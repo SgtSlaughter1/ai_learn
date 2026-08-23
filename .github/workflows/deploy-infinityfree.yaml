@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # ── PHP ───────────────────────────────────────────────
       - name: 🔧 Setup PHP 8.3
@@ -29,10 +29,10 @@ jobs:
 
       # ── Node.js / Vite ────────────────────────────────────
       - name: 📦 Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: 🔧 Setup Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: 'pnpm'
@@ -135,7 +135,7 @@ jobs:
 
       # ── Deploy to InfinityFree via FTP ────────────────────
       - name: 🚀 Deploy via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
           server: ftpupload.net
           username: ${{ secrets.FTP_USERNAME }}
