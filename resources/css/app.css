@@ -1,0 +1,273 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+/* ═══════════════════════════════════════════════════════════
+   DESIGN SYSTEM — Antigravity AI
+   Edit these variables to change the entire theme globally.
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+    /* ── Core Palette ── */
+    --color-primary:        #183B2B;
+    --color-primary-light:  #6F8F7A;
+    --color-accent:         #D99A3D;
+    --color-background:     #F7F4EC;
+    --color-surface:        #FFFCF5;
+    --color-text:           #202522;
+    --color-muted:          #6B746D;
+    --color-border:         #DDE1D9;
+    --color-success:        #3F7D58;
+    --color-error:          #B94A48;
+
+    /* ── Derived Colors ── */
+    --color-primary-hover:  #1e4d37;
+    --color-surface-hover:  #F5F1E8;
+    --color-accent-hover:   #c48a2f;
+    --color-primary-5:      rgba(24, 59, 43, 0.05);
+    --color-primary-10:     rgba(24, 59, 43, 0.10);
+    --color-primary-20:     rgba(24, 59, 43, 0.20);
+    --color-accent-5:       rgba(217, 154, 61, 0.05);
+    --color-accent-10:      rgba(217, 154, 61, 0.10);
+    --color-accent-20:      rgba(217, 154, 61, 0.20);
+    --color-success-5:      rgba(63, 125, 88, 0.05);
+    --color-success-10:     rgba(63, 125, 88, 0.10);
+    --color-success-20:     rgba(63, 125, 88, 0.20);
+    --color-error-5:        rgba(185, 74, 72, 0.05);
+    --color-error-10:       rgba(185, 74, 72, 0.10);
+    --color-error-20:       rgba(185, 74, 72, 0.20);
+    --color-overlay:        rgba(32, 37, 34, 0.5);
+}
+
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+
+    /* Map design system to Tailwind tokens */
+    --color-brand:          var(--color-primary);
+    --color-brand-hover:    var(--color-primary-hover);
+    --color-brand-secondary: var(--color-primary-light);
+
+    --color-ds-primary:     var(--color-primary);
+    --color-ds-primary-light: var(--color-primary-light);
+    --color-ds-accent:      var(--color-accent);
+    --color-ds-background:  var(--color-background);
+    --color-ds-surface:     var(--color-surface);
+    --color-ds-text:        var(--color-text);
+    --color-ds-muted:       var(--color-muted);
+    --color-ds-border:      var(--color-border);
+    --color-ds-success:     var(--color-success);
+    --color-ds-error:       var(--color-error);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BASE STYLES
+   ═══════════════════════════════════════════════════════════ */
+
+html {
+    background-color: var(--color-background);
+    color: var(--color-text);
+}
+
+body {
+    background-color: var(--color-background);
+    color: var(--color-text);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CHAT MARKDOWN (AI Tutor responses)
+   ═══════════════════════════════════════════════════════════ */
+
+.chat-markdown p { margin: 0.4em 0; }
+.chat-markdown p:first-child { margin-top: 0; }
+.chat-markdown p:last-child { margin-bottom: 0; }
+.chat-markdown strong { color: var(--color-text); font-weight: 700; }
+.chat-markdown em { color: var(--color-primary-light); font-style: italic; }
+.chat-markdown ul { list-style: disc; padding-left: 1.25em; margin: 0.4em 0; }
+.chat-markdown ol { list-style: decimal; padding-left: 1.25em; margin: 0.4em 0; }
+.chat-markdown li { margin: 0.2em 0; }
+.chat-markdown li::marker { color: var(--color-primary-light); }
+.chat-markdown code {
+    background: var(--color-primary-5);
+    color: var(--color-primary);
+    padding: 0.15em 0.4em;
+    border-radius: 0.25rem;
+    font-size: 0.8em;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.chat-markdown pre {
+    background: var(--color-primary-5);
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    padding: 0.75em 1em;
+    margin: 0.5em 0;
+    overflow-x: auto;
+}
+.chat-markdown pre code { background: transparent; padding: 0; font-size: 0.75rem; }
+.chat-markdown blockquote {
+    border-left: 3px solid var(--color-primary-light);
+    padding-left: 0.75em;
+    margin: 0.5em 0;
+    color: var(--color-muted);
+}
+.chat-markdown h1, .chat-markdown h2, .chat-markdown h3, .chat-markdown h4 {
+    color: var(--color-text);
+    font-weight: 700;
+    margin: 0.6em 0 0.3em;
+}
+.chat-markdown h1 { font-size: 1.1em; }
+.chat-markdown h2 { font-size: 1em; }
+.chat-markdown h3 { font-size: 0.95em; }
+
+/* ═══════════════════════════════════════════════════════════
+   REUSABLE COMPONENT CLASSES
+   ═══════════════════════════════════════════════════════════ */
+
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #ffffff;
+    background-color: var(--color-primary);
+    border-radius: 0.5rem;
+    transition: all 0.2s ease-in-out;
+    min-height: 48px;
+    cursor: pointer;
+    border: none;
+}
+.btn-primary:hover {
+    background-color: var(--color-primary-hover);
+}
+
+.btn-accent {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #ffffff;
+    background-color: var(--color-accent);
+    border-radius: 0.5rem;
+    transition: all 0.2s ease-in-out;
+    min-height: 48px;
+    cursor: pointer;
+    border: none;
+}
+.btn-accent:hover {
+    background-color: var(--color-accent-hover);
+}
+
+.card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    transition: all 0.2s ease-in-out;
+}
+
+.card-hover:hover {
+    border-color: var(--color-primary-light);
+    box-shadow: 0 4px 24px rgba(24, 59, 43, 0.06);
+}
+
+.input-field {
+    display: block;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    color: var(--color-text);
+    font-size: 0.875rem;
+    transition: all 0.2s ease-in-out;
+    min-height: 48px;
+}
+.input-field::placeholder { color: var(--color-muted); }
+.input-field:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-10);
+}
+
+.badge-primary {
+    font-size: 0.625rem;
+    font-weight: 800;
+    padding: 0.25rem 0.625rem;
+    background-color: var(--color-primary-10);
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary-20);
+    border-radius: 0.375rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.badge-accent {
+    font-size: 0.625rem;
+    font-weight: 800;
+    padding: 0.25rem 0.625rem;
+    background-color: var(--color-accent-10);
+    color: var(--color-accent);
+    border: 1px solid var(--color-accent-20);
+    border-radius: 0.375rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.badge-success {
+    font-size: 0.625rem;
+    font-weight: 800;
+    padding: 0.25rem 0.625rem;
+    background-color: var(--color-success-10);
+    color: var(--color-success);
+    border: 1px solid var(--color-success-20);
+    border-radius: 0.375rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.badge-error {
+    font-size: 0.625rem;
+    font-weight: 800;
+    padding: 0.25rem 0.625rem;
+    background-color: var(--color-error-10);
+    color: var(--color-error);
+    border: 1px solid var(--color-error-20);
+    border-radius: 0.375rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.chat-bubble-user {
+    background-color: var(--color-primary);
+    color: #ffffff;
+    border-top-right-radius: 0px;
+    border-radius: 1rem;
+    padding: 0.875rem;
+    font-size: 0.75rem;
+    line-height: 1.625;
+    max-width: 80%;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SCROLLBAR
+   ═══════════════════════════════════════════════════════════ */
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: var(--color-background);
+}
+::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-muted);
+}

@@ -1,0 +1,161 @@
+name: 🚀 Deploy Laravel + Inertia to InfinityFree
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Build & Deploy to ailearn.gt.tc
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      # ── PHP ───────────────────────────────────────────────
+      - name: 🔧 Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, dom, filter, gd, json, zip, curl, opcache
+          coverage: none
+
+      # ── Composer ──────────────────────────────────────────
+      - name: 📦 Install Composer dependencies (production)
+        run: composer install --optimize-autoloader --no-dev --no-interaction --prefer-dist
+
+      # ── Node.js / Vite ────────────────────────────────────
+      - name: 📦 Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: 🔧 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: 📦 Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: 🏗️ Build frontend (Vite + Inertia)
+        env:
+          VITE_APP_NAME: "Antigravity AI"
+          VITE_BASE_URL: "https://ailearn.gt.tc"
+          VITE_API_BASE_URL: "https://ailearn.gt.tc"
+          VITE_STORAGE_URL: "https://ailearn.gt.tc/storage"
+        run: pnpm build
+
+      # ── Laravel optimizations ─────────────────────────────
+      - name: 🧹 Clear Caches (Prevent Path Issues)
+        run: |
+          php artisan config:clear
+          php artisan route:clear
+          php artisan view:clear
+          rm -f bootstrap/cache/*.php
+
+      # ── Cleanup before deploy ─────────────────────────────
+      - name: 🧹 Remove unnecessary files/folders
+        run: |
+          rm -rf \
+            tests/ \
+            node_modules/ \
+            .git/ \
+            .github/ \
+            storage/framework/cache/data/* \
+            storage/framework/views/* \
+            storage/logs/* \
+            .env.example \
+            phpunit.xml \
+            README.md \
+            pnpm-lock.yaml \
+            vite.config.ts \
+            tailwind.config.js \
+            postcss.config.js \
+            tsconfig.json \
+            tsconfig.node.json \
+            resources/css/ \
+            resources/js/ \
+            resources/views/
+
+      # ── Prepare InfinityFree structure ────────────────────
+      # InfinityFree: /htdocs/ = web root (public/)
+      #                / = Laravel framework root
+      - name: 📁 Prepare InfinityFree directory structure
+        run: |
+          # Create a temp deploy folder
+          mkdir -p /tmp/deploy/htdocs
+
+          # Move public/ contents into htdocs/
+          cp -r public/* /tmp/deploy/htdocs/
+
+          # Copy the rest of Laravel to root (above htdocs)
+          # Excluding public/ and dev-only folders
+          cp -r app /tmp/deploy/
+          cp -r bootstrap /tmp/deploy/
+          cp -r config /tmp/deploy/
+          cp -r database /tmp/deploy/
+          cp -r public /tmp/deploy/
+          cp -r resources /tmp/deploy/
+          cp -r routes /tmp/deploy/
+          cp -r storage /tmp/deploy/
+          cp -r vendor /tmp/deploy/
+          cp composer.json /tmp/deploy/
+          cp composer.lock /tmp/deploy/
+          cp artisan /tmp/deploy/
+          cp .env /tmp/deploy/ 2>/dev/null || true
+
+          # Point htdocs/index.php to root vendor/autoload
+          # (InfinityFree serves from /htdocs/)
+          # We need a wrapper that bootstraps Laravel from the parent dir
+
+          # Create the root-level bootstrap
+          cat > /tmp/deploy/htdocs/index.php << 'ROOTPHP'
+          <?php
+
+          use Illuminate\Contracts\Http\Kernel;
+          use Illuminate\Http\Request;
+
+          define('LARAVEL_START', microtime(true));
+
+          // Determine if the application is in maintenance mode...
+          if (file_exists($maintenance = __DIR__.'/../storage/framework/maintenance.php')) {
+              require $maintenance;
+          }
+
+          // Register the Composer autoloader...
+          require __DIR__.'/../vendor/autoload.php';
+
+          // Bootstrap Laravel and handle the request...
+          (require_once __DIR__.'/../bootstrap/app.php')
+              ->handleRequest(Request::capture());
+          ROOTPHP
+
+      # ── Deploy to InfinityFree via FTP ────────────────────
+      - name: 🚀 Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ftpupload.net
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: /tmp/deploy/
+          server-dir: /
+          exclude: |
+            **/.git*
+            **/.github/**
+            **/node_modules/**
+            **/tests/**
+            **/.env.example
+            **/phpunit.xml
+            **/.DS_Store
+            **/*.log
+          dangerous-clean-slate: false
+          timeout: 86400000
+          log-level: standard
+
+      - name: 🎉 Deployment finished
+        run: echo "Deployment to https://ailearn.gt.tc/ completed! ✨"
