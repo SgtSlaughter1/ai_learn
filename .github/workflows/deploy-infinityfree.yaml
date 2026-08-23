@@ -28,19 +28,14 @@ jobs:
         run: composer install --optimize-autoloader --no-dev --no-interaction --prefer-dist
 
       # ── Node.js / Vite ────────────────────────────────────
-      - name: 📦 Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - name: 🔧 Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: 📦 Install Node dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: 🏗️ Build frontend (Vite + Inertia)
         env:
@@ -48,7 +43,7 @@ jobs:
           VITE_BASE_URL: "https://ailearn.gt.tc"
           VITE_API_BASE_URL: "https://ailearn.gt.tc"
           VITE_STORAGE_URL: "https://ailearn.gt.tc/storage"
-        run: pnpm build
+        run: npm run build
 
       # ── Laravel optimizations ─────────────────────────────
       - name: 🧹 Clear Caches (Prevent Path Issues)
@@ -72,7 +67,7 @@ jobs:
             .env.example \
             phpunit.xml \
             README.md \
-            pnpm-lock.yaml \
+            package-lock.json \
             vite.config.ts \
             tailwind.config.js \
             postcss.config.js \
@@ -94,7 +89,6 @@ jobs:
           cp -r public/* /tmp/deploy/htdocs/
 
           # Copy the rest of Laravel to root (above htdocs)
-          # Excluding public/ and dev-only folders
           cp -r app /tmp/deploy/
           cp -r bootstrap /tmp/deploy/
           cp -r config /tmp/deploy/
@@ -110,10 +104,6 @@ jobs:
           cp .env /tmp/deploy/ 2>/dev/null || true
 
           # Point htdocs/index.php to root vendor/autoload
-          # (InfinityFree serves from /htdocs/)
-          # We need a wrapper that bootstraps Laravel from the parent dir
-
-          # Create the root-level bootstrap
           cat > /tmp/deploy/htdocs/index.php << 'ROOTPHP'
           <?php
 
