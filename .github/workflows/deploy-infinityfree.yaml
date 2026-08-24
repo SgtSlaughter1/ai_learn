@@ -106,6 +106,24 @@ jobs:
             docs/ \
             content/
 
+          # ── Clean vendor: remove non-essential files ──
+          # Safe: only deletes files INSIDE vendor packages (not vendor itself)
+          echo "=== Cleaning vendor ==="
+          find vendor/ -mindepth 2 -name "*.md" -type f -delete 2>/dev/null || true
+          find vendor/ -mindepth 2 -name "*.txt" -type f -not -name "LICENSE*" -delete 2>/dev/null || true
+          find vendor/ -mindepth 2 -name "*.map" -type f -delete 2>/dev/null || true
+          find vendor/ -mindepth 2 -name "*.xml" -type f -not -name "composer.json" -delete 2>/dev/null || true
+          find vendor/ -mindepth 2 -name "*.neon" -type f -delete 2>/dev/null || true
+          find vendor/ -mindepth 2 -name "*.yml" -type f -delete 2>/dev/null || true
+          find vendor/ -mindepth 2 -name "*.yaml" -type f -delete 2>/dev/null || true
+          find vendor/ -mindepth 2 -name "*.dist" -type f -delete 2>/dev/null || true
+          find vendor/ -mindepth 2 -name "*.xml.dist" -type f -delete 2>/dev/null || true
+          find vendor/ -mindepth 2 \( -name ".gitignore" -o -name ".gitattributes" -o -name ".editorconfig" -o -name ".php-cs-fixer*" -o -name "Makefile" -o -name "Dockerfile*" -o -name "docker-compose*" \) -type f -delete 2>/dev/null || true
+          find vendor/ -mindepth 2 -type d \( -name "docs" -o -name "doc" -o -name "Examples" -o -name "example" -o -name "tests" -o -name "Test" -o -name "test" \) -exec rm -rf {} + 2>/dev/null || true
+          find vendor/ -mindepth 2 -type d -name ".github" -exec rm -rf {} + 2>/dev/null || true
+          echo "=== Vendor after cleanup ==="
+          du -sh vendor/
+
           echo "=== Deploy size ==="
           du -sh .
           echo "=== File count ==="
