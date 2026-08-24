@@ -128,10 +128,9 @@ jobs:
           chmod -R 775 /tmp/deploy/storage
           chmod -R 775 /tmp/deploy/bootstrap/cache
 
-      # ── Write index.php (no heredoc — avoid YAML issues) ──
+      # ── Copy index.php to htdocs ──────────────────────────
       - name: 📄 Create htdocs/index.php
-        run: |
-          printf '<?php\n\nuse Illuminate\\Http\\Request;\n\ndefine('"'"'LARAVEL_START'"'"', microtime(true));\n\nif (file_exists($maintenance = __DIR__."'"'/../storage/framework/maintenance.php'"'"')) {\n    require $maintenance;\n}\n\nrequire __DIR__."'"'/../vendor/autoload.php'"'"';\n\n(require_once __DIR__."'"'/../bootstrap/app.php'"'"')\n    ->handleRequest(Request::capture());\n' > /tmp/deploy/htdocs/index.php
+        run: cp public/server-index.php /tmp/deploy/htdocs/index.php
 
       # ── Deploy to InfinityFree via FTP ────────────────────
       - name: 🚀 Deploy via FTP
