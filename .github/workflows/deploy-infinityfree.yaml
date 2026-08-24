@@ -133,11 +133,9 @@ jobs:
       # Rewrites all requests into the public/ subdirectory
       - name: 📄 Create root .htaccess
         run: |
-          cat > .htaccess << 'HTACCESS'
-          RewriteEngine On
-          RewriteRule ^storage/(.*)$ /storage/app/public/$1 [END]
-          RewriteRule (.*) /public/$1 [L]
-          HTACCESS
+          echo 'RewriteEngine On' > .htaccess
+          echo 'RewriteRule ^storage/(.*)$ /storage/app/public/$1 [END]' >> .htaccess
+          echo 'RewriteRule (.*) /public/$1 [L]' >> .htaccess
 
       # ── Deploy to InfinityFree via FTP ────────────────────
       - name: 🚀 Deploy via FTP
