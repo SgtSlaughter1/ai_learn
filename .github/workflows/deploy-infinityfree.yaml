@@ -24,7 +24,7 @@ jobs:
           coverage: none
 
       # ── Composer ──────────────────────────────────────────
-      - name: 📦 Install Composer dependencies (production)
+      - name: 📦 Install Composer dependencies (production, no dev)
         run: composer install --optimize-autoloader --no-dev --no-interaction --prefer-dist
 
       # ── Node.js / Vite ────────────────────────────────────
@@ -102,36 +102,14 @@ jobs:
             tsconfig.json \
             tsconfig.node.json
 
-      # ── Aggressive vendor cleanup ─────────────────────────
-      - name: ⚡ Clean vendor/ — remove tests, docs, maps, dev files
+      # ── Verify vendor exists ──────────────────────────────
+      - name: ✅ Verify vendor exists
         run: |
-          echo "=== Vendor exists? ==="
           test -d vendor || { echo "ERROR: vendor/ not found!"; exit 1; }
-          echo "=== Vendor size BEFORE cleanup ==="
+          echo "=== Vendor size ==="
           du -sh vendor/
-
-          # Remove test directories (only actual test folders, not vendor itself)
-          find vendor/ -mindepth 2 -type d \( -name "tests" -o -name "Test" -o -name "test" -o -name "Tests" \) -exec rm -rf {} + 2>/dev/null || true
-          # Remove docs
-          find vendor/ -mindepth 2 -type d \( -name "docs" -o -name "doc" -o -name "Examples" -o -name "example" \) -exec rm -rf {} + 2>/dev/null || true
-          # Remove source maps
-          find vendor/ -mindepth 2 -name "*.map" -delete 2>/dev/null || true
-          # Remove markdown
-          find vendor/ -mindepth 2 -name "*.md" -delete 2>/dev/null || true
-          # Remove txt (keep LICENSE)
-          find vendor/ -mindepth 2 -name "*.txt" -not -name "LICENSE*" -delete 2>/dev/null || true
-          # Remove git/CI files inside packages only
-          find vendor/ -mindepth 2 -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
-          find vendor/ -mindepth 2 -name ".github" -type d -exec rm -rf {} + 2>/dev/null || true
-          find vendor/ -mindepth 2 \( -name ".gitignore" -o -name ".gitattributes" -o -name ".editorconfig" \
-            -o -name ".php-cs-fixer*" -o -name "phpstan*" -o -name "phpunit.xml*" \
-            -o -name ".phpunit.result.cache" -o -name "Makefile" -o -name "Dockerfile*" \
-            -o -name "docker-compose*" -o -name ".travis.yml" \) -delete 2>/dev/null || true
-
-          echo "=== Vendor exists after cleanup? ==="
-          test -d vendor || { echo "ERROR: vendor/ was deleted by cleanup!"; exit 1; }
-          echo "=== Vendor size AFTER cleanup ==="
-          du -sh vendor/
+          echo "=== File count ==="
+          find vendor/ -type f | wc -l
 
       # ── Prepare InfinityFree directory structure ──────────
       - name: 📁 Prepare InfinityFree directory structure
@@ -145,6 +123,7 @@ jobs:
           cp -r public /tmp/deploy/htdocs/
           cp -r resources /tmp/deploy/htdocs/
           cp -r routes /tmp/deploy/htdocs/
+          cp -r vendor /tmp/deploy/htdocs/
           cp .env /tmp/deploy/htdocs/
           cp artisan /tmp/deploy/htdocs/
           cp composer.json /tmp/deploy/htdocs/
@@ -163,22 +142,16 @@ jobs:
           chmod -R 775 /tmp/deploy/htdocs/bootstrap/cache
 
           # Verify vendor was copied
-          test -d /tmp/deploy/htdocs/vendor || { echo "ERROR: vendor/ not copied to deploy dir!"; exit 1; }
-          echo "=== Non-vendor size ==="
-          du -sh /tmp/deploy/htdocs/
+          test -d /tmp/deploy/htdocs/vendor || { echo "ERROR: vendor/ not copied!"; exit 1; }
 
       # ── Tar vendor into ONE file ──────────────────────────
-      # This is the key optimization: upload 1 file instead of 5000+
       - name: 📦 Compress vendor/ into single tar.gz
         run: |
-          echo "=== Checking vendor exists ==="
-          ls -la /tmp/deploy/htdocs/vendor/ | head -5
-          test -d /tmp/deploy/htdocs/vendor || { echo "ERROR: vendor/ not found in deploy dir!"; exit 1; }
-          echo "=== Tarring vendor ==="
+          test -d /tmp/deploy/htdocs/vendor || { echo "ERROR: vendor/ not found!"; exit 1; }
           cd /tmp/deploy/htdocs
           tar -czf vendor.tar.gz vendor/
           rm -rf vendor/
-          echo "=== vendor.tar.gz size ==="
+          echo "=== vendor.tar.gz ==="
           ls -lh vendor.tar.gz
           echo "=== Total deploy size ==="
           du -sh /tmp/deploy/htdocs/
@@ -195,11 +168,9 @@ jobs:
           set net:reconnect-interval-base 5
           set net:max-retries 3
 
-          # Navigate to htdocs
           cd htdocs
           lcd /tmp/deploy/htdocs
 
-          # Upload ONLY extract.php + vendor.tar.gz (2 files!)
           put extract.php
           put vendor.tar.gz
 
