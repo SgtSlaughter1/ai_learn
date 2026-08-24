@@ -168,7 +168,7 @@ jobs:
           set net:reconnect-interval-base 5
           set net:max-retries 3
 
-          cd htdocs
+          # FTP root IS htdocs on InfinityFree — no cd needed
           lcd /tmp/deploy/htdocs
 
           put extract.php
