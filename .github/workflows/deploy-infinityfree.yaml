@@ -105,30 +105,31 @@ jobs:
       # ── Aggressive vendor cleanup ─────────────────────────
       - name: ⚡ Clean vendor/ — remove tests, docs, maps, dev files
         run: |
+          echo "=== Vendor exists? ==="
+          test -d vendor || { echo "ERROR: vendor/ not found!"; exit 1; }
           echo "=== Vendor size BEFORE cleanup ==="
           du -sh vendor/
 
-          # Remove test directories
-          find vendor/ -type d \( -name "tests" -o -name "Test" -o -name "test" -o -name "Tests" \) -exec rm -rf {} + 2>/dev/null || true
+          # Remove test directories (only actual test folders, not vendor itself)
+          find vendor/ -mindepth 2 -type d \( -name "tests" -o -name "Test" -o -name "test" -o -name "Tests" \) -exec rm -rf {} + 2>/dev/null || true
           # Remove docs
-          find vendor/ -type d \( -name "docs" -o -name "doc" -o -name "Examples" -o -name "example" \) -exec rm -rf {} + 2>/dev/null || true
+          find vendor/ -mindepth 2 -type d \( -name "docs" -o -name "doc" -o -name "Examples" -o -name "example" \) -exec rm -rf {} + 2>/dev/null || true
           # Remove source maps
-          find vendor/ -name "*.map" -delete 2>/dev/null || true
+          find vendor/ -mindepth 2 -name "*.map" -delete 2>/dev/null || true
           # Remove markdown
-          find vendor/ -name "*.md" -delete 2>/dev/null || true
+          find vendor/ -mindepth 2 -name "*.md" -delete 2>/dev/null || true
           # Remove txt (keep LICENSE)
-          find vendor/ -name "*.txt" -not -name "LICENSE*" -delete 2>/dev/null || true
-          # Remove git/CI files
-          find vendor/ -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
-          find vendor/ -name ".github" -type d -exec rm -rf {} + 2>/dev/null || true
-          find vendor/ \( -name ".gitignore" -o -name ".gitattributes" -o -name ".editorconfig" \
+          find vendor/ -mindepth 2 -name "*.txt" -not -name "LICENSE*" -delete 2>/dev/null || true
+          # Remove git/CI files inside packages only
+          find vendor/ -mindepth 2 -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
+          find vendor/ -mindepth 2 -name ".github" -type d -exec rm -rf {} + 2>/dev/null || true
+          find vendor/ -mindepth 2 \( -name ".gitignore" -o -name ".gitattributes" -o -name ".editorconfig" \
             -o -name ".php-cs-fixer*" -o -name "phpstan*" -o -name "phpunit.xml*" \
             -o -name ".phpunit.result.cache" -o -name "Makefile" -o -name "Dockerfile*" \
             -o -name "docker-compose*" -o -name ".travis.yml" \) -delete 2>/dev/null || true
-          find vendor/ -name ".circleci" -type d -exec rm -rf {} + 2>/dev/null || true
-          # Remove empty dirs
-          find vendor/ -type d -empty -delete 2>/dev/null || true
 
+          echo "=== Vendor exists after cleanup? ==="
+          test -d vendor || { echo "ERROR: vendor/ was deleted by cleanup!"; exit 1; }
           echo "=== Vendor size AFTER cleanup ==="
           du -sh vendor/
 
@@ -161,6 +162,8 @@ jobs:
           chmod -R 775 /tmp/deploy/htdocs/storage
           chmod -R 775 /tmp/deploy/htdocs/bootstrap/cache
 
+          # Verify vendor was copied
+          test -d /tmp/deploy/htdocs/vendor || { echo "ERROR: vendor/ not copied to deploy dir!"; exit 1; }
           echo "=== Non-vendor size ==="
           du -sh /tmp/deploy/htdocs/
 
@@ -168,6 +171,9 @@ jobs:
       # This is the key optimization: upload 1 file instead of 5000+
       - name: 📦 Compress vendor/ into single tar.gz
         run: |
+          echo "=== Checking vendor exists ==="
+          ls -la /tmp/deploy/htdocs/vendor/ | head -5
+          test -d /tmp/deploy/htdocs/vendor || { echo "ERROR: vendor/ not found in deploy dir!"; exit 1; }
           echo "=== Tarring vendor ==="
           cd /tmp/deploy/htdocs
           tar -czf vendor.tar.gz vendor/
