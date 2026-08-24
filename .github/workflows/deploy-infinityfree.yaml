@@ -48,25 +48,23 @@ jobs:
       # ── Create .env from GitHub Secrets ───────────────────
       - name: 📝 Create .env file
         run: |
-          cat > .env << ENVEOF
-          APP_NAME="${{ vars.APP_NAME }}"
-          APP_ENV=production
-          APP_KEY=${{ secrets.APP_KEY }}
-          APP_DEBUG=false
-          APP_URL=https://ailearn.gt.tc
-          LOG_CHANNEL=stack
-          LOG_LEVEL=error
-          DB_CONNECTION=mysql
-          DB_HOST=${{ secrets.DB_HOST }}
-          DB_PORT=3306
-          DB_DATABASE=${{ secrets.DB_DATABASE }}
-          DB_USERNAME=${{ secrets.DB_USERNAME }}
-          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-          SESSION_DRIVER=file
-          CACHE_STORE=file
-          FILESYSTEM_DISK=local
-          QUEUE_CONNECTION=sync
-          ENVEOF
+          echo 'APP_NAME="Antigravity AI"' > .env
+          echo 'APP_ENV=production' >> .env
+          echo 'APP_KEY=${{ secrets.APP_KEY }}' >> .env
+          echo 'APP_DEBUG=false' >> .env
+          echo 'APP_URL=https://ailearn.gt.tc' >> .env
+          echo 'LOG_CHANNEL=stack' >> .env
+          echo 'LOG_LEVEL=error' >> .env
+          echo 'DB_CONNECTION=mysql' >> .env
+          echo 'DB_HOST=${{ secrets.DB_HOST }}' >> .env
+          echo 'DB_PORT=3306' >> .env
+          echo 'DB_DATABASE=${{ secrets.DB_DATABASE }}' >> .env
+          echo 'DB_USERNAME=${{ secrets.DB_USERNAME }}' >> .env
+          echo 'DB_PASSWORD=${{ secrets.DB_PASSWORD }}' >> .env
+          echo 'SESSION_DRIVER=file' >> .env
+          echo 'CACHE_STORE=file' >> .env
+          echo 'FILESYSTEM_DISK=local' >> .env
+          echo 'QUEUE_CONNECTION=sync' >> .env
 
       # ── Laravel optimizations ─────────────────────────────
       - name: 🔑 Generate APP_KEY (if missing)
@@ -100,9 +98,7 @@ jobs:
             tsconfig.json \
             tsconfig.node.json
 
-      # ── Prepare InfinityFree structure ────────────────────
-      # InfinityFree FTP root = hosting root
-      # htdocs/ = web root (Apache document root)
+      # ── Prepare InfinityFree directory structure ──────────
       - name: 📁 Prepare InfinityFree directory structure
         run: |
           mkdir -p /tmp/deploy/htdocs
@@ -132,28 +128,10 @@ jobs:
           chmod -R 775 /tmp/deploy/storage
           chmod -R 775 /tmp/deploy/bootstrap/cache
 
-      # ── Write index.php (no leading spaces!) ──────────────
+      # ── Write index.php (no heredoc — avoid YAML issues) ──
       - name: 📄 Create htdocs/index.php
         run: |
-          cat > /tmp/deploy/htdocs/index.php << 'ROOTPHP'
-<?php
-
-use Illuminate\Http\Request;
-
-define('LARAVEL_START', microtime(true));
-
-// Determine if the application is in maintenance mode...
-if (file_exists($maintenance = __DIR__.'/../storage/framework/maintenance.php')) {
-    require $maintenance;
-}
-
-// Register the Composer autoloader...
-require __DIR__.'/../vendor/autoload.php';
-
-// Bootstrap Laravel and handle the request...
-(require_once __DIR__.'/../bootstrap/app.php')
-    ->handleRequest(Request::capture());
-ROOTPHP
+          printf '<?php\n\nuse Illuminate\\Http\\Request;\n\ndefine('"'"'LARAVEL_START'"'"', microtime(true));\n\nif (file_exists($maintenance = __DIR__."'"'/../storage/framework/maintenance.php'"'"')) {\n    require $maintenance;\n}\n\nrequire __DIR__."'"'/../vendor/autoload.php'"'"';\n\n(require_once __DIR__."'"'/../bootstrap/app.php'"'"')\n    ->handleRequest(Request::capture());\n' > /tmp/deploy/htdocs/index.php
 
       # ── Deploy to InfinityFree via FTP ────────────────────
       - name: 🚀 Deploy via FTP
@@ -178,4 +156,4 @@ ROOTPHP
           log-level: standard
 
       - name: 🎉 Deployment finished
-        run: echo "Deployment to https://ailearn.gt.tc/ completed! ✨"
+        run: echo "Deployment to https://ailearn.gt.tc/ completed!"
