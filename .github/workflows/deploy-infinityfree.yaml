@@ -100,8 +100,7 @@ jobs:
             tailwind.config.js \
             postcss.config.js \
             tsconfig.json \
-            tsconfig.node.json \
-            .htaccess
+            tsconfig.node.json
 
       # ── 🚀 AGGRESSIVE VENDOR CLEANUP ─────────────────────
       - name: ⚡ Clean vendor/ — remove tests, docs, maps, dev files
@@ -128,93 +127,81 @@ jobs:
           echo "=== Total files ==="
           find . -type f | wc -l
 
-      # ── Prepare for InfinityFree ──────────────────────────
-      # ZIP contains files directly (app/, vendor/, public/, etc.)
-      # extract.php extracts to parent of htdocs = FTP root
-      # Then parent .htaccess rewrites everything into public/
-      - name: 📁 Prepare deploy package
+      # ── Create root .htaccess for InfinityFree ─────────────
+      # Rewrites all requests into the public/ subdirectory
+      # Also handles storage/ symlink replacement
+      - name: 📄 Create root .htaccess
         run: |
-          rm -rf /tmp/deploy
-          mkdir -p /tmp/deploy
+          cat > .htaccess << 'HTACCESS'
+          RewriteEngine On
+          RewriteRule ^storage/(.*)$ /storage/app/public/$1 [END]
+          RewriteRule (.*) /public/$1 [L]
+          HTACCESS
 
-          cp -r app /tmp/deploy/
-          cp -r bootstrap /tmp/deploy/
-          cp -r config /tmp/deploy/
-          cp -r database /tmp/deploy/
-          cp -r public /tmp/deploy/
-          cp -r resources /tmp/deploy/
-          cp -r routes /tmp/deploy/
-          cp -r vendor /tmp/deploy/
-          cp .env /tmp/deploy/
-          cp artisan /tmp/deploy/
-          cp composer.json /tmp/deploy/
-          cp composer.lock /tmp/deploy/
+      # ── Prepare InfinityFree directory structure ──────────
+      # On InfinityFree, htdocs/ IS the web root.
+      # Everything goes inside htdocs/ directly.
+      - name: 📁 Prepare InfinityFree directory structure
+        run: |
+          mkdir -p /tmp/deploy/htdocs
+
+          cp -r app /tmp/deploy/htdocs/
+          cp -r bootstrap /tmp/deploy/htdocs/
+          cp -r config /tmp/deploy/htdocs/
+          cp -r database /tmp/deploy/htdocs/
+          cp -r public /tmp/deploy/htdocs/
+          cp -r resources /tmp/deploy/htdocs/
+          cp -r routes /tmp/deploy/htdocs/
+          cp -r vendor /tmp/deploy/htdocs/
+          cp .env /tmp/deploy/htdocs/
+          cp .htaccess /tmp/deploy/htdocs/
+          cp artisan /tmp/deploy/htdocs/
+          cp composer.json /tmp/deploy/htdocs/
+          cp composer.lock /tmp/deploy/htdocs/
 
           # Make storage writable
-          mkdir -p /tmp/deploy/storage/app/public
-          mkdir -p /tmp/deploy/storage/framework/cache/data
-          mkdir -p /tmp/deploy/storage/framework/sessions
-          mkdir -p /tmp/deploy/storage/framework/views
-          mkdir -p /tmp/deploy/storage/logs
-          chmod -R 775 /tmp/deploy/storage
-          chmod -R 775 /tmp/deploy/bootstrap/cache
+          mkdir -p /tmp/deploy/htdocs/storage/app/public
+          mkdir -p /tmp/deploy/htdocs/storage/framework/cache/data
+          mkdir -p /tmp/deploy/htdocs/storage/framework/sessions
+          mkdir -p /tmp/deploy/htdocs/storage/framework/views
+          mkdir -p /tmp/deploy/htdocs/storage/logs
+          chmod -R 775 /tmp/deploy/htdocs/storage
+          chmod -R 775 /tmp/deploy/htdocs/bootstrap/cache
 
           echo "=== Deploy size ==="
-          du -sh /tmp/deploy/
+          du -sh /tmp/deploy/htdocs/
           echo "=== Total files ==="
-          find /tmp/deploy/ -type f | wc -l
+          find /tmp/deploy/htdocs/ -type f | wc -l
 
-      # ── 🗜️ ZIP everything into one file ────────────────────
-      - name: 🗜️ Compress into deploy.zip
-        run: |
-          cd /tmp/deploy
-          zip -r -q deploy.zip .
-          mv deploy.zip /tmp/
-          echo "=== ZIP size ==="
-          ls -lh /tmp/deploy.zip
-
-      # ── Upload via lftp ──────────────────────────────────
-      - name: 🚀 Upload deploy.zip + extract.php via lftp
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq lftp > /dev/null 2>&1
-
-          lftp -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} ftpupload.net << 'FTPSCRIPT'
-          set net:timeout 60
-          set net:max-retries 3
-          set net:reconnect-interval-base 5
-          set ftp:ssl-allow no
-
-          # Make sure htdocs exists
-          mkdir -f htdocs
-
-          # Upload extract.php directly into htdocs (tiny, instant)
-          put public/extract.php -o htdocs/extract.php
-
-          # Upload deploy.zip into htdocs (single file, fast)
-          put /tmp/deploy.zip -o htdocs/deploy.zip
-
-          bye
-          FTPSCRIPT
-
-          echo "Upload complete"
-
-      # ── Trigger extraction ────────────────────────────────
-      - name: 🗜️ Extract deploy.zip on server
-        run: |
-          echo "Waiting 5s for upload to settle..."
-          sleep 5
-
-          RESULT=$(curl -s -w "\n%{http_code}" "https://ailearn.gt.tc/extract.php?key=ailearn-deploy-2026")
-          HTTP_CODE=$(echo "$RESULT" | tail -1)
-          BODY=$(echo "$RESULT" | head -n -1)
-
-          echo "HTTP Status: $HTTP_CODE"
-          echo "Response: $BODY"
-
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "Extraction may have failed"
-            exit 1
-          fi
+      # ── Deploy to InfinityFree via FTP ────────────────────
+      # FTP-Deploy-Action syncs: only uploads new/changed files
+      # First deploy = all files. Redeploys = only diffs.
+      - name: 🚀 Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ftpupload.net
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: /tmp/deploy/htdocs/
+          server-dir: /
+          exclude: |
+            **/.git*
+            **/.github/**/
+            **/node_modules/**
+            **/tests/**
+            **/.env.example
+            **/phpunit.xml
+            **/.DS_Store
+            **/*.log
+            **/*.map
+            **/docs/**
+            **/doc/**
+            **/.editorconfig
+            **/.gitignore
+            **/.gitattributes
+          dangerous-clean-slate: false
+          timeout: 86400000
+          log-level: standard
 
       - name: 🎉 Deployment finished
         run: echo "Deployment to https://ailearn.gt.tc/ completed!"
