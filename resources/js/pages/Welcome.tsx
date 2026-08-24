@@ -42,7 +42,7 @@ export default function Welcome() {
                     <div className="relative max-w-5xl mx-auto px-4 sm:px-6 pt-20 pb-24 text-center">
                         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[var(--color-success)]/10 border border-[var(--color-success)]/20 text-[var(--color-success)] text-xs font-semibold mb-6">
                             <span className="w-2 h-2 rounded-full bg-[var(--color-success)] animate-pulse" />
-                            Works offline — study anywhere
+                            Works offline, study anywhere
                         </div>
 
                         <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-[var(--color-primary)] leading-tight">
@@ -52,7 +52,7 @@ export default function Welcome() {
 
                         <p className="mt-6 text-lg sm:text-xl text-[var(--color-muted)] max-w-2xl mx-auto leading-relaxed">
                             An AI-powered adaptive learning platform that works completely offline.
-                            Take quizzes, track your progress, and get personalized tutoring — no connection required.
+                            Take quizzes, track your progress, and get personalized tutoring, no connection required.
                         </p>
 
                         <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -114,7 +114,7 @@ export default function Welcome() {
                                 </div>
                                 <h3 className="text-lg font-bold text-[var(--color-text)]">Offline-First</h3>
                                 <p className="mt-2 text-sm text-[var(--color-muted)] leading-relaxed">
-                                    Study anywhere — on the bus, in class, or without WiFi. All your quizzes, progress, and flashcards are stored locally on your device.
+                                    Study anywhere, on the bus, in class, or without WiFi. All your quizzes, progress, and flashcards are stored locally on your device.
                                 </p>
                             </div>
 
@@ -282,7 +282,7 @@ export default function Welcome() {
                                 href="/login"
                                 className="inline-flex items-center px-10 py-4 text-lg font-bold text-[var(--color-primary)] bg-white rounded-xl hover:bg-gray-50 shadow-lg hover:shadow-xl transition-all"
                             >
-                                Get Started — It's Free
+                                Get Started, It's Free
                                 <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                                 </svg>

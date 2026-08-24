@@ -102,7 +102,9 @@ jobs:
             tsconfig.json \
             tsconfig.node.json \
             public/extract.php \
-            public/server-index.php
+            public/server-index.php \
+            docs/ \
+            content/
 
           echo "=== Deploy size ==="
           du -sh .
@@ -138,8 +140,10 @@ jobs:
             **/.DS_Store
             **/*.log
             **/*.map
-            **/docs/**/
+            **/docs*/
+            **/docs*
             **/doc/**/
+            **/content*/
             **/.editorconfig
             **/.gitignore
             **/.gitattributes

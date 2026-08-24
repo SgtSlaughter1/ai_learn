@@ -1,4 +1,4 @@
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEvent } from 'react';
 
 export default function Login() {
@@ -24,6 +24,16 @@ export default function Login() {
             <Head title="Sign In" />
 
             <div className="w-full max-w-md space-y-8">
+                {/* Back to Home */}
+                <Link
+                    href="/"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors"
+                >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back to Home
+                </Link>
                 {/* Brand Header */}
                 <div className="text-center space-y-2">
                     <h1 className="text-4xl font-extrabold tracking-tight text-[var(--color-primary)]">
