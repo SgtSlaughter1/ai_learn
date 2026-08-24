@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import React, { useState } from 'react';
 import ChatWidget from '@/components/ui/ChatWidget';
+import SyncIndicator from '@/components/ui/SyncIndicator';
 
 interface User {
     id: number;
@@ -202,6 +203,9 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                     {children}
                 </div>
             </main>
+
+            {/* Sync Status Indicator */}
+            <SyncIndicator />
 
             {/* Persistent AI Companion Floating Widget (Global across all pages) */}
             <ChatWidget />

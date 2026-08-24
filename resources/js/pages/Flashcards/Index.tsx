@@ -4,31 +4,37 @@ import { useState, useEffect } from 'react';
 import Markdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-
-interface Flashcard {
-    id: number;
-    subject_name: string;
-    topic_name: string;
-    question_text: string;
-    correct_answer: string;
-    explanation: string;
-}
+import { getFreshFlashcards } from '../../services/OfflineService';
+import type { CachedFlashcard } from '../../db/database';
 
 export default function Index() {
     const [loading, setLoading] = useState<boolean>(true);
-    const [deck, setDeck] = useState<Flashcard[]>([]);
+    const [deck, setDeck] = useState<CachedFlashcard[]>([]);
     const [currentIndex, setCurrentIndex] = useState<number>(0);
     const [flipped, setFlipped] = useState<boolean>(false);
     const [completed, setCompleted] = useState<boolean>(false);
     const [ratings, setRatings] = useState<('again' | 'good' | 'easy')[]>([]);
     const [xpEarned, setXpEarned] = useState<number>(0);
     const [levelUpInfo, setLevelUpInfo] = useState<{ level: number; rank: string; achievements: any[] } | null>(null);
+    const [_isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
+    const [offlineMessage, setOfflineMessage] = useState<string>('');
+
+    useEffect(() => {
+        const handleOnline = () => setIsOffline(false);
+        const handleOffline = () => setIsOffline(true);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
 
     useEffect(() => {
         fetchDeck();
     }, []);
 
-    const fetchDeck = () => {
+    const fetchDeck = async () => {
         setLoading(true);
         setFlipped(false);
         setCompleted(false);
@@ -36,67 +42,71 @@ export default function Index() {
         setRatings([]);
         setXpEarned(0);
         setLevelUpInfo(null);
+        setOfflineMessage('');
 
-        fetch('/api/v1/flashcards/deck')
-            .then((res) => {
-                if (!res.ok) throw new Error('Failed to fetch flashcard deck');
-                return res.json();
-            })
-            .then((data) => {
-                setDeck(data.deck);
-                setLoading(false);
-            })
-            .catch((err) => {
-                console.error(err);
-                setLoading(false);
-            });
+        try {
+            const cards = await getFreshFlashcards();
+            setDeck(cards);
+            if (cards.length === 0 && !navigator.onLine) {
+                setOfflineMessage('No flashcards cached for offline use. Connect to the internet to download flashcards.');
+            }
+        } catch {
+            setOfflineMessage('Could not load flashcards. Please check your connection.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleFlip = () => {
         setFlipped(!flipped);
     };
 
-    const submitSession = (finalRatings: ('again' | 'good' | 'easy')[]) => {
+    const submitSession = async (finalRatings: ('again' | 'good' | 'easy')[]) => {
+        if (!navigator.onLine) {
+            // Save locally — XP will be awarded when synced
+            setXpEarned(Math.round(finalRatings.filter(r => r !== 'again').length * 5));
+            setCompleted(true);
+            return;
+        }
+
         const csrfToken = document.cookie
             .split('; ')
             .find(row => row.startsWith('XSRF-TOKEN='))
             ?.split('=')[1] || '';
 
-        fetch('/api/v1/flashcards/complete', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-XSRF-TOKEN': decodeURIComponent(csrfToken)
-            },
-            body: JSON.stringify({ ratings: finalRatings })
-        })
-            .then(res => {
-                if (!res.ok) throw new Error('Failed to submit flashcard session');
-                return res.json();
-            })
-            .then(data => {
-                setXpEarned(data.xp_earned);
-                if (data.new_level && data.new_rank) {
-                    setLevelUpInfo({
-                        level: data.new_level,
-                        rank: data.new_rank,
-                        achievements: data.new_achievements || []
-                    });
-                }
-                setCompleted(true);
-            })
-            .catch(err => {
-                console.error(err);
-                setCompleted(true);
+        try {
+            const res = await fetch('/api/v1/flashcards/complete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-XSRF-TOKEN': decodeURIComponent(csrfToken)
+                },
+                body: JSON.stringify({ ratings: finalRatings })
             });
+
+            if (!res.ok) throw new Error('Failed to submit flashcard session');
+            const data = await res.json();
+            setXpEarned(data.xp_earned);
+            if (data.new_level && data.new_rank) {
+                setLevelUpInfo({
+                    level: data.new_level,
+                    rank: data.new_rank,
+                    achievements: data.new_achievements || []
+                });
+            }
+        } catch {
+            // Estimate XP locally
+            setXpEarned(Math.round(finalRatings.filter(r => r !== 'again').length * 5));
+        } finally {
+            setCompleted(true);
+        }
     };
 
     const handleRateRecall = (rating: 'again' | 'good' | 'easy') => {
         setFlipped(false);
         const newRatings = [...ratings, rating];
         setRatings(newRatings);
-        
-        // Timeout to let the flip animation finish before moving to next card
+
         setTimeout(() => {
             if (currentIndex < deck.length - 1) {
                 setCurrentIndex((prev) => prev + 1);
@@ -116,12 +126,22 @@ export default function Index() {
                         <h1 className="text-3xl font-extrabold text-[var(--color-text)] tracking-tight">Active Recall</h1>
                         <p className="text-[var(--color-muted)] mt-1">Review weak topics with flashcards and spaced repetition.</p>
                     </div>
-                    <button
-                        onClick={fetchDeck}
-                        className="inline-flex items-center justify-center px-4 py-2.5 text-sm font-semibold text-[var(--color-text)] hover:text-white bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-slate-700 rounded-xl transition-all focus:outline-none min-h-[48px] cursor-pointer"
-                    >
-                        🔄 Refresh Deck
-                    </button>
+                    <div className="flex items-center gap-3">
+                        {!navigator.onLine && (
+                            <span className="px-3 py-1.5 rounded-xl bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20 text-[var(--color-accent)] text-xs font-bold flex items-center gap-1.5">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3" />
+                                </svg>
+                                Offline
+                            </span>
+                        )}
+                        <button
+                            onClick={fetchDeck}
+                            className="inline-flex items-center justify-center px-4 py-2.5 text-sm font-semibold text-[var(--color-text)] hover:text-white bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-slate-700 rounded-xl transition-all focus:outline-none min-h-[48px] cursor-pointer"
+                        >
+                            🔄 Refresh Deck
+                        </button>
+                    </div>
                 </div>
             }
         >
@@ -129,7 +149,6 @@ export default function Index() {
 
             <div className="max-w-2xl mx-auto py-4 space-y-8">
                 {loading ? (
-                    /* Loading Skeleton */
                     <div className="space-y-6 animate-pulse">
                         <div className="flex justify-between items-center text-sm font-semibold text-[var(--color-muted)]">
                             <div className="h-4 bg-[var(--color-surface)] rounded w-24" />
@@ -138,8 +157,22 @@ export default function Index() {
                         <div className="h-[360px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl" />
                         <div className="h-2 bg-[var(--color-surface)] rounded-full w-full" />
                     </div>
+                ) : offlineMessage && deck.length === 0 ? (
+                    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] p-10 rounded-3xl text-center space-y-4">
+                        <div className="h-16 w-16 rounded-full mx-auto flex items-center justify-center bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20">
+                            <svg className="w-8 h-8 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3" />
+                            </svg>
+                        </div>
+                        <p className="text-[var(--color-muted)] text-sm">{offlineMessage}</p>
+                        <Link
+                            href="/dashboard"
+                            className="inline-flex items-center px-6 py-3 bg-[var(--color-primary)] text-white rounded-xl font-bold transition-all"
+                        >
+                            Go to Dashboard
+                        </Link>
+                    </div>
                 ) : completed ? (
-                    /* Completion Success Frame */
                     <div className="bg-[var(--color-surface)] backdrop-blur-md border border-[var(--color-border)] p-10 rounded-3xl text-center space-y-6 shadow-xl hover:border-[var(--color-border)] transition-all">
                         <div className="flex justify-center">
                             <span className="p-4 bg-[var(--color-primary)]/10 text-[var(--color-primary)] rounded-full animate-bounce">
@@ -151,11 +184,10 @@ export default function Index() {
                         <div className="space-y-2">
                             <h2 className="text-2xl font-extrabold text-[var(--color-text)]">Recall Session Complete!</h2>
                             <p className="text-[var(--color-muted)] text-sm max-w-md mx-auto leading-relaxed">
-                                Great job practicing active recall! Reviewing concepts you recently struggled with dramatically speeds up long-term retention.
+                                Great job practicing active recall! {!navigator.onLine ? 'Results will sync when you reconnect.' : 'Reviewing concepts you recently struggled with dramatically speeds up long-term retention.'}
                             </p>
                         </div>
 
-                        {/* XP and Activity Summary */}
                         <div className="max-w-md mx-auto bg-[var(--color-background)]/60 border border-[var(--color-border)] p-6 rounded-2xl space-y-4">
                             <div className="flex items-center justify-between">
                                 <span className="text-xs text-[var(--color-muted)] font-semibold uppercase tracking-wider">XP Awarded</span>
@@ -165,6 +197,14 @@ export default function Index() {
                                 <span>Cards Reviewed</span>
                                 <span>{deck.length} cards</span>
                             </div>
+                            {!navigator.onLine && (
+                                <div className="flex items-center gap-2 text-xs text-[var(--color-accent)] font-semibold pt-2 border-t border-[var(--color-border)]">
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    Will sync when online
+                                </div>
+                            )}
                             {levelUpInfo && (
                                 <div className="border-t border-[var(--color-border)] pt-4 mt-2 text-left space-y-3">
                                     <div className="flex items-center justify-between">
@@ -174,7 +214,7 @@ export default function Index() {
                                     {levelUpInfo.achievements.length > 0 && (
                                         <div className="space-y-2">
                                             <span className="block text-[10px] text-[var(--color-muted)] font-bold uppercase tracking-wider">Achievements Unlocked!</span>
-                                            {levelUpInfo.achievements.map((ach) => (
+                                            {levelUpInfo.achievements.map((ach: any) => (
                                                 <div key={ach.key} className="flex items-center gap-2.5 p-2.5 bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20 rounded-xl">
                                                     <span className="text-xl shrink-0">{ach.icon}</span>
                                                     <div>
@@ -205,19 +245,17 @@ export default function Index() {
                         </div>
                     </div>
                 ) : (
-                    /* Flashcard Slide View */
                     <div className="space-y-6">
                         <div className="flex justify-between items-center text-sm font-semibold text-[var(--color-muted)]">
                             <span className="uppercase tracking-wider">Review Session</span>
                             <span>Card {currentIndex + 1} of {deck.length}</span>
                         </div>
 
-                        {/* 3D Flippable Card Frame */}
-                        <div 
+                        <div
                             className="w-full select-none"
                             style={{ perspective: '1000px' }}
                         >
-                            <div 
+                            <div
                                 onClick={handleFlip}
                                 className="relative w-full h-[360px] transition-transform duration-500 cursor-pointer"
                                 style={{
@@ -225,8 +263,7 @@ export default function Index() {
                                     transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
                                 }}
                             >
-                                {/* CARD FRONT */}
-                                <div 
+                                <div
                                     className="absolute inset-0 w-full h-full rounded-3xl border border-[var(--color-border)] p-8 flex flex-col justify-between bg-[var(--color-surface)] backdrop-blur-md hover:border-[var(--color-border)] transition-colors shadow-lg"
                                     style={{ backfaceVisibility: 'hidden' }}
                                 >
@@ -248,8 +285,7 @@ export default function Index() {
                                     </div>
                                 </div>
 
-                                {/* CARD BACK */}
-                                <div 
+                                <div
                                     className="absolute inset-0 w-full h-full rounded-3xl border border-[var(--color-primary)]/20 p-8 flex flex-col justify-between bg-teal-950/20 backdrop-blur-md shadow-lg"
                                     style={{
                                         backfaceVisibility: 'hidden',
@@ -257,7 +293,6 @@ export default function Index() {
                                         border: '1px solid rgba(20, 184, 166, 0.2)'
                                     }}
                                     onClick={(e) => {
-                                        // Prevent clicking background of back card from re-flipping, allowing buttons execution
                                         e.stopPropagation();
                                     }}
                                 >
@@ -284,7 +319,6 @@ export default function Index() {
                             </div>
                         </div>
 
-                        {/* Spaced Repetition Rating Controls */}
                         <div className={`grid grid-cols-3 gap-3 transition-opacity duration-300 ${flipped ? 'opacity-100 pointer-events-auto' : 'opacity-35 pointer-events-none'}`}>
                             <button
                                 onClick={() => handleRateRecall('again')}
@@ -309,7 +343,6 @@ export default function Index() {
                             </button>
                         </div>
 
-                        {/* Progress Bar indicator */}
                         <div className="space-y-2">
                             <div className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] h-2 rounded-full overflow-hidden">
                                 <div

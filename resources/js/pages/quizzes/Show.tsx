@@ -3,6 +3,7 @@ import { useState, useEffect, FormEvent } from 'react';
 import Markdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import { getFreshQuiz, saveLocalAttempt } from '../../services/OfflineService';
 
 interface Option {
     id: number;
@@ -15,6 +16,7 @@ interface Question {
     question_text: string;
     type: string;
     difficulty?: string;
+    explanation?: string;
     options: Option[];
 }
 
@@ -54,6 +56,7 @@ export default function Show({ quizId }: Props) {
     const [loading, setLoading] = useState<boolean>(true);
     const [quiz, setQuiz] = useState<Quiz | null>(null);
     const [mode, setMode] = useState<QuizMode>(null);
+    const [_isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
 
     // Standard mode state
     const [activeIndex, setActiveIndex] = useState<number>(0);
@@ -76,29 +79,40 @@ export default function Show({ quizId }: Props) {
     const [secondsRemaining, setSecondsRemaining] = useState<number | null>(null);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-    // Fetch quiz data
+    // Online/offline detection
+    useEffect(() => {
+        const handleOnline = () => setIsOffline(false);
+        const handleOffline = () => setIsOffline(true);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
+
+    // Fetch quiz data (with offline cache)
     useEffect(() => {
         let isMounted = true;
 
-        fetch(`/api/v1/quizzes/${quizId}`)
-            .then((res) => {
-                if (!res.ok) throw new Error('Failed to fetch quiz data');
-                return res.json();
-            })
-            .then((data) => {
-                if (isMounted) {
-                    setQuiz(data.quiz);
-                    if (data.quiz.time_limit_minutes) {
-                        setSecondsRemaining(data.quiz.time_limit_minutes * 60);
+        const loadQuiz = async () => {
+            try {
+                const freshQuiz = await getFreshQuiz(quizId);
+                if (isMounted && freshQuiz) {
+                    setQuiz(freshQuiz as Quiz);
+                    if (freshQuiz.time_limit_minutes) {
+                        setSecondsRemaining(freshQuiz.time_limit_minutes * 60);
                     }
                     setLoading(false);
+                } else if (isMounted) {
+                    setLoading(false);
                 }
-            })
-            .catch((err) => {
-                console.error(err);
+            } catch {
                 if (isMounted) setLoading(false);
-            });
+            }
+        };
 
+        loadQuiz();
         return () => { isMounted = false; };
     }, [quizId]);
 
@@ -129,17 +143,52 @@ export default function Show({ quizId }: Props) {
         setAnswers((prev) => ({ ...prev, [questionId]: optionId }));
     };
 
-    const handleStandardSubmit = (e?: FormEvent) => {
+    const handleStandardSubmit = async (e?: FormEvent) => {
         if (e) e.preventDefault();
         if (isSubmitting || !quiz) return;
         setIsSubmitting(true);
 
-        router.post(`/quizzes/${quiz.id}/attempt`, {
-            answers: answers,
+        const attemptId = crypto.randomUUID();
+        const answerList = Object.entries(answers).map(([qId, oId]) => ({
+            question_id: parseInt(qId),
+            selected_option_id: oId,
+            is_correct: false, // Will be determined server-side
+            marks_awarded: 0,
+        }));
+
+        // Save locally for offline
+        await saveLocalAttempt({
+            id: attemptId,
+            user_id: 'current',
+            quiz_id: quiz.id,
+            status: 'completed',
+            score: null,
+            total_marks: quiz.questions.length,
+            started_at: new Date(Date.now() - secondsElapsed * 1000).toISOString(),
+            completed_at: new Date().toISOString(),
             duration_seconds: secondsElapsed,
-        }, {
-            onFinish: () => setIsSubmitting(false),
+            answers: answerList.map(a => ({
+                ...a,
+                id: crypto.randomUUID(),
+                quiz_attempt_id: attemptId,
+                answered_at: new Date().toISOString(),
+            })),
+            synced: navigator.onLine,
         });
+
+        if (navigator.onLine) {
+            // Submit to server
+            router.post(`/quizzes/${quiz.id}/attempt`, {
+                answers: answers,
+                duration_seconds: secondsElapsed,
+            }, {
+                onFinish: () => setIsSubmitting(false),
+            });
+        } else {
+            // Offline — show saved message and redirect
+            setIsSubmitting(false);
+            router.visit('/dashboard');
+        }
     };
 
     // ── Adaptive Mode Handlers ──
@@ -147,6 +196,13 @@ export default function Show({ quizId }: Props) {
     const startAdaptiveQuiz = async () => {
         if (!quiz) return;
         setAdaptiveLoading(true);
+
+        if (!navigator.onLine) {
+            // Adaptive quiz requires server — show message
+            alert('Adaptive quizzes require an internet connection. Please use Standard mode offline.');
+            setAdaptiveLoading(false);
+            return;
+        }
 
         try {
             const res = await fetch(`/api/v1/quizzes/${quiz.id}/adaptive/start`, {
@@ -183,7 +239,6 @@ export default function Show({ quizId }: Props) {
             if (!res.ok) throw new Error('Failed to submit answer');
             const data: AdaptiveState = await res.json();
 
-            // Show feedback before moving to next question
             if (!data.is_completed && data.answer_correct !== undefined) {
                 setLastAnswerResult({
                     correct: data.answer_correct,
@@ -196,12 +251,10 @@ export default function Show({ quizId }: Props) {
             setAdaptiveState(data);
 
             if (data.is_completed) {
-                // Quiz completed — redirect to results
                 router.get(`/quizzes/attempts/${data.attempt_id}`);
                 return;
             }
 
-            // If not showing feedback, set next question immediately
             if (!data.answer_correct === undefined) {
                 setAdaptiveCurrentQuestion(data.question);
                 setSelectedAdaptiveOption(null);
@@ -298,6 +351,18 @@ export default function Show({ quizId }: Props) {
             <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] p-4 md:p-8">
                 <Head title={quiz.title} />
                 <div className="max-w-4xl w-full mx-auto flex flex-col items-center justify-center min-h-[80vh] space-y-10">
+                    {/* Offline Banner */}
+                    {!navigator.onLine && (
+                        <div className="bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20 rounded-xl px-4 py-3 flex items-center gap-3 max-w-2xl w-full">
+                            <svg className="w-5 h-5 text-[var(--color-accent)] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3" />
+                            </svg>
+                            <span className="text-sm font-semibold text-[var(--color-accent)]">
+                                You're offline. Standard quizzes are available — answers will sync when you reconnect.
+                            </span>
+                        </div>
+                    )}
+
                     {/* Quiz Info Card */}
                     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] p-8 md:p-12 rounded-3xl backdrop-blur-md text-center space-y-6 max-w-2xl w-full">
                         <span className="text-[10px] font-extrabold px-3 py-1 bg-[var(--color-accent)]/10 text-[var(--color-accent)] border border-[var(--color-accent)]/20 rounded-md tracking-wider uppercase">
@@ -344,16 +409,19 @@ export default function Show({ quizId }: Props) {
                                 </div>
                                 <h3 className="text-lg font-bold text-[var(--color-text)] group-hover:text-white transition-colors">Standard Quiz</h3>
                                 <p className="text-sm text-[var(--color-muted)] leading-relaxed">
-                                    All questions presented in fixed order. Submit all answers at the end. Classic exam-style experience.
+                                    All questions presented in fixed order. Submit all answers at the end. Works offline!
                                 </p>
+                                <span className="inline-block text-[10px] font-bold px-2 py-0.5 bg-[var(--color-success)]/10 text-[var(--color-success)] border border-[var(--color-success)]/20 rounded tracking-wider uppercase">
+                                    Offline Ready
+                                </span>
                             </div>
                         </button>
 
                         {/* Adaptive Quiz */}
                         <button
                             onClick={startAdaptiveQuiz}
-                            disabled={adaptiveLoading}
-                            className="group bg-[var(--color-surface)] border border-[var(--color-accent)]/20 p-8 rounded-3xl text-left transition-all hover:border-indigo-500/40 hover:bg-indigo-950/20 hover:shadow-xl hover:shadow-indigo-500/10 focus:outline-none cursor-pointer disabled:opacity-50"
+                            disabled={adaptiveLoading || !navigator.onLine}
+                            className="group bg-[var(--color-surface)] border border-[var(--color-accent)]/20 p-8 rounded-3xl text-left transition-all hover:border-indigo-500/40 hover:bg-indigo-950/20 hover:shadow-xl hover:shadow-indigo-500/10 focus:outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <div className="space-y-4">
                                 <div className="h-12 w-12 rounded-2xl bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20 flex items-center justify-center group-hover:bg-[var(--color-accent)]/20 group-hover:border-[var(--color-accent)]/30 transition-all">
@@ -372,10 +440,10 @@ export default function Show({ quizId }: Props) {
                                     Adaptive Quiz ✨
                                 </h3>
                                 <p className="text-sm text-[var(--color-muted)] leading-relaxed">
-                                    AI-powered difficulty adjustment. Questions adapt to your skill level in real-time for a personalized assessment.
+                                    AI-powered difficulty adjustment. Requires internet connection.
                                 </p>
                                 <span className="inline-block text-[10px] font-bold px-2 py-0.5 bg-[var(--color-accent)]/10 text-[var(--color-accent)] border border-[var(--color-accent)]/20 rounded tracking-wider uppercase">
-                                    AI-Powered
+                                    {navigator.onLine ? 'AI-Powered' : 'Requires Internet'}
                                 </span>
                             </div>
                         </button>
@@ -391,7 +459,6 @@ export default function Show({ quizId }: Props) {
             <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] p-4 md:p-8">
                 <Head title="Answer Feedback" />
                 <div className="max-w-4xl w-full mx-auto flex flex-col items-center justify-center min-h-[70vh] space-y-8">
-                    {/* Feedback Card */}
                     <div className={`bg-[var(--color-surface)] border p-8 md:p-12 rounded-3xl backdrop-blur-md text-center space-y-6 max-w-2xl w-full ${
                         lastAnswerResult.correct
                             ? 'border-[var(--color-success)]/20'
@@ -417,17 +484,10 @@ export default function Show({ quizId }: Props) {
                             {lastAnswerResult.correct ? 'Correct!' : 'Not Quite!'}
                         </h2>
 
-                        {/* Ability Score Movement */}
                         {adaptiveState && (
                             <div className="flex items-center justify-center gap-3">
                                 <span className="text-sm text-[var(--color-muted)]">Ability:</span>
-                                <span className={`text-lg font-bold ${
-                                    adaptiveState.difficulty_label === 'Expert' ? 'text-[var(--color-error)]' :
-                                    adaptiveState.difficulty_label === 'Advanced' ? 'text-[var(--color-accent)]' :
-                                    adaptiveState.difficulty_label === 'Proficient' ? 'text-[var(--color-accent)]' :
-                                    adaptiveState.difficulty_label === 'Developing' ? 'text-blue-400' :
-                                    'text-[var(--color-success)]'
-                                }`}>
+                                <span className={`text-lg font-bold ${getDifficultyColor(adaptiveState.difficulty_label).split(' ')[0]}`}>
                                     {adaptiveState.ability_score}
                                 </span>
                                 <span className={`text-xs font-bold px-2 py-0.5 rounded border ${getDifficultyColor(adaptiveState.difficulty_label)}`}>
@@ -436,7 +496,6 @@ export default function Show({ quizId }: Props) {
                             </div>
                         )}
 
-                        {/* Explanation */}
                         {lastAnswerResult.explanation && (
                             <div className="p-5 bg-indigo-950/20 border border-indigo-500/10 rounded-2xl text-left space-y-2">
                                 <span className="block text-xs font-bold text-[var(--color-accent)] uppercase tracking-wider">
@@ -470,7 +529,6 @@ export default function Show({ quizId }: Props) {
             <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex flex-col justify-between p-4 md:p-8">
                 <Head title={`${quiz?.title} — Adaptive`} />
 
-                {/* Header */}
                 <header className="max-w-4xl w-full mx-auto flex justify-between items-center bg-[var(--color-surface)] border border-[var(--color-border)] p-4 md:p-6 rounded-2xl backdrop-blur-md">
                     <div className="space-y-1">
                         <h1 className="text-lg md:text-xl font-extrabold text-[var(--color-text)] truncate max-w-[200px] sm:max-w-md">
@@ -482,7 +540,6 @@ export default function Show({ quizId }: Props) {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        {/* Ability Score Badge */}
                         <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 ${getDifficultyColor(adaptiveState.difficulty_label)}`}>
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
@@ -490,7 +547,6 @@ export default function Show({ quizId }: Props) {
                             {adaptiveState.ability_score}
                         </div>
 
-                        {/* Timer */}
                         {secondsRemaining !== null && (
                             <div className={`px-4 py-2 rounded-xl border flex items-center space-x-2 text-sm font-bold ${
                                 secondsRemaining < 60
@@ -506,10 +562,8 @@ export default function Show({ quizId }: Props) {
                     </div>
                 </header>
 
-                {/* Question Card */}
                 <main className="max-w-4xl w-full mx-auto my-6 md:my-10 flex-1 flex flex-col justify-center">
                     <div className="bg-[var(--color-surface)] backdrop-blur-md border border-[var(--color-border)]/80 p-6 md:p-10 rounded-3xl shadow-xl flex flex-col justify-between space-y-8">
-                        {/* Question Meta */}
                         <div className="space-y-4">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-[10px] font-extrabold px-2 py-0.5 bg-[var(--color-accent)]/10 text-[var(--color-accent)] border border-[var(--color-accent)]/20 rounded-md tracking-wider uppercase">
@@ -526,7 +580,6 @@ export default function Show({ quizId }: Props) {
                             </p>
                         </div>
 
-                        {/* Options */}
                         <div className="space-y-3.5">
                             {adaptiveCurrentQuestion.options.map((option) => {
                                 const isSelected = selectedAdaptiveOption === option.id;
@@ -552,7 +605,6 @@ export default function Show({ quizId }: Props) {
                                 );
                             })}
 
-                            {/* Skip button for adaptive */}
                             <button
                                 onClick={() => setSelectedAdaptiveOption(null)}
                                 className="w-full text-center py-3 text-xs text-[var(--color-muted)] hover:text-[var(--color-muted)] transition-colors font-semibold"
@@ -563,15 +615,12 @@ export default function Show({ quizId }: Props) {
                     </div>
                 </main>
 
-                {/* Footer */}
                 <footer className="max-w-4xl w-full mx-auto space-y-4">
-                    {/* Ability Score Progress Bar */}
                     <div className="flex items-center gap-3">
                         <span className="text-[10px] font-bold text-[var(--color-muted)] uppercase tracking-wider whitespace-nowrap">
                             {adaptiveState.difficulty_label}
                         </span>
                         <div className="flex-1 bg-[var(--color-surface)] border border-[var(--color-border)] h-2.5 rounded-full overflow-hidden relative">
-                            {/* Ability scale visualization */}
                             <div
                                 className={`h-full rounded-full transition-all duration-500 shadow-md ${
                                     adaptiveState.difficulty_label === 'Expert' ? 'bg-rose-500 shadow-rose-500/20' :
@@ -588,7 +637,6 @@ export default function Show({ quizId }: Props) {
                         </span>
                     </div>
 
-                    {/* Progress bar */}
                     <div className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] h-2.5 rounded-full overflow-hidden">
                         <div
                             className="bg-[var(--color-accent)] h-full transition-all duration-300 rounded-full shadow-md shadow-indigo-600/20"
@@ -625,18 +673,29 @@ export default function Show({ quizId }: Props) {
                     </span>
                 </div>
 
-                {secondsRemaining !== null && (
-                    <div className={`px-4 py-2 rounded-xl border flex items-center space-x-2 text-sm font-bold ${
-                        secondsRemaining < 60
-                            ? 'bg-[var(--color-error)]/10 text-[var(--color-error)] border-[var(--color-error)]/20 animate-pulse'
-                            : 'bg-[var(--color-background)]/60 text-[var(--color-accent)] border-[var(--color-border)]'
-                    }`}>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>{formatTime(secondsRemaining)}</span>
-                    </div>
-                )}
+                <div className="flex items-center gap-3">
+                    {!navigator.onLine && (
+                        <div className="px-3 py-1.5 rounded-xl border bg-[var(--color-accent)]/10 border-[var(--color-accent)]/20 text-[var(--color-accent)] text-xs font-bold flex items-center gap-1.5">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3" />
+                            </svg>
+                            Offline
+                        </div>
+                    )}
+
+                    {secondsRemaining !== null && (
+                        <div className={`px-4 py-2 rounded-xl border flex items-center space-x-2 text-sm font-bold ${
+                            secondsRemaining < 60
+                                ? 'bg-[var(--color-error)]/10 text-[var(--color-error)] border-[var(--color-error)]/20 animate-pulse'
+                                : 'bg-[var(--color-background)]/60 text-[var(--color-accent)] border-[var(--color-border)]'
+                        }`}>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>{formatTime(secondsRemaining)}</span>
+                        </div>
+                    )}
+                </div>
             </header>
 
             <main className="max-w-4xl w-full mx-auto my-6 md:my-10 flex-1 flex flex-col justify-center">

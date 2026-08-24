@@ -1,6 +1,8 @@
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { db } from '@/db/database';
 import 'katex/dist/katex.min.css';
 
 interface Attempt {
@@ -44,28 +46,63 @@ export default function Dashboard() {
     const [recentAttempts, setRecentAttempts] = useState<Attempt[]>([]);
     const [gamification, setGamification] = useState<GamificationProfile | null>(null);
     const [showXpGuide, setShowXpGuide] = useState<boolean>(false);
+    const [offlineStats, setOfflineStats] = useState<any>(null);
+    const isOnline = useNetworkStatus();
 
     useEffect(() => {
         let isMounted = true;
-        Promise.all([
-            fetch('/api/v1/dashboard/stats').then((res) => res.json()),
-            fetch('/api/v1/gamification/profile').then((res) => res.json()),
-        ])
-            .then(([statsData, gamData]) => {
+
+        const loadDashboard = async () => {
+            if (isOnline) {
+                try {
+                    const [statsData, gamData] = await Promise.all([
+                        fetch('/api/v1/dashboard/stats').then((res) => res.json()),
+                        fetch('/api/v1/gamification/profile').then((res) => res.json()),
+                    ]);
+                    if (isMounted) {
+                        setStats(statsData.stats);
+                        setRecentAttempts(statsData.recentAttempts);
+                        setGamification(gamData);
+                        setLoading(false);
+                    }
+                } catch {
+                    if (isMounted) setLoading(false);
+                }
+            } else {
+                // Offline: load from Dexie
+                const cached = await db.learnerProgress.toArray();
+                const gamCache = await db.gamification.toCollection().first();
+                const attempts = await db.quizAttempts.toArray();
                 if (isMounted) {
-                    setStats(statsData.stats);
-                    setRecentAttempts(statsData.recentAttempts);
-                    setGamification(gamData);
+                    if (cached.length > 0) {
+                        const total = cached.length;
+                        const mastered = cached.filter(c => (c.mastery_score ?? 0) >= 80).length;
+                        const avgMastery = total > 0
+                            ? Math.round(cached.reduce((s, c) => s + (c.mastery_score ?? 0), 0) / total)
+                            : 0;
+                        setOfflineStats({ total, mastered, avgMastery });
+                    }
+                    if (gamCache) {
+                        setGamification(gamCache as unknown as GamificationProfile);
+                    }
+                    setRecentAttempts(
+                        attempts.slice(-5).reverse().map(a => ({
+                            id: String(a.id),
+                            quiz_title: 'Quiz #' + a.quiz_id,
+                            status: a.status,
+                            score: a.score ?? null,
+                            total_marks: a.total_marks ?? null,
+                            completed_at: a.completed_at || null,
+                        }))
+                    );
                     setLoading(false);
                 }
-            })
-            .catch((err) => {
-                console.error(err);
-                if (isMounted) setLoading(false);
-            });
+            }
+        };
 
+        loadDashboard();
         return () => { isMounted = false; };
-    }, []);
+    }, [isOnline]);
 
     const accuracy = stats && stats.questionsAttempted > 0
         ? Math.round((stats.questionsCorrect / stats.questionsAttempted) * 100)
@@ -78,6 +115,12 @@ export default function Dashboard() {
                     <div>
                         <h1 className="text-3xl font-extrabold text-[var(--color-text)] tracking-tight">Dashboard</h1>
                         <p className="text-[var(--color-muted)] mt-1">Track your progress and offline learning path.</p>
+                        {!isOnline && (
+                            <span className="inline-flex items-center gap-1 mt-2 text-xs font-bold text-[var(--color-accent)] bg-[var(--color-accent)]/10 px-2 py-1 rounded-full border border-[var(--color-accent)]/20">
+                                <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)] animate-pulse" />
+                                Offline — showing cached data
+                            </span>
+                        )}
                     </div>
                     <Link
                         href="/subjects"
@@ -95,27 +138,27 @@ export default function Dashboard() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     <StatCard
                         label="Active Subjects"
-                        value={loading ? '...' : stats?.totalSubjects}
+                        value={loading ? '...' : isOnline ? stats?.totalSubjects : offlineStats?.total ?? 0}
                         icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13M12 19.247V21" /></svg>}
                         loading={loading}
                     />
                     <StatCard
                         label="Questions Solved"
-                        value={loading ? '...' : stats?.questionsAttempted}
+                        value={loading ? '...' : isOnline ? stats?.questionsAttempted : offlineStats?.total ?? 0}
                         subtitle={stats ? `${stats.questionsCorrect} correct answers` : undefined}
                         icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                         loading={loading}
                     />
                     <StatCard
                         label="Avg. Accuracy"
-                        value={loading ? '...' : `${accuracy}%`}
+                        value={loading ? '...' : `${isOnline ? accuracy : offlineStats?.avgMastery ?? 0}%`}
                         subtitle="Based on quiz attempts"
                         icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
                         loading={loading}
                     />
                     <StatCard
                         label="Mastered Topics"
-                        value={loading ? '...' : stats?.completedTopics}
+                        value={loading ? '...' : isOnline ? stats?.completedTopics : offlineStats?.mastered ?? 0}
                         subtitle=">= 80% mastery level"
                         icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>}
                         loading={loading}
@@ -279,7 +322,7 @@ export default function Dashboard() {
                                         />
                                     </svg>
                                     <div className="absolute text-center">
-                                        <span className="text-4xl font-extrabold text-[var(--color-text)]">{stats?.averageMastery}%</span>
+                                        <span className="text-4xl font-extrabold text-[var(--color-text)]">{stats?.averageMastery ?? offlineStats?.avgMastery ?? 0}%</span>
                                         <span className="block text-[10px] text-[var(--color-primary)] font-bold uppercase tracking-wider mt-0.5">Mastery</span>
                                     </div>
                                 </div>
@@ -288,7 +331,7 @@ export default function Dashboard() {
                         <div className="text-center text-xs text-[var(--color-muted)] bg-[var(--color-background)] py-2.5 rounded-xl border border-[var(--color-border)]">
                             {loading ? (
                                 <span className="text-[var(--color-muted)] font-bold">Loading mastery...</span>
-                            ) : (stats?.averageMastery ?? 0) >= 80 ? (
+                            ) : ((stats?.averageMastery ?? offlineStats?.avgMastery ?? 0) >= 80) ? (
                                 '🌟 Excellent Progress!'
                             ) : (
                                 '📈 Keep practicing to unlock mastery!'
@@ -299,7 +342,9 @@ export default function Dashboard() {
                     {/* Recent Attempts logs */}
                     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] p-6 rounded-2xl lg:col-span-2 shadow-sm">
                         <h2 className="text-lg font-bold text-[var(--color-text)]">Recent Quiz Activity</h2>
-                        <p className="text-[var(--color-muted)] text-xs mt-1">Your recent diagnostic quiz assessments.</p>
+                        <p className="text-[var(--color-muted)] text-xs mt-1">
+                            {isOnline ? 'Your recent diagnostic quiz assessments.' : '📱 Cached data — will sync when online'}
+                        </p>
 
                         <div className="mt-6 space-y-4">
                             {loading ? (
