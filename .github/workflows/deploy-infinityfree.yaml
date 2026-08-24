@@ -77,7 +77,7 @@ jobs:
           php artisan view:clear
           rm -f bootstrap/cache/*.php
 
-      # ── Remove source files not needed ────────────────────
+      # ── Remove files not needed on server ─────────────────
       - name: 🧹 Remove unnecessary files/folders
         run: |
           rm -rf \
@@ -108,73 +108,87 @@ jobs:
           echo "=== Vendor size BEFORE cleanup ==="
           du -sh vendor/
 
-          # Remove test directories inside vendor packages
           find vendor/ -type d \( -name "tests" -o -name "Test" -o -name "test" -o -name "testbench" \) -exec rm -rf {} + 2>/dev/null || true
-
-          # Remove documentation directories
           find vendor/ -type d \( -name "docs" -o -name "doc" -o -name "Examples" -o -name "example" \) -exec rm -rf {} + 2>/dev/null || true
-
-          # Remove source map and markdown/doc files
           find vendor/ -name "*.map" -delete 2>/dev/null || true
           find vendor/ -name "*.md" -delete 2>/dev/null || true
           find vendor/ -name "*.txt" -not -name "LICENSE*" -delete 2>/dev/null || true
-
-          # Remove git/CI/IDE/build files inside vendor
           find vendor/ -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true
           find vendor/ -name ".github" -type d -exec rm -rf {} + 2>/dev/null || true
           find vendor/ \( -name ".gitignore" -o -name ".gitattributes" -o -name ".editorconfig" \
             -o -name ".php-cs-fixer*" -o -name "phpstan*" -o -name "phpunit.xml*" \
             -o -name ".phpunit.result.cache" -o -name "Makefile" -o -name "Dockerfile*" \
-            -o -name "docker-compose*" -o -name ".travis.yml" -o -name ".circleci" \) -delete 2>/dev/null || true
+            -o -name "docker-compose*" -o -name ".travis.yml" \) -delete 2>/dev/null || true
           find vendor/ -name ".circleci" -type d -exec rm -rf {} + 2>/dev/null || true
-
-          # Remove empty directories left behind
           find vendor/ -type d -empty -delete 2>/dev/null || true
 
           echo "=== Vendor size AFTER cleanup ==="
           du -sh vendor/
-          echo "=== Total file count ==="
-          find vendor/ -type f | wc -l
+          echo "=== Total files to upload ==="
+          find . -type f | wc -l
 
-      # ── Prepare InfinityFree directory structure ──────────
+      # ── Create .htaccess in project root (for InfinityFree) ──
+      # On InfinityFree, htdocs IS the web root.
+      # We upload EVERYTHING into htdocs/, so the root .htaccess
+      # rewrites all requests into the public/ subdirectory.
+      - name: 📄 Create root .htaccess for InfinityFree
+        run: |
+          cat > .htaccess << 'HTACCESS'
+          RewriteEngine On
+          RewriteRule ^storage/(.*)$ /storage/app/public/$1 [END]
+          RewriteRule (.*) /public/$1 [L]
+          HTACCESS
+
+      # ── Prepare for InfinityFree ──────────────────────────
+      # InfinityFree: everything goes inside htdocs/
+      # Structure:
+      #   htdocs/
+      #   ├── app/
+      #   ├── bootstrap/
+      #   ├── config/
+      #   ├── database/
+      #   ├── public/        ← contains index.php, build/, .htaccess
+      #   ├── resources/
+      #   ├── routes/
+      #   ├── storage/
+      #   ├── vendor/
+      #   ├── .env
+      #   ├── .htaccess      ← rewrites to public/
+      #   └── artisan
       - name: 📁 Prepare InfinityFree directory structure
         run: |
           mkdir -p /tmp/deploy/htdocs
 
-          # Copy public/ contents into htdocs/ (web root)
-          cp -r public/* /tmp/deploy/htdocs/
-
-          # Copy Laravel framework files to parent (above htdocs)
-          cp -r app /tmp/deploy/
-          cp -r bootstrap /tmp/deploy/
-          cp -r config /tmp/deploy/
-          cp -r database /tmp/deploy/
-          cp -r resources /tmp/deploy/
-          cp -r routes /tmp/deploy/
-          cp -r vendor /tmp/deploy/
-          cp composer.json /tmp/deploy/
-          cp composer.lock /tmp/deploy/
-          cp artisan /tmp/deploy/
-          cp .env /tmp/deploy/
+          # Copy the ENTIRE project into htdocs/ (except .git, node_modules, tests)
+          # This is how InfinityFree expects it
+          cp -r app /tmp/deploy/htdocs/
+          cp -r bootstrap /tmp/deploy/htdocs/
+          cp -r config /tmp/deploy/htdocs/
+          cp -r database /tmp/deploy/htdocs/
+          cp -r public /tmp/deploy/htdocs/
+          cp -r resources /tmp/deploy/htdocs/
+          cp -r routes /tmp/deploy/htdocs/
+          cp -r vendor /tmp/deploy/htdocs/
+          cp .env /tmp/deploy/htdocs/
+          cp .htaccess /tmp/deploy/htdocs/
+          cp artisan /tmp/deploy/htdocs/
+          cp composer.json /tmp/deploy/htdocs/
+          cp composer.lock /tmp/deploy/htdocs/
 
           # Make storage writable
-          mkdir -p /tmp/deploy/storage/app/public
-          mkdir -p /tmp/deploy/storage/framework/cache/data
-          mkdir -p /tmp/deploy/storage/framework/sessions
-          mkdir -p /tmp/deploy/storage/framework/views
-          mkdir -p /tmp/deploy/storage/logs
-          chmod -R 775 /tmp/deploy/storage
-          chmod -R 775 /tmp/deploy/bootstrap/cache
+          mkdir -p /tmp/deploy/htdocs/storage/app/public
+          mkdir -p /tmp/deploy/htdocs/storage/framework/cache/data
+          mkdir -p /tmp/deploy/htdocs/storage/framework/sessions
+          mkdir -p /tmp/deploy/htdocs/storage/framework/views
+          mkdir -p /tmp/deploy/htdocs/storage/logs
+          chmod -R 775 /tmp/deploy/htdocs/storage
+          chmod -R 775 /tmp/deploy/htdocs/bootstrap/cache
 
-          echo "=== Final deploy size ==="
-          du -sh /tmp/deploy/
-          du -sh /tmp/deploy/vendor/
-          echo "=== Total files to upload ==="
-          find /tmp/deploy/ -type f | wc -l
-
-      # ── Copy index.php to htdocs ──────────────────────────
-      - name: 📄 Create htdocs/index.php
-        run: cp public/server-index.php /tmp/deploy/htdocs/index.php
+          echo "=== Deploy structure ==="
+          ls -la /tmp/deploy/htdocs/
+          echo "=== Deploy size ==="
+          du -sh /tmp/deploy/htdocs/
+          du -sh /tmp/deploy/htdocs/vendor/
 
       # ── Deploy to InfinityFree via FTP ────────────────────
       - name: 🚀 Deploy via FTP
@@ -183,7 +197,7 @@ jobs:
           server: ftpupload.net
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: /tmp/deploy/
+          local-dir: /tmp/deploy/htdocs/
           server-dir: /
           exclude: |
             **/.git*
