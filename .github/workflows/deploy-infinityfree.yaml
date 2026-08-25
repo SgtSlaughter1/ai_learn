@@ -117,6 +117,35 @@ jobs:
       - name: 📄 Create root index.php
         run: cp public/root-index.php ./index.php
 
+      # ── Create all directories on FTP first ──────────────
+      - name: 🗂️ Create FTP directories
+        run: |
+          sudo apt-get update && sudo apt-get install -y lftp
+
+          # Collect all unique directories that will be uploaded (excluding git, node_modules, tests, docs, content)
+          find . -type d \
+            -not -path './.git*' \
+            -not -path './.github*' \
+            -not -path './node_modules*' \
+            -not -path './tests*' \
+            -not -path './docs*' \
+            -not -path './content*' \
+            -not -path './storage/framework/cache/data*' \
+            -not -path './storage/framework/views*' \
+            -not -path './storage/logs*' \
+            | sed 's|^\./||' | grep -v '^$' | sort -u > /tmp/ftp_dirs.txt
+
+          echo "Creating $(wc -l < /tmp/ftp_dirs.txt) directories on FTP server..."
+
+          # Create an lftp script
+          echo "set ssl:verify-certificate no" > /tmp/ftp_mkdir.lftp
+          while IFS= read -r dir; do
+            echo "mkdir -p '$dir'" >> /tmp/ftp_mkdir.lftp
+          done < /tmp/ftp_dirs.txt
+          echo "bye" >> /tmp/ftp_mkdir.lftp
+
+          lftp -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} ftpupload.net < /tmp/ftp_mkdir.lftp || echo "Warning: Some dirs may have failed, continuing..."
+
       # ── Deploy to InfinityFree via FTP ────────────────────
       - name: 🚀 Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
