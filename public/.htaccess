@@ -23,3 +23,16 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 </IfModule>
+
+# Allow the service worker to control the entire site from /build/
+<IfModule mod_headers.c>
+    <FilesMatch "sw\.js$">
+        Header Set Service-Worker-Allowed "/"
+        Header Set Cache-Control "no-cache"
+    </FilesMatch>
+</IfModule>
+
+# Correct MIME type for the web manifest
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+</IfModule>
