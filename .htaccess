@@ -1,0 +1,11 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Prevent direct access to sensitive files and folders
+    RedirectMatch 404 /\.(env|git|gitignore|gitattributes|editorconfig|styleci\.yml|phpunit\.result\.cache)$
+    RedirectMatch 404 ^/(app|bootstrap|config|database|resources|routes|storage|tests|vendor)/
+
+    # Rewrite all requests to the public/ folder
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
