@@ -77,6 +77,12 @@ jobs:
           php artisan view:clear
           rm -f bootstrap/cache/*.php
 
+      # ── Create root index.php ─────────────────────────────
+      # On InfinityFree the FTP root IS htdocs, so vendor/ is at the same level
+      # The root index.php bootstraps Laravel directly from vendor/ and bootstrap/
+      - name: 📄 Create root index.php
+        run: cp public/root-index.php ./index.php
+
       # ── Remove files not needed on server ─────────────────
       - name: 🧹 Remove unnecessary files/folders
         run: |
@@ -94,6 +100,8 @@ jobs:
             .env.example \
             phpunit.xml \
             README.md \
+            DEPLOY_GUIDE.md \
+            CHANGELOG.md \
             package.json \
             package-lock.json \
             vite.config.ts \
@@ -103,81 +111,69 @@ jobs:
             tsconfig.node.json \
             public/extract.php \
             public/server-index.php \
+            public/root-index.php \
             docs/ \
             content/
+
+          # Ensure storage directories exist (even if empty) so Laravel doesn't error
+          mkdir -p storage/framework/cache/data
+          mkdir -p storage/framework/sessions
+          mkdir -p storage/framework/views
+          mkdir -p storage/logs
+          mkdir -p bootstrap/cache
+
+          # Create .gitkeep files so lftp uploads the empty directories
+          touch storage/framework/cache/data/.gitkeep
+          touch storage/framework/sessions/.gitkeep
+          touch storage/framework/views/.gitkeep
+          touch storage/logs/.gitkeep
+          touch bootstrap/cache/.gitkeep
 
           echo "=== Deploy size ==="
           du -sh .
           echo "=== File count ==="
           find . -type f | wc -l
 
-      # ── Create root index.php ─────────────────────────────
-      # On InfinityFree the FTP root IS htdocs, so vendor/ is at the same level
-      # The root index.php bootstraps Laravel directly from vendor/ and bootstrap/
-      - name: 📄 Create root index.php
-        run: cp public/root-index.php ./index.php
+      # ── Deploy to InfinityFree via lftp ────────────────────
+      # Using lftp mirror instead of SamKirkland/FTP-Deploy-Action because:
+      # - InfinityFree blocks IPs after too many rapid connections (FTP-Deploy-Action opens many)
+      # - lftp supports retries, parallel transfers, and passive mode natively
+      # - lftp handles InfinityFree's SSL certificate issues gracefully
+      - name: 📦 Install lftp
+        run: sudo apt-get update && sudo apt-get install -y lftp
 
-      # ── Create all directories on FTP first ──────────────
-      - name: 🗂️ Create FTP directories
+      - name: 🚀 Deploy via lftp mirror
+        env:
+          FTP_USER: ${{ secrets.FTP_USERNAME }}
+          FTP_PASS: ${{ secrets.FTP_PASSWORD }}
+          FTP_HOST: ftpupload.net
         run: |
-          sudo apt-get update && sudo apt-get install -y lftp
+          lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" <<EOF
+          set ssl:verify-certificate no
+          set ftp:ssl-allow yes
+          set ftp:passive-mode yes
+          set net:timeout 30
+          set net:max-retries 5
+          set net:reconnect-interval-base 5
+          set net:reconnect-interval-multiplier 1
+          set mirror:parallel-transfer-count 4
+          set ftp:timezone ""
 
-          # Collect all unique directories that will be uploaded (excluding git, node_modules, tests, docs, content)
-          find . -type d \
-            -not -path './.git*' \
-            -not -path './.github*' \
-            -not -path './node_modules*' \
-            -not -path './tests*' \
-            -not -path './docs*' \
-            -not -path './content*' \
-            -not -path './storage/framework/cache/data*' \
-            -not -path './storage/framework/views*' \
-            -not -path './storage/logs*' \
-            | sed 's|^\./||' | grep -v '^$' | sort -u > /tmp/ftp_dirs.txt
+          # Mirror the entire build to the server root
+          # --reverse  = upload local -> remote
+          # --delete   = remove remote files not present locally
+          # --verbose  = show what's being transferred
+          # --no-perms = don't try to set permissions (InfinityFree ignores them)
+          # --parallel = upload multiple files at once
+          # --exclude-glob patterns skip files we don't want on the server
+          mirror --reverse --delete --verbose --no-perms --parallel=4 \
+            --exclude-glob .DS_Store \
+            --exclude-glob "*.log" \
+            --exclude-glob "*.map" \
+            ./ /
 
-          echo "Creating $(wc -l < /tmp/ftp_dirs.txt) directories on FTP server..."
-
-          # Create an lftp script
-          echo "set ssl:verify-certificate no" > /tmp/ftp_mkdir.lftp
-          while IFS= read -r dir; do
-            echo "mkdir -p '$dir'" >> /tmp/ftp_mkdir.lftp
-          done < /tmp/ftp_dirs.txt
-          echo "bye" >> /tmp/ftp_mkdir.lftp
-
-          lftp -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} ftpupload.net < /tmp/ftp_mkdir.lftp || echo "Warning: Some dirs may have failed, continuing..."
-
-      # ── Deploy to InfinityFree via FTP ────────────────────
-      - name: 🚀 Deploy via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ftpupload.net
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./
-          server-dir: /
-          exclude: |
-            **/.git*
-            **/.github/**/
-            **/node_modules/**/
-            **/tests/**/
-            **/.env.example
-            **/phpunit.xml
-            **/.DS_Store
-            **/*.log
-            **/*.map
-            **/docs*/
-            **/docs*
-            **/doc/**/
-            **/content*/
-            **/.editorconfig
-            **/.gitignore
-            **/.gitattributes
-            **/extract.php
-            **/server-index.php
-            **/root-index.php
-          dangerous-clean-slate: false
-          timeout: 86400000
-          log-level: standard
+          bye
+          EOF
 
       - name: 🎉 Deployment finished
         run: echo "Deployment to https://ailearn.gt.tc/ completed!"
