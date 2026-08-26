@@ -5,7 +5,18 @@
     RedirectMatch 404 /\.(env|git|gitignore|gitattributes|editorconfig|styleci\.yml|phpunit\.result\.cache)$
     RedirectMatch 404 ^/(app|bootstrap|config|database|resources|routes|storage|tests|vendor)/
 
-    # Rewrite all requests to the public/ folder
+    # Allow direct access if file exists in public/
+    RewriteCond %{DOCUMENT_ROOT}/public/$1 -f [OR]
+    RewriteCond %{DOCUMENT_ROOT}/public/$1 -d
+    RewriteRule ^(.*)$ public/$1 [L]
+
+    # Rewrite all remaining requests to the public/ folder
     RewriteCond %{REQUEST_URI} !^/public/
     RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+    AddType application/manifest+json .json
+    AddType application/javascript .js
 </IfModule>
