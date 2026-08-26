@@ -152,25 +152,25 @@ jobs:
           set ssl:verify-certificate no
           set ftp:ssl-allow yes
           set ftp:passive-mode yes
-          set net:timeout 30
-          set net:max-retries 5
-          set net:reconnect-interval-base 5
-          set net:reconnect-interval-multiplier 1
-          set mirror:parallel-transfer-count 4
+          set net:timeout 60
+          set net:max-retries 10
+          set net:reconnect-interval-base 10
+          set net:reconnect-interval-multiplier 2
+          set mirror:parallel-transfer-count 2
           set ftp:timezone ""
 
-          # Mirror the entire build to the server root
+          # Mirror the entire build into htdocs/ (the web root on InfinityFree)
           # --reverse  = upload local -> remote
           # --delete   = remove remote files not present locally
           # --verbose  = show what's being transferred
           # --no-perms = don't try to set permissions (InfinityFree ignores them)
           # --parallel = upload multiple files at once
           # --exclude-glob patterns skip files we don't want on the server
-          mirror --reverse --delete --verbose --no-perms --parallel=4 \
+          mirror --reverse --delete --verbose --no-perms --parallel=2 \
             --exclude-glob .DS_Store \
             --exclude-glob "*.log" \
             --exclude-glob "*.map" \
-            ./ /
+            ./ /htdocs/
 
           bye
           EOF
