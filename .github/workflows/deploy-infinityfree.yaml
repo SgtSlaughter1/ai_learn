@@ -162,32 +162,28 @@ jobs:
           EOF
           echo "Old build assets cleaned (or didn't exist yet)"
 
-      - name: 🚀 Deploy via lftp mirror
+      - name: 🚀 Deploy via lftp mirror (with retry)
         env:
           FTP_USER: ${{ secrets.FTP_USERNAME }}
           FTP_PASS: ${{ secrets.FTP_PASSWORD }}
           FTP_HOST: ftpupload.net
         run: |
-          lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" <<EOF
+          # Run mirror up to 3 times — InfinityFree randomly rejects
+          # individual files with "553 Permission denied", but retrying works.
+          for ATTEMPT in 1 2 3; do
+            echo "=== Upload attempt $ATTEMPT ==="
+            lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" <<EOF && break
           set ssl:verify-certificate no
           set ftp:ssl-allow yes
           set ftp:passive-mode yes
           set net:timeout 60
-          set net:max-retries 10
+          set net:max-retries 5
           set net:reconnect-interval-base 10
           set net:reconnect-interval-multiplier 2
           set ftp:timezone ""
+          set cmd:fail-exit yes
 
-          # Mirror into htdocs/ (InfinityFree web root)
-          # --reverse      = upload (local → remote)
-          # --ignore-time  = compare by SIZE only, not timestamps
-          #                  (CI builds always have fresh timestamps, so without
-          #                   this flag lftp re-uploads everything every deploy)
-          # --no-perms     = skip chmod (InfinityFree ignores it)
-          # --parallel=2   = low parallelism to avoid IP blocks
-          # NO --delete    = don't remove server files not in local
-          #                  (avoids deleting htdocs itself or user uploads)
-          mirror --reverse --verbose --no-perms --parallel=2 --ignore-time \
+          mirror --reverse --verbose --no-perms --ignore-time \
             --exclude-glob .DS_Store \
             --exclude-glob "*.log" \
             --exclude-glob "*.map" \
@@ -195,6 +191,9 @@ jobs:
 
           bye
           EOF
+            echo "Attempt $ATTEMPT had errors, retrying in 15s..."
+            sleep 15
+          done
 
       - name: 🎉 Deployment finished
         run: echo "Deployment to https://ailearn.gt.tc/ completed!"
