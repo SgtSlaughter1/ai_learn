@@ -18,8 +18,75 @@ export default defineConfig({
             scope: '/',
             workbox: {
                 globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-                navigateFallback: '/',
-                navigateFallbackDenylist: [/^\/api/, /^\/login/, /^\/logout/, /^\/register/],
+                cleanupOutdatedCaches: true,
+                clientsClaim: true,
+                skipWaiting: true,
+                navigateFallback: null,
+                runtimeCaching: [
+                    {
+                        // 1. Cache all HTML navigation requests (Page visits)
+                        urlPattern: ({ request }) => request.mode === 'navigate',
+                        handler: 'NetworkFirst',
+                        options: {
+                            cacheName: 'pages-cache',
+                            networkTimeoutSeconds: 3,
+                            expiration: {
+                                maxEntries: 50,
+                                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+                            },
+                            cacheableResponse: {
+                                statuses: [0, 200],
+                            },
+                        },
+                    },
+                    {
+                        // 2. Cache images and icons in /images/
+                        urlPattern: ({ url }) => url.pathname.startsWith('/images/'),
+                        handler: 'StaleWhileRevalidate',
+                        options: {
+                            cacheName: 'images-cache',
+                            expiration: {
+                                maxEntries: 60,
+                                maxAgeSeconds: 30 * 24 * 60 * 60,
+                            },
+                            cacheableResponse: {
+                                statuses: [0, 200],
+                            },
+                        },
+                    },
+                    {
+                        // 3. Cache Inertia SPA page data requests
+                        urlPattern: ({ request }) => request.headers.get('X-Inertia') === 'true',
+                        handler: 'NetworkFirst',
+                        options: {
+                            cacheName: 'inertia-cache',
+                            networkTimeoutSeconds: 3,
+                            expiration: {
+                                maxEntries: 50,
+                                maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
+                            },
+                            cacheableResponse: {
+                                statuses: [0, 200],
+                            },
+                        },
+                    },
+                    {
+                        // 4. Cache API calls for offline fallback
+                        urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
+                        handler: 'NetworkFirst',
+                        options: {
+                            cacheName: 'api-cache',
+                            networkTimeoutSeconds: 3,
+                            expiration: {
+                                maxEntries: 100,
+                                maxAgeSeconds: 7 * 24 * 60 * 60,
+                            },
+                            cacheableResponse: {
+                                statuses: [0, 200],
+                            },
+                        },
+                    },
+                ],
             },
             manifest: {
                 id: '/',
