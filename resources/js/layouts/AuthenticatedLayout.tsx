@@ -2,6 +2,7 @@ import { Link, usePage } from '@inertiajs/react';
 import React, { useState } from 'react';
 import ChatWidget from '@/components/ui/ChatWidget';
 import SyncIndicator from '@/components/ui/SyncIndicator';
+import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt';
 
 interface User {
     id: number;
@@ -209,6 +210,9 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
 
             {/* Persistent AI Companion Floating Widget (Global across all pages) */}
             <ChatWidget />
+
+            {/* In-App PWA Install Banner */}
+            <PWAInstallPrompt />
         </div>
     );
 }

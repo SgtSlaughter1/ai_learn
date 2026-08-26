@@ -1,4 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
+import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt';
 
 export default function Welcome() {
     return (
@@ -310,6 +311,9 @@ export default function Welcome() {
                         </p>
                     </div>
                 </footer>
+
+                {/* In-App PWA Install Banner */}
+                <PWAInstallPrompt />
             </div>
         </>
     );
