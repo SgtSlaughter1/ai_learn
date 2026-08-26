@@ -10,6 +10,7 @@ jobs:
   deploy:
     name: Build & Deploy to ailearn.gt.tc
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: 📥 Checkout code
@@ -78,69 +79,88 @@ jobs:
           rm -f bootstrap/cache/*.php
 
       # ── Create root index.php ─────────────────────────────
-      # On InfinityFree the FTP root IS htdocs, so vendor/ is at the same level
-      # The root index.php bootstraps Laravel directly from vendor/ and bootstrap/
       - name: 📄 Create root index.php
         run: cp public/root-index.php ./index.php
 
-      # ── Remove files not needed on server ─────────────────
-      - name: 🧹 Remove unnecessary files/folders
+      # ── Prepare deploy directory ───────────────────────────
+      # Copy only what's needed into a clean staging directory
+      # This avoids uploading .git, node_modules, tests, etc.
+      - name: 📁 Stage deployment files
         run: |
-          rm -rf \
-            tests/ \
-            node_modules/ \
-            .git/ \
-            .github/ \
-            .editorconfig \
-            .gitattributes \
-            .gitignore \
-            storage/framework/cache/data/* \
-            storage/framework/views/* \
-            storage/logs/* \
-            .env.example \
-            phpunit.xml \
-            README.md \
-            DEPLOY_GUIDE.md \
-            CHANGELOG.md \
-            package.json \
-            package-lock.json \
-            vite.config.ts \
-            tailwind.config.js \
-            postcss.config.js \
-            tsconfig.json \
-            tsconfig.node.json \
-            public/extract.php \
-            public/server-index.php \
-            public/root-index.php \
-            docs/ \
-            content/
+          mkdir -p /tmp/deploy
 
-          # Ensure storage directories exist (even if empty) so Laravel doesn't error
-          mkdir -p storage/framework/cache/data
-          mkdir -p storage/framework/sessions
-          mkdir -p storage/framework/views
-          mkdir -p storage/logs
-          mkdir -p bootstrap/cache
+          # Copy only production-necessary directories and files
+          cp -r app /tmp/deploy/
+          cp -r bootstrap /tmp/deploy/
+          cp -r config /tmp/deploy/
+          cp -r database /tmp/deploy/
+          cp -r public /tmp/deploy/
+          cp -r resources /tmp/deploy/
+          cp -r routes /tmp/deploy/
+          cp -r vendor /tmp/deploy/
 
-          # Create .gitkeep files so lftp uploads the empty directories
-          touch storage/framework/cache/data/.gitkeep
-          touch storage/framework/sessions/.gitkeep
-          touch storage/framework/views/.gitkeep
-          touch storage/logs/.gitkeep
-          touch bootstrap/cache/.gitkeep
+          # Copy root files
+          cp .env /tmp/deploy/
+          cp .htaccess /tmp/deploy/
+          cp artisan /tmp/deploy/
+          cp composer.json /tmp/deploy/
+          cp composer.lock /tmp/deploy/
+          cp index.php /tmp/deploy/
+
+          # Create storage directories
+          mkdir -p /tmp/deploy/storage/app/public
+          mkdir -p /tmp/deploy/storage/framework/cache/data
+          mkdir -p /tmp/deploy/storage/framework/sessions
+          mkdir -p /tmp/deploy/storage/framework/views
+          mkdir -p /tmp/deploy/storage/logs
+
+          # Placeholder files so FTP creates the directories
+          touch /tmp/deploy/storage/app/public/.gitkeep
+          touch /tmp/deploy/storage/framework/cache/data/.gitkeep
+          touch /tmp/deploy/storage/framework/sessions/.gitkeep
+          touch /tmp/deploy/storage/framework/views/.gitkeep
+          touch /tmp/deploy/storage/logs/.gitkeep
+          touch /tmp/deploy/bootstrap/cache/.gitkeep
+
+          # Remove files that shouldn't be on server
+          rm -f /tmp/deploy/public/root-index.php
+          rm -f /tmp/deploy/public/server-index.php
+          rm -f /tmp/deploy/public/extract.php
 
           echo "=== Deploy size ==="
-          du -sh .
+          du -sh /tmp/deploy
           echo "=== File count ==="
-          find . -type f | wc -l
+          find /tmp/deploy -type f | wc -l
 
-      # ── Deploy to InfinityFree via lftp ────────────────────
-      # Using lftp mirror instead of SamKirkland/FTP-Deploy-Action because:
-      # - InfinityFree blocks IPs after too many rapid connections (FTP-Deploy-Action opens many)
-      # - lftp supports retries, parallel transfers, and passive mode natively
-      # - lftp handles InfinityFree's SSL certificate issues gracefully
+      # ── Deploy via lftp ────────────────────────────────────
       - name: 📦 Install lftp
         run: sudo apt-get update && sudo apt-get install -y lftp
+
+      # Clean old Vite build hashes before uploading new ones
+      - name: 🧹 Clean old build assets on server
+        env:
+          FTP_USER: ${{ secrets.FTP_USERNAME }}
+          FTP_PASS: ${{ secrets.FTP_PASSWORD }}
+          FTP_HOST: ftpupload.net
+        run: |
+          lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" <<EOF || true
+          set ssl:verify-certificate no
+          set ftp:ssl-allow yes
+          set ftp:passive-mode yes
+          set net:timeout 30
+          set net:max-retries 3
+
+          # Remove old hashed build assets (they change every build)
+          rm -rf /htdocs/public/build/assets
+          rm -f /htdocs/public/build/manifest.json
+          rm -f /htdocs/public/build/manifest.webmanifest
+          rm -f /htdocs/public/build/sw.js
+          rm -f /htdocs/public/build/registerSW.js
+          rm -f /htdocs/public/build/workbox-*.js
+
+          bye
+          EOF
+          echo "Old build assets cleaned (or didn't exist yet)"
 
       - name: 🚀 Deploy via lftp mirror
         env:
@@ -156,21 +176,22 @@ jobs:
           set net:max-retries 10
           set net:reconnect-interval-base 10
           set net:reconnect-interval-multiplier 2
-          set mirror:parallel-transfer-count 2
           set ftp:timezone ""
 
-          # Mirror the entire build into htdocs/ (the web root on InfinityFree)
-          # --reverse  = upload local -> remote
-          # --delete   = remove remote files not present locally
-          # --verbose  = show what's being transferred
-          # --no-perms = don't try to set permissions (InfinityFree ignores them)
-          # --parallel = upload multiple files at once
-          # --exclude-glob patterns skip files we don't want on the server
-          mirror --reverse --delete --verbose --no-perms --parallel=2 \
+          # Mirror into htdocs/ (InfinityFree web root)
+          # --reverse      = upload (local → remote)
+          # --ignore-time  = compare by SIZE only, not timestamps
+          #                  (CI builds always have fresh timestamps, so without
+          #                   this flag lftp re-uploads everything every deploy)
+          # --no-perms     = skip chmod (InfinityFree ignores it)
+          # --parallel=2   = low parallelism to avoid IP blocks
+          # NO --delete    = don't remove server files not in local
+          #                  (avoids deleting htdocs itself or user uploads)
+          mirror --reverse --verbose --no-perms --parallel=2 --ignore-time \
             --exclude-glob .DS_Store \
             --exclude-glob "*.log" \
             --exclude-glob "*.map" \
-            ./ /htdocs/
+            /tmp/deploy/ /htdocs/
 
           bye
           EOF
