@@ -10,7 +10,7 @@ jobs:
   deploy:
     name: Build & Deploy to ailearn.gt.tc
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: 📥 Checkout code
@@ -82,61 +82,60 @@ jobs:
       - name: 📄 Create root index.php
         run: cp public/root-index.php ./index.php
 
-      # ── Prepare deploy directory ───────────────────────────
-      # Copy only what's needed into a clean staging directory
-      # This avoids uploading .git, node_modules, tests, etc.
+      # ── Prepare deploy directories ─────────────────────────
+      # Splitting app code from vendor ensures your app & assets upload in seconds
       - name: 📁 Stage deployment files
         run: |
-          mkdir -p /tmp/deploy
+          mkdir -p /tmp/deploy_app
+          mkdir -p /tmp/deploy_vendor
 
-          # Copy only production-necessary directories and files
-          cp -r app /tmp/deploy/
-          cp -r bootstrap /tmp/deploy/
-          cp -r config /tmp/deploy/
-          cp -r database /tmp/deploy/
-          cp -r public /tmp/deploy/
-          cp -r resources /tmp/deploy/
-          cp -r routes /tmp/deploy/
-          cp -r vendor /tmp/deploy/
+          # 1. Copy Application Code & Assets (Fast ~150 files)
+          cp -r app /tmp/deploy_app/
+          cp -r bootstrap /tmp/deploy_app/
+          cp -r config /tmp/deploy_app/
+          cp -r database /tmp/deploy_app/
+          cp -r public /tmp/deploy_app/
+          cp -r resources /tmp/deploy_app/
+          cp -r routes /tmp/deploy_app/
 
-          # Copy root files
-          cp .env /tmp/deploy/
-          cp .htaccess /tmp/deploy/
-          cp artisan /tmp/deploy/
-          cp composer.json /tmp/deploy/
-          cp composer.lock /tmp/deploy/
-          cp index.php /tmp/deploy/
+          cp .env /tmp/deploy_app/
+          cp .htaccess /tmp/deploy_app/
+          cp artisan /tmp/deploy_app/
+          cp composer.json /tmp/deploy_app/
+          cp composer.lock /tmp/deploy_app/
+          cp index.php /tmp/deploy_app/
 
           # Create storage directories
-          mkdir -p /tmp/deploy/storage/app/public
-          mkdir -p /tmp/deploy/storage/framework/cache/data
-          mkdir -p /tmp/deploy/storage/framework/sessions
-          mkdir -p /tmp/deploy/storage/framework/views
-          mkdir -p /tmp/deploy/storage/logs
+          mkdir -p /tmp/deploy_app/storage/app/public
+          mkdir -p /tmp/deploy_app/storage/framework/cache/data
+          mkdir -p /tmp/deploy_app/storage/framework/sessions
+          mkdir -p /tmp/deploy_app/storage/framework/views
+          mkdir -p /tmp/deploy_app/storage/logs
 
-          # Placeholder files so FTP creates the directories
-          touch /tmp/deploy/storage/app/public/.gitkeep
-          touch /tmp/deploy/storage/framework/cache/data/.gitkeep
-          touch /tmp/deploy/storage/framework/sessions/.gitkeep
-          touch /tmp/deploy/storage/framework/views/.gitkeep
-          touch /tmp/deploy/storage/logs/.gitkeep
-          touch /tmp/deploy/bootstrap/cache/.gitkeep
+          touch /tmp/deploy_app/storage/app/public/.gitkeep
+          touch /tmp/deploy_app/storage/framework/cache/data/.gitkeep
+          touch /tmp/deploy_app/storage/framework/sessions/.gitkeep
+          touch /tmp/deploy_app/storage/framework/views/.gitkeep
+          touch /tmp/deploy_app/storage/logs/.gitkeep
+          touch /tmp/deploy_app/bootstrap/cache/.gitkeep
 
-          # Remove files that shouldn't be on server
-          rm -f /tmp/deploy/public/root-index.php
-          rm -f /tmp/deploy/public/server-index.php
-          rm -f /tmp/deploy/public/extract.php
+          rm -f /tmp/deploy_app/public/root-index.php
+          rm -f /tmp/deploy_app/public/server-index.php
+          rm -f /tmp/deploy_app/public/extract.php
 
-          echo "=== Deploy size ==="
-          du -sh /tmp/deploy
-          echo "=== File count ==="
-          find /tmp/deploy -type f | wc -l
+          # 2. Copy Vendor directory separately
+          cp -r vendor/* /tmp/deploy_vendor/
+
+          echo "=== App files to upload ==="
+          find /tmp/deploy_app -type f | wc -l
+          echo "=== Vendor files to sync ==="
+          find /tmp/deploy_vendor -type f | wc -l
 
       # ── Deploy via lftp ────────────────────────────────────
       - name: 📦 Install lftp
         run: sudo apt-get update && sudo apt-get install -y lftp
 
-      # Clean old Vite build hashes before uploading new ones
+      # Clean old Vite build assets to ensure fresh hash references
       - name: 🧹 Clean old build assets on server
         env:
           FTP_USER: ${{ secrets.FTP_USERNAME }}
@@ -147,10 +146,10 @@ jobs:
           set ssl:verify-certificate no
           set ftp:ssl-allow yes
           set ftp:passive-mode yes
+          set ftp:sync-mode off
           set net:timeout 30
           set net:max-retries 3
 
-          # Remove old hashed build assets (they change every build)
           rm -rf /htdocs/public/build/assets
           rm -f /htdocs/public/build/manifest.json
           rm -f /htdocs/public/build/manifest.webmanifest
@@ -160,39 +159,69 @@ jobs:
 
           bye
           EOF
-          echo "Old build assets cleaned (or didn't exist yet)"
 
-      - name: 🚀 Deploy via lftp mirror (with retry)
+      # Deploy Application Code, Views, Public Assets & PWA Icons (FAST ~30s)
+      - name: 🚀 Deploy Application & PWA Assets
         env:
           FTP_USER: ${{ secrets.FTP_USERNAME }}
           FTP_PASS: ${{ secrets.FTP_PASSWORD }}
           FTP_HOST: ftpupload.net
         run: |
-          # Run mirror up to 3 times — InfinityFree randomly rejects
-          # individual files with "553 Permission denied", but retrying works.
           for ATTEMPT in 1 2 3; do
-            echo "=== Upload attempt $ATTEMPT ==="
+            echo "=== App Upload attempt $ATTEMPT ==="
             lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" <<EOF && break
           set ssl:verify-certificate no
           set ftp:ssl-allow yes
           set ftp:passive-mode yes
-          set net:timeout 60
+          set ftp:sync-mode off
+          set net:timeout 45
           set net:max-retries 5
-          set net:reconnect-interval-base 10
-          set net:reconnect-interval-multiplier 2
+          set net:reconnect-interval-base 5
+          set net:reconnect-interval-multiplier 1.5
           set ftp:timezone ""
           set cmd:fail-exit yes
 
-          mirror --reverse --verbose --no-perms --ignore-time \
+          mirror --reverse --verbose --no-perms --ignore-time --parallel=3 \
             --exclude-glob .DS_Store \
             --exclude-glob "*.log" \
             --exclude-glob "*.map" \
-            /tmp/deploy/ /htdocs/
+            /tmp/deploy_app/ /htdocs/
 
           bye
           EOF
-            echo "Attempt $ATTEMPT had errors, retrying in 15s..."
-            sleep 15
+            echo "Attempt $ATTEMPT had errors, retrying in 10s..."
+            sleep 10
+          done
+
+      # Deploy / Sync Vendor Dependencies (Skipped/Fast if already matching sizes)
+      - name: 🚀 Sync Vendor Dependencies
+        env:
+          FTP_USER: ${{ secrets.FTP_USERNAME }}
+          FTP_PASS: ${{ secrets.FTP_PASSWORD }}
+          FTP_HOST: ftpupload.net
+        run: |
+          for ATTEMPT in 1 2 3; do
+            echo "=== Vendor Sync attempt $ATTEMPT ==="
+            lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" <<EOF && break
+          set ssl:verify-certificate no
+          set ftp:ssl-allow yes
+          set ftp:passive-mode yes
+          set ftp:sync-mode off
+          set net:timeout 60
+          set net:max-retries 5
+          set net:reconnect-interval-base 5
+          set net:reconnect-interval-multiplier 1.5
+          set ftp:timezone ""
+          set cmd:fail-exit yes
+
+          mirror --reverse --verbose --no-perms --ignore-time --parallel=3 \
+            --exclude-glob .DS_Store \
+            /tmp/deploy_vendor/ /htdocs/vendor/
+
+          bye
+          EOF
+            echo "Attempt $ATTEMPT had errors, retrying in 10s..."
+            sleep 10
           done
 
       - name: 🎉 Deployment finished
