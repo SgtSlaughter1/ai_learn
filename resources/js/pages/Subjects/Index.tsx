@@ -2,6 +2,8 @@ import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 
+import { db } from '@/db/database';
+
 interface Subject {
     id: number;
     name: string;
@@ -19,21 +21,59 @@ export default function Index() {
     useEffect(() => {
         let isMounted = true;
 
-        fetch('/api/v1/subjects')
-            .then((res) => {
-                if (!res.ok) throw new Error('Failed to fetch subjects');
-                return res.json();
-            })
-            .then((data) => {
-                if (isMounted) {
-                    setSubjects(data.subjects);
+        async function loadSubjects() {
+            // 1. Try reading from Dexie first (instant offline/cached render)
+            try {
+                const local = await db.subjects.toArray();
+                if (local.length > 0 && isMounted) {
+                    setSubjects(local.map((s: any) => ({
+                        id: s.id,
+                        name: s.name,
+                        slug: s.slug,
+                        description: s.description,
+                        progress_percent: s.progress_percent || 0,
+                        topics_count: s.topics_count || 0,
+                    })));
                     setLoading(false);
                 }
-            })
-            .catch((err) => {
-                console.error(err);
+            } catch (e) {
+                console.error('Dexie read error:', e);
+            }
+
+            // 2. Fetch fresh data from network if online
+            try {
+                const res = await fetch('/api/v1/subjects');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (isMounted) {
+                        setSubjects(data.subjects);
+                        setLoading(false);
+                    }
+                    // Save to Dexie for offline use
+                    if (data.subjects && data.subjects.length > 0) {
+                        await db.subjects.bulkPut(
+                            data.subjects.map((s: any) => ({
+                                id: s.id,
+                                name: s.name,
+                                slug: s.slug,
+                                description: s.description,
+                                status: 'published',
+                                sort_order: 0,
+                                progress_percent: s.progress_percent || 0,
+                                topics_count: s.topics_count || 0,
+                                cached_at: new Date().toISOString(),
+                            }))
+                        );
+                    }
+                }
+            } catch (err) {
+                console.log('Offline mode — loaded subjects from local database');
+            } finally {
                 if (isMounted) setLoading(false);
-            });
+            }
+        }
+
+        loadSubjects();
 
         return () => {
             isMounted = false;

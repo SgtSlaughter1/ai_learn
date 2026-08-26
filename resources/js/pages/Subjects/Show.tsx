@@ -2,6 +2,8 @@ import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 
+import { db } from '@/db/database';
+
 interface TopicProgress {
     questions_attempted: number;
     questions_correct: number;
@@ -47,23 +49,92 @@ export default function Show({ slug }: Props) {
     useEffect(() => {
         let isMounted = true;
 
-        fetch(`/api/v1/subjects/${slug}`)
-            .then((res) => {
-                if (!res.ok) throw new Error('Failed to fetch subject details');
-                return res.json();
-            })
-            .then((data) => {
-                if (isMounted) {
-                    setSubject(data.subject);
-                    setTopics(data.topics);
-                    setQuizzes(data.quizzes);
+        async function loadSubjectDetails() {
+            // 1. Try reading from Dexie first (instant offline/cached render)
+            try {
+                const localSubject = await db.subjects.where('slug').equals(slug).first();
+                if (localSubject && isMounted) {
+                    setSubject(localSubject);
+                    const localTopics = await db.topics.where('subject_id').equals(localSubject.id).toArray();
+                    if (localTopics.length > 0 && isMounted) {
+                        setTopics(
+                            localTopics.map((t: any) => ({
+                                id: t.id,
+                                subject_id: t.subject_id,
+                                name: t.name,
+                                slug: t.slug,
+                                level: t.level,
+                                description: t.description,
+                                progress: t.progress || null,
+                            }))
+                        );
+                    }
+                    const localQuizzes = await db.quizzes.toArray();
+                    if (localQuizzes.length > 0 && isMounted) {
+                        setQuizzes(
+                            localQuizzes.map((q: any) => ({
+                                id: q.id,
+                                title: q.title,
+                                description: q.description,
+                                time_limit_minutes: q.time_limit_minutes,
+                            }))
+                        );
+                    }
                     setLoading(false);
                 }
-            })
-            .catch((err) => {
-                console.error(err);
+            } catch (e) {
+                console.error('Dexie subject read error:', e);
+            }
+
+            // 2. Fetch fresh data from network if online
+            try {
+                const res = await fetch(`/api/v1/subjects/${slug}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (isMounted) {
+                        setSubject(data.subject);
+                        setTopics(data.topics || []);
+                        setQuizzes(data.quizzes || []);
+                        setLoading(false);
+                    }
+                    // Cache in Dexie for offline use
+                    if (data.subject) {
+                        await db.subjects.put({
+                            ...data.subject,
+                            status: 'published',
+                            sort_order: 0,
+                            cached_at: new Date().toISOString(),
+                        });
+                    }
+                    if (data.topics && data.topics.length > 0) {
+                        await db.topics.bulkPut(
+                            data.topics.map((t: any) => ({
+                                ...t,
+                                status: 'published',
+                                sort_order: 0,
+                                cached_at: new Date().toISOString(),
+                            }))
+                        );
+                    }
+                    if (data.quizzes && data.quizzes.length > 0) {
+                        await db.quizzes.bulkPut(
+                            data.quizzes.map((q: any) => ({
+                                ...q,
+                                status: 'published',
+                                cached_at: new Date().toISOString(),
+                                questions: q.questions || [],
+                            }))
+                        );
+                    }
+                }
+            } catch (err) {
+                console.log('Offline mode — loaded subject details from local database');
+            } finally {
                 if (isMounted) setLoading(false);
-            });
+            }
+        }
+
+        loadSubjectDetails();
 
         return () => {
             isMounted = false;

@@ -149,25 +149,35 @@ export default function Show({ quizId }: Props) {
         setIsSubmitting(true);
 
         const attemptId = crypto.randomUUID();
-        const answerList = Object.entries(answers).map(([qId, oId]) => ({
-            question_id: parseInt(qId),
-            selected_option_id: oId,
-            is_correct: false, // Will be determined server-side
-            marks_awarded: 0,
-        }));
+        let calculatedScore = 0;
 
-        // Save locally for offline
+        const answerList = Object.entries(answers).map(([qId, oId]) => {
+            const questionId = parseInt(qId);
+            const question = quiz.questions.find((q) => q.id === questionId);
+            const correctOption = (question?.options as any[])?.find((o) => o.is_correct);
+            const isCorrect = correctOption ? correctOption.id === oId : false;
+            if (isCorrect) calculatedScore++;
+
+            return {
+                question_id: questionId,
+                selected_option_id: oId,
+                is_correct: isCorrect,
+                marks_awarded: isCorrect ? 1 : 0,
+            };
+        });
+
+        // Save locally in Dexie for offline
         await saveLocalAttempt({
             id: attemptId,
             user_id: 'current',
             quiz_id: quiz.id,
             status: 'completed',
-            score: null,
+            score: calculatedScore,
             total_marks: quiz.questions.length,
             started_at: new Date(Date.now() - secondsElapsed * 1000).toISOString(),
             completed_at: new Date().toISOString(),
             duration_seconds: secondsElapsed,
-            answers: answerList.map(a => ({
+            answers: answerList.map((a) => ({
                 ...a,
                 id: crypto.randomUUID(),
                 quiz_attempt_id: attemptId,
@@ -178,16 +188,20 @@ export default function Show({ quizId }: Props) {
 
         if (navigator.onLine) {
             // Submit to server
-            router.post(`/quizzes/${quiz.id}/attempt`, {
-                answers: answers,
-                duration_seconds: secondsElapsed,
-            }, {
-                onFinish: () => setIsSubmitting(false),
-            });
+            router.post(
+                `/quizzes/${quiz.id}/attempt`,
+                {
+                    answers: answers,
+                    duration_seconds: secondsElapsed,
+                },
+                {
+                    onFinish: () => setIsSubmitting(false),
+                }
+            );
         } else {
-            // Offline — show saved message and redirect
+            // Offline — immediately navigate to the offline result page!
             setIsSubmitting(false);
-            router.visit('/dashboard');
+            router.visit(`/quizzes/attempts/${attemptId}`);
         }
     };
 

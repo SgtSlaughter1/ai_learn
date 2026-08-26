@@ -65,6 +65,28 @@ export default function Dashboard() {
                         setGamification(gamData);
                         setLoading(false);
                     }
+
+                    // Background preload and sync all subjects into Dexie for offline readiness
+                    fetch('/api/v1/subjects')
+                        .then((r) => (r.ok ? r.json() : null))
+                        .then((d) => {
+                            if (d?.subjects?.length) {
+                                db.subjects.bulkPut(
+                                    d.subjects.map((s: any) => ({
+                                        id: s.id,
+                                        name: s.name,
+                                        slug: s.slug,
+                                        description: s.description,
+                                        status: 'published',
+                                        sort_order: 0,
+                                        progress_percent: s.progress_percent || 0,
+                                        topics_count: s.topics_count || 0,
+                                        cached_at: new Date().toISOString(),
+                                    }))
+                                );
+                            }
+                        })
+                        .catch(() => {});
                 } catch {
                     if (isMounted) setLoading(false);
                 }

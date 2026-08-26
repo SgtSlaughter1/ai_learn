@@ -4,6 +4,8 @@ import Markdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 
+import { db } from '@/db/database';
+
 interface Option {
     id: number;
     option_text: string;
@@ -47,21 +49,69 @@ export default function Result({ attemptId }: Props) {
     useEffect(() => {
         let isMounted = true;
 
-        fetch(`/api/v1/quizzes/attempts/${attemptId}`)
-            .then((res) => {
-                if (!res.ok) throw new Error('Failed to fetch attempt details');
-                return res.json();
-            })
-            .then((data) => {
-                if (isMounted) {
-                    setAttempt(data.attempt);
+        async function loadAttempt() {
+            // 1. Try reading from Dexie first (instant offline render)
+            try {
+                const localAttempt = await db.quizAttempts.get(attemptId);
+                if (localAttempt && isMounted) {
+                    const localQuiz = await db.quizzes.get(localAttempt.quiz_id);
+                    const questions = localQuiz?.questions || [];
+
+                    let calculatedScore = 0;
+                    const answers: Answer[] = (localAttempt.answers || []).map((ans) => {
+                        const question = questions.find((q) => q.id === ans.question_id);
+                        const correctOption = question?.options.find((o) => o.is_correct);
+                        const isCorrect = correctOption ? correctOption.id === ans.selected_option_id : ans.is_correct;
+                        if (isCorrect) calculatedScore++;
+
+                        return {
+                            id: ans.id,
+                            question_id: ans.question_id,
+                            question_text: question?.question_text || `Question #${ans.question_id}`,
+                            explanation: question?.explanation || '',
+                            selected_option_id: ans.selected_option_id,
+                            is_correct: Boolean(isCorrect),
+                            marks_awarded: isCorrect ? 1 : 0,
+                            options: (question?.options || []).map((o) => ({
+                                id: o.id,
+                                option_text: o.option_text,
+                                is_correct: Boolean(o.is_correct),
+                            })),
+                        };
+                    });
+
+                    setAttempt({
+                        id: localAttempt.id,
+                        quiz_title: localQuiz?.title || `Quiz #${localAttempt.quiz_id}`,
+                        score: localAttempt.score ?? calculatedScore,
+                        total_marks: localAttempt.total_marks ?? (questions.length || answers.length),
+                        completed_at: localAttempt.completed_at,
+                        answers: answers,
+                    });
                     setLoading(false);
                 }
-            })
-            .catch((err) => {
-                console.error(err);
+            } catch (e) {
+                console.error('Dexie attempt load error:', e);
+            }
+
+            // 2. Fetch fresh from network if online
+            try {
+                const res = await fetch(`/api/v1/quizzes/attempts/${attemptId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (isMounted) {
+                        setAttempt(data.attempt);
+                        setLoading(false);
+                    }
+                }
+            } catch (err) {
+                console.log('Offline mode — loaded quiz result from local database');
+            } finally {
                 if (isMounted) setLoading(false);
-            });
+            }
+        }
+
+        loadAttempt();
 
         return () => {
             isMounted = false;
