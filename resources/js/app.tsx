@@ -18,32 +18,41 @@ router.on('before', (event) => {
         if (targetUrl) {
             event.preventDefault();
             window.location.href = targetUrl;
+            return false;
         }
     }
+    return true;
 });
 
 // 2. 'invalid' fires if SW returns cached HTML for an XHR request.
+//    We redirect to the target URL to load the HTML layout properly.
 router.on('invalid', (event) => {
-    if (!navigator.onLine) {
-        event.preventDefault();
-        const response = (event.detail as any)?.response;
-        const targetUrl = response?.config?.url || response?.url;
-        if (targetUrl && targetUrl !== window.location.href) {
-            window.location.href = targetUrl;
-        }
+    event.preventDefault();
+    const response = (event.detail as any)?.response;
+    const targetUrl = response?.config?.url || response?.url;
+    if (targetUrl && targetUrl !== window.location.href) {
+        window.location.href = targetUrl;
+        return false;
     }
+    return true;
 });
 
 // 3. 'exception' fires if a network error occurred during an in-flight visit.
+//    We catch any network connection failure (Axios Network Error / no response)
+//    and perform standard navigation to fall back to the Service Worker cache.
 router.on('exception', (event) => {
-    if (!navigator.onLine) {
+    const exception = (event.detail as any)?.exception;
+    const isNetworkError = !exception?.response || exception?.message === 'Network Error' || exception?.code === 'ERR_NETWORK';
+
+    if (isNetworkError) {
         event.preventDefault();
-        const exception = (event.detail as any)?.exception;
         const targetUrl = exception?.config?.url;
         if (targetUrl && targetUrl !== window.location.href) {
             window.location.href = targetUrl;
+            return false;
         }
     }
+    return true;
 });
 
 createInertiaApp({
