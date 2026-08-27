@@ -2,11 +2,72 @@ import React, { useState, useEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import { db } from '@/db/database';
 import 'katex/dist/katex.min.css';
 
 interface Message {
     role: 'user' | 'model';
     content: string;
+}
+
+async function generateOfflineResponse(message: string): Promise<string> {
+    const query = message.toLowerCase();
+
+    try {
+        // 1. Suggest recommendations
+        if (query.includes('recommend') || query.includes('what should i study') || query.includes('suggest') || query.includes('study next') || query.includes('todo')) {
+            const progress = await db.learnerProgress.toArray();
+            const subjects = await db.subjects.toArray();
+            const topics = await db.topics.toArray();
+
+            if (subjects.length === 0) {
+                return "I don't see any cached subjects in your database yet. Connect to the internet to download and suggest topics for you!";
+            }
+
+            // Find topics with progress < 80% or unattempted
+            const lowProgressTopics = topics.filter(t => {
+                const p = progress.find(pr => pr.topic_id === t.id);
+                return !p || (p.mastery_score ?? 0) < 80;
+            });
+
+            if (lowProgressTopics.length === 0) {
+                return "🎉 Excellent work! You have mastered all topics. You can review your flashcards or take standard quizzes to maintain your score.";
+            }
+
+            const recommendations = lowProgressTopics.slice(0, 3).map(t => {
+                const sub = subjects.find(s => s.id === t.subject_id);
+                const p = progress.find(pr => pr.topic_id === t.id);
+                const scoreText = p ? `(Current Mastery: ${p.mastery_score}%)` : '(Not started yet)';
+                return `- **${t.name}** in *${sub?.name || 'Curriculum'}* ${scoreText}`;
+            }).join('\n');
+
+            return `Here are the top topics you should focus on next to achieve mastery:\n\n${recommendations}\n\nWould you like to study one of these?`;
+        }
+
+        // 2. List subjects
+        if (query.includes('subject') || query.includes('curriculum') || query.includes('list') || query.includes('course')) {
+            const subjects = await db.subjects.toArray();
+            if (subjects.length === 0) {
+                return "No subjects are cached locally yet. Log in while online to preload your curriculum!";
+            }
+            const list = subjects.map(s => `- **${s.name}**: ${s.description || 'No description available.'}`).join('\n');
+            return `Here are the subjects available in your offline study library:\n\n${list}\n\nSelect a subject from the menu to start studying!`;
+        }
+
+        // 3. Search for specific topics
+        const topics = await db.topics.toArray();
+        const matchedTopic = topics.find(t => query.includes(t.name.toLowerCase()) || query.includes(t.slug.replace('-', ' ')));
+        if (matchedTopic) {
+            const subjects = await db.subjects.toArray();
+            const sub = subjects.find(s => s.id === matchedTopic.subject_id);
+            return `Here is what I found in your offline library about **${matchedTopic.name}** (Level: ${matchedTopic.level.toUpperCase()}):\n\n*${matchedTopic.description || 'No description cached.'}*\n\nThis topic is part of your **${sub?.name || 'Curriculum'}** course. You can practice this topic by taking the standard quiz for this subject!`;
+        }
+    } catch (e) {
+        console.warn('Offline AI helper error:', e);
+    }
+
+    // 4. Default Offline fallback message
+    return `🤖 **Offline AI Tutor Mode**\n\nI am operating in offline mode because you are disconnected.\n\nWhile offline, I can help you with:\n1. **"Recommend what to study"**: I will analyze your local progress and suggest topics.\n2. **"List subjects"**: View your offline curriculum and descriptions.\n3. Ask about specific topics like **Algebra**, **Concord**, or **Genetics** to see quick notes.`;
 }
 
 export default function ChatWidget() {
@@ -40,6 +101,16 @@ export default function ChatWidget() {
         setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
         setChatLoading(true);
 
+        // If offline, use the local offline AI response generator
+        if (!navigator.onLine) {
+            setTimeout(async () => {
+                const response = await generateOfflineResponse(userMessage);
+                setMessages((prev) => [...prev, { role: 'model', content: response }]);
+                setChatLoading(false);
+            }, 800);
+            return;
+        }
+
         try {
             const res = await fetch('/api/v1/ai/chat', {
                 method: 'POST',
@@ -59,7 +130,9 @@ export default function ChatWidget() {
             setMessages((prev) => [...prev, { role: 'model', content: data.response }]);
         } catch (error) {
             console.error(error);
-            setMessages((prev) => [...prev, { role: 'model', content: '⚠️ Sorry, I could not generate a response. Please check your offline status and try again.' }]);
+            // Fallback to offline response generator even if request fails (network error)
+            const response = await generateOfflineResponse(userMessage);
+            setMessages((prev) => [...prev, { role: 'model', content: response }]);
         } finally {
             setChatLoading(false);
         }

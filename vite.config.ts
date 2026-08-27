@@ -40,6 +40,7 @@ export default defineConfig({
                             networkTimeoutSeconds: 3,
                             matchOptions: {
                                 ignoreVary: true,
+                                ignoreSearch: true,
                             },
                             expiration: {
                                 maxEntries: 100,
