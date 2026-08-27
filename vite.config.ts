@@ -33,7 +33,10 @@ export default defineConfig({
                         // Pre-warmed as plain HTML (200 OK), served from cache when offline
                         // ignoreVary is critical: Inertia adds Vary: X-Inertia to responses,
                         // which would cause cache misses when XHR requests have X-Inertia header
-                        urlPattern: ({ url }) => /^\/(dashboard|subjects|quizzes|flashcards)(\/.*)?$/.test(url.pathname),
+                        urlPattern: ({ url, request }) => {
+                            const isAppRoute = /^\/(dashboard|subjects|quizzes|flashcards)(\/.*)?$/.test(url.pathname);
+                            return isAppRoute && !request.headers.has('X-Inertia');
+                        },
                         handler: 'NetworkFirst',
                         options: {
                             cacheName: 'app-routes-cache',
