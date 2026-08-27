@@ -156,6 +156,12 @@ jobs:
           rm -f /htdocs/public/build/sw.js
           rm -f /htdocs/public/build/registerSW.js
           rm -f /htdocs/public/build/workbox-*.js
+          
+          # Clean old root public static files to let Laravel dynamic routes take over
+          rm -f /htdocs/public/sw.js
+          rm -f /htdocs/public/manifest.webmanifest
+          rm -f /htdocs/public/registerSW.js
+          rm -f /htdocs/public/workbox-*.js
 
           bye
           EOF
