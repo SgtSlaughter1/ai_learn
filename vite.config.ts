@@ -18,13 +18,40 @@ export default defineConfig({
             scope: '/',
             workbox: {
                 globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+                modifyURLPrefix: {
+                    'assets/': '/build/assets/',
+                    'registerSW.js': '/registerSW.js',
+                    'manifest.webmanifest': '/manifest.webmanifest',
+                },
                 cleanupOutdatedCaches: true,
                 clientsClaim: true,
                 skipWaiting: true,
                 navigateFallback: null,
                 runtimeCaching: [
                     {
-                        // 1. Cache all HTML navigation requests (Page visits)
+                        // 1. Cache app routes (HTML + Inertia XHR) — MUST be first
+                        // Pre-warmed as plain HTML (200 OK), served from cache when offline
+                        // ignoreVary is critical: Inertia adds Vary: X-Inertia to responses,
+                        // which would cause cache misses when XHR requests have X-Inertia header
+                        urlPattern: ({ url }) => /^\/(dashboard|subjects|quizzes|flashcards)(\/.*)?$/.test(url.pathname),
+                        handler: 'NetworkFirst',
+                        options: {
+                            cacheName: 'app-routes-cache',
+                            networkTimeoutSeconds: 3,
+                            matchOptions: {
+                                ignoreVary: true,
+                            },
+                            expiration: {
+                                maxEntries: 100,
+                                maxAgeSeconds: 14 * 24 * 60 * 60, // 14 days
+                            },
+                            cacheableResponse: {
+                                statuses: [0, 200],
+                            },
+                        },
+                    },
+                    {
+                        // 2. Catch-all for other HTML navigation requests
                         urlPattern: ({ request }) => request.mode === 'navigate',
                         handler: 'NetworkFirst',
                         options: {
@@ -40,7 +67,7 @@ export default defineConfig({
                         },
                     },
                     {
-                        // 2. Cache images and icons in /images/
+                        // 3. Cache images and icons in /images/
                         urlPattern: ({ url }) => url.pathname.startsWith('/images/'),
                         handler: 'StaleWhileRevalidate',
                         options: {
@@ -48,22 +75,6 @@ export default defineConfig({
                             expiration: {
                                 maxEntries: 60,
                                 maxAgeSeconds: 30 * 24 * 60 * 60,
-                            },
-                            cacheableResponse: {
-                                statuses: [0, 200],
-                            },
-                        },
-                    },
-                    {
-                        // 3. Cache Inertia SPA page data requests
-                        urlPattern: ({ request }) => request.headers.get('X-Inertia') === 'true',
-                        handler: 'NetworkFirst',
-                        options: {
-                            cacheName: 'inertia-cache',
-                            networkTimeoutSeconds: 3,
-                            expiration: {
-                                maxEntries: 50,
-                                maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
                             },
                             cacheableResponse: {
                                 statuses: [0, 200],

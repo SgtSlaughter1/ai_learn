@@ -3,6 +3,7 @@ import { Head, Link } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { db } from '@/db/database';
+import { preloadFullOfflineCurriculum } from '@/services/OfflineService';
 import 'katex/dist/katex.min.css';
 
 interface Attempt {
@@ -47,7 +48,7 @@ export default function Dashboard() {
     const [gamification, setGamification] = useState<GamificationProfile | null>(null);
     const [showXpGuide, setShowXpGuide] = useState<boolean>(false);
     const [offlineStats, setOfflineStats] = useState<any>(null);
-    const isOnline = useNetworkStatus();
+    const { isOnline } = useNetworkStatus();
 
     useEffect(() => {
         let isMounted = true;
@@ -66,27 +67,8 @@ export default function Dashboard() {
                         setLoading(false);
                     }
 
-                    // Background preload and sync all subjects into Dexie for offline readiness
-                    fetch('/api/v1/subjects')
-                        .then((r) => (r.ok ? r.json() : null))
-                        .then((d) => {
-                            if (d?.subjects?.length) {
-                                db.subjects.bulkPut(
-                                    d.subjects.map((s: any) => ({
-                                        id: s.id,
-                                        name: s.name,
-                                        slug: s.slug,
-                                        description: s.description,
-                                        status: 'published',
-                                        sort_order: 0,
-                                        progress_percent: s.progress_percent || 0,
-                                        topics_count: s.topics_count || 0,
-                                        cached_at: new Date().toISOString(),
-                                    }))
-                                );
-                            }
-                        })
-                        .catch(() => {});
+                    // Background preload full offline curriculum (subjects, topics, quizzes, flashcards)
+                    preloadFullOfflineCurriculum();
                 } catch {
                     if (isMounted) setLoading(false);
                 }

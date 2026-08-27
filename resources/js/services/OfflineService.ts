@@ -213,6 +213,144 @@ export async function getPendingSyncCount(): Promise<number> {
     return attempts + progress + gamification;
 }
 
+// ── Full Offline Preloading ──
+
+let isPreloading = false;
+let hasPreloadedThisSession = false;
+
+/**
+ * Pre-warm a route by fetching the full HTML page and explicitly
+ * storing it in both app-routes-cache and pages-cache.
+ */
+async function prewarmRoute(url: string): Promise<void> {
+    try {
+        const fullUrl = new URL(url, window.location.origin).href;
+        const response = await fetch(fullUrl, {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'text/html' },
+        });
+        if (response.ok) {
+            const cache = await caches.open('app-routes-cache');
+            await cache.put(fullUrl, response.clone());
+            await cache.put(url, response.clone());
+            const pagesCache = await caches.open('pages-cache');
+            await pagesCache.put(fullUrl, response.clone());
+            await pagesCache.put(url, response.clone());
+        }
+    } catch {
+        // Ignore — we're just warming the SW cache
+    }
+}
+
+export async function preloadFullOfflineCurriculum(): Promise<void> {
+    if (isPreloading || hasPreloadedThisSession || !navigator.onLine) return;
+    isPreloading = true;
+
+    try {
+        // 1. Pre-warm main routes
+        await prewarmRoute('/dashboard');
+        await prewarmRoute('/subjects');
+        await prewarmRoute('/flashcards');
+
+        // 2. Fetch and cache all subjects (API data → IndexedDB)
+        const subjectsRes = await fetch('/api/v1/subjects');
+        if (!subjectsRes.ok) return;
+        const subjectsData = await subjectsRes.json();
+        const subjectsList = subjectsData.subjects || subjectsData || [];
+
+        if (Array.isArray(subjectsList) && subjectsList.length > 0) {
+            await db.subjects.bulkPut(
+                subjectsList.map((s: any) => ({
+                    id: s.id,
+                    name: s.name,
+                    slug: s.slug,
+                    description: s.description,
+                    status: 'published',
+                    sort_order: 0,
+                    progress_percent: s.progress_percent || 0,
+                    topics_count: s.topics_count || 0,
+                    cached_at: new Date().toISOString(),
+                }))
+            );
+
+            // 3. Fetch and cache topics and quizzes for each subject
+            for (const subject of subjectsList) {
+                try {
+                    await prewarmRoute(`/subjects/${subject.slug}`);
+
+                    const subRes = await fetch(`/api/v1/subjects/${subject.slug}`);
+                    if (!subRes.ok) continue;
+                    const subData = await subRes.json();
+
+                    if (subData.topics && subData.topics.length > 0) {
+                        await db.topics.bulkPut(
+                            subData.topics.map((t: any) => ({
+                                id: t.id,
+                                subject_id: subject.id,
+                                name: t.name,
+                                slug: t.slug,
+                                level: t.level,
+                                description: t.description,
+                                status: 'published',
+                                sort_order: 0,
+                                cached_at: new Date().toISOString(),
+                            }))
+                        );
+                    }
+
+                    if (subData.quizzes && subData.quizzes.length > 0) {
+                        for (const q of subData.quizzes) {
+                            try {
+                                await prewarmRoute(`/quizzes/${q.id}`);
+
+                                const quizRes = await fetch(`/api/v1/quizzes/${q.id}`);
+                                if (quizRes.ok) {
+                                    const quizData = await quizRes.json();
+                                    if (quizData.quiz) {
+                                        await db.quizzes.put({
+                                            ...quizData.quiz,
+                                            cached_at: new Date().toISOString(),
+                                        });
+                                    }
+                                }
+                            } catch {
+                                // Ignore individual quiz fetch failure
+                            }
+                        }
+                    }
+                } catch {
+                    // Ignore individual subject fetch failure
+                }
+            }
+        }
+
+        // 4. Fetch and cache flashcards deck
+        try {
+            const flashRes = await fetch('/api/v1/flashcards/deck');
+            if (flashRes.ok) {
+                const flashData = await flashRes.json();
+                if (flashData.deck && flashData.deck.length > 0) {
+                    await db.flashcards.bulkPut(
+                        flashData.deck.map((f: any) => ({
+                            ...f,
+                            cached_at: new Date().toISOString(),
+                        }))
+                    );
+                }
+            }
+        } catch {
+            // Ignore flashcard failure
+        }
+
+        console.log('✅ Offline curriculum fully preloaded and cached.');
+    } catch (e) {
+        console.warn('Background offline preload encountered an error:', e);
+    } finally {
+        isPreloading = false;
+        hasPreloadedThisSession = true;
+    }
+}
+
 // ── Wipe (for logout) ──
 
 export async function clearAllOfflineData(): Promise<void> {

@@ -268,7 +268,7 @@ export default function Show({ slug }: Props) {
                                             {quizzes.length > 0 ? (
                                                 <Link
                                                     href={`/quizzes/${quizzes[0].id}`}
-                                                    className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-bold text-white bg-[var(--color-primary-5)] hover:bg-[var(--color-primary)] rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-all shadow-md focus:outline-none min-h-[48px] cursor-pointer"
+                                                    className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-bold text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] rounded-xl shadow-md hover:shadow-lg transition-all focus:outline-none min-h-[48px] cursor-pointer"
                                                 >
                                                     Take Exercise
                                                 </Link>

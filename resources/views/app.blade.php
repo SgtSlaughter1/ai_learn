@@ -13,7 +13,7 @@
         <link rel="shortcut icon" href="/favicon.ico">
 
         <!-- PWA Manifest -->
-        <link rel="manifest" href="/build/manifest.webmanifest">
+        <link rel="manifest" href="/manifest.webmanifest">
         <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
 
         <!-- Scripts -->
@@ -23,6 +23,18 @@
     </head>
     <body class="font-sans antialiased">
         @inertia
-        <script src="/build/registerSW.js"></script>
+        <script>
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                        .then((reg) => {
+                            console.log('✅ ServiceWorker registered with scope:', reg.scope);
+                        })
+                        .catch((err) => {
+                            console.error('❌ ServiceWorker registration error:', err);
+                        });
+                });
+            }
+        </script>
     </body>
 </html>

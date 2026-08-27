@@ -77,13 +77,91 @@ Route::get('/api/health', function () {
     return response()->json('OK');
 });
 
-// // Temporary Shared Hosting Migration helper
-// Route::get('/deploy-db-setup', function () {
-//     try {
-//         \Illuminate\Support\Facades\Artisan::call('migrate:force');
-//         \Illuminate\Support\Facades\Artisan::call('db:seed', ['--force' => true]);
-//         return 'Database migrated and seeded successfully!';
-//     } catch (\Exception $e) {
-//         return 'Error during deployment DB setup: ' . $e->getMessage();
-//     }
-// });
+// PWA Service Worker & Manifest Route Handlers (Ensures Service-Worker-Allowed header everywhere)
+Route::get('/sw.js', function () {
+    $path = public_path('build/sw.js');
+    if (!file_exists($path)) {
+        $path = public_path('sw.js');
+    }
+    if (!file_exists($path)) {
+        return response('/* SW not found */', 404, ['Content-Type' => 'application/javascript']);
+    }
+    return response()->file($path, [
+        'Content-Type' => 'application/javascript',
+        'Service-Worker-Allowed' => '/',
+        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+    ]);
+});
+
+Route::get('/workbox-{hash}.js', function ($hash) {
+    $filename = "workbox-{$hash}.js";
+    $path = public_path($filename);
+    if (!file_exists($path)) {
+        $path = public_path("build/{$filename}");
+    }
+    if (!file_exists($path)) {
+        return response('/* workbox not found */', 404, ['Content-Type' => 'application/javascript']);
+    }
+    return response()->file($path, ['Content-Type' => 'application/javascript']);
+});
+
+Route::get('/build/sw.js', function () {
+    $path = public_path('build/sw.js');
+    if (!file_exists($path)) {
+        return response('/* SW not found */', 404, ['Content-Type' => 'application/javascript']);
+    }
+    return response()->file($path, [
+        'Content-Type' => 'application/javascript',
+        'Service-Worker-Allowed' => '/',
+        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+    ]);
+});
+
+Route::get('/manifest.webmanifest', function () {
+    $path = public_path('build/manifest.webmanifest');
+    if (!file_exists($path)) {
+        $path = public_path('manifest.webmanifest');
+    }
+    return response()->file($path, [
+        'Content-Type' => 'application/manifest+json',
+        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+    ]);
+});
+
+Route::get('/registerSW.js', function () {
+    $path = public_path('build/registerSW.js');
+    if (!file_exists($path)) {
+        $path = public_path('registerSW.js');
+    }
+    if (!file_exists($path)) {
+        return response('/* registerSW not found */', 404, ['Content-Type' => 'application/javascript']);
+    }
+    return response()->file($path, ['Content-Type' => 'application/javascript']);
+});
+
+Route::get('/build/registerSW.js', function () {
+    $path = public_path('build/registerSW.js');
+    if (!file_exists($path)) {
+        $path = public_path('registerSW.js');
+    }
+    if (!file_exists($path)) {
+        return response('/* registerSW not found */', 404, ['Content-Type' => 'application/javascript']);
+    }
+    return response()->file($path, ['Content-Type' => 'application/javascript']);
+});
+
+Route::get('/assets/{path}', function ($path) {
+    $file = public_path('build/assets/' . $path);
+    if (file_exists($file)) {
+        $mime = match (pathinfo($file, PATHINFO_EXTENSION)) {
+            'js' => 'application/javascript',
+            'css' => 'text/css',
+            'woff2' => 'font/woff2',
+            'woff' => 'font/woff',
+            'ttf' => 'font/ttf',
+            default => mime_content_type($file) ?: 'application/octet-stream',
+        };
+        return response()->file($file, ['Content-Type' => $mime]);
+    }
+    abort(404);
+})->where('path', '.*');

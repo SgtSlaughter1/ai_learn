@@ -1,8 +1,9 @@
 import { Link, usePage } from '@inertiajs/react';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ChatWidget from '@/components/ui/ChatWidget';
 import SyncIndicator from '@/components/ui/SyncIndicator';
 import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt';
+import { preloadFullOfflineCurriculum } from '@/services/OfflineService';
 
 interface User {
     id: number;
@@ -21,6 +22,11 @@ interface PageProps {
 export default function AuthenticatedLayout({ children, header }: { children: React.ReactNode; header?: React.ReactNode }) {
     const { auth } = usePage<PageProps>().props;
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    useEffect(() => {
+        // Trigger background curriculum preloading whenever user is online
+        preloadFullOfflineCurriculum();
+    }, []);
 
     const activeRouteClass = (path: string) => {
         const currentPath = window.location.pathname;
@@ -43,19 +49,24 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                 >
                     Antigravity AI
                 </Link>
-                <button
-                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                    className="p-2 text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-md focus:outline-none min-h-[48px] min-w-[48px] flex items-center justify-center"
-                    aria-label="Toggle Menu"
-                >
-                    <svg className="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
-                        {isMobileMenuOpen ? (
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                        ) : (
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-                        )}
-                    </svg>
-                </button>
+                <div className="flex items-center gap-2">
+                    <div className="bg-[var(--color-background)] border border-[var(--color-border)] px-3 py-1 rounded-full scale-90">
+                        <SyncIndicator />
+                    </div>
+                    <button
+                        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                        className="p-2 text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-md focus:outline-none min-h-[48px] min-w-[48px] flex items-center justify-center"
+                        aria-label="Toggle Menu"
+                    >
+                        <svg className="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
+                            {isMobileMenuOpen ? (
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                            ) : (
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                            )}
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             {/* Sidebar Container */}
@@ -205,8 +216,12 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                 </div>
             </main>
 
-            {/* Sync Status Indicator */}
-            <SyncIndicator />
+            {/* Sync Status Indicator (Desktop only - floating pill) */}
+            <div className="fixed top-6 right-6 z-40 hidden md:block">
+                <div className="bg-[var(--color-surface)]/80 backdrop-blur-md border border-[var(--color-border)] shadow-sm px-4 py-2 rounded-full flex items-center justify-center">
+                    <SyncIndicator />
+                </div>
+            </div>
 
             {/* Persistent AI Companion Floating Widget (Global across all pages) */}
             <ChatWidget />
