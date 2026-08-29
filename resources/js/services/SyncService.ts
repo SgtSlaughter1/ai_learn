@@ -11,8 +11,12 @@ let syncInProgress = false;
 let syncInterval: ReturnType<typeof setInterval> | null = null;
 
 function getCsrfToken(): string {
-    const meta = document.querySelector('meta[name="csrf-token"]');
-    return meta ? meta.getAttribute('content') || '' : '';
+    // Laravel sets XSRF-TOKEN as a cookie (URL-encoded); use that instead of the meta tag
+    // (the meta tag is not present in this app's Blade template).
+    const match = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('XSRF-TOKEN='));
+    return match ? decodeURIComponent(match.split('=')[1]) : '';
 }
 
 // ── Core sync functions ──

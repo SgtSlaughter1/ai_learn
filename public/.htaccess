@@ -18,16 +18,30 @@
     RewriteCond %{REQUEST_URI} (.+)/$
     RewriteRule ^ %1 [L,R=301]
 
+    # Force sw.js and registerSW.js through Laravel (PHP) so Service-Worker-Allowed
+    # header is set correctly — critical for InfinityFree where mod_headers is disabled.
+    RewriteRule ^build/sw\.js$ index.php [L]
+    RewriteRule ^sw\.js$ index.php [L]
+    RewriteRule ^build/registerSW\.js$ index.php [L]
+    RewriteRule ^registerSW\.js$ index.php [L]
+    RewriteRule ^build/workbox-(.+)\.js$ index.php [L]
+    RewriteRule ^workbox-(.+)\.js$ index.php [L]
+    RewriteRule ^manifest\.webmanifest$ index.php [L]
+
     # Send Requests To Front Controller...
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 </IfModule>
 
-# Allow the service worker to control the entire site from /build/
+# Service Worker header — works where mod_headers is available (local dev, VPS, etc.)
+# On InfinityFree this is handled by the RewriteRules above routing through PHP/Laravel.
 <IfModule mod_headers.c>
     <FilesMatch "sw\.js$">
         Header Set Service-Worker-Allowed "/"
+        Header Set Cache-Control "no-cache, no-store, must-revalidate"
+    </FilesMatch>
+    <FilesMatch "registerSW\.js$">
         Header Set Cache-Control "no-cache"
     </FilesMatch>
 </IfModule>

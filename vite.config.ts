@@ -18,6 +18,10 @@ export default defineConfig({
             scope: '/',
             workbox: {
                 globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+                // Also precache the offline fallback page from public/
+                additionalManifestEntries: [
+                    { url: '/offline.html', revision: '1' },
+                ],
                 modifyURLPrefix: {
                     'assets/': '/build/assets/',
                     'registerSW.js': '/registerSW.js',
@@ -26,7 +30,15 @@ export default defineConfig({
                 cleanupOutdatedCaches: true,
                 clientsClaim: true,
                 skipWaiting: true,
-                navigateFallback: null,
+                navigateFallback: '/offline.html',
+                navigateFallbackDenylist: [
+                    // Don't serve offline.html for API routes or auth routes
+                    /^\/api\//,
+                    /^\/login/,
+                    /^\/logout/,
+                    /^\/build\//,
+                    /^\/images\//,
+                ],
                 runtimeCaching: [
                     {
                         // 1. Cache app routes (HTML + Inertia XHR) — MUST be first

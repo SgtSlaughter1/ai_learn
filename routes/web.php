@@ -8,6 +8,7 @@ use App\Http\Controllers\Web\AdaptiveQuizController;
 use App\Http\Controllers\Web\AIWebController;
 use App\Http\Controllers\Web\FlashcardController;
 use App\Http\Controllers\Web\GamificationController;
+use App\Http\Controllers\Web\SyncController;
 use App\Http\Controllers\Web\TeacherDashboardController;
 use App\Http\Controllers\Web\AdminDashboardController;
 use Illuminate\Support\Facades\Route;
@@ -48,6 +49,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/subjects/{subject}', [SubjectWebController::class, 'getSubjectDetails']);
         Route::get('/quizzes/{quiz}', [QuizWebController::class, 'getQuizData']);
         Route::get('/quizzes/attempts/{attempt}', [QuizWebController::class, 'getAttemptData']);
+        Route::post('/quizzes/attempts/{attemptId}/sync', [QuizWebController::class, 'syncAttempt']);
 
         // Adaptive Quiz Engine
         Route::post('/quizzes/{quiz}/adaptive/start', [AdaptiveQuizController::class, 'start']);
@@ -64,6 +66,10 @@ Route::middleware('auth')->group(function () {
         // Gamification & XP System
         Route::get('/gamification/profile', [GamificationController::class, 'profile']);
         Route::get('/gamification/leaderboard', [GamificationController::class, 'leaderboard']);
+
+        // Offline Sync Endpoints (called by SyncService.ts when coming back online)
+        Route::post('/progress/sync', [SyncController::class, 'syncProgress']);
+        Route::post('/gamification/sync', [SyncController::class, 'syncGamification']);
 
         // Teacher Dashboard & Class Management
         Route::get('/teacher/classes/{classId}/learners', [TeacherDashboardController::class, 'getClassLearners']);

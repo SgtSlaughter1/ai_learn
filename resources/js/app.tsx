@@ -3,6 +3,7 @@ import '../css/app.css';
 import { createInertiaApp, router } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
+import { startAutoSync } from './services/SyncService';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Offline AI Learning Platform';
 
@@ -65,6 +66,10 @@ createInertiaApp({
     setup({ el, App, props }) {
         const root = createRoot(el);
         root.render(<App {...props} />);
+
+        // Boot background auto-sync: syncs offline data every 30s when online,
+        // and immediately when connectivity is restored.
+        startAutoSync(30000);
     },
     progress: {
         color: '#183B2B',

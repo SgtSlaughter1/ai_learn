@@ -23,15 +23,31 @@
     </head>
     <body class="font-sans antialiased">
         @inertia
+        {{-- PWA Service Worker Registration
+             vite-plugin-pwa generates the SW at /build/sw.js with a Service-Worker-Allowed: /
+             header served via our Laravel route, so it can control the full / scope.
+             We do NOT use /sw.js (the old manual route) to avoid double-registration.
+        --}}
         <script>
             if ('serviceWorker' in navigator) {
                 window.addEventListener('load', () => {
-                    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                    navigator.serviceWorker.register('/build/sw.js', { scope: '/' })
                         .then((reg) => {
-                            console.log('✅ ServiceWorker registered with scope:', reg.scope);
+                            console.log('✅ ServiceWorker registered, scope:', reg.scope);
+                            // Check for waiting SW and notify user
+                            reg.addEventListener('updatefound', () => {
+                                const newWorker = reg.installing;
+                                if (newWorker) {
+                                    newWorker.addEventListener('statechange', () => {
+                                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                            console.log('🔄 New SW installed, will activate on next load');
+                                        }
+                                    });
+                                }
+                            });
                         })
                         .catch((err) => {
-                            console.error('❌ ServiceWorker registration error:', err);
+                            console.error('❌ ServiceWorker registration failed:', err);
                         });
                 });
             }
