@@ -1,8 +1,4 @@
 <IfModule mod_rewrite.c>
-    <IfModule mod_negotiation.c>
-        Options -MultiViews -Indexes
-    </IfModule>
-
     RewriteEngine On
 
     # Handle Authorization Header
@@ -13,15 +9,13 @@
     RewriteCond %{HTTP:x-xsrf-token} .
     RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
 
-    # Redirect Trailing Slashes If Not A Folder...
+    # Remove trailing slashes
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI} (.+)/$
     RewriteRule ^ %1 [L,R=301]
 
-    # Force PWA files through Laravel (PHP) so correct headers are set.
-    # Critical for InfinityFree where mod_headers is disabled.
-    # This covers both the /build/ prefixed paths (actual file locations)
-    # and root-level paths (what the browser/SW requests).
+    # Route PWA files through Laravel/PHP for correct headers
+    # (InfinityFree blocks mod_headers, so PHP sets them instead)
     RewriteRule ^build/sw\.js$ index.php [L]
     RewriteRule ^sw\.js$ index.php [L]
     RewriteRule ^build/registerSW\.js$ index.php [L]
@@ -31,25 +25,13 @@
     RewriteRule ^manifest\.webmanifest$ index.php [L]
     RewriteRule ^build/manifest\.webmanifest$ index.php [L]
 
-    # Send Requests To Front Controller...
+    # All other requests to Laravel front controller
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 </IfModule>
 
-# Service Worker header — works where mod_headers is available (local dev, VPS, etc.)
-# On InfinityFree this is handled by the RewriteRules above routing through PHP/Laravel.
-<IfModule mod_headers.c>
-    <FilesMatch "sw\.js$">
-        Header Set Service-Worker-Allowed "/"
-        Header Set Cache-Control "no-cache, no-store, must-revalidate"
-    </FilesMatch>
-    <FilesMatch "registerSW\.js$">
-        Header Set Cache-Control "no-cache"
-    </FilesMatch>
-</IfModule>
-
-# Correct MIME type for the web manifest
 <IfModule mod_mime.c>
     AddType application/manifest+json .webmanifest
+    AddType application/javascript .js
 </IfModule>

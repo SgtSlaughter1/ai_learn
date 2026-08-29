@@ -14,25 +14,25 @@ export default defineConfig({
         tailwindcss(),
         VitePWA({
             registerType: 'autoUpdate',
-            injectRegister: 'auto',
+            // 'null' because we register the SW manually in app.blade.php
+            // to avoid double-registration conflicts
+            injectRegister: null,
             scope: '/',
             workbox: {
                 globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
                 // Also precache the offline fallback page from public/
                 additionalManifestEntries: [
-                    { url: '/offline.html', revision: '1' },
+                    { url: '/offline.html', revision: '2' },
                 ],
                 modifyURLPrefix: {
+                    // Map Vite's output paths to the actual served paths
                     'assets/': '/build/assets/',
-                    'registerSW.js': '/registerSW.js',
-                    'manifest.webmanifest': '/manifest.webmanifest',
                 },
                 cleanupOutdatedCaches: true,
                 clientsClaim: true,
                 skipWaiting: true,
                 navigateFallback: '/offline.html',
                 navigateFallbackDenylist: [
-                    // Don't serve offline.html for API routes or auth routes
                     /^\/api\//,
                     /^\/login/,
                     /^\/logout/,

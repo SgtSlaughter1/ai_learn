@@ -5,40 +5,58 @@ interface BeforeInstallPromptEvent extends Event {
     userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 }
 
+// How long to wait before re-showing the banner after dismissal (24 hours)
+const DISMISS_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const STORAGE_KEY = 'pwa_prompt_dismissed_at';
+
+function isDismissedRecently(): boolean {
+    try {
+        const ts = localStorage.getItem(STORAGE_KEY);
+        if (!ts) return false;
+        return Date.now() - parseInt(ts, 10) < DISMISS_COOLDOWN_MS;
+    } catch {
+        return false;
+    }
+}
+
+function markDismissed() {
+    try {
+        localStorage.setItem(STORAGE_KEY, String(Date.now()));
+    } catch {}
+}
+
+function clearDismissed() {
+    try {
+        localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+}
+
 export default function PWAInstallPrompt() {
     const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
     const [isIOS, setIsIOS] = useState(false);
     const [isStandalone, setIsStandalone] = useState(false);
     const [isDismissed, setIsDismissed] = useState(false);
+    const [ready, setReady] = useState(false);
 
     useEffect(() => {
         // 1. Check if already running in standalone (installed) mode
-        const isAppStandalone =
+        const standalone =
             window.matchMedia('(display-mode: standalone)').matches ||
             (window.navigator as any).standalone === true;
 
-        setIsStandalone(isAppStandalone);
+        setIsStandalone(standalone);
+        if (standalone) return;
 
-        if (isAppStandalone) {
-            return;
-        }
-
-        // 2. Check if user previously dismissed the prompt in this session
-        const dismissed = sessionStorage.getItem('pwa_prompt_dismissed');
-        if (dismissed === 'true') {
-            setIsDismissed(true);
-        }
+        // 2. Check localStorage dismissal (cleared when user clears site data)
+        setIsDismissed(isDismissedRecently());
 
         // 3. Detect iOS Safari
-        const userAgent = window.navigator.userAgent.toLowerCase();
-        const isAppleDevice = /iphone|ipad|ipod/.test(userAgent);
-        const isSafari = /safari/.test(userAgent) && !/crios|fxios|chrome/.test(userAgent);
+        const ua = window.navigator.userAgent.toLowerCase();
+        const isApple = /iphone|ipad|ipod/.test(ua);
+        const isSafari = /safari/.test(ua) && !/crios|fxios|chrome/.test(ua);
+        setIsIOS(isApple && isSafari);
 
-        if (isAppleDevice && isSafari) {
-            setIsIOS(true);
-        }
-
-        // 4. Listen for Chrome / Android / Edge install prompt event
+        // 4. Listen for Chrome/Android/Edge install prompt
         const handleBeforeInstallPrompt = (e: Event) => {
             e.preventDefault();
             setDeferredPrompt(e as BeforeInstallPromptEvent);
@@ -47,39 +65,46 @@ export default function PWAInstallPrompt() {
         const handleAppInstalled = () => {
             setIsStandalone(true);
             setDeferredPrompt(null);
-            sessionStorage.removeItem('pwa_prompt_dismissed');
+            clearDismissed();
         };
 
         window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
         window.addEventListener('appinstalled', handleAppInstalled);
 
+        // Small delay so the page is settled before showing the banner
+        const timer = setTimeout(() => setReady(true), 2500);
+
         return () => {
             window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
             window.removeEventListener('appinstalled', handleAppInstalled);
+            clearTimeout(timer);
         };
     }, []);
 
     const handleInstallClick = async () => {
         if (!deferredPrompt) return;
-
         await deferredPrompt.prompt();
-        const choiceResult = await deferredPrompt.userChoice;
-
-        if (choiceResult.outcome === 'accepted') {
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
             setIsStandalone(true);
+            clearDismissed();
         }
         setDeferredPrompt(null);
     };
 
     const handleDismiss = () => {
         setIsDismissed(true);
-        sessionStorage.setItem('pwa_prompt_dismissed', 'true');
+        markDismissed();
     };
 
-    // Do not show if already installed or dismissed, or if no install trigger exists
-    if (isStandalone || isDismissed || (!deferredPrompt && !isIOS)) {
-        return null;
-    }
+    // Don't render until page is settled
+    if (!ready) return null;
+    // Already installed
+    if (isStandalone) return null;
+    // Dismissed recently
+    if (isDismissed) return null;
+    // Nothing to show — no install trigger and not iOS
+    if (!deferredPrompt && !isIOS) return null;
 
     return (
         <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:max-w-md z-50 animate-in fade-in slide-in-from-bottom duration-300">
@@ -133,11 +158,14 @@ export default function PWAInstallPrompt() {
                     <div className="bg-[var(--color-primary-5)] border border-[var(--color-primary-10)] rounded-xl p-2.5 text-xs text-[var(--color-text)] flex items-center gap-2">
                         <span className="text-base">📲</span>
                         <span>
-                            Tap <strong className="text-[var(--color-primary)] font-semibold">Share</strong> (
+                            Tap{' '}
+                            <strong className="text-[var(--color-primary)] font-semibold">Share</strong>
+                            {' '}(
                             <svg className="w-3.5 h-3.5 inline mx-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                             </svg>
-                            ) then <strong className="text-[var(--color-primary)] font-semibold">Add to Home Screen ⊕</strong>
+                            ) then{' '}
+                            <strong className="text-[var(--color-primary)] font-semibold">Add to Home Screen ⊕</strong>
                         </span>
                     </div>
                 ) : null}
