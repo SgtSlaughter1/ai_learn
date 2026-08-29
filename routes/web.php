@@ -83,32 +83,24 @@ Route::get('/api/health', function () {
     return response()->json('OK');
 });
 
-// PWA Service Worker & Manifest Route Handlers (Ensures Service-Worker-Allowed header everywhere)
+// ═══════════════════════════════════════════════════════════════════════
+// PWA / Service Worker Static Asset Routes
+// These must be OUTSIDE auth middleware and served with correct headers.
+// On InfinityFree, mod_headers is disabled so we route through PHP to
+// set Service-Worker-Allowed and correct Content-Type headers ourselves.
+// ═══════════════════════════════════════════════════════════════════════
+
+// Service Worker — both /sw.js and /build/sw.js resolve to the same file
 Route::get('/sw.js', function () {
     $path = public_path('build/sw.js');
-    if (!file_exists($path)) {
-        $path = public_path('sw.js');
-    }
     if (!file_exists($path)) {
         return response('/* SW not found */', 404, ['Content-Type' => 'application/javascript']);
     }
     return response()->file($path, [
-        'Content-Type' => 'application/javascript',
+        'Content-Type'           => 'application/javascript',
         'Service-Worker-Allowed' => '/',
-        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+        'Cache-Control'          => 'no-cache, no-store, must-revalidate',
     ]);
-});
-
-Route::get('/workbox-{hash}.js', function ($hash) {
-    $filename = "workbox-{$hash}.js";
-    $path = public_path($filename);
-    if (!file_exists($path)) {
-        $path = public_path("build/{$filename}");
-    }
-    if (!file_exists($path)) {
-        return response('/* workbox not found */', 404, ['Content-Type' => 'application/javascript']);
-    }
-    return response()->file($path, ['Content-Type' => 'application/javascript']);
 });
 
 Route::get('/build/sw.js', function () {
@@ -117,28 +109,43 @@ Route::get('/build/sw.js', function () {
         return response('/* SW not found */', 404, ['Content-Type' => 'application/javascript']);
     }
     return response()->file($path, [
-        'Content-Type' => 'application/javascript',
+        'Content-Type'           => 'application/javascript',
         'Service-Worker-Allowed' => '/',
-        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+        'Cache-Control'          => 'no-cache, no-store, must-revalidate',
     ]);
 });
 
-Route::get('/manifest.webmanifest', function () {
-    $path = public_path('build/manifest.webmanifest');
+// Workbox runtime chunk — sw.js calls importScripts() on this file.
+// Must handle BOTH /build/workbox-{hash}.js AND /workbox-{hash}.js
+Route::get('/build/workbox-{hash}.js', function (string $hash) {
+    $path = public_path("build/workbox-{$hash}.js");
     if (!file_exists($path)) {
-        $path = public_path('manifest.webmanifest');
+        return response("/* workbox-{$hash}.js not found */", 404, ['Content-Type' => 'application/javascript']);
     }
     return response()->file($path, [
-        'Content-Type' => 'application/manifest+json',
-        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+        'Content-Type'  => 'application/javascript',
+        'Cache-Control' => 'public, max-age=31536000, immutable',
     ]);
-});
+})->where('hash', '[a-zA-Z0-9]+');
 
+Route::get('/workbox-{hash}.js', function (string $hash) {
+    // Try /build/ first, then public root
+    $path = public_path("build/workbox-{$hash}.js");
+    if (!file_exists($path)) {
+        $path = public_path("workbox-{$hash}.js");
+    }
+    if (!file_exists($path)) {
+        return response("/* workbox-{$hash}.js not found */", 404, ['Content-Type' => 'application/javascript']);
+    }
+    return response()->file($path, [
+        'Content-Type'  => 'application/javascript',
+        'Cache-Control' => 'public, max-age=31536000, immutable',
+    ]);
+})->where('hash', '[a-zA-Z0-9]+');
+
+// RegisterSW helper script
 Route::get('/registerSW.js', function () {
     $path = public_path('build/registerSW.js');
-    if (!file_exists($path)) {
-        $path = public_path('registerSW.js');
-    }
     if (!file_exists($path)) {
         return response('/* registerSW not found */', 404, ['Content-Type' => 'application/javascript']);
     }
@@ -148,26 +155,56 @@ Route::get('/registerSW.js', function () {
 Route::get('/build/registerSW.js', function () {
     $path = public_path('build/registerSW.js');
     if (!file_exists($path)) {
-        $path = public_path('registerSW.js');
-    }
-    if (!file_exists($path)) {
         return response('/* registerSW not found */', 404, ['Content-Type' => 'application/javascript']);
     }
     return response()->file($path, ['Content-Type' => 'application/javascript']);
 });
 
-Route::get('/assets/{path}', function ($path) {
-    $file = public_path('build/assets/' . $path);
-    if (file_exists($file)) {
-        $mime = match (pathinfo($file, PATHINFO_EXTENSION)) {
-            'js' => 'application/javascript',
-            'css' => 'text/css',
-            'woff2' => 'font/woff2',
-            'woff' => 'font/woff',
-            'ttf' => 'font/ttf',
-            default => mime_content_type($file) ?: 'application/octet-stream',
-        };
-        return response()->file($file, ['Content-Type' => $mime]);
+// Web App Manifest — must return valid JSON, NOT HTML
+Route::get('/manifest.webmanifest', function () {
+    $path = public_path('build/manifest.webmanifest');
+    if (!file_exists($path)) {
+        $path = public_path('manifest.webmanifest');
     }
-    abort(404);
+    if (!file_exists($path)) {
+        return response()->json(['error' => 'manifest not found'], 404);
+    }
+    return response()->file($path, [
+        'Content-Type'  => 'application/manifest+json',
+        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+    ]);
+});
+
+// Also handle /build/manifest.webmanifest in case anything links there directly
+Route::get('/build/manifest.webmanifest', function () {
+    $path = public_path('build/manifest.webmanifest');
+    if (!file_exists($path)) {
+        return response()->json(['error' => 'manifest not found'], 404);
+    }
+    return response()->file($path, [
+        'Content-Type'  => 'application/manifest+json',
+        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+    ]);
+});
+
+// Hashed JS/CSS/font assets from Vite build
+Route::get('/assets/{path}', function (string $path) {
+    $file = public_path('build/assets/' . $path);
+    if (!file_exists($file)) {
+        abort(404);
+    }
+    $mime = match (pathinfo($file, PATHINFO_EXTENSION)) {
+        'js'    => 'application/javascript',
+        'css'   => 'text/css',
+        'woff2' => 'font/woff2',
+        'woff'  => 'font/woff',
+        'ttf'   => 'font/ttf',
+        'png'   => 'image/png',
+        'svg'   => 'image/svg+xml',
+        default => mime_content_type($file) ?: 'application/octet-stream',
+    };
+    return response()->file($file, [
+        'Content-Type'  => $mime,
+        'Cache-Control' => 'public, max-age=31536000, immutable',
+    ]);
 })->where('path', '.*');

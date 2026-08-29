@@ -18,15 +18,18 @@
     RewriteCond %{REQUEST_URI} (.+)/$
     RewriteRule ^ %1 [L,R=301]
 
-    # Force sw.js and registerSW.js through Laravel (PHP) so Service-Worker-Allowed
-    # header is set correctly — critical for InfinityFree where mod_headers is disabled.
+    # Force PWA files through Laravel (PHP) so correct headers are set.
+    # Critical for InfinityFree where mod_headers is disabled.
+    # This covers both the /build/ prefixed paths (actual file locations)
+    # and root-level paths (what the browser/SW requests).
     RewriteRule ^build/sw\.js$ index.php [L]
     RewriteRule ^sw\.js$ index.php [L]
     RewriteRule ^build/registerSW\.js$ index.php [L]
     RewriteRule ^registerSW\.js$ index.php [L]
-    RewriteRule ^build/workbox-(.+)\.js$ index.php [L]
-    RewriteRule ^workbox-(.+)\.js$ index.php [L]
+    RewriteRule ^build/workbox-[a-zA-Z0-9]+\.js$ index.php [L]
+    RewriteRule ^workbox-[a-zA-Z0-9]+\.js$ index.php [L]
     RewriteRule ^manifest\.webmanifest$ index.php [L]
+    RewriteRule ^build/manifest\.webmanifest$ index.php [L]
 
     # Send Requests To Front Controller...
     RewriteCond %{REQUEST_FILENAME} !-d
