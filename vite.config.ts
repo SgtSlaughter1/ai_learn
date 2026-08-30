@@ -31,22 +31,17 @@ export default defineConfig({
                 cleanupOutdatedCaches: true,
                 clientsClaim: true,
                 skipWaiting: true,
-                navigateFallback: '/offline.html',
-                navigateFallbackDenylist: [
-                    /^\/api\//,
-                    /^\/login/,
-                    /^\/logout/,
-                    /^\/build\//,
-                    /^\/images\//,
-                ],
+                // No navigateFallback here — we handle offline navigation via
+                // the runtimeCaching NetworkFirst rules below which check the
+                // cache before giving up. offline.html is only shown when
+                // nothing is cached AND network fails.
+                navigateFallback: null,
                 runtimeCaching: [
                     {
-                        // 1. Cache app routes (HTML + Inertia XHR) — MUST be first
-                        // Pre-warmed as plain HTML (200 OK), served from cache when offline
-                        // ignoreVary is critical: Inertia adds Vary: X-Inertia to responses,
-                        // which would cause cache misses when XHR requests have X-Inertia header
+                        // 1. Cache app routes (HTML) — covers all main nav pages
+                        // ignoreVary is critical: Inertia adds Vary: X-Inertia to responses
                         urlPattern: ({ url, request }) => {
-                            const isAppRoute = /^\/(dashboard|subjects|quizzes|flashcards)(\/.*)?$/.test(url.pathname);
+                            const isAppRoute = /^\/(dashboard|subjects|quizzes|flashcards|login|)(\/.*)?$/.test(url.pathname);
                             return isAppRoute && !request.headers.has('X-Inertia');
                         },
                         handler: 'NetworkFirst',
@@ -67,7 +62,9 @@ export default defineConfig({
                         },
                     },
                     {
-                        // 2. Catch-all for other HTML navigation requests
+                        // 2. Catch-all for ALL HTML navigation requests
+                        // NetworkFirst: tries network (3s timeout), falls back to cache,
+                        // and if nothing cached serves /offline.html
                         urlPattern: ({ request }) => request.mode === 'navigate',
                         handler: 'NetworkFirst',
                         options: {
@@ -75,11 +72,20 @@ export default defineConfig({
                             networkTimeoutSeconds: 3,
                             expiration: {
                                 maxEntries: 50,
-                                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+                                maxAgeSeconds: 30 * 24 * 60 * 60,
                             },
                             cacheableResponse: {
                                 statuses: [0, 200],
                             },
+                            plugins: [
+                                {
+                                    // When both network and cache fail, serve the offline page
+                                    handlerDidError: async () => {
+                                        const offlinePage = await caches.match('/offline.html');
+                                        return offlinePage || Response.error();
+                                    }
+                                }
+                            ],
                         },
                     },
                     {

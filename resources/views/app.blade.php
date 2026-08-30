@@ -31,10 +31,12 @@
         <script>
             if ('serviceWorker' in navigator) {
                 window.addEventListener('load', () => {
-                    navigator.serviceWorker.register('/build/sw.js', { scope: '/' })
+                    // Register SW from /sw.js (root path) so it naturally controls
+                    // the full / scope without needing Service-Worker-Allowed header.
+                    // The /build/sw.js path requires that header which PHP dev server strips.
+                    navigator.serviceWorker.register('/sw.js', { scope: '/' })
                         .then((reg) => {
                             console.log('✅ ServiceWorker registered, scope:', reg.scope);
-                            // Check for waiting SW and notify user
                             reg.addEventListener('updatefound', () => {
                                 const newWorker = reg.installing;
                                 if (newWorker) {

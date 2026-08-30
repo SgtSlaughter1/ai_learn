@@ -219,26 +219,33 @@ let isPreloading = false;
 let hasPreloadedThisSession = false;
 
 /**
- * Pre-warm a route by fetching the full HTML page and explicitly
- * storing it in both app-routes-cache and pages-cache.
+ * Pre-warm a route by fetching the full HTML page and storing it in
+ * the SW runtime caches. Each cache.put() needs its own Response object
+ * so we fetch multiple times — Responses cannot be cloned more than once
+ * after their body has been read.
  */
 async function prewarmRoute(url: string): Promise<void> {
+    const fullUrl = new URL(url, window.location.origin).href;
+    const opts: RequestInit = {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'text/html' },
+    };
+
+    const fetchFresh = () => fetch(fullUrl, opts);
+
     try {
-        const fullUrl = new URL(url, window.location.origin).href;
-        const response = await fetch(fullUrl, {
-            credentials: 'same-origin',
-            headers: { 'Accept': 'text/html' },
-        });
-        if (response.ok) {
-            const cache = await caches.open('app-routes-cache');
-            await cache.put(fullUrl, response.clone());
-            await cache.put(url, response.clone());
-            const pagesCache = await caches.open('pages-cache');
-            await pagesCache.put(fullUrl, response.clone());
-            await pagesCache.put(url, response.clone());
-        }
+        // Store in app-routes-cache (keyed by both full and relative URL)
+        const appCache = await caches.open('app-routes-cache');
+        const r1 = await fetchFresh();
+        if (r1.ok) await appCache.put(fullUrl, r1);
+
+        // Store in pages-cache (the navigate catch-all cache)
+        const pagesCache = await caches.open('pages-cache');
+        const r2 = await fetchFresh();
+        if (r2.ok) await pagesCache.put(fullUrl, r2);
+
     } catch {
-        // Ignore — we're just warming the SW cache
+        // Best-effort — silent fail is fine
     }
 }
 

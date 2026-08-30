@@ -74,21 +74,34 @@ export default function Dashboard() {
                 }
             } else {
                 // Offline: load from Dexie
-                const cached = await db.learnerProgress.toArray();
-                const gamCache = await db.gamification.toCollection().first();
-                const attempts = await db.quizAttempts.toArray();
+                const [subjects, progress, gamCache, attempts] = await Promise.all([
+                    db.subjects.toArray(),
+                    db.learnerProgress.toArray(),
+                    db.gamification.toCollection().first(),
+                    db.quizAttempts.toArray(),
+                ]);
+
                 if (isMounted) {
-                    if (cached.length > 0) {
-                        const total = cached.length;
-                        const mastered = cached.filter(c => (c.mastery_score ?? 0) >= 80).length;
-                        const avgMastery = total > 0
-                            ? Math.round(cached.reduce((s, c) => s + (c.mastery_score ?? 0), 0) / total)
-                            : 0;
-                        setOfflineStats({ total, mastered, avgMastery });
-                    }
+                    const totalSubjects = subjects.length;
+                    const masteredTopics = progress.filter(p => (p.mastery_score ?? 0) >= 80).length;
+                    const totalAttempted = progress.reduce((s, p) => s + (p.questions_attempted ?? 0), 0);
+                    const totalCorrect = progress.reduce((s, p) => s + (p.questions_correct ?? 0), 0);
+                    const avgMastery = progress.length > 0
+                        ? Math.round(progress.reduce((s, p) => s + (p.mastery_score ?? 0), 0) / progress.length)
+                        : 0;
+
+                    setOfflineStats({
+                        totalSubjects,
+                        questionsAttempted: totalAttempted,
+                        questionsCorrect: totalCorrect,
+                        averageMastery: avgMastery,
+                        completedTopics: masteredTopics,
+                    });
+
                     if (gamCache) {
                         setGamification(gamCache as unknown as GamificationProfile);
                     }
+
                     setRecentAttempts(
                         attempts.slice(-5).reverse().map(a => ({
                             id: String(a.id),
@@ -142,27 +155,27 @@ export default function Dashboard() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     <StatCard
                         label="Active Subjects"
-                        value={loading ? '...' : isOnline ? stats?.totalSubjects : offlineStats?.total ?? 0}
+                        value={loading ? '...' : isOnline ? stats?.totalSubjects : offlineStats?.totalSubjects ?? 0}
                         icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13M12 19.247V21" /></svg>}
                         loading={loading}
                     />
                     <StatCard
                         label="Questions Solved"
-                        value={loading ? '...' : isOnline ? stats?.questionsAttempted : offlineStats?.total ?? 0}
-                        subtitle={stats ? `${stats.questionsCorrect} correct answers` : undefined}
+                        value={loading ? '...' : isOnline ? stats?.questionsAttempted : offlineStats?.questionsAttempted ?? 0}
+                        subtitle={isOnline && stats ? `${stats.questionsCorrect} correct answers` : offlineStats ? `${offlineStats.questionsCorrect} correct answers` : undefined}
                         icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                         loading={loading}
                     />
                     <StatCard
                         label="Avg. Accuracy"
-                        value={loading ? '...' : `${isOnline ? accuracy : offlineStats?.avgMastery ?? 0}%`}
+                        value={loading ? '...' : `${isOnline ? accuracy : offlineStats?.averageMastery ?? 0}%`}
                         subtitle="Based on quiz attempts"
                         icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>}
                         loading={loading}
                     />
                     <StatCard
                         label="Mastered Topics"
-                        value={loading ? '...' : isOnline ? stats?.completedTopics : offlineStats?.mastered ?? 0}
+                        value={loading ? '...' : isOnline ? stats?.completedTopics : offlineStats?.completedTopics ?? 0}
                         subtitle=">= 80% mastery level"
                         icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>}
                         loading={loading}
@@ -326,7 +339,7 @@ export default function Dashboard() {
                                         />
                                     </svg>
                                     <div className="absolute text-center">
-                                        <span className="text-4xl font-extrabold text-[var(--color-text)]">{stats?.averageMastery ?? offlineStats?.avgMastery ?? 0}%</span>
+                                        <span className="text-4xl font-extrabold text-[var(--color-text)]">{stats?.averageMastery ?? offlineStats?.averageMastery ?? 0}%</span>
                                         <span className="block text-[10px] text-[var(--color-primary)] font-bold uppercase tracking-wider mt-0.5">Mastery</span>
                                     </div>
                                 </div>
