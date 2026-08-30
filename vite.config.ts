@@ -23,7 +23,15 @@ export default defineConfig({
                 // Also precache the offline fallback page from public/
                 additionalManifestEntries: [
                     { url: '/offline.html', revision: '2' },
-                    { url: '/manifest.webmanifest', revision: '3' },
+                    { url: '/images/icon-144x144.png', revision: '1' },
+                    { url: '/images/icon-192x192.png', revision: '1' },
+                    { url: '/images/icon-512x512.png', revision: '1' },
+                    { url: '/images/apple-touch-icon.png', revision: '1' },
+                    { url: '/images/favicon-32x32.png', revision: '1' },
+                    { url: '/images/favicon-16x16.png', revision: '1' },
+                    { url: '/favicon.ico', revision: '1' },
+                    { url: '/images/screenshot-desktop.png', revision: '1' },
+                    { url: '/images/screenshot-mobile.png', revision: '1' },
                 ],
                 modifyURLPrefix: {
                     // Map Vite's output paths to the actual served paths
