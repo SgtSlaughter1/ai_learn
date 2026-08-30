@@ -123,6 +123,11 @@ jobs:
           rm -f /tmp/deploy_app/public/server-index.php
           rm -f /tmp/deploy_app/public/extract.php
 
+          # Ensure manifest and icons exist in both root and public to prevent shared-hosting 404s
+          cp public/build/manifest.webmanifest /tmp/deploy_app/manifest.webmanifest
+          cp public/build/manifest.webmanifest /tmp/deploy_app/public/manifest.webmanifest
+          cp -r public/images /tmp/deploy_app/images
+
           # 2. Copy Vendor directory separately
           cp -r vendor/* /tmp/deploy_vendor/
 
@@ -157,11 +162,16 @@ jobs:
           rm -f /htdocs/public/build/registerSW.js
           rm -f /htdocs/public/build/workbox-*.js
           
-          # Clean old root public static files to let Laravel dynamic routes take over
+          # Clean old root public static files to let fresh manifest and worker take over
+          rm -f /htdocs/sw.js
+          rm -f /htdocs/manifest.webmanifest
           rm -f /htdocs/public/sw.js
           rm -f /htdocs/public/manifest.webmanifest
           rm -f /htdocs/public/registerSW.js
           rm -f /htdocs/public/workbox-*.js
+
+          # Clean legacy root images directory to ensure fresh resized icons are used
+          rm -rf /htdocs/images
 
           bye
           EOF

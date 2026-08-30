@@ -89,28 +89,59 @@ Route::get('/registerSW.js', function () {
 
 // ── Web App Manifest ──────────────────────────────────────────────────────────
 
-Route::get('/manifest.webmanifest', function () {
-    $path = public_path('build/manifest.webmanifest');
-    if (!file_exists($path)) {
-        $path = public_path('manifest.webmanifest');
-    }
-    if (!file_exists($path)) {
-        return response('{}', 404)->header('Content-Type', 'application/manifest+json');
-    }
-    return response(file_get_contents($path), 200)
-        ->header('Content-Type', 'application/manifest+json')
-        ->header('Cache-Control', 'no-cache, no-store, must-revalidate');
-});
+$serveManifest = function () {
+    $candidates = [
+        public_path('build/manifest.webmanifest'),
+        public_path('manifest.webmanifest'),
+        base_path('public/build/manifest.webmanifest'),
+        base_path('public/manifest.webmanifest'),
+        base_path('manifest.webmanifest'),
+        ($_SERVER['DOCUMENT_ROOT'] ?? '') . '/public/build/manifest.webmanifest',
+        ($_SERVER['DOCUMENT_ROOT'] ?? '') . '/build/manifest.webmanifest',
+        ($_SERVER['DOCUMENT_ROOT'] ?? '') . '/manifest.webmanifest',
+    ];
 
-Route::get('/build/manifest.webmanifest', function () {
-    $path = public_path('build/manifest.webmanifest');
-    if (!file_exists($path)) {
-        return response('{}', 404)->header('Content-Type', 'application/manifest+json');
+    foreach ($candidates as $candidate) {
+        if (!empty($candidate) && file_exists($candidate)) {
+            return response(file_get_contents($candidate), 200)
+                ->header('Content-Type', 'application/manifest+json')
+                ->header('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
     }
-    return response(file_get_contents($path), 200)
-        ->header('Content-Type', 'application/manifest+json')
-        ->header('Cache-Control', 'no-cache, no-store, must-revalidate');
-});
+
+    // Fallback: Return a complete, valid PWA manifest instead of an empty `{}`
+    $fallbackManifest = [
+        'name' => 'Offline AI Learning Platform',
+        'short_name' => 'OfflineAI',
+        'start_url' => '/',
+        'display' => 'standalone',
+        'background_color' => '#F7F4EC',
+        'lang' => 'en',
+        'scope' => '/',
+        'id' => '/',
+        'description' => 'An offline-first adaptive AI learning platform.',
+        'theme_color' => '#183B2B',
+        'icons' => [
+            ['src' => '/images/icon-144x144.png', 'sizes' => '144x144', 'type' => 'image/png', 'purpose' => 'any'],
+            ['src' => '/images/icon-192x192.png', 'sizes' => '192x192', 'type' => 'image/png', 'purpose' => 'any'],
+            ['src' => '/images/icon-512x512.png', 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'any'],
+            ['src' => '/images/icon-192x192.png', 'sizes' => '192x192', 'type' => 'image/png', 'purpose' => 'maskable'],
+            ['src' => '/images/icon-512x512.png', 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'maskable'],
+        ],
+        'screenshots' => [
+            ['src' => '/images/screenshot-desktop.png', 'sizes' => '1280x720', 'type' => 'image/png', 'form_factor' => 'wide', 'label' => 'Dashboard - Desktop View'],
+            ['src' => '/images/screenshot-mobile.png', 'sizes' => '750x1334', 'type' => 'image/png', 'label' => 'Dashboard - Mobile View'],
+        ],
+    ];
+
+    return response()->json($fallbackManifest, 200, [
+        'Content-Type' => 'application/manifest+json',
+        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+    ], JSON_UNESCAPED_SLASHES);
+};
+
+Route::get('/manifest.webmanifest', $serveManifest);
+Route::get('/build/manifest.webmanifest', $serveManifest);
 
 // ── Offline Fallback Page ─────────────────────────────────────────────────────
 
