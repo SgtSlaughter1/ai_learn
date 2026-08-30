@@ -23,6 +23,7 @@ export default defineConfig({
                 // Also precache the offline fallback page from public/
                 additionalManifestEntries: [
                     { url: '/offline.html', revision: '2' },
+                    { url: '/manifest.webmanifest', revision: '3' },
                 ],
                 modifyURLPrefix: {
                     // Map Vite's output paths to the actual served paths

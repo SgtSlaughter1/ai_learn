@@ -142,6 +142,7 @@ $serveManifest = function () {
 
 Route::get('/manifest.webmanifest', $serveManifest);
 Route::get('/build/manifest.webmanifest', $serveManifest);
+Route::get('/manifest.json', $serveManifest);
 
 // ── Offline Fallback Page ─────────────────────────────────────────────────────
 

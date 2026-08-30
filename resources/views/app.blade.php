@@ -13,7 +13,7 @@
         <link rel="shortcut icon" href="/favicon.ico">
 
         <!-- PWA Manifest -->
-        <link rel="manifest" href="/manifest.webmanifest">
+        <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
         <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
 
         <!-- Scripts -->
