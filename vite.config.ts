@@ -68,6 +68,14 @@ export default defineConfig({
                             cacheableResponse: {
                                 statuses: [0, 200],
                             },
+                            plugins: [
+                                {
+                                    handlerDidError: async () => {
+                                        const offlinePage = await caches.match('/offline.html');
+                                        return offlinePage || Response.error();
+                                    }
+                                }
+                            ],
                         },
                     },
                     {

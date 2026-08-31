@@ -310,14 +310,23 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
                             try {
                                 await prewarmRoute(`/quizzes/${q.id}`);
 
-                                const quizRes = await fetch(`/api/v1/quizzes/${q.id}`);
-                                if (quizRes.ok) {
-                                    const quizData = await quizRes.json();
-                                    if (quizData.quiz) {
-                                        await db.quizzes.put({
-                                            ...quizData.quiz,
-                                            cached_at: new Date().toISOString(),
-                                        });
+                                if (q.questions && q.questions.length > 0) {
+                                    await db.quizzes.put({
+                                        ...q,
+                                        status: 'published',
+                                        cached_at: new Date().toISOString(),
+                                    });
+                                } else {
+                                    const quizRes = await fetch(`/api/v1/quizzes/${q.id}`);
+                                    if (quizRes.ok) {
+                                        const quizData = await quizRes.json();
+                                        if (quizData.quiz) {
+                                            await db.quizzes.put({
+                                                ...quizData.quiz,
+                                                status: 'published',
+                                                cached_at: new Date().toISOString(),
+                                            });
+                                        }
                                     }
                                 }
                             } catch {

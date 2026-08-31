@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Question;
 use App\Models\QuestionOption;
+use App\Models\Subject;
+use App\Models\Topic;
 use App\Models\User;
 use App\Models\LearnerProgress;
 use Illuminate\Support\Facades\Http;
@@ -196,7 +198,7 @@ Guidelines:
             // Pattern: plain text duplicate after inline math
             // e.g. "$x = 5$ x = 5" where x = 5 is the same content
             $line = preg_replace_callback(
-                '/(\$)([^$]+)(\$)\s+([\w\s+\-*/=().,]+?)(?=[\n$]|\$)/',
+                '#(\$)([^$]+)(\$)\s+([\w\s+\-*/=().,]+?)(?=[\n$]|\$)#',
                 function ($matches) {
                     $mathContent = trim($matches[2]);
                     $plainText = trim($matches[4]);
@@ -422,36 +424,144 @@ Guidelines:
 
     private function generateHeuristicChatResponse(User $user, string $message): string
     {
-        // Query the user's progress records
-        $progress = LearnerProgress::where('user_id', $user->id)
-            ->with('topic')
-            ->orderBy('mastery_score', 'asc')
-            ->get();
+        $query = strtolower(trim($message));
+        $cleanQuery = preg_replace('/[^\w\s]/', '', $query);
+        $stopWords = ['what', 'when', 'where', 'which', 'explain', 'tell', 'about', 'study', 'help', 'with', 'know', 'learn', 'please', 'can', 'you', 'does', 'work', 'some', 'give', 'need', 'show', 'like'];
+        $words = array_values(array_filter(explode(' ', $cleanQuery), fn($w) => strlen($w) >= 4 && !in_array($w, $stopWords)));
 
-        // Build mastery summary lists dynamically
-        if ($progress->count() >= 2) {
-            $topic1 = $progress[0]->topic->name;
-            $score1 = $progress[0]->mastery_score;
-            $topic2 = $progress[1]->topic->name;
-            $score2 = $progress[1]->mastery_score;
-        } elseif ($progress->count() === 1) {
-            $topic1 = $progress[0]->topic->name;
-            $score1 = $progress[0]->mastery_score;
-            $topic2 = "Euclidean Geometry";
-            $score2 = 25;
-        } else {
-            $topic1 = "Algebraic Expressions";
-            $score1 = 50;
-            $topic2 = "Euclidean Geometry";
-            $score2 = 25;
+        // 1. Dynamic Topic Search: Match against any topic in the active curriculum
+        $topics = Topic::where('status', 'active')->with('subject')->get();
+        $matchedTopic = $topics->first(function ($topic) use ($query) {
+            $name = strtolower($topic->name);
+            $slugWords = str_replace('-', ' ', strtolower($topic->slug));
+            return str_contains($query, $name) || str_contains($query, $slugWords);
+        });
+
+        // If no direct topic match, check keywords against topic names
+        if (!$matchedTopic && !empty($words)) {
+            foreach ($words as $word) {
+                $matchedTopic = $topics->first(function ($topic) use ($word) {
+                    return str_contains(strtolower($topic->name), $word);
+                });
+                if ($matchedTopic) break;
+            }
         }
 
-        // Determine recommendation topic name
-        $lowTopic = ($score1 < 80) ? $topic1 : (($score2 < 80) ? $topic2 : null);
+        if ($matchedTopic) {
+            $subjName = $matchedTopic->subject->name ?? 'Curriculum';
+            $level = strtoupper($matchedTopic->level);
 
-        return "You got it, **{$user->name}**! 🚀 Which math concept would you like to tackle today?
+            $progress = LearnerProgress::where('user_id', $user->id)
+                ->where('topic_id', $matchedTopic->id)
+                ->first();
+            $masteryText = $progress ? "Current Mastery: **{$progress->mastery_score}%**" : "Not yet attempted";
 
-* **{$topic1} ({$score1}% mastery):** We can review like terms, expanding brackets, or factoring.
-* **{$topic2} ({$score2}% mastery):** We can break down angle rules, triangle theorems, or parallel lines.";
+            // Pull real explanation from the question bank for this topic
+            $sampleQuestion = Question::where('topic_id', $matchedTopic->id)
+                ->where('status', 'active')
+                ->whereNotNull('explanation')
+                ->where('explanation', '!=', '')
+                ->inRandomOrder()
+                ->first();
+
+            $output = "Hello **{$user->name}**! 📚 Here is an overview of **{$matchedTopic->name}**:\n\n"
+                . "* **Subject:** {$subjName} (Level: {$level})\n"
+                . "* **Your Status:** {$masteryText}\n\n";
+
+            if (!empty($matchedTopic->description)) {
+                $output .= "**Overview:**\n{$matchedTopic->description}\n\n";
+            }
+
+            if ($sampleQuestion && !empty($sampleQuestion->explanation)) {
+                $output .= "**Key Study Concept:**\n{$sampleQuestion->explanation}\n\n";
+            }
+
+            $output .= "💡 *Tip: Practice this topic under **{$subjName}** in the Subjects menu to build mastery!*";
+            return $output;
+        }
+
+        // 2. Dynamic Question/Concept Search: Search question bank for matching concepts (e.g., photosynthesis, equations)
+        if (!empty($words)) {
+            $questionMatch = null;
+            foreach ($words as $word) {
+                $questionMatch = Question::where('status', 'active')
+                    ->where(function ($q) use ($word) {
+                        $q->where('question_text', 'like', "%{$word}%")
+                          ->orWhere('explanation', 'like', "%{$word}%");
+                    })
+                    ->with(['topic.subject', 'options' => fn($o) => $o->where('is_correct', true)])
+                    ->first();
+                if ($questionMatch) break;
+            }
+
+            if ($questionMatch) {
+                $topicName = $questionMatch->topic->name ?? 'General Concept';
+                $subjName = $questionMatch->topic->subject->name ?? 'Curriculum';
+                $correctOpt = $questionMatch->options->first();
+                $ansText = $correctOpt ? " (Key concept: **{$correctOpt->option_text}**)" : "";
+
+                return "Great question, **{$user->name}**! 💡 Here is what our curriculum notes say about that:\n\n"
+                    . "* **Subject:** {$subjName} → **{$topicName}**\n\n"
+                    . "**Explanation:**\n{$questionMatch->explanation}{$ansText}\n\n"
+                    . "Would you like to practice more questions on **{$topicName}**?";
+            }
+        }
+
+        // 3. Dynamic Subject Search: Match against any subject in the curriculum
+        $subjects = Subject::where('status', 'active')->with('topics')->get();
+        $matchedSubject = $subjects->first(function ($subject) use ($query) {
+            $name = strtolower($subject->name);
+            $slug = strtolower($subject->slug);
+            return str_contains($query, $name) || str_contains($query, $slug);
+        });
+
+        if ($matchedSubject) {
+            $topicList = $matchedSubject->topics->take(5)->map(fn($t) => "* **{$t->name}** (Level: " . strtoupper($t->level) . ")")->implode("\n");
+
+            return "Hi **{$user->name}**! 🎓 In **{$matchedSubject->name}**, here are key topics available in your syllabus:\n\n"
+                . "{$topicList}\n\n"
+                . (!empty($matchedSubject->description) ? "{$matchedSubject->description}\n\n" : "")
+                . "Which topic would you like to dive into today?";
+        }
+
+        // 4. Dynamic Personalized Study Recommendations
+        try {
+            $progressRecords = LearnerProgress::where('user_id', $user->id)
+                ->with('topic.subject')
+                ->orderBy('mastery_score', 'asc')
+                ->get();
+
+            if ($progressRecords->isNotEmpty()) {
+                $lowTopics = $progressRecords->filter(fn($p) => $p->mastery_score < 80)->take(3);
+                if ($lowTopics->isNotEmpty()) {
+                    $recommendations = $lowTopics->map(function ($p) {
+                        $subj = $p->topic->subject->name ?? 'Curriculum';
+                        return "* **{$p->topic->name}** (*{$subj}*) — {$p->mastery_score}% mastery";
+                    })->implode("\n");
+
+                    return "Welcome, **{$user->name}**! 🎯 Based on your latest quiz attempts across all subjects, here are your top recommended focus areas:\n\n"
+                        . "{$recommendations}\n\n"
+                        . "Reviewing these will boost your overall grade fastest! Which one shall we start with?";
+                }
+            }
+        } catch (\Exception $e) {
+            // Fall through to general response
+        }
+
+        // 5. Dynamic General Helper: Lists all available active subjects in the database
+        $availableSubjects = Subject::where('status', 'active')->pluck('name');
+        $subjectStr = $availableSubjects->isNotEmpty() ? $availableSubjects->implode(', ') : 'all subjects';
+
+        $sampleTopics = Topic::where('status', 'active')->inRandomOrder()->take(3)->pluck('name');
+        $samplePrompt = $sampleTopics->isNotEmpty()
+            ? "Ask me about topics like *" . $sampleTopics->implode('*, *') . "*."
+            : "Ask me to explain any topic or recommend what to study next.";
+
+        return "Hi **{$user->name}**! 🚀 I'm your AI Study Companion for **{$subjectStr}**.\n\n"
+            . "I can help you with:\n"
+            . "1. **Topic Explanations:** {$samplePrompt}\n"
+            . "2. **Study Recommendations:** Say *\"What should I study next?\"* to review your weakest areas.\n"
+            . "3. **Subject Overviews:** Ask about any subject to see all its syllabus topics.\n\n"
+            . "What would you like to explore?";
     }
 }

@@ -8,6 +8,7 @@ use App\Models\Quiz;
 use App\Models\Subject;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -60,48 +61,126 @@ class SubjectWebController extends Controller
     {
         $user = $request->user();
 
-        $subject = Subject::where('slug', $slug)
+        $subject = DB::table('subjects')
+            ->where('slug', $slug)
             ->where('status', 'active')
             ->select(['id', 'name', 'slug', 'description'])
-            ->firstOrFail();
+            ->first();
 
-        // Fetch topics and map learner progress
-        $topics = $subject->topics()
-            ->select(['id', 'subject_id', 'name', 'slug', 'level', 'description', 'sort_order'])
-            ->where('status', 'active')
-            ->orderBy('sort_order')
+        if (!$subject) {
+            return response()->json(['message' => 'Subject not found'], 404);
+        }
+
+        // 1. Efficient single-join query for topics and user progress (eliminates N+1)
+        $topics = DB::table('topics as t')
+            ->leftJoin('learner_progress as lp', function ($join) use ($user) {
+                $join->on('lp.topic_id', '=', 't.id')
+                     ->where('lp.user_id', '=', $user->id);
+            })
+            ->where('t.subject_id', $subject->id)
+            ->where('t.status', 'active')
+            ->orderBy('t.sort_order')
+            ->select([
+                't.id',
+                't.subject_id',
+                't.name',
+                't.slug',
+                't.level',
+                't.description',
+                'lp.questions_attempted',
+                'lp.questions_correct',
+                'lp.mastery_score',
+            ])
             ->get()
-            ->map(function ($topic) use ($user) {
-                $progress = LearnerProgress::where('user_id', $user->id)
-                    ->where('topic_id', $topic->id)
-                    ->first();
-
+            ->map(function ($t) {
                 return [
-                    'id' => $topic->id,
-                    'subject_id' => $topic->subject_id,
-                    'name' => $topic->name,
-                    'slug' => $topic->slug,
-                    'level' => $topic->level,
-                    'description' => $topic->description,
-                    'progress' => $progress ? [
-                        'questions_attempted' => $progress->questions_attempted,
-                        'questions_correct' => $progress->questions_correct,
-                        'mastery_score' => $progress->mastery_score,
-                    ] : null
+                    'id' => (int) $t->id,
+                    'subject_id' => (int) $t->subject_id,
+                    'name' => $t->name,
+                    'slug' => $t->slug,
+                    'level' => $t->level,
+                    'description' => $t->description,
+                    'progress' => $t->mastery_score !== null ? [
+                        'questions_attempted' => (int) $t->questions_attempted,
+                        'questions_correct' => (int) $t->questions_correct,
+                        'mastery_score' => (int) $t->mastery_score,
+                    ] : null,
                 ];
             });
 
-        $quizzes = Quiz::where('status', 'active')
-            ->whereHas('questions.topic', function ($query) use ($subject) {
-                $query->where('subject_id', $subject->id);
-            })
-            ->select(['id', 'title', 'description', 'time_limit_minutes'])
+        // 2. High-performance single-pass DB query (zero whereIn, zero N+1, single roundtrip)
+        $quizRows = DB::table('quizzes as q')
+            ->join('quiz_questions as qq', 'qq.quiz_id', '=', 'q.id')
+            ->join('questions as qn', 'qn.id', '=', 'qq.question_id')
+            ->join('topics as t', 't.id', '=', 'qn.topic_id')
+            ->leftJoin('question_options as qo', 'qo.question_id', '=', 'qn.id')
+            ->where('t.subject_id', $subject->id)
+            ->where('q.status', 'active')
+            ->where('qn.status', 'active')
+            ->select([
+                'q.id as quiz_id',
+                'q.title as quiz_title',
+                'q.description as quiz_description',
+                'q.time_limit_minutes',
+                'qn.id as question_id',
+                'qn.topic_id',
+                'qn.question_text',
+                'qn.type',
+                'qn.difficulty',
+                'qn.explanation',
+                'qo.id as option_id',
+                'qo.option_text',
+                'qo.is_correct',
+            ])
+            ->orderBy('q.id')
+            ->orderBy('qq.sort_order')
+            ->orderBy('qo.sort_order')
             ->get();
+
+        // 3. Assemble clean payload in memory (single pass, zero Eloquent model overhead)
+        $groupedQuizzes = [];
+        foreach ($quizRows as $row) {
+            if (!isset($groupedQuizzes[$row->quiz_id])) {
+                $groupedQuizzes[$row->quiz_id] = [
+                    'id' => (int) $row->quiz_id,
+                    'subject_id' => (int) $subject->id,
+                    'title' => $row->quiz_title,
+                    'description' => $row->quiz_description,
+                    'time_limit_minutes' => $row->time_limit_minutes !== null ? (int) $row->time_limit_minutes : null,
+                    'questions' => [],
+                ];
+            }
+
+            if (!isset($groupedQuizzes[$row->quiz_id]['questions'][$row->question_id])) {
+                $groupedQuizzes[$row->quiz_id]['questions'][$row->question_id] = [
+                    'id' => (int) $row->question_id,
+                    'topic_id' => (int) $row->topic_id,
+                    'question_text' => $row->question_text,
+                    'type' => $row->type,
+                    'difficulty' => $row->difficulty,
+                    'explanation' => $row->explanation,
+                    'options' => [],
+                ];
+            }
+
+            if ($row->option_id !== null) {
+                $groupedQuizzes[$row->quiz_id]['questions'][$row->question_id]['options'][] = [
+                    'id' => (int) $row->option_id,
+                    'option_text' => $row->option_text,
+                    'is_correct' => (bool) $row->is_correct,
+                ];
+            }
+        }
+
+        $formattedQuizzes = array_values(array_map(function ($q) {
+            $q['questions'] = array_values($q['questions']);
+            return $q;
+        }, $groupedQuizzes));
 
         return response()->json([
             'subject' => $subject,
             'topics' => $topics,
-            'quizzes' => $quizzes,
+            'quizzes' => $formattedQuizzes,
         ]);
     }
 }

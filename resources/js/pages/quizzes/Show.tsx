@@ -4,6 +4,7 @@ import Markdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { getFreshQuiz, saveLocalAttempt } from '../../services/OfflineService';
+import Result from './Result';
 
 interface Option {
     id: number;
@@ -78,6 +79,7 @@ export default function Show({ quizId }: Props) {
     const [secondsElapsed, setSecondsElapsed] = useState<number>(0);
     const [secondsRemaining, setSecondsRemaining] = useState<number | null>(null);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+    const [offlineAttemptId, setOfflineAttemptId] = useState<string | null>(null);
 
     // Online/offline detection
     useEffect(() => {
@@ -199,9 +201,10 @@ export default function Show({ quizId }: Props) {
                 }
             );
         } else {
-            // Offline — immediately navigate to the offline result page!
+            // Offline — immediately render the offline result in-place!
             setIsSubmitting(false);
-            router.visit(`/quizzes/attempts/${attemptId}`);
+            window.history.pushState(null, '', `/quizzes/attempts/${attemptId}`);
+            setOfflineAttemptId(attemptId);
         }
     };
 
@@ -323,6 +326,11 @@ export default function Show({ quizId }: Props) {
     const questions = quiz?.questions || [];
     const currentQuestion = questions[activeIndex];
     const progressPercent = questions.length > 0 ? ((activeIndex + 1) / questions.length) * 100 : 0;
+
+    // ── Offline Completed Result View ──
+    if (offlineAttemptId) {
+        return <Result attemptId={offlineAttemptId} />;
+    }
 
     // ── Loading Skeleton ──
     if (loading) {

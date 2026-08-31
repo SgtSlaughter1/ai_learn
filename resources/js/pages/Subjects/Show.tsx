@@ -70,9 +70,10 @@ export default function Show({ slug }: Props) {
                         );
                     }
                     const localQuizzes = await db.quizzes.toArray();
-                    if (localQuizzes.length > 0 && isMounted) {
+                    const filteredQuizzes = localQuizzes.filter((q: any) => !q.subject_id || q.subject_id === localSubject.id);
+                    if (filteredQuizzes.length > 0 && isMounted) {
                         setQuizzes(
-                            localQuizzes.map((q: any) => ({
+                            filteredQuizzes.map((q: any) => ({
                                 id: q.id,
                                 title: q.title,
                                 description: q.description,
@@ -117,14 +118,19 @@ export default function Show({ slug }: Props) {
                         );
                     }
                     if (data.quizzes && data.quizzes.length > 0) {
-                        await db.quizzes.bulkPut(
-                            data.quizzes.map((q: any) => ({
+                        for (const q of data.quizzes) {
+                            const existing = await db.quizzes.get(q.id);
+                            const questionsToSave = (q.questions && q.questions.length > 0)
+                                ? q.questions
+                                : (existing?.questions && existing.questions.length > 0 ? existing.questions : []);
+
+                            await db.quizzes.put({
                                 ...q,
                                 status: 'published',
                                 cached_at: new Date().toISOString(),
-                                questions: q.questions || [],
-                            }))
-                        );
+                                questions: questionsToSave,
+                            });
+                        }
                     }
                 }
             } catch (err) {

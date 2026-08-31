@@ -60,14 +60,61 @@ async function generateOfflineResponse(message: string): Promise<string> {
         if (matchedTopic) {
             const subjects = await db.subjects.toArray();
             const sub = subjects.find(s => s.id === matchedTopic.subject_id);
-            return `Here is what I found in your offline library about **${matchedTopic.name}** (Level: ${matchedTopic.level.toUpperCase()}):\n\n*${matchedTopic.description || 'No description cached.'}*\n\nThis topic is part of your **${sub?.name || 'Curriculum'}** course. You can practice this topic by taking the standard quiz for this subject!`;
+
+            // Look for sample explanation in cached quizzes
+            const quizzes = await db.quizzes.toArray();
+            let keyConcept = '';
+            for (const q of quizzes) {
+                const found = q.questions?.find((item: any) => item.topic_id === matchedTopic.id && item.explanation);
+                if (found?.explanation) {
+                    keyConcept = found.explanation;
+                    break;
+                }
+            }
+
+            let response = `Here is what I found in your offline library about **${matchedTopic.name}** (Level: ${matchedTopic.level.toUpperCase()}):\n\n*${matchedTopic.description || 'No description cached.'}*\n\nThis topic is part of your **${sub?.name || 'Curriculum'}** course.`;
+            if (keyConcept) {
+                response += `\n\n💡 **Key Concept:**\n${keyConcept}`;
+            }
+            response += `\n\nYou can practice this topic by taking the quiz for ${sub?.name || 'this subject'}!`;
+            return response;
+        }
+
+        // 4. Search for specific subjects
+        const subjects = await db.subjects.toArray();
+        const matchedSubject = subjects.find(s => query.includes(s.name.toLowerCase()) || query.includes(s.slug));
+        if (matchedSubject) {
+            const subTopics = topics.filter(t => t.subject_id === matchedSubject.id);
+            const topicList = subTopics.map(t => `- **${t.name}** (Level: ${t.level.toUpperCase()})`).join('\n');
+            return `Here are the topics available in **${matchedSubject.name}**:\n\n${topicList || 'No topics cached yet.'}\n\nAsk me about any of these topics or practice them in the Subjects menu!`;
+        }
+
+        // 5. Concept & Question Bank Search across cached quizzes
+        const cleanWords = query.replace(/[^\w\s]/g, '').split(' ').filter(w => w.length >= 4);
+        if (cleanWords.length > 0) {
+            const quizzes = await db.quizzes.toArray();
+            for (const q of quizzes) {
+                const qn = q.questions?.find((item: any) =>
+                    cleanWords.some(w => item.question_text?.toLowerCase().includes(w) || item.explanation?.toLowerCase().includes(w))
+                );
+                if (qn) {
+                    const sub = subjects.find(s => s.id === (q as any).subject_id);
+                    const t = topics.find(tp => tp.id === qn.topic_id);
+                    return `Here is what your offline curriculum notes say:\n\n* **${sub?.name || 'Curriculum'}** → **${t?.name || 'Concept'}**\n\n**Explanation:**\n${qn.explanation || qn.question_text}\n\nWould you like to practice more on this topic?`;
+                }
+            }
         }
     } catch (e) {
         console.warn('Offline AI helper error:', e);
     }
 
-    // 4. Default Offline fallback message
-    return `🤖 **Offline AI Tutor Mode**\n\nI am operating in offline mode because you are disconnected.\n\nWhile offline, I can help you with:\n1. **"Recommend what to study"**: I will analyze your local progress and suggest topics.\n2. **"List subjects"**: View your offline curriculum and descriptions.\n3. Ask about specific topics like **Algebra**, **Concord**, or **Genetics** to see quick notes.`;
+    // 6. Default Dynamic Offline fallback message
+    const cachedSubjects = await db.subjects.toArray().catch(() => []);
+    const cachedTopics = await db.topics.toArray().catch(() => []);
+    const subjectList = cachedSubjects.length > 0 ? cachedSubjects.map(s => s.name).join(', ') : 'all enrolled subjects';
+    const sampleTopics = cachedTopics.slice(0, 3).map(t => `**${t.name}**`).join(', ');
+
+    return `🤖 **Offline AI Tutor Mode**\n\nI am operating in offline mode using your local curriculum library for **${subjectList}**.\n\nWhile offline, I can help you with:\n1. **"Recommend what to study"**: I will analyze your local mastery and suggest topics.\n2. **"List subjects"**: View your offline curriculum and descriptions.\n3. Ask about any topic in your library (e.g. ${sampleTopics || 'your topics'}) to see concept notes.`;
 }
 
 export default function ChatWidget() {
