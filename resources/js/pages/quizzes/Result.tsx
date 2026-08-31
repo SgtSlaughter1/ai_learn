@@ -184,7 +184,7 @@ export default function Result({ attemptId }: Props) {
 
     const feedback = attempt ? getScoreFeedback(percentage) : null;
 
-    if (loading || !attempt || !feedback) {
+    if (loading) {
         return (
             <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] p-4 md:p-8 animate-pulse">
                 <Head title="Loading Results..." />
@@ -208,6 +208,29 @@ export default function Result({ attemptId }: Props) {
                         <div className="h-5 bg-[var(--color-surface)] rounded w-1/4" />
                         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] p-6 md:p-8 rounded-3xl h-[280px]" />
                     </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!attempt || !feedback) {
+        return (
+            <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex items-center justify-center p-4">
+                <Head title="Assessment Recorded" />
+                <div className="max-w-md w-full text-center bg-[var(--color-surface)] border border-[var(--color-border)] p-8 rounded-3xl space-y-5">
+                    <div className="w-16 h-16 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center mx-auto text-2xl font-black">
+                        ✓
+                    </div>
+                    <h1 className="text-xl font-bold">Assessment Recorded</h1>
+                    <p className="text-sm text-[var(--color-muted)]">
+                        Your quiz attempt has been saved locally in your offline study vault and will automatically sync with the cloud next time you connect to the internet.
+                    </p>
+                    <a
+                        href="/subjects"
+                        className="inline-block w-full py-3 rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-bold text-sm transition-all"
+                    >
+                        Back to Subjects
+                    </a>
                 </div>
             </div>
         );

@@ -29,8 +29,10 @@ async function syncQuizAttempts(): Promise<number> {
         try {
             const res = await fetch(`/api/v1/quizzes/attempts/${attempt.id}/sync`, {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                     'X-XSRF-TOKEN': getCsrfToken(),
                 },
                 body: JSON.stringify({
@@ -48,8 +50,12 @@ async function syncQuizAttempts(): Promise<number> {
             if (res.ok) {
                 await markAttemptSynced(attempt.id);
                 synced++;
+                console.log(`[SyncService] Successfully synced offline attempt ${attempt.id} to server`);
+            } else {
+                console.warn(`[SyncService] Failed syncing attempt ${attempt.id}: HTTP ${res.status}`);
             }
-        } catch {
+        } catch (err) {
+            console.warn(`[SyncService] Network error syncing attempt ${attempt.id}:`, err);
             // Will retry on next sync cycle
         }
     }

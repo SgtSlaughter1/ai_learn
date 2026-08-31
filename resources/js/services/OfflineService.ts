@@ -144,7 +144,7 @@ export async function getLocalAttempts(userId: string): Promise<LocalQuizAttempt
 }
 
 export async function getUnsyncedAttempts(): Promise<LocalQuizAttempt[]> {
-    return db.quizAttempts.where('synced').equals(0).toArray();
+    return db.quizAttempts.filter(a => !a.synced || (a.synced as any) === 0).toArray();
 }
 
 export async function markAttemptSynced(id: string): Promise<void> {
@@ -165,7 +165,7 @@ export async function getLocalProgress(userId: string): Promise<LocalLearnerProg
 }
 
 export async function getUnsyncedProgress(): Promise<LocalLearnerProgress[]> {
-    return db.learnerProgress.where('synced').equals(0).toArray();
+    return db.learnerProgress.filter(p => !p.synced || (p.synced as any) === 0).toArray();
 }
 
 export async function markProgressSynced(id: number): Promise<void> {
@@ -184,7 +184,7 @@ export async function getLocalGamification(userId: string): Promise<LocalGamific
 }
 
 export async function getUnsyncedGamification(): Promise<LocalGamification[]> {
-    return db.gamification.where('synced').equals(0).toArray();
+    return db.gamification.filter(g => !g.synced || (g.synced as any) === 0).toArray();
 }
 
 export async function markGamificationSynced(id: number): Promise<void> {
@@ -206,9 +206,9 @@ export async function getCachedUserProfile(): Promise<CachedUserProfile | undefi
 
 export async function getPendingSyncCount(): Promise<number> {
     const [attempts, progress, gamification] = await Promise.all([
-        db.quizAttempts.where('synced').equals(0).count(),
-        db.learnerProgress.where('synced').equals(0).count(),
-        db.gamification.where('synced').equals(0).count(),
+        db.quizAttempts.filter(a => !a.synced || (a.synced as any) === 0).count(),
+        db.learnerProgress.filter(p => !p.synced || (p.synced as any) === 0).count(),
+        db.gamification.filter(g => !g.synced || (g.synced as any) === 0).count(),
     ]);
     return attempts + progress + gamification;
 }

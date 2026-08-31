@@ -3,7 +3,7 @@ import { useState, useEffect, FormEvent } from 'react';
 import Markdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import { getFreshQuiz, saveLocalAttempt } from '../../services/OfflineService';
+import { getFreshQuiz, saveLocalAttempt, cacheQuiz, markAttemptSynced } from '../../services/OfflineService';
 import Result from './Result';
 
 interface Option {
@@ -168,40 +168,68 @@ export default function Show({ quizId }: Props) {
             };
         });
 
-        // Save locally in Dexie for offline
-        await saveLocalAttempt({
-            id: attemptId,
-            user_id: 'current',
-            quiz_id: quiz.id,
-            status: 'completed',
-            score: calculatedScore,
-            total_marks: quiz.questions.length,
-            started_at: new Date(Date.now() - secondsElapsed * 1000).toISOString(),
-            completed_at: new Date().toISOString(),
-            duration_seconds: secondsElapsed,
-            answers: answerList.map((a) => ({
-                ...a,
-                id: crypto.randomUUID(),
-                quiz_attempt_id: attemptId,
-                answered_at: new Date().toISOString(),
-            })),
-            synced: navigator.onLine,
-        });
+        try {
+            // 1. Always cache the full quiz in Dexie so Result.tsx has question texts and explanations
+            await cacheQuiz({
+                id: quiz.id,
+                title: quiz.title,
+                description: quiz.description,
+                time_limit_minutes: quiz.time_limit_minutes,
+                status: 'active',
+                questions: quiz.questions as any,
+                cached_at: new Date().toISOString(),
+            });
 
-        if (navigator.onLine) {
-            // Submit to server
-            router.post(
-                `/quizzes/${quiz.id}/attempt`,
-                {
-                    answers: answers,
-                    duration_seconds: secondsElapsed,
-                },
-                {
-                    onFinish: () => setIsSubmitting(false),
+            // 2. Save locally in Dexie with synced: false initially
+            await saveLocalAttempt({
+                id: attemptId,
+                user_id: 'current',
+                quiz_id: quiz.id,
+                status: 'completed',
+                score: calculatedScore,
+                total_marks: quiz.questions.length,
+                started_at: new Date(Date.now() - secondsElapsed * 1000).toISOString(),
+                completed_at: new Date().toISOString(),
+                duration_seconds: secondsElapsed,
+                answers: answerList.map((a) => ({
+                    ...a,
+                    id: crypto.randomUUID(),
+                    quiz_attempt_id: attemptId,
+                    answered_at: new Date().toISOString(),
+                })),
+                synced: false,
+            });
+
+            // 3. If online, attempt direct background sync
+            if (navigator.onLine) {
+                try {
+                    const res = await fetch(`/api/v1/quizzes/attempts/${attemptId}/sync`, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-XSRF-TOKEN': getCsrfToken(),
+                        },
+                        body: JSON.stringify({
+                            quiz_id: quiz.id,
+                            answers: answerList,
+                            duration_seconds: secondsElapsed,
+                        }),
+                    });
+
+                    if (res.ok) {
+                        await markAttemptSynced(attemptId);
+                        console.log('Quiz attempt synced successfully to server');
+                    }
+                } catch (netErr) {
+                    console.log('Online sync failed, attempt stored locally for auto-sync:', netErr);
                 }
-            );
-        } else {
-            // Offline — immediately render the offline result in-place!
+            }
+        } catch (err) {
+            console.error('Local attempt save error:', err);
+        } finally {
+            // Smoothly render result in-place without triggering browser network navigation
             setIsSubmitting(false);
             window.history.pushState(null, '', `/quizzes/attempts/${attemptId}`);
             setOfflineAttemptId(attemptId);
@@ -293,6 +321,10 @@ export default function Show({ quizId }: Props) {
     // ── Helpers ──
 
     function getCsrfToken(): string {
+        const match = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('XSRF-TOKEN='));
+        if (match) return decodeURIComponent(match.split('=')[1]);
         const meta = document.querySelector('meta[name="csrf-token"]');
         return meta ? meta.getAttribute('content') || '' : '';
     }
