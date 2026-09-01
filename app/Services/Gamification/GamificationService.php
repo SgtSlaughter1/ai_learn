@@ -2,6 +2,7 @@
 
 namespace App\Services\Gamification;
 
+use App\Models\Achievement;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use App\Models\User;
@@ -59,6 +60,7 @@ class GamificationService
     private const XP_PERFECT_SCORE_BONUS = 50;
     private const XP_FIRST_ATTEMPT_BONUS = 20;
     private const XP_STREAK_DAILY_BONUS = 15;
+    private array $profileCache = [];
 
     // ── Public Methods ──
 
@@ -67,7 +69,11 @@ class GamificationService
      */
     public function getProfile(User $user): UserGamification
     {
-        return UserGamification::firstOrCreate(
+        if (isset($this->profileCache[$user->id])) {
+            return $this->profileCache[$user->id];
+        }
+
+        $profile = UserGamification::firstOrCreate(
             ['user_id' => $user->id],
             [
                 'total_xp'      => 0,
@@ -77,6 +83,11 @@ class GamificationService
                 'longest_streak'=> 0,
             ]
         );
+
+        $this->recalculateLevel($profile);
+        $this->profileCache[$user->id] = $profile;
+
+        return $profile;
     }
 
     /**
@@ -86,26 +97,50 @@ class GamificationService
     public function processQuizCompletion(User $user, QuizAttempt $attempt, Quiz $quiz): array
     {
         $profile = $this->getProfile($user);
-        $newAchievements = [];
 
-        // 1. Award XP for correct answers
-        $correctCount = $attempt->answers()->where('is_correct', true)->count();
-        $totalQuestions = $attempt->answers()->count();
+        $totalQuestions = $attempt->relationLoaded('answers') ? $attempt->answers->count() : $attempt->answers()->count();
+        $correctCount = $attempt->relationLoaded('answers')
+            ? $attempt->answers->where('is_correct', true)->count()
+            : $attempt->answers()->where('is_correct', true)->count();
+
+        $xpEarnedTotal = self::XP_QUIZ_COMPLETE_BASE;
+        $now = now();
+        $transactions = [
+            [
+                'user_id' => $user->id,
+                'amount' => self::XP_QUIZ_COMPLETE_BASE,
+                'source' => 'quiz_complete',
+                'description' => "Completed: {$quiz->title}",
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]
+        ];
 
         $answerXp = $correctCount * self::XP_CORRECT_ANSWER;
         if ($answerXp > 0) {
-            $this->awardXp($user, $answerXp, 'correct_answer', "{$correctCount} correct answers in {$quiz->title}");
+            $xpEarnedTotal += $answerXp;
+            $transactions[] = [
+                'user_id' => $user->id,
+                'amount' => $answerXp,
+                'source' => 'correct_answer',
+                'description' => "{$correctCount} correct answers in {$quiz->title}",
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
         }
 
-        // 2. Award base quiz completion XP
-        $this->awardXp($user, self::XP_QUIZ_COMPLETE_BASE, 'quiz_complete', "Completed: {$quiz->title}");
-
-        // 3. Perfect score bonus
         if ($totalQuestions > 0 && $correctCount === $totalQuestions) {
-            $this->awardXp($user, self::XP_PERFECT_SCORE_BONUS, 'perfect_score', "Perfect score on {$quiz->title}!");
+            $xpEarnedTotal += self::XP_PERFECT_SCORE_BONUS;
+            $transactions[] = [
+                'user_id' => $user->id,
+                'amount' => self::XP_PERFECT_SCORE_BONUS,
+                'source' => 'perfect_score',
+                'description' => "Perfect score on {$quiz->title}!",
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
         }
 
-        // 4. First attempt bonus
         $previousAttempts = QuizAttempt::where('user_id', $user->id)
             ->where('quiz_id', $quiz->id)
             ->where('id', '!=', $attempt->id)
@@ -113,16 +148,27 @@ class GamificationService
             ->count();
 
         if ($previousAttempts === 0) {
-            $this->awardXp($user, self::XP_FIRST_ATTEMPT_BONUS, 'first_attempt', "First attempt on {$quiz->title}");
+            $xpEarnedTotal += self::XP_FIRST_ATTEMPT_BONUS;
+            $transactions[] = [
+                'user_id' => $user->id,
+                'amount' => self::XP_FIRST_ATTEMPT_BONUS,
+                'source' => 'first_attempt',
+                'description' => "First attempt on {$quiz->title}",
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
         }
+
+        // Batch update XP in a single query and insert transactions in 1 bulk write
+        $profile->increment('total_xp', $xpEarnedTotal);
+        $profile->total_xp += $xpEarnedTotal;
+        $this->recalculateLevel($profile);
+        XpTransaction::insert($transactions);
 
         // 5. Update streak
         $this->updateStreak($user);
 
-        // 6. Recalculate level and rank
-        $this->recalculateLevel($profile);
-
-        // 7. Check and award achievements
+        // 6. Check and award achievements
         $newAchievements = $this->checkAchievements($user);
 
         return $newAchievements;
@@ -138,29 +184,29 @@ class GamificationService
 
     /**
      * Award XP and process gamification updates after a flashcard session completion.
+     * Returns gamification progress (xp earned, level, rank, new achievements).
      */
-    public function processFlashcardCompletion(User $user, int $xpEarned, int $cardsCount): array
+    public function processFlashcardCompletion(User $user, int $xpEarned, int $cardsReviewed): array
     {
         $profile = $this->getProfile($user);
+        $oldLevel = $profile->level;
+        $oldRank = $profile->rank;
 
         // 1. Award flashcard XP
         if ($xpEarned > 0) {
-            $this->awardXp($user, $xpEarned, 'flashcard_complete', "Completed recall deck of {$cardsCount} flashcards");
+            $this->awardXp($user, $xpEarned, 'flashcard_review', "Reviewed {$cardsReviewed} flashcards");
         }
 
-        // 2. Update streak (active study)
+        // 2. Update streak
         $this->updateStreak($user);
 
-        // 3. Recalculate level and rank
-        $this->recalculateLevel($profile);
-
-        // 4. Check achievements
+        // 3. Check achievements
         $newAchievements = $this->checkAchievements($user);
 
         return [
-            'xp_earned' => $xpEarned,
-            'new_level' => $profile->level,
-            'new_rank' => $profile->rank,
+            'xp_earned'        => $xpEarned,
+            'new_level'        => $profile->level > $oldLevel ? $profile->level : null,
+            'new_rank'         => $profile->rank !== $oldRank ? $profile->rank : null,
             'new_achievements' => $newAchievements,
         ];
     }
@@ -197,13 +243,15 @@ class GamificationService
 
         // Achievements
         $achievements = UserAchievement::where('user_id', $user->id)
+            ->with('achievement')
             ->orderByDesc('earned_at')
             ->get()
             ->map(fn($a) => [
                 'key'         => $a->achievement_key,
                 'name'        => $a->name,
-                'description' => $a->description,
-                'icon'        => $a->icon,
+                'description' => $a->description ?? $a->achievement?->description,
+                'icon'        => $a->icon ?? $a->achievement?->icon,
+                'xp_reward'   => $a->achievement?->xp_reward ?? 25,
                 'earned_at'   => $a->earned_at->diffForHumans(),
             ]);
 
@@ -286,6 +334,8 @@ class GamificationService
     {
         $profile = $this->getProfile($user);
         $profile->increment('total_xp', $amount);
+        $profile->total_xp += $amount;
+        $this->recalculateLevel($profile);
 
         XpTransaction::create([
             'user_id'     => $user->id,
@@ -348,7 +398,7 @@ class GamificationService
     /**
      * Recalculate level and rank based on total XP.
      */
-    private function recalculateLevel(UserGamification $profile): void
+    public function recalculateLevel(UserGamification $profile): void
     {
         $newLevel = 1;
         foreach (self::LEVEL_THRESHOLDS as $level => $threshold) {
@@ -366,6 +416,8 @@ class GamificationService
                 'level' => $newLevel,
                 'rank'  => $newRank,
             ]);
+            $profile->level = $newLevel;
+            $profile->rank = $newRank;
         }
     }
 
@@ -402,27 +454,39 @@ class GamificationService
      */
     private function getAllAchievementDefinitions(): array
     {
+        $dbAchievements = Achievement::all();
+        if ($dbAchievements->isNotEmpty()) {
+            return $dbAchievements->map(fn($a) => [
+                'key'         => $a->key,
+                'name'        => $a->name,
+                'description' => $a->description,
+                'icon'        => $a->icon,
+                'xp_reward'   => $a->xp_reward ?? 25,
+                'category'    => $a->category,
+            ])->toArray();
+        }
+
         return [
-            ['key' => 'first_quiz',          'name' => 'First Steps',        'description' => 'Complete your first quiz',               'icon' => '🎯'],
-            ['key' => 'quiz_5',              'name' => 'Getting Serious',     'description' => 'Complete 5 quizzes',                     'icon' => '📝'],
-            ['key' => 'quiz_10',             'name' => 'Quiz Enthusiast',     'description' => 'Complete 10 quizzes',                    'icon' => '🏆'],
-            ['key' => 'quiz_25',             'name' => 'Quiz Master',         'description' => 'Complete 25 quizzes',                    'icon' => '👑'],
-            ['key' => 'perfect_score',       'name' => 'Flawless',            'description' => 'Get a perfect score on any quiz',        'icon' => '💎'],
-            ['key' => 'perfect_3',           'name' => 'Triple Perfect',      'description' => 'Get 3 perfect scores',                  'icon' => '✨'],
-            ['key' => 'streak_3',            'name' => 'On Fire',             'description' => 'Maintain a 3-day streak',               'icon' => '🔥'],
-            ['key' => 'streak_7',            'name' => 'Week Warrior',        'description' => 'Maintain a 7-day streak',               'icon' => '⚡'],
-            ['key' => 'streak_14',           'name' => 'Unstoppable',         'description' => 'Maintain a 14-day streak',              'icon' => '🌟'],
-            ['key' => 'streak_30',           'name' => 'Iron Will',           'description' => 'Maintain a 30-day streak',              'icon' => '💪'],
-            ['key' => 'mastery_50',          'name' => 'Halfway There',       'description' => 'Reach 50% mastery in any subject',      'icon' => '📈'],
-            ['key' => 'mastery_80',          'name' => 'Subject Expert',      'description' => 'Reach 80% mastery in any subject',      'icon' => '🎓'],
-            ['key' => 'mastery_100',         'name' => 'Subject Master',      'description' => 'Reach 100% mastery in any subject',     'icon' => '🥇'],
-            ['key' => 'all_subjects_80',     'name' => 'Renaissance Student', 'description' => 'Reach 80% mastery in all subjects',     'icon' => '🌍'],
-            ['key' => 'level_5',             'name' => 'Level Up!',           'description' => 'Reach Level 5',                         'icon' => '⬆️'],
-            ['key' => 'level_10',            'name' => 'High Roller',         'description' => 'Reach Level 10',                        'icon' => '🎰'],
-            ['key' => 'xp_1000',             'name' => 'XP Hunter',           'description' => 'Earn 1,000 total XP',                   'icon' => '⭐'],
-            ['key' => 'xp_5000',             'name' => 'XP Legend',            'description' => 'Earn 5,000 total XP',                   'icon' => '🌟'],
-            ['key' => 'speed_demon',         'name' => 'Speed Demon',         'description' => 'Complete a quiz in under 2 minutes',    'icon' => '⚡'],
-            ['key' => 'try_all_subjects',    'name' => 'Curious Mind',        'description' => 'Try a quiz in every subject',           'icon' => '📚'],
+            ['key' => 'first_quiz',          'name' => 'First Steps',        'description' => 'Complete your first quiz',               'icon' => '🎯', 'xp_reward' => 25],
+            ['key' => 'quiz_5',              'name' => 'Getting Serious',     'description' => 'Complete 5 quizzes',                     'icon' => '📝', 'xp_reward' => 25],
+            ['key' => 'quiz_10',             'name' => 'Quiz Enthusiast',     'description' => 'Complete 10 quizzes',                    'icon' => '🏆', 'xp_reward' => 25],
+            ['key' => 'quiz_25',             'name' => 'Quiz Master',         'description' => 'Complete 25 quizzes',                    'icon' => '👑', 'xp_reward' => 25],
+            ['key' => 'perfect_score',       'name' => 'Flawless',            'description' => 'Get a perfect score on any quiz',        'icon' => '💎', 'xp_reward' => 25],
+            ['key' => 'perfect_3',           'name' => 'Triple Perfect',      'description' => 'Get 3 perfect scores',                  'icon' => '✨', 'xp_reward' => 25],
+            ['key' => 'streak_3',            'name' => 'On Fire',             'description' => 'Maintain a 3-day streak',               'icon' => '🔥', 'xp_reward' => 25],
+            ['key' => 'streak_7',            'name' => 'Week Warrior',        'description' => 'Maintain a 7-day streak',               'icon' => '⚡', 'xp_reward' => 25],
+            ['key' => 'streak_14',           'name' => 'Unstoppable',         'description' => 'Maintain a 14-day streak',              'icon' => '🌟', 'xp_reward' => 25],
+            ['key' => 'streak_30',           'name' => 'Iron Will',           'description' => 'Maintain a 30-day streak',              'icon' => '💪', 'xp_reward' => 25],
+            ['key' => 'mastery_50',          'name' => 'Halfway There',       'description' => 'Reach 50% mastery in any subject',      'icon' => '📈', 'xp_reward' => 25],
+            ['key' => 'mastery_80',          'name' => 'Subject Expert',      'description' => 'Reach 80% mastery in any subject',      'icon' => '🎓', 'xp_reward' => 25],
+            ['key' => 'mastery_100',         'name' => 'Subject Master',      'description' => 'Reach 100% mastery in any subject',     'icon' => '🥇', 'xp_reward' => 25],
+            ['key' => 'all_subjects_80',     'name' => 'Renaissance Student', 'description' => 'Reach 80% mastery in all subjects',     'icon' => '🌍', 'xp_reward' => 25],
+            ['key' => 'level_5',             'name' => 'Level Up!',           'description' => 'Reach Level 5',                         'icon' => '⬆️', 'xp_reward' => 25],
+            ['key' => 'level_10',            'name' => 'High Roller',         'description' => 'Reach Level 10',                        'icon' => '🎰', 'xp_reward' => 25],
+            ['key' => 'xp_1000',             'name' => 'XP Hunter',           'description' => 'Earn 1,000 total XP',                   'icon' => '⭐', 'xp_reward' => 25],
+            ['key' => 'xp_5000',             'name' => 'XP Legend',            'description' => 'Earn 5,000 total XP',                   'icon' => '🌟', 'xp_reward' => 25],
+            ['key' => 'speed_demon',         'name' => 'Speed Demon',         'description' => 'Complete a quiz in under 2 minutes',    'icon' => '⚡', 'xp_reward' => 25],
+            ['key' => 'try_all_subjects',    'name' => 'Curious Mind',        'description' => 'Try a quiz in every subject',           'icon' => '📚', 'xp_reward' => 25],
         ];
     }
 
@@ -437,88 +501,115 @@ class GamificationService
             ->pluck('achievement_key')
             ->toArray();
 
-        foreach ($allDefinitions as $def) {
-            if (in_array($def['key'], $existingKeys)) continue;
+        $pendingDefs = array_filter($allDefinitions, fn($def) => !in_array($def['key'], $existingKeys));
+        if (empty($pendingDefs)) {
+            return [];
+        }
 
-            if ($this->checkAchievementCondition($user, $def['key'])) {
+        // Preload snapshot in only 2 indexed queries to avoid 20+ SQL queries per check
+        $profile = $this->getProfile($user);
+
+        $completedAttempts = QuizAttempt::where('user_id', $user->id)
+            ->where('status', 'completed')
+            ->select(['id', 'score', 'total_marks', 'started_at', 'completed_at'])
+            ->get();
+
+        $completedCount = $completedAttempts->count();
+        $perfectCount = $completedAttempts->filter(fn ($a) => $a->total_marks > 0 && $a->score >= $a->total_marks)->count();
+        $hasSpeedDemon = $completedAttempts->contains(
+            fn ($a) => $a->completed_at && $a->started_at && $a->completed_at->diffInSeconds($a->started_at) < 120
+        );
+
+        $progressStats = LearnerProgress::where('user_id', $user->id)
+            ->selectRaw('
+                COUNT(CASE WHEN mastery_score >= 50 THEN 1 END) as count_50,
+                COUNT(CASE WHEN mastery_score >= 80 THEN 1 END) as count_80,
+                COUNT(CASE WHEN mastery_score >= 100 THEN 1 END) as count_100
+            ')
+            ->first();
+
+        $snapshot = [
+            'profile'         => $profile,
+            'completed_count' => $completedCount,
+            'perfect_count'   => $perfectCount,
+            'has_speed_demon' => $hasSpeedDemon,
+            'count_50'        => (int) ($progressStats?->count_50 ?? 0),
+            'count_80'        => (int) ($progressStats?->count_80 ?? 0),
+            'count_100'       => (int) ($progressStats?->count_100 ?? 0),
+        ];
+
+        $achievementBonusXp = 0;
+        $achievementTransactions = [];
+        $now = now();
+
+        foreach ($pendingDefs as $def) {
+            if ($this->checkAchievementCondition($user, $def['key'], $snapshot)) {
                 UserAchievement::create([
                     'user_id'         => $user->id,
                     'achievement_key' => $def['key'],
                     'name'            => $def['name'],
                     'description'     => $def['description'],
                     'icon'            => $def['icon'],
-                    'earned_at'       => now(),
+                    'earned_at'       => $now,
                 ]);
 
-                // Award bonus XP for earning achievement
-                $this->awardXp($user, 25, 'achievement', "Achievement unlocked: {$def['name']}");
+                $rewardXp = $def['xp_reward'] ?? 25;
+                $achievementBonusXp += $rewardXp;
+                $achievementTransactions[] = [
+                    'user_id'     => $user->id,
+                    'amount'      => $rewardXp,
+                    'source'      => 'achievement',
+                    'description' => "Achievement unlocked: {$def['name']}",
+                    'created_at'  => $now,
+                    'updated_at'  => $now,
+                ];
 
                 $earned[] = $def;
             }
+        }
+
+        if ($achievementBonusXp > 0) {
+            $profile->increment('total_xp', $achievementBonusXp);
+            $profile->total_xp += $achievementBonusXp;
+            $this->recalculateLevel($profile);
+            XpTransaction::insert($achievementTransactions);
         }
 
         return $earned;
     }
 
     /**
-     * Check if a specific achievement condition is met.
+     * Check if a specific achievement condition is met using preloaded snapshot.
      */
-    private function checkAchievementCondition(User $user, string $key): bool
+    private function checkAchievementCondition(User $user, string $key, array $snapshot): bool
     {
-        $profile = $this->getProfile($user);
+        $profile = $snapshot['profile'];
 
         return match ($key) {
-            'first_quiz' => QuizAttempt::where('user_id', $user->id)
-                ->where('status', 'completed')->count() >= 1,
+            'first_quiz'    => $snapshot['completed_count'] >= 1,
+            'quiz_5'        => $snapshot['completed_count'] >= 5,
+            'quiz_10'       => $snapshot['completed_count'] >= 10,
+            'quiz_25'       => $snapshot['completed_count'] >= 25,
 
-            'quiz_5' => QuizAttempt::where('user_id', $user->id)
-                ->where('status', 'completed')->count() >= 5,
+            'perfect_score' => $snapshot['perfect_count'] >= 1,
+            'perfect_3'     => $snapshot['perfect_count'] >= 3,
 
-            'quiz_10' => QuizAttempt::where('user_id', $user->id)
-                ->where('status', 'completed')->count() >= 10,
+            'streak_3'      => $profile->longest_streak >= 3,
+            'streak_7'      => $profile->longest_streak >= 7,
+            'streak_14'     => $profile->longest_streak >= 14,
+            'streak_30'     => $profile->longest_streak >= 30,
 
-            'quiz_25' => QuizAttempt::where('user_id', $user->id)
-                ->where('status', 'completed')->count() >= 25,
+            'mastery_50'    => $snapshot['count_50'] >= 1,
+            'mastery_80'    => $snapshot['count_80'] >= 1,
+            'mastery_100'   => $snapshot['count_100'] >= 1,
 
-            'perfect_score' => QuizAttempt::where('user_id', $user->id)
-                ->where('status', 'completed')
-                ->whereColumn('score', '=', 'total_marks')
-                ->count() >= 1,
-
-            'perfect_3' => QuizAttempt::where('user_id', $user->id)
-                ->where('status', 'completed')
-                ->whereColumn('score', '=', 'total_marks')
-                ->count() >= 3,
-
-            'streak_3' => $profile->longest_streak >= 3,
-            'streak_7' => $profile->longest_streak >= 7,
-            'streak_14' => $profile->longest_streak >= 14,
-            'streak_30' => $profile->longest_streak >= 30,
-
-            'mastery_50' => LearnerProgress::where('user_id', $user->id)
-                ->where('mastery_score', '>=', 50)->count() >= 1,
-
-            'mastery_80' => LearnerProgress::where('user_id', $user->id)
-                ->where('mastery_score', '>=', 80)->count() >= 1,
-
-            'mastery_100' => LearnerProgress::where('user_id', $user->id)
-                ->where('mastery_score', '>=', 100)->count() >= 1,
-
-            'all_subjects_80' => $this->checkAllSubjectsMastery($user, 80),
-
-            'level_5' => $profile->level >= 5,
-            'level_10' => $profile->level >= 10,
-
-            'xp_1000' => $profile->total_xp >= 1000,
-            'xp_5000' => $profile->total_xp >= 5000,
-
-            'speed_demon' => QuizAttempt::where('user_id', $user->id)
-                ->where('status', 'completed')
-                ->get()
-                ->filter(fn($attempt) => $attempt->completed_at && $attempt->started_at && $attempt->completed_at->diffInSeconds($attempt->started_at) < 120)
-                ->count() >= 1,
-
-            'try_all_subjects' => $this->checkTriedAllSubjects($user),
+            'all_subjects_80'  => $snapshot['count_80'] > 0 && $this->checkAllSubjectsMastery($user, 80),
+            'level_5'          => $profile->level >= 5,
+            'level_10'         => $profile->level >= 10,
+            'xp_1000'          => $profile->total_xp >= 1000,
+            'xp_5000'          => $profile->total_xp >= 5000,
+            'speed_demon'      => $snapshot['has_speed_demon'],
+            'try_all_subjects' => $snapshot['completed_count'] >= 2 && $this->checkTriedAllSubjects($user),
 
             default => false,
         };
