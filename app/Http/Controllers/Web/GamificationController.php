@@ -16,7 +16,7 @@ class GamificationController extends Controller
     /**
      * Get the user's full gamification profile.
      */
-    public function profile(Request $request): JsonResponse
+    public function getProfile(Request $request): JsonResponse
     {
         $data = $this->gamificationService->getDashboardData($request->user());
         return response()->json($data);
@@ -25,7 +25,7 @@ class GamificationController extends Controller
     /**
      * Get the leaderboard.
      */
-    public function leaderboard(Request $request): JsonResponse
+    public function getLeaderboard(Request $request): JsonResponse
     {
         $data = $this->gamificationService->getLeaderboard($request->user());
         return response()->json($data);

@@ -8,40 +8,26 @@ use App\Models\QuizAttempt;
 use App\Models\Subject;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function index(Request $request): mixed
-    {
-        $user = $request->user();
-        if ($user->role === \App\Enums\UserRole::TEACHER) {
-            return redirect('/teacher/dashboard');
-        }
-        if ($user->role === \App\Enums\UserRole::ADMIN) {
-            return redirect('/admin/dashboard');
-        }
-        return Inertia::render('Dashboard');
-    }
-
     public function getStats(Request $request): JsonResponse
     {
         $user = $request->user();
 
-        // Get key statistics
+        // Get key statistics in a single aggregated query on learner_progress
         $totalSubjects = Subject::where('status', 'active')->count();
-        
-        // Sum total questions attempted and correct
+
         $progressStats = LearnerProgress::where('user_id', $user->id)
-            ->selectRaw('SUM(questions_attempted) as attempted, SUM(questions_correct) as correct, AVG(mastery_score) as avg_mastery')
+            ->selectRaw('
+                SUM(questions_attempted) as attempted,
+                SUM(questions_correct) as correct,
+                AVG(mastery_score) as avg_mastery,
+                COUNT(CASE WHEN mastery_score >= 80 THEN 1 END) as completed_topics
+            ')
             ->first();
 
-        $completedTopicsCount = LearnerProgress::where('user_id', $user->id)
-            ->where('mastery_score', '>=', 80) // 80% mastery threshold
-            ->count();
-
-        // Get recent quiz attempts
+        // Get recent quiz attempts (select only needed fields with eager-loaded quiz)
         $recentAttempts = QuizAttempt::with('quiz:id,title')
             ->where('user_id', $user->id)
             ->orderBy('started_at', 'desc')
@@ -50,7 +36,7 @@ class DashboardController extends Controller
             ->map(function ($attempt) {
                 return [
                     'id' => $attempt->id,
-                    'quiz_title' => $attempt->quiz->title,
+                    'quiz_title' => $attempt->quiz?->title ?? ('Quiz #' . $attempt->quiz_id),
                     'status' => $attempt->status,
                     'score' => $attempt->score,
                     'total_marks' => $attempt->total_marks,
@@ -61,10 +47,10 @@ class DashboardController extends Controller
         return response()->json([
             'stats' => [
                 'totalSubjects' => $totalSubjects,
-                'questionsAttempted' => (int) ($progressStats->attempted ?? 0),
-                'questionsCorrect' => (int) ($progressStats->correct ?? 0),
-                'averageMastery' => round($progressStats->avg_mastery ?? 0),
-                'completedTopics' => $completedTopicsCount,
+                'questionsAttempted' => (int) ($progressStats?->attempted ?? 0),
+                'questionsCorrect' => (int) ($progressStats?->correct ?? 0),
+                'averageMastery' => (int) round($progressStats?->avg_mastery ?? 0),
+                'completedTopics' => (int) ($progressStats?->completed_topics ?? 0),
             ],
             'recentAttempts' => $recentAttempts,
         ]);

@@ -1,4 +1,4 @@
-name: 🚀 Deploy Laravel + Inertia to InfinityFree
+name: 🚀 Deploy Laravel API to InfinityFree
 
 on:
   workflow_dispatch:
@@ -27,24 +27,6 @@ jobs:
       # ── Composer ──────────────────────────────────────────
       - name: 📦 Install Composer dependencies (production)
         run: composer install --optimize-autoloader --no-dev --no-interaction --prefer-dist
-
-      # ── Node.js / Vite ────────────────────────────────────
-      - name: 🔧 Setup Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: 📦 Install Node dependencies
-        run: npm ci
-
-      - name: 🏗️ Build frontend (Vite + Inertia)
-        env:
-          VITE_APP_NAME: "Antigravity AI"
-          VITE_BASE_URL: "https://ailearn.gt.tc"
-          VITE_API_BASE_URL: "https://ailearn.gt.tc"
-          VITE_STORAGE_URL: "https://ailearn.gt.tc/storage"
-        run: npm run build
 
       # ── Create .env from GitHub Secrets ───────────────────
       - name: 📝 Create .env file
@@ -83,13 +65,13 @@ jobs:
         run: cp public/root-index.php ./index.php
 
       # ── Prepare deploy directories ─────────────────────────
-      # Splitting app code from vendor ensures your app & assets upload in seconds
+      # Splitting app code from vendor ensures your app uploads in seconds
       - name: 📁 Stage deployment files
         run: |
           mkdir -p /tmp/deploy_app
           mkdir -p /tmp/deploy_vendor
 
-          # 1. Copy Application Code & Assets (Production-only, ~150 files)
+          # 1. Copy Application Code (Production-only API)
           cp -r app /tmp/deploy_app/
           cp -r bootstrap /tmp/deploy_app/
           cp -r config /tmp/deploy_app/
@@ -124,11 +106,6 @@ jobs:
           rm -f /tmp/deploy_app/public/server-index.php
           rm -f /tmp/deploy_app/public/extract.php
 
-          # Ensure manifest and icons exist in both root and public to prevent shared-hosting 404s
-          cp public/build/manifest.webmanifest /tmp/deploy_app/manifest.webmanifest
-          cp public/build/manifest.webmanifest /tmp/deploy_app/public/manifest.webmanifest
-          cp -r public/images /tmp/deploy_app/images
-
           # 2. Copy Vendor directory separately
           cp -r vendor/* /tmp/deploy_vendor/
 
@@ -156,40 +133,8 @@ jobs:
       - name: 📦 Install lftp
         run: sudo apt-get update && sudo apt-get install -y lftp
 
-      # Clean old Vite build assets to ensure fresh hash references
-      - name: 🧹 Clean old build assets on server
-        env:
-          FTP_USER: ${{ secrets.FTP_USERNAME }}
-          FTP_PASS: ${{ secrets.FTP_PASSWORD }}
-          FTP_HOST: ftpupload.net
-        run: |
-          lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" <<EOF || true
-          set ssl:verify-certificate no
-          set ftp:ssl-allow yes
-          set ftp:passive-mode yes
-          set net:timeout 30
-          set net:max-retries 3
-
-          mrm -f /htdocs/public/build/assets/* || true
-          mrm -f /htdocs/public/build/workbox-*.js || true
-          rm -f /htdocs/public/build/manifest.json || true
-          rm -f /htdocs/public/build/manifest.webmanifest || true
-          rm -f /htdocs/public/build/sw.js || true
-          rm -f /htdocs/public/build/registerSW.js || true
-          
-          # Clean old root public static files to let fresh manifest and worker take over
-          rm -f /htdocs/sw.js || true
-          rm -f /htdocs/manifest.webmanifest || true
-          rm -f /htdocs/public/sw.js || true
-          rm -f /htdocs/public/manifest.webmanifest || true
-          rm -f /htdocs/public/registerSW.js || true
-          rm -f /htdocs/public/workbox-*.js || true
-
-          bye
-          EOF
-
-      # Deploy Application Code, Views, Public Assets & PWA Icons (FAST ~30s-60s)
-      - name: 🚀 Deploy Application & PWA Assets
+      # Deploy Application Code & Configuration (FAST ~20s-40s)
+      - name: 🚀 Deploy Application Code
         env:
           FTP_USER: ${{ secrets.FTP_USERNAME }}
           FTP_PASS: ${{ secrets.FTP_PASSWORD }}

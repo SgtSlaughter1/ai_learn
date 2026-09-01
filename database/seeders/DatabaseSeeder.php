@@ -49,6 +49,7 @@ class DatabaseSeeder extends Seeder
 
         // Call modular seeders
         $this->call([
+            AchievementSeeder::class,
             SubjectSeeder::class,
             QuizSeeder::class,
             SchoolSeeder::class,

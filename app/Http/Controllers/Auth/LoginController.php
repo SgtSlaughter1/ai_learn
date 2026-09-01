@@ -3,45 +3,72 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\ValidationException;
-use Inertia\Inertia;
-use Inertia\Response;
 
 class LoginController extends Controller
 {
-    public function show(): Response
-    {
-        return Inertia::render('auth/Login');
-    }
-
-    public function store(Request $request): RedirectResponse
+    /**
+     * Authenticate the user and start a session.
+     */
+    public function login(Request $request): JsonResponse
     {
         $credentials = $request->validate([
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
         ]);
 
-        if (Auth::attempt($credentials, $request->boolean('remember'))) {
+        if (Auth::attempt($credentials, true)) {
             $request->session()->regenerate();
+            $user = Auth::user();
 
-            return redirect()->intended('/dashboard');
+            return response()->json([
+                'status' => 'success',
+                'token' => session()->getId(),
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => $user->role ?? 'student',
+                ],
+            ]);
         }
 
-        throw ValidationException::withMessages([
-            'email' => trans('auth.failed'),
+        return response()->json([
+            'message' => trans('auth.failed'),
+        ], 401);
+    }
+
+    /**
+     * Get the authenticated user.
+     */
+    public function getUser(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role ?? 'student',
+            ],
         ]);
     }
 
-    public function destroy(Request $request): RedirectResponse
+    /**
+     * Log out the authenticated user and invalidate the session.
+     */
+    public function logout(Request $request): JsonResponse
     {
         Auth::logout();
-
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect('/login');
+        return response()->json(['status' => 'logged_out']);
     }
 }

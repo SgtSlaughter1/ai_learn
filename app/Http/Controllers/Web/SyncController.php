@@ -87,6 +87,8 @@ class SyncController extends Controller
                 'longest_streak' => max($gamification->longest_streak, $request->longest_streak),
             ]);
 
+            app(\App\Services\Gamification\GamificationService::class)->recalculateLevel($gamification);
+
             // Log the synced XP as a transaction so it shows in the dashboard
             if ($xpDiff > 0) {
                 XpTransaction::create([

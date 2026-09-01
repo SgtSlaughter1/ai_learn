@@ -9,19 +9,9 @@ use App\Models\Subject;
 use App\Services\Gamification\GamificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Inertia\Response;
 
 class FlashcardController extends Controller
 {
-    /**
-     * Render the flashcards study shell page.
-     */
-    public function index(Request $request): Response
-    {
-        return Inertia::render('Flashcards/Index');
-    }
-
     /**
      * Generate a personalized recall deck of 10 cards.
      */

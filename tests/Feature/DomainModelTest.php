@@ -214,10 +214,6 @@ class DomainModelTest extends TestCase
         $user = User::factory()->create(['role' => UserRole::LEARNER]);
         $this->actingAs($user);
 
-        // Test shell index render
-        $response = $this->get('/flashcards');
-        $response->assertStatus(200);
-
         // Test deck API endpoint
         $apiResponse = $this->getJson('/api/v1/flashcards/deck');
         $apiResponse->assertStatus(200);
@@ -244,24 +240,19 @@ class DomainModelTest extends TestCase
         $learner = User::factory()->create(['role' => UserRole::LEARNER]);
         $teacher = User::factory()->create(['role' => UserRole::TEACHER]);
 
-        // 1. Learner gets 403 trying to access teacher dashboard or stats
+        // 1. Learner gets 403 trying to access teacher stats
         $this->actingAs($learner);
-        $this->get('/teacher/dashboard')->assertStatus(403);
         $this->getJson('/api/v1/teacher/stats')->assertStatus(403);
 
-        // 2. Learner gets default /dashboard view (loads Inertia page, status 200)
-        $this->get('/dashboard')->assertStatus(200);
+        // 2. Learner can access student dashboard stats
+        $this->getJson('/api/v1/dashboard/stats')->assertStatus(200);
 
-        // 3. Teacher can access dashboard and stats
+        // 3. Teacher can access teacher stats
         $this->actingAs($teacher);
-        $this->get('/teacher/dashboard')->assertStatus(200);
         $this->getJson('/api/v1/teacher/stats')->assertStatus(200)
             ->assertJsonStructure([
-                'stats' => ['totalStudents', 'classAverageMastery', 'activeStudents'],
-                'recentActivities'
+                'classes',
+                'overview'
             ]);
-
-        // 4. Teacher gets redirected from /dashboard to /teacher/dashboard
-        $this->get('/dashboard')->assertRedirect('/teacher/dashboard');
     }
 }
