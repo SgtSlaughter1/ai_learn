@@ -67,6 +67,7 @@ export interface LocalQuizAttempt {
     id: string;
     user_id: string;
     quiz_id: number;
+    quiz_title?: string;
     status: 'started' | 'completed';
     score: number | null;
     total_marks: number | null;
@@ -94,7 +95,7 @@ export interface LocalLearnerProgress {
     questions_attempted: number;
     questions_correct: number;
     mastery_score: number;
-    ability_score: number;
+    ability_score?: number;
     last_attempted_at: string | null;
     synced: boolean;
 }

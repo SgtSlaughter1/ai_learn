@@ -8,22 +8,9 @@ import { startAutoSync } from './services/SyncService';
 const appName = import.meta.env.VITE_APP_NAME || 'Offline AI Learning Platform';
 
 // Handle offline navigation for Inertia.js:
-//
-// 1. 'before' fires BEFORE any visit starts. When offline, cancel the Inertia AJAX
-//    visit (which would fail with ERR_INTERNET_DISCONNECTED) and do a standard browser
-//    navigation. The Service Worker intercepts it and serves the cached HTML page.
-router.on('before', (event) => {
-    if (!navigator.onLine) {
-        const visit = (event.detail as any)?.visit;
-        const targetUrl = visit?.url?.href || visit?.url;
-        if (targetUrl) {
-            event.preventDefault();
-            window.location.href = targetUrl;
-            return false;
-        }
-    }
-    return true;
-});
+// The Service Worker caches both Inertia JSON and full HTML views.
+// Client-side Inertia transitions work smoothly offline from the SW cache.
+
 
 // 2. 'invalid' fires if SW returns cached HTML for an XHR request.
 //    We redirect to the target URL to load the HTML layout properly.

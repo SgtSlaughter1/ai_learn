@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,7 +18,7 @@ class LoginController extends Controller
         return Inertia::render('auth/Login');
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request): RedirectResponse|JsonResponse
     {
         $credentials = $request->validate([
             'email' => ['required', 'string', 'email'],
@@ -26,8 +27,28 @@ class LoginController extends Controller
 
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
             $request->session()->regenerate();
+            $user = Auth::user();
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'status' => 'success',
+                    'token' => session()->getId(),
+                    'user' => [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'role' => $user->role?->value ?? $user->role ?? 'learner',
+                    ],
+                ]);
+            }
 
             return redirect()->intended('/dashboard');
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'message' => trans('auth.failed'),
+            ], 401);
         }
 
         throw ValidationException::withMessages([
@@ -35,13 +56,44 @@ class LoginController extends Controller
         ]);
     }
 
-    public function destroy(Request $request): RedirectResponse
+    public function login(Request $request): JsonResponse|RedirectResponse
+    {
+        return $this->store($request);
+    }
+
+    public function getUser(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role?->value ?? $user->role ?? 'learner',
+            ],
+        ]);
+    }
+
+    public function destroy(Request $request): RedirectResponse|JsonResponse
     {
         Auth::logout();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
+        if ($request->wantsJson()) {
+            return response()->json(['status' => 'logged_out']);
+        }
+
         return redirect('/login');
+    }
+
+    public function logout(Request $request): JsonResponse|RedirectResponse
+    {
+        return $this->destroy($request);
     }
 }

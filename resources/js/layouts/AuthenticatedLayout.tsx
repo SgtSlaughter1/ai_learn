@@ -69,6 +69,15 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                 </div>
             </div>
 
+            {/* Mobile Backdrop Overlay */}
+            {isMobileMenuOpen && (
+                <div
+                    className="fixed inset-0 bg-black/60 backdrop-blur-xs z-30 md:hidden animate-fade-in"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    aria-hidden="true"
+                />
+            )}
+
             {/* Sidebar Container */}
             <aside
                 className={`fixed inset-y-0 left-0 transform ${

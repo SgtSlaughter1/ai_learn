@@ -186,10 +186,10 @@ export default function ChatWidget() {
     };
 
     return (
-        <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end">
+        <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex flex-col items-end">
             {/* Chat Panel Box */}
             {chatOpen && (
-                <div className="mb-4 w-[350px] sm:w-[400px] h-[500px] bg-[var(--color-surface)]/95 border border-[var(--color-border)] rounded-3xl shadow-2xl backdrop-blur-xl flex flex-col overflow-hidden animate-fade-in">
+                <div className="mb-3 w-[calc(100vw-2rem)] sm:w-[400px] max-h-[75vh] h-[480px] bg-[var(--color-surface)]/95 border border-[var(--color-border)] rounded-3xl shadow-2xl backdrop-blur-xl flex flex-col overflow-hidden animate-fade-in">
                     {/* Header */}
                     <div className="p-4 bg-[var(--color-background)]/60 border-b border-[var(--color-border)] flex items-center justify-between">
                         <div className="flex items-center space-x-2.5">

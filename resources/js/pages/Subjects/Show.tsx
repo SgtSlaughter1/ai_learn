@@ -1,37 +1,17 @@
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
-import { Head, Link } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
-
 import { db } from '@/db/database';
-
-interface TopicProgress {
-    questions_attempted: number;
-    questions_correct: number;
-    mastery_score: number;
-}
-
-interface Topic {
-    id: number;
-    subject_id: number;
-    name: string;
-    slug: string;
-    level: string;
-    description: string | null;
-    progress: TopicProgress | null;
-}
+import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
+import { LevelFilterTabs } from '@/components/subjects/LevelFilterTabs';
+import { TopicCard, SubjectTopic } from '@/components/subjects/TopicCard';
+import { SubjectQuizCard, SubjectQuiz } from '@/components/subjects/SubjectQuizCard';
 
 interface Subject {
     id: number;
     name: string;
     slug: string;
     description: string | null;
-}
-
-interface Quiz {
-    id: number;
-    title: string;
-    description: string | null;
-    time_limit_minutes: number | null;
 }
 
 interface Props {
@@ -41,9 +21,8 @@ interface Props {
 export default function Show({ slug }: Props) {
     const [loading, setLoading] = useState<boolean>(true);
     const [subject, setSubject] = useState<Subject | null>(null);
-    const [topics, setTopics] = useState<Topic[]>([]);
-    const [quizzes, setQuizzes] = useState<Quiz[]>([]);
-    
+    const [topics, setTopics] = useState<SubjectTopic[]>([]);
+    const [quizzes, setQuizzes] = useState<SubjectQuiz[]>([]);
     const [selectedLevel, setSelectedLevel] = useState<string>('all');
 
     useEffect(() => {
@@ -70,7 +49,9 @@ export default function Show({ slug }: Props) {
                         );
                     }
                     const localQuizzes = await db.quizzes.toArray();
-                    const filteredQuizzes = localQuizzes.filter((q: any) => !q.subject_id || q.subject_id === localSubject.id);
+                    const filteredQuizzes = localQuizzes.filter(
+                        (q: any) => !q.subject_id || q.subject_id === localSubject.id
+                    );
                     if (filteredQuizzes.length > 0 && isMounted) {
                         setQuizzes(
                             filteredQuizzes.map((q: any) => ({
@@ -120,9 +101,12 @@ export default function Show({ slug }: Props) {
                     if (data.quizzes && data.quizzes.length > 0) {
                         for (const q of data.quizzes) {
                             const existing = await db.quizzes.get(q.id);
-                            const questionsToSave = (q.questions && q.questions.length > 0)
-                                ? q.questions
-                                : (existing?.questions && existing.questions.length > 0 ? existing.questions : []);
+                            const questionsToSave =
+                                q.questions && q.questions.length > 0
+                                    ? q.questions
+                                    : existing?.questions && existing.questions.length > 0
+                                    ? existing.questions
+                                    : [];
 
                             await db.quizzes.put({
                                 ...q,
@@ -133,7 +117,7 @@ export default function Show({ slug }: Props) {
                         }
                     }
                 }
-            } catch (err) {
+            } catch {
                 console.log('Offline mode — loaded subject details from local database');
             } finally {
                 if (isMounted) setLoading(false);
@@ -147,32 +131,19 @@ export default function Show({ slug }: Props) {
         };
     }, [slug]);
 
-    // Extract unique levels present in topics for filter tabs
     const uniqueLevels = ['all', ...Array.from(new Set(topics.map((t) => t.level)))];
-
-    const filteredTopics = selectedLevel === 'all'
-        ? topics
-        : topics.filter((t) => t.level === selectedLevel);
-
-    const getProgressStatus = (progress: TopicProgress | null) => {
-        if (!progress || progress.questions_attempted === 0) {
-            return { label: 'Not Started', class: 'bg-[var(--color-primary-5)] text-[var(--color-muted)] border-[var(--color-border)]' };
-        }
-        if (progress.mastery_score >= 80) {
-            return { label: 'Mastered', class: 'bg-[var(--color-success)]/10 text-[var(--color-success)] border-[var(--color-success)]/20' };
-        }
-        return { label: 'In Progress', class: 'bg-[var(--color-accent)]/10 text-[var(--color-accent)] border-[var(--color-accent)]/20' };
-    };
+    const filteredTopics = selectedLevel === 'all' ? topics : topics.filter((t) => t.level === selectedLevel);
 
     return (
         <AuthenticatedLayout
             header={
                 <div className="space-y-3">
-                    <div className="flex items-center space-x-2 text-sm text-[var(--color-muted)]">
-                        <Link href="/subjects" className="hover:text-[var(--color-primary)] transition-colors">Subjects</Link>
-                        <span>&gt;</span>
-                        <span className="text-[var(--color-text)]">{loading ? 'Loading...' : subject?.name}</span>
-                    </div>
+                    <Breadcrumbs
+                        items={[
+                            { label: 'Subjects', href: '/subjects' },
+                            { label: loading ? 'Loading...' : subject?.name || 'Subject' },
+                        ]}
+                    />
                     {loading ? (
                         <div className="space-y-2.5">
                             <div className="h-8 bg-[var(--color-surface)] rounded w-1/4 animate-pulse" />
@@ -180,8 +151,12 @@ export default function Show({ slug }: Props) {
                         </div>
                     ) : (
                         <>
-                            <h1 className="text-3xl font-extrabold text-[var(--color-text)] tracking-tight">{subject?.name}</h1>
-                            <p className="text-[var(--color-muted)] max-w-3xl leading-relaxed">{subject?.description}</p>
+                            <h1 className="text-3xl font-extrabold text-[var(--color-text)] tracking-tight">
+                                {subject?.name}
+                            </h1>
+                            <p className="text-[var(--color-muted)] max-w-3xl leading-relaxed">
+                                {subject?.description}
+                            </p>
                         </>
                     )}
                 </div>
@@ -191,22 +166,12 @@ export default function Show({ slug }: Props) {
 
             <div className="space-y-12">
                 {/* Level Filter Tabs */}
-                {!loading && uniqueLevels.length > 2 && (
-                    <div className="flex space-x-1.5 p-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl max-w-md animate-fade-in">
-                        {uniqueLevels.map((lvl) => (
-                            <button
-                                key={lvl}
-                                onClick={() => setSelectedLevel(lvl)}
-                                className={`flex-1 py-2 px-3 text-xs font-bold uppercase tracking-wider rounded-lg transition-all focus:outline-none min-h-[40px] ${
-                                    selectedLevel === lvl
-                                        ? 'bg-[var(--color-primary)] text-white shadow-md shadow-[var(--color-primary)]/10'
-                                        : 'text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-primary-5)]/40'
-                                }`}
-                            >
-                                {lvl === 'all' ? 'All Levels' : lvl}
-                            </button>
-                        ))}
-                    </div>
+                {!loading && (
+                    <LevelFilterTabs
+                        levels={uniqueLevels}
+                        selectedLevel={selectedLevel}
+                        onSelectLevel={setSelectedLevel}
+                    />
                 )}
 
                 {/* Topics List */}
@@ -235,61 +200,13 @@ export default function Show({ slug }: Props) {
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {filteredTopics.map((topic) => {
-                                const status = getProgressStatus(topic.progress);
-                                return (
-                                    <div
-                                        key={topic.id}
-                                        className="bg-[var(--color-surface)] backdrop-blur-md border border-[var(--color-border)] rounded-2xl p-6 hover:border-[var(--color-border)]/60 transition-all flex flex-col md:flex-row md:items-center justify-between gap-6"
-                                    >
-                                        <div className="space-y-2.5 flex-1">
-                                            <div className="flex items-center space-x-3">
-                                                <span className="text-[10px] font-extrabold px-2 py-0.5 bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20 rounded-md tracking-wider uppercase">
-                                                    {topic.level}
-                                                </span>
-                                                <span className={`text-xs font-bold px-2 py-0.5 rounded-md border ${status.class}`}>
-                                                    {status.label}
-                                                </span>
-                                            </div>
-                                            <h3 className="text-xl font-bold text-[var(--color-text)]">{topic.name}</h3>
-                                            <p className="text-sm text-[var(--color-muted)] leading-relaxed max-w-3xl">
-                                                {topic.description}
-                                            </p>
-                                        </div>
-
-                                        {/* Progress Statistics & CTA */}
-                                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 md:justify-end">
-                                            {topic.progress && topic.progress.questions_attempted > 0 && (
-                                                <div className="text-sm border-l-2 border-[var(--color-border)] pl-4 space-y-0.5">
-                                                    <span className="block text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">Topic Stats</span>
-                                                    <span className="block font-bold text-[var(--color-text)]">
-                                                        Mastery: {topic.progress.mastery_score}%
-                                                    </span>
-                                                    <span className="block text-xs text-[var(--color-muted)]">
-                                                        {topic.progress.questions_correct}/{topic.progress.questions_attempted} Correct
-                                                    </span>
-                                                </div>
-                                            )}
-
-                                            {quizzes.length > 0 ? (
-                                                <Link
-                                                    href={`/quizzes/${quizzes[0].id}`}
-                                                    className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-bold text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] rounded-xl shadow-md hover:shadow-lg transition-all focus:outline-none min-h-[48px] cursor-pointer"
-                                                >
-                                                    Take Exercise
-                                                </Link>
-                                            ) : (
-                                                <button
-                                                    disabled
-                                                    className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-bold text-[var(--color-muted)] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl opacity-50 min-h-[48px] cursor-not-allowed"
-                                                >
-                                                    No Exercises
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                            {filteredTopics.map((topic) => (
+                                <TopicCard
+                                    key={topic.id}
+                                    topic={topic}
+                                    exerciseQuizId={quizzes[0]?.id}
+                                />
+                            ))}
                         </div>
                     )}
                 </div>
@@ -297,8 +214,12 @@ export default function Show({ slug }: Props) {
                 {/* Available Quizzes & Assessments Section */}
                 <div className="space-y-6 pt-8 border-t border-[var(--color-border)]">
                     <div className="space-y-1">
-                        <h2 className="text-2xl font-extrabold text-[var(--color-text)] tracking-tight">Assessments & Quizzes</h2>
-                        <p className="text-sm text-[var(--color-muted)]">Evaluate your overall subject mastery with these evaluations.</p>
+                        <h2 className="text-2xl font-extrabold text-[var(--color-text)] tracking-tight">
+                            Assessments & Quizzes
+                        </h2>
+                        <p className="text-sm text-[var(--color-muted)]">
+                            Evaluate your overall subject mastery with these evaluations.
+                        </p>
                     </div>
 
                     {loading ? (
@@ -318,31 +239,14 @@ export default function Show({ slug }: Props) {
                         </div>
                     ) : quizzes.length === 0 ? (
                         <div className="text-center py-10 border border-[var(--color-border)] bg-[var(--color-background)]/20 rounded-2xl">
-                            <p className="text-[var(--color-muted)] text-sm">No diagnostic assessments are currently active for this subject.</p>
+                            <p className="text-[var(--color-muted)] text-sm">
+                                No diagnostic assessments are currently active for this subject.
+                            </p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {quizzes.map((quiz) => (
-                                <div
-                                    key={quiz.id}
-                                    className="bg-[var(--color-surface)] backdrop-blur-md border border-[var(--color-border)] p-6 rounded-2xl flex flex-col justify-between space-y-4 hover:border-[var(--color-border)] transition-all"
-                                >
-                                    <div className="space-y-2">
-                                        <h3 className="font-bold text-[var(--color-text)] text-lg leading-tight">{quiz.title}</h3>
-                                        <p className="text-xs text-[var(--color-muted)] leading-relaxed">{quiz.description}</p>
-                                    </div>
-                                    <div className="flex items-center justify-between pt-2 border-t border-[var(--color-border)]/40">
-                                        <span className="text-xs font-semibold text-[var(--color-muted)]">
-                                            Time Limit: {quiz.time_limit_minutes ? `${quiz.time_limit_minutes} minutes` : 'Untimed'}
-                                        </span>
-                                        <Link
-                                            href={`/quizzes/${quiz.id}`}
-                                            className="inline-flex items-center justify-center px-4.5 py-2.5 text-xs font-bold text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary)] rounded-xl transition-all shadow-md min-h-[40px] cursor-pointer"
-                                        >
-                                            Start Quiz
-                                        </Link>
-                                    </div>
-                                </div>
+                                <SubjectQuizCard key={quiz.id} quiz={quiz} />
                             ))}
                         </div>
                     )}

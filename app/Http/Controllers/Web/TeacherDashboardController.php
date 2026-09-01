@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\ClassModel;
 use App\Models\ClassMembership;
@@ -11,6 +12,7 @@ use App\Models\User;
 use App\Models\UserGamification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class TeacherDashboardController extends Controller
@@ -21,6 +23,10 @@ class TeacherDashboardController extends Controller
     public function index(Request $request): mixed
     {
         $user = $request->user();
+
+        if ($user->role !== UserRole::TEACHER && $user->role !== UserRole::ADMIN) {
+            abort(403);
+        }
 
         // Get teacher's school
         $teacherProfile = $user->teacherProfile()->with('school')->first();
@@ -70,11 +76,23 @@ class TeacherDashboardController extends Controller
     public function getStats(Request $request): JsonResponse
     {
         $user = $request->user();
+
+        if ($user->role !== UserRole::TEACHER && $user->role !== UserRole::ADMIN) {
+            abort(403);
+        }
+
         $teacherProfile = $user->teacherProfile()->first();
         $school = $teacherProfile?->school;
 
         if (!$school) {
-            return response()->json(['classes' => [], 'overview' => $this->emptyOverview()]);
+            return response()->json([
+                'stats' => ['totalStudents' => 0, 'classAverageMastery' => 0, 'activeStudents' => 0],
+                'recentActivities' => [],
+                'classes' => [],
+                'top_performers' => [],
+                'struggling_learners' => [],
+                'overview' => $this->emptyOverview(),
+            ]);
         }
 
         // Get all class IDs this teacher teaches
@@ -84,17 +102,10 @@ class TeacherDashboardController extends Controller
 
         $selectedClassId = $request->get('class_id');
 
-        // Get learners in the selected class (or all classes)
-        $learnerQuery = User::whereHas('classMemberships', function ($q) use ($classIds, $selectedClassId) {
-            $q->where('role', 'learner');
-            if ($selectedClassId) {
-                $q->where('class_id', $selectedClassId);
-            } else {
-                $q->whereIn('class_id', $classIds);
-            }
-        });
-
-        $learnerIds = $learnerQuery->pluck('id');
+        // Get learners in the selected class (or all classes) directly from indexed ClassMembership table
+        $learnerIds = ClassMembership::where('role', 'learner')
+            ->when($selectedClassId, fn ($q) => $q->where('class_id', $selectedClassId), fn ($q) => $q->whereIn('class_id', $classIds))
+            ->pluck('user_id');
 
         // Overview stats
         $progressStats = LearnerProgress::whereIn('user_id', $learnerIds)
@@ -106,36 +117,43 @@ class TeacherDashboardController extends Controller
             ->where('status', 'completed')
             ->first();
 
-        $topPerformers = User::whereIn('id', $learnerIds)
-            ->with(['gamification'])
-            ->get()
-            ->map(fn ($u) => [
-                'id' => $u->id,
-                'name' => $u->name,
-                'total_xp' => $u->gamification?->total_xp ?? 0,
-                'level' => $u->gamification?->level ?? 1,
-                'rank' => $u->gamification?->rank ?? 'Newcomer',
+        // Optimized: Sort and limit at database level instead of hydrating all models in PHP
+        $topPerformers = DB::table('users as u')
+            ->leftJoin('user_gamification as ug', 'ug.user_id', '=', 'u.id')
+            ->whereIn('u.id', $learnerIds)
+            ->select([
+                'u.id',
+                'u.name',
+                DB::raw('COALESCE(ug.total_xp, 0) as total_xp'),
+                DB::raw('COALESCE(ug.level, 1) as level'),
+                DB::raw("COALESCE(ug.rank, 'Newcomer') as rank"),
             ])
-            ->sortByDesc('total_xp')
-            ->take(10)
-            ->values();
+            ->orderByDesc('total_xp')
+            ->limit(10)
+            ->get();
 
-        $strugglingLearners = User::whereIn('id', $learnerIds)
-            ->with(['learnerProgress' => function ($q) {
-                $q->selectRaw('user_id, AVG(mastery_score) as avg_mastery');
-                $q->groupBy('user_id');
-            }])
-            ->get()
-            ->filter(fn ($u) => $u->learnerProgress->isNotEmpty() && $u->learnerProgress->first()->avg_mastery < 40)
-            ->map(fn ($u) => [
-                'id' => $u->id,
-                'name' => $u->name,
-                'avg_mastery' => round($u->learnerProgress->first()->avg_mastery),
+        // Optimized: Direct SQL having filter instead of loading full collections into PHP
+        $strugglingLearners = DB::table('users as u')
+            ->join('learner_progress as lp', 'lp.user_id', '=', 'u.id')
+            ->whereIn('u.id', $learnerIds)
+            ->groupBy('u.id', 'u.name')
+            ->havingRaw('AVG(lp.mastery_score) < 40')
+            ->select([
+                'u.id',
+                'u.name',
+                DB::raw('ROUND(AVG(lp.mastery_score)) as avg_mastery'),
             ])
-            ->sortBy('avg_mastery')
-            ->values();
+            ->orderBy('avg_mastery')
+            ->limit(10)
+            ->get();
 
         return response()->json([
+            'stats' => [
+                'totalStudents' => (int) ($progressStats->total_learners ?? 0),
+                'classAverageMastery' => round($progressStats->avg_mastery ?? 0),
+                'activeStudents' => count($topPerformers),
+            ],
+            'recentActivities' => [],
             'overview' => [
                 'total_learners' => (int) ($progressStats->total_learners ?? 0),
                 'total_attempted' => (int) ($progressStats->total_attempted ?? 0),
@@ -148,6 +166,7 @@ class TeacherDashboardController extends Controller
             'top_performers' => $topPerformers,
             'struggling_learners' => $strugglingLearners,
             'classes' => ClassModel::where('school_id', $school->id)
+                ->select(['id', 'name', 'school_id'])
                 ->whereHas('memberships', fn ($q) => $q->where('user_id', $user->id)->where('role', 'teacher'))
                 ->withCount(['learnerUsers as learner_count'])
                 ->get()
@@ -181,30 +200,45 @@ class TeacherDashboardController extends Controller
             ->where('role', 'learner')
             ->pluck('user_id');
 
-        $learners = User::whereIn('id', $learnerIds)
-            ->with(['gamification', 'learnerProgress' => function ($q) {
-                $q->selectRaw('user_id, COUNT(*) as topics_covered, AVG(mastery_score) as avg_mastery, SUM(questions_attempted) as total_attempted, SUM(questions_correct) as total_correct');
-                $q->groupBy('user_id');
-            }])
-            ->get()
-            ->map(function ($u) {
-                $progress = $u->learnerProgress->first();
-                return [
-                    'id' => $u->id,
-                    'name' => $u->name,
-                    'email' => $u->email,
-                    'level' => $u->gamification?->level ?? 1,
-                    'rank' => $u->gamification?->rank ?? 'Newcomer',
-                    'total_xp' => $u->gamification?->total_xp ?? 0,
-                    'streak' => $u->gamification?->current_streak ?? 0,
-                    'topics_covered' => $progress?->topics_covered ?? 0,
-                    'avg_mastery' => round($progress?->avg_mastery ?? 0),
-                    'total_attempted' => $progress?->total_attempted ?? 0,
-                    'total_correct' => $progress?->total_correct ?? 0,
-                ];
-            })
-            ->sortByDesc('total_xp')
-            ->values();
+        if ($learnerIds->isEmpty()) {
+            return response()->json([
+                'class' => [
+                    'id' => $class?->id ?? $classId,
+                    'name' => $class?->name ?? 'Class',
+                    'learner_count' => 0,
+                ],
+                'learners' => [],
+            ]);
+        }
+
+        // Single optimized joined query for learners, gamification, and topic progress
+        $learners = DB::table('users as u')
+            ->whereIn('u.id', $learnerIds)
+            ->leftJoin('user_gamification as ug', 'ug.user_id', '=', 'u.id')
+            ->leftJoin(DB::raw('(
+                SELECT user_id,
+                       COUNT(*) as topics_covered,
+                       AVG(mastery_score) as avg_mastery,
+                       SUM(questions_attempted) as total_attempted,
+                       SUM(questions_correct) as total_correct
+                FROM learner_progress
+                GROUP BY user_id
+            ) as lp'), 'lp.user_id', '=', 'u.id')
+            ->select([
+                'u.id',
+                'u.name',
+                'u.email',
+                DB::raw('COALESCE(ug.level, 1) as level'),
+                DB::raw("COALESCE(ug.rank, 'Newcomer') as rank"),
+                DB::raw('COALESCE(ug.total_xp, 0) as total_xp'),
+                DB::raw('COALESCE(ug.current_streak, 0) as streak'),
+                DB::raw('COALESCE(lp.topics_covered, 0) as topics_covered'),
+                DB::raw('ROUND(COALESCE(lp.avg_mastery, 0)) as avg_mastery'),
+                DB::raw('COALESCE(lp.total_attempted, 0) as total_attempted'),
+                DB::raw('COALESCE(lp.total_correct, 0) as total_correct'),
+            ])
+            ->orderByDesc('total_xp')
+            ->get();
 
         return response()->json([
             'class' => [

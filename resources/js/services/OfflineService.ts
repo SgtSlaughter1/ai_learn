@@ -79,17 +79,23 @@ export async function cacheQuiz(quiz: CachedQuiz): Promise<void> {
     await db.quizzes.put({ ...quiz, cached_at: new Date().toISOString() });
 }
 
-export async function getCachedQuiz(id: number): Promise<CachedQuiz | undefined> {
-    return db.quizzes.get(id);
+export async function getCachedQuiz(id: number | string): Promise<CachedQuiz | undefined> {
+    const numId = Number(id);
+    if (!isNaN(numId)) {
+        const byNum = await db.quizzes.get(numId);
+        if (byNum) return byNum;
+    }
+    return db.quizzes.get(String(id) as any);
 }
 
-export async function getFreshQuiz(id: number): Promise<CachedQuiz | null> {
+export async function getFreshQuiz(id: number | string): Promise<CachedQuiz | null> {
     const cached = await getCachedQuiz(id);
     if (cached && !isStale(cached.cached_at)) {
         return cached;
     }
     try {
-        const res = await fetch(`/api/v1/quizzes/${id}`);
+        const numId = Number(id) || id;
+        const res = await fetch(`/api/v1/quizzes/${numId}`);
         if (!res.ok) throw new Error('Failed to fetch quiz');
         const data = await res.json();
         const quiz: CachedQuiz = data.quiz;
@@ -226,24 +232,36 @@ let hasPreloadedThisSession = false;
  */
 async function prewarmRoute(url: string): Promise<void> {
     const fullUrl = new URL(url, window.location.origin).href;
-    const opts: RequestInit = {
-        credentials: 'same-origin',
-        headers: { 'Accept': 'text/html' },
-    };
-
-    const fetchFresh = () => fetch(fullUrl, opts);
 
     try {
-        // Store in app-routes-cache (keyed by both full and relative URL)
         const appCache = await caches.open('app-routes-cache');
-        const r1 = await fetchFresh();
-        if (r1.ok) await appCache.put(fullUrl, r1);
-
-        // Store in pages-cache (the navigate catch-all cache)
         const pagesCache = await caches.open('pages-cache');
-        const r2 = await fetchFresh();
-        if (r2.ok) await pagesCache.put(fullUrl, r2);
 
+        // 1. Prewarm HTML document (for direct browser navigations/refreshes)
+        const htmlRes = await fetch(fullUrl, {
+            credentials: 'same-origin',
+            headers: { Accept: 'text/html' },
+        });
+        if (htmlRes.ok) {
+            await appCache.put(fullUrl, htmlRes.clone());
+            await pagesCache.put(fullUrl, htmlRes);
+        }
+
+        // 2. Prewarm Inertia JSON payload (for SPA <Link> navigations)
+        const inertiaRes = await fetch(fullUrl, {
+            credentials: 'same-origin',
+            headers: {
+                'X-Inertia': 'true',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'text/html, application/xhtml+xml',
+            },
+        });
+        if (inertiaRes.ok) {
+            const inertiaReq = new Request(fullUrl, {
+                headers: { 'X-Inertia': 'true' },
+            });
+            await appCache.put(inertiaReq, inertiaRes);
+        }
     } catch {
         // Best-effort — silent fail is fine
     }
@@ -303,6 +321,25 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
                                 cached_at: new Date().toISOString(),
                             }))
                         );
+
+                        const progressList: LocalLearnerProgress[] = [];
+                        for (const t of subData.topics) {
+                            if (t.progress) {
+                                progressList.push({
+                                    user_id: 'current',
+                                    topic_id: t.id,
+                                    questions_attempted: t.progress.questions_attempted || 0,
+                                    questions_correct: t.progress.questions_correct || 0,
+                                    mastery_score: t.progress.mastery_score || 0,
+                                    ability_score: t.progress.ability_score || 0,
+                                    synced: true,
+                                    last_attempted_at: new Date().toISOString(),
+                                });
+                            }
+                        }
+                        if (progressList.length > 0) {
+                            await db.learnerProgress.bulkPut(progressList);
+                        }
                     }
 
                     if (subData.quizzes && subData.quizzes.length > 0) {

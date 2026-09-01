@@ -23,6 +23,13 @@ Route::get('/login', [LoginController::class, 'show'])->name('login');
 Route::post('/login', [LoginController::class, 'store']);
 Route::post('/logout', [LoginController::class, 'destroy']);
 
+// Standalone API Auth Endpoints
+Route::prefix('api/v1/auth')->group(function () {
+    Route::post('/login', [LoginController::class, 'login']);
+    Route::get('/user', [LoginController::class, 'getUser']);
+    Route::post('/logout', [LoginController::class, 'logout']);
+});
+
 // Protected Core Learning Routes
 Route::middleware('auth')->group(function () {
     // Shell Pages Renders
@@ -47,7 +54,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/teacher/stats', [TeacherDashboardController::class, 'getStats']);
         Route::get('/subjects', [SubjectWebController::class, 'getSubjects']);
         Route::get('/subjects/{subject}', [SubjectWebController::class, 'getSubjectDetails']);
+        Route::get('/subjects/{subject}/topics', [SubjectWebController::class, 'getTopics']);
         Route::get('/quizzes/{quiz}', [QuizWebController::class, 'getQuizData']);
+        Route::post('/quizzes/{quiz}/submit', [QuizWebController::class, 'submit']);
         Route::get('/quizzes/attempts/{attempt}', [QuizWebController::class, 'getAttemptData']);
         Route::post('/quizzes/attempts/{attemptId}/sync', [QuizWebController::class, 'syncAttempt']);
 

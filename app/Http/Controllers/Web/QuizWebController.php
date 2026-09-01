@@ -70,7 +70,7 @@ class QuizWebController extends Controller
         ]);
     }
 
-    public function submit(Request $request, Quiz $quiz): RedirectResponse
+    public function submit(Request $request, Quiz $quiz): RedirectResponse|JsonResponse
     {
         $request->validate([
             'answers' => ['required', 'array'],
@@ -145,29 +145,35 @@ class QuizWebController extends Controller
             // Save all quiz answers
             QuizAnswer::insert($answersToInsert);
 
-            // Update topic progress mastery calculations for topics covered in this quiz
+            // Batch compute all evaluated topic stats in ONE query instead of 2N correlated whereHas subqueries
+            $topicStats = DB::table('quiz_answers as qa')
+                ->join('quiz_attempts as qat', 'qa.quiz_attempt_id', '=', 'qat.id')
+                ->join('questions as q', 'qa.question_id', '=', 'q.id')
+                ->where('qat.user_id', $user->id)
+                ->whereIn('q.topic_id', array_keys($topicIdsEvaluated))
+                ->groupBy('q.topic_id')
+                ->selectRaw('
+                    q.topic_id,
+                    COUNT(*) as questions_attempted,
+                    SUM(CASE WHEN qa.is_correct = 1 THEN 1 ELSE 0 END) as questions_correct
+                ')
+                ->get()
+                ->keyBy('topic_id');
+
+            $now = now();
             foreach (array_keys($topicIdsEvaluated) as $topicId) {
-                $topicQuestionsCount = QuizAnswer::whereHas('question', function ($q) use ($topicId) {
-                    $q->where('topic_id', $topicId);
-                })->whereHas('attempt', function ($q) use ($user) {
-                    $q->where('user_id', $user->id);
-                })->count();
-
-                $topicCorrectQuestionsCount = QuizAnswer::whereHas('question', function ($q) use ($topicId) {
-                    $q->where('topic_id', $topicId);
-                })->whereHas('attempt', function ($q) use ($user) {
-                    $q->where('user_id', $user->id);
-                })->where('is_correct', true)->count();
-
-                $masteryScore = $topicQuestionsCount > 0 ? (int) round(($topicCorrectQuestionsCount / $topicQuestionsCount) * 100) : 0;
+                $stat = $topicStats->get($topicId);
+                $attempted = (int) ($stat?->questions_attempted ?? 0);
+                $correct   = (int) ($stat?->questions_correct ?? 0);
+                $masteryScore = $attempted > 0 ? (int) round(($correct / $attempted) * 100) : 0;
 
                 LearnerProgress::updateOrCreate(
                     ['user_id' => $user->id, 'topic_id' => $topicId],
                     [
-                        'questions_attempted' => $topicQuestionsCount,
-                        'questions_correct' => $topicCorrectQuestionsCount,
-                        'mastery_score' => $masteryScore,
-                        'last_attempted_at' => now(),
+                        'questions_attempted' => $attempted,
+                        'questions_correct'   => $correct,
+                        'mastery_score'       => $masteryScore,
+                        'last_attempted_at'   => $now,
                     ]
                 );
             }
@@ -175,6 +181,9 @@ class QuizWebController extends Controller
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'error' => $e->getMessage()], 422);
+            }
             throw $e;
         }
 
@@ -182,6 +191,17 @@ class QuizWebController extends Controller
         $attempt = QuizAttempt::find($attemptId);
         $gamificationService = app(GamificationService::class);
         $newAchievements = $gamificationService->processQuizCompletion($user, $attempt, $quiz);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'attempt_id' => $attemptId,
+                'score' => $score,
+                'total_marks' => $totalMarks,
+                'percentage' => $totalMarks > 0 ? (int) round(($score / $totalMarks) * 100) : 0,
+                'achievements' => $newAchievements,
+            ]);
+        }
 
         return redirect("/quizzes/attempts/{$attemptId}");
     }
@@ -283,16 +303,26 @@ class QuizWebController extends Controller
 
             QuizAnswer::insert($answersToInsert);
 
+            // Batch compute all evaluated topic stats in ONE query instead of 2N correlated whereHas subqueries
+            $topicStats = DB::table('quiz_answers as qa')
+                ->join('quiz_attempts as qat', 'qa.quiz_attempt_id', '=', 'qat.id')
+                ->join('questions as q', 'qa.question_id', '=', 'q.id')
+                ->where('qat.user_id', $user->id)
+                ->whereIn('q.topic_id', array_keys($topicIdsEvaluated))
+                ->groupBy('q.topic_id')
+                ->selectRaw('
+                    q.topic_id,
+                    COUNT(*) as questions_attempted,
+                    SUM(CASE WHEN qa.is_correct = 1 THEN 1 ELSE 0 END) as questions_correct
+                ')
+                ->get()
+                ->keyBy('topic_id');
+
+            $now = now();
             foreach (array_keys($topicIdsEvaluated) as $topicId) {
-                $attempted = QuizAnswer::whereHas('question', fn ($q) => $q->where('topic_id', $topicId))
-                    ->whereHas('attempt', fn ($q) => $q->where('user_id', $user->id))
-                    ->count();
-
-                $correct = QuizAnswer::whereHas('question', fn ($q) => $q->where('topic_id', $topicId))
-                    ->whereHas('attempt', fn ($q) => $q->where('user_id', $user->id))
-                    ->where('is_correct', true)
-                    ->count();
-
+                $stat = $topicStats->get($topicId);
+                $attempted = (int) ($stat?->questions_attempted ?? 0);
+                $correct   = (int) ($stat?->questions_correct ?? 0);
                 $masteryScore = $attempted > 0 ? (int) round(($correct / $attempted) * 100) : 0;
 
                 LearnerProgress::updateOrCreate(
@@ -301,7 +331,7 @@ class QuizWebController extends Controller
                         'questions_attempted' => $attempted,
                         'questions_correct'   => $correct,
                         'mastery_score'       => $masteryScore,
-                        'last_attempted_at'   => now(),
+                        'last_attempted_at'   => $now,
                     ]
                 );
             }
@@ -333,28 +363,29 @@ class QuizWebController extends Controller
         ]);
 
         $answersMapped = $attempt->answers->map(function ($ans) {
+            $question = $ans->question;
             return [
                 'id' => $ans->id,
                 'question_id' => $ans->question_id,
-                'question_text' => $ans->question->question_text,
-                'explanation' => $ans->question->explanation,
+                'question_text' => $question?->question_text ?? ('Question #' . $ans->question_id),
+                'explanation' => $question?->explanation ?? '',
                 'selected_option_id' => $ans->selected_option_id,
-                'is_correct' => (bool)$ans->is_correct,
+                'is_correct' => (bool) $ans->is_correct,
                 'marks_awarded' => $ans->marks_awarded,
-                'options' => $ans->question->options->map(function ($o) {
+                'options' => $question ? $question->options->map(function ($o) {
                     return [
                         'id' => $o->id,
                         'option_text' => $o->option_text,
-                        'is_correct' => (bool)$o->is_correct,
+                        'is_correct' => (bool) $o->is_correct,
                     ];
-                })
+                }) : [],
             ];
         });
 
         return response()->json([
             'attempt' => [
                 'id' => $attempt->id,
-                'quiz_title' => $attempt->quiz->title,
+                'quiz_title' => $attempt->quiz?->title ?? ('Quiz #' . $attempt->quiz_id),
                 'score' => $attempt->score,
                 'total_marks' => $attempt->total_marks,
                 'completed_at' => $attempt->completed_at ? $attempt->completed_at->toIso8601String() : null,

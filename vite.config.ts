@@ -19,7 +19,7 @@ export default defineConfig({
             injectRegister: null,
             scope: '/',
             workbox: {
-                globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+                globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf}'],
                 // Also precache the offline fallback page from public/
                 additionalManifestEntries: [
                     { url: '/offline.html', revision: '2' },
@@ -47,11 +47,10 @@ export default defineConfig({
                 navigateFallback: null,
                 runtimeCaching: [
                     {
-                        // 1. Cache app routes (HTML) — covers all main nav pages
+                        // 1. Cache app routes (both HTML and Inertia JSON) — covers all main nav pages
                         // ignoreVary is critical: Inertia adds Vary: X-Inertia to responses
-                        urlPattern: ({ url, request }) => {
-                            const isAppRoute = /^\/(dashboard|subjects|quizzes|flashcards|login|)(\/.*)?$/.test(url.pathname);
-                            return isAppRoute && !request.headers.has('X-Inertia');
+                        urlPattern: ({ url }) => {
+                            return /^\/(dashboard|subjects|quizzes|flashcards|login|)(\/.*)?$/.test(url.pathname);
                         },
                         handler: 'NetworkFirst',
                         options: {
@@ -106,7 +105,22 @@ export default defineConfig({
                         },
                     },
                     {
-                        // 3. Cache images and icons in /images/
+                        // 3. Cache built JS/CSS/asset chunks (CacheFirst)
+                        urlPattern: ({ url }) => url.pathname.startsWith('/build/assets/'),
+                        handler: 'CacheFirst',
+                        options: {
+                            cacheName: 'build-assets-cache',
+                            expiration: {
+                                maxEntries: 300,
+                                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+                            },
+                            cacheableResponse: {
+                                statuses: [0, 200],
+                            },
+                        },
+                    },
+                    {
+                        // 4. Cache images and icons in /images/
                         urlPattern: ({ url }) => url.pathname.startsWith('/images/'),
                         handler: 'StaleWhileRevalidate',
                         options: {

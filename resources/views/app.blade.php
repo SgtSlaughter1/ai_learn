@@ -2,8 +2,12 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <meta name="theme-color" content="#183B2B">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="OfflineAI">
 
         <title inertia>{{ config('app.name', 'Offline AI Learning Platform') }}</title>
 
@@ -51,6 +55,16 @@
                         .catch((err) => {
                             console.error('❌ ServiceWorker registration failed:', err);
                         });
+
+                    // When a new SW activates and claims clients, reload once while online
+                    // so the open tab does not attempt to request orphaned chunk hashes
+                    let refreshing = false;
+                    navigator.serviceWorker.addEventListener('controllerchange', () => {
+                        if (!refreshing && navigator.onLine) {
+                            refreshing = true;
+                            window.location.reload();
+                        }
+                    });
                 });
             }
         </script>

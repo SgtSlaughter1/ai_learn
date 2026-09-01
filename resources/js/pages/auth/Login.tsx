@@ -1,7 +1,9 @@
 import { Head, Link, useForm } from '@inertiajs/react';
-import { FormEvent } from 'react';
+import { useState, FormEvent } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
+    const [showPassword, setShowPassword] = useState(false);
     const { data, setData, post, processing, errors, reset } = useForm({
         email: '',
         password: '',
@@ -10,9 +12,18 @@ export default function Login() {
 
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
+        if (processing) return;
         post('/login', {
             onFinish: () => reset('password'),
         });
+    };
+
+    const fillCredentials = (userEmail: string, userPass: string) => {
+        setData((prev) => ({
+            ...prev,
+            email: userEmail,
+            password: userPass,
+        }));
     };
 
     return (
@@ -73,17 +84,32 @@ export default function Login() {
                             <label htmlFor="password" className="block text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">
                                 Password
                             </label>
-                            <input
-                                id="password"
-                                type="password"
-                                name="password"
-                                value={data.password}
-                                onChange={(e) => setData('password', e.target.value)}
-                                className="input-field"
-                                placeholder="••••••••"
-                                required
-                                autoComplete="current-password"
-                            />
+                            <div className="relative">
+                                <input
+                                    id="password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    name="password"
+                                    value={data.password}
+                                    onChange={(e) => setData('password', e.target.value)}
+                                    className="input-field pr-11"
+                                    placeholder="••••••••"
+                                    required
+                                    autoComplete="current-password"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors focus:outline-none cursor-pointer"
+                                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                    title={showPassword ? 'Hide password' : 'Show password'}
+                                >
+                                    {showPassword ? (
+                                        <EyeOff className="w-4 h-4" />
+                                    ) : (
+                                        <Eye className="w-4 h-4" />
+                                    )}
+                                </button>
+                            </div>
                             {errors.password && (
                                 <p className="text-xs text-[var(--color-error)] font-semibold mt-1">{errors.password}</p>
                             )}
@@ -110,7 +136,7 @@ export default function Login() {
                             className="w-full btn-primary"
                         >
                             {processing ? (
-                                <div className="flex items-center space-x-2">
+                                <div className="flex items-center justify-center space-x-2">
                                     <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -124,14 +150,35 @@ export default function Login() {
                     </form>
                 </div>
 
-                {/* Helper Login Credentials Card */}
-                <div className="bg-[var(--color-primary)]/5 border border-[var(--color-border)] p-5 rounded-2xl text-xs text-[var(--color-muted)] space-y-2">
-                    <p className="font-bold text-[var(--color-text)]">Demo Accounts Available:</p>
-                    <ul className="space-y-1.5 list-disc pl-4">
-                        <li><span className="text-[var(--color-text)]">Learner:</span> learner@example.com / password</li>
-                        <li><span className="text-[var(--color-text)]">Teacher:</span> teacher@example.com / password</li>
-                        <li><span className="text-[var(--color-text)]">Admin:</span> admin@example.com / password</li>
-                    </ul>
+                {/* Helper Login Credentials Card with Click-to-Fill */}
+                <div className="bg-[var(--color-primary)]/5 border border-[var(--color-border)] p-5 rounded-2xl text-xs text-[var(--color-muted)] space-y-2.5">
+                    <p className="font-bold text-[var(--color-text)]">Quick Fill Demo Accounts (Tap to fill):</p>
+                    <div className="space-y-1.5">
+                        <button
+                            type="button"
+                            onClick={() => fillCredentials('learner@example.com', 'password')}
+                            className="w-full text-left p-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors cursor-pointer flex items-center justify-between group"
+                        >
+                            <span className="font-semibold text-[var(--color-text)]">Learner</span>
+                            <span className="text-[11px] text-[var(--color-muted)] group-hover:text-[var(--color-primary)]">learner@example.com / password</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => fillCredentials('teacher@example.com', 'password')}
+                            className="w-full text-left p-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors cursor-pointer flex items-center justify-between group"
+                        >
+                            <span className="font-semibold text-[var(--color-text)]">Teacher</span>
+                            <span className="text-[11px] text-[var(--color-muted)] group-hover:text-[var(--color-primary)]">teacher@example.com / password</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => fillCredentials('admin@example.com', 'password')}
+                            className="w-full text-left p-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors cursor-pointer flex items-center justify-between group"
+                        >
+                            <span className="font-semibold text-[var(--color-text)]">Admin</span>
+                            <span className="text-[11px] text-[var(--color-muted)] group-hover:text-[var(--color-primary)]">admin@example.com / password</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

@@ -30,4 +30,14 @@ class GamificationController extends Controller
         $data = $this->gamificationService->getLeaderboard($request->user());
         return response()->json($data);
     }
+
+    public function getProfile(Request $request): JsonResponse
+    {
+        return $this->profile($request);
+    }
+
+    public function getLeaderboard(Request $request): JsonResponse
+    {
+        return $this->leaderboard($request);
+    }
 }

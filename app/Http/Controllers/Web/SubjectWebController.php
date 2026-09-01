@@ -30,24 +30,38 @@ class SubjectWebController extends Controller
     {
         $user = $request->user();
 
-        // Fetch active subjects and calculate progress percentages for this learner
+        // 1. Batch compute topic counts and completed topics per subject in ONE query (eliminates 2N+1 queries)
+        $topicsSummary = DB::table('topics as t')
+            ->leftJoin('learner_progress as lp', function ($join) use ($user) {
+                $join->on('lp.topic_id', '=', 't.id')
+                     ->where('lp.user_id', '=', $user->id);
+            })
+            ->where('t.status', 'active')
+            ->groupBy('t.subject_id')
+            ->selectRaw('
+                t.subject_id,
+                COUNT(t.id) as total_topics,
+                SUM(CASE WHEN lp.mastery_score >= 80 THEN 1 ELSE 0 END) as completed_topics
+            ')
+            ->get()
+            ->keyBy('subject_id');
+
+        // 2. Fetch active subjects (single query)
         $subjects = Subject::where('status', 'active')
             ->select(['id', 'name', 'slug', 'description'])
             ->orderBy('sort_order')
             ->get()
-            ->map(function ($subject) use ($user) {
-                $totalTopics = $subject->topics()->count();
-                $completedTopics = LearnerProgress::where('user_id', $user->id)
-                    ->whereIn('topic_id', $subject->topics()->pluck('id'))
-                    ->where('mastery_score', '>=', 80)
-                    ->count();
-                
+            ->map(function ($subject) use ($topicsSummary) {
+                $summary = $topicsSummary->get($subject->id);
+                $totalTopics = (int) ($summary?->total_topics ?? 0);
+                $completedTopics = (int) ($summary?->completed_topics ?? 0);
+
                 return [
                     'id' => $subject->id,
                     'name' => $subject->name,
                     'slug' => $subject->slug,
                     'description' => $subject->description,
-                    'progress_percent' => $totalTopics > 0 ? round(($completedTopics / $totalTopics) * 100) : 0,
+                    'progress_percent' => $totalTopics > 0 ? (int) round(($completedTopics / $totalTopics) * 100) : 0,
                     'topics_count' => $totalTopics,
                 ];
             });
@@ -181,6 +195,29 @@ class SubjectWebController extends Controller
             'subject' => $subject,
             'topics' => $topics,
             'quizzes' => $formattedQuizzes,
+        ]);
+    }
+
+    /**
+     * Get topics for a specific subject (by ID or slug).
+     */
+    public function getTopics(Request $request, string $subject): JsonResponse
+    {
+        $sub = is_numeric($subject)
+            ? Subject::find($subject)
+            : Subject::where('slug', $subject)->first();
+
+        if (!$sub) {
+            return response()->json(['message' => 'Subject not found'], 404);
+        }
+
+        $topics = $sub->topics()
+            ->where('status', 'active')
+            ->orderBy('sort_order')
+            ->get(['id', 'subject_id', 'name', 'slug', 'level', 'description', 'sort_order']);
+
+        return response()->json([
+            'topics' => $topics,
         ]);
     }
 }
