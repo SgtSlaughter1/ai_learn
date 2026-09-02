@@ -13,21 +13,26 @@ const appName = import.meta.env.VITE_APP_NAME || 'Offline AI Learning Platform';
 
 
 // 2. 'invalid' fires if SW returns cached HTML for an XHR request.
-//    We redirect to the target URL to load the HTML layout properly.
 router.on('invalid', (event) => {
     event.preventDefault();
     const response = (event.detail as any)?.response;
     const targetUrl = response?.config?.url || response?.url;
-    if (targetUrl && targetUrl !== window.location.href) {
-        window.location.href = targetUrl;
-        return false;
+    if (targetUrl && targetUrl !== window.location.href && !targetUrl.startsWith('/api/')) {
+        if (navigator.onLine) {
+            window.location.href = targetUrl;
+            return false;
+        }
+        if ('caches' in window) {
+            caches.match(targetUrl).then((cached) => {
+                if (cached) window.location.href = targetUrl;
+            });
+        }
     }
     return true;
 });
 
 // 3. 'exception' fires if a network error occurred during an in-flight visit.
-//    We catch any network connection failure (Axios Network Error / no response)
-//    and perform standard navigation to fall back to the Service Worker cache.
+//    We prevent Safari from dumping the entire SPA when offline.
 router.on('exception', (event) => {
     const exception = (event.detail as any)?.exception;
     const isNetworkError = !exception?.response || exception?.message === 'Network Error' || exception?.code === 'ERR_NETWORK';
@@ -35,9 +40,16 @@ router.on('exception', (event) => {
     if (isNetworkError) {
         event.preventDefault();
         const targetUrl = exception?.config?.url;
-        if (targetUrl && targetUrl !== window.location.href) {
-            window.location.href = targetUrl;
-            return false;
+        if (targetUrl && targetUrl !== window.location.href && !targetUrl.startsWith('/api/')) {
+            if (navigator.onLine) {
+                window.location.href = targetUrl;
+                return false;
+            }
+            if ('caches' in window) {
+                caches.match(targetUrl).then((cached) => {
+                    if (cached) window.location.href = targetUrl;
+                });
+            }
         }
     }
     return true;
