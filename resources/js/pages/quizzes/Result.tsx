@@ -109,7 +109,7 @@ export default function Result({ attemptId }: Props) {
         );
     };
 
-    // Offline AI Tutor Explanation Generator
+    // AILEARN Tutor Explanation Generator
     const generateOfflineExplanation = async (
         questionId: number,
         questionText: string,
@@ -158,7 +158,7 @@ export default function Result({ attemptId }: Props) {
             const selectedOption = selectedOptionId ? options.find((o) => o.id === selectedOptionId) : null;
             const correctOption = options.find((o) => o.is_correct);
 
-            let out = `### 📚 Offline AI Tutor Explanation\n\n`;
+            let out = `### 📚 AILEARN Tutor Explanation\n\n`;
 
             if (subjectName || topicName) {
                 out += `**Curriculum Topic:** ${subjectName ? subjectName + ' → ' : ''}**${topicName || 'General Practice'}** ${
@@ -206,7 +206,7 @@ export default function Result({ attemptId }: Props) {
             return out;
         } catch (e) {
             console.error('Offline explanation generation error:', e);
-            return `### 📚 Offline AI Tutor\n\n**Question:** ${questionText}\n\nReview your answer and study notes for this question. Your offline progress has been saved.`;
+            return `### 📚 AILEARN Tutor\n\n**Question:** ${questionText}\n\nReview your answer and study notes for this question. Your offline progress has been saved.`;
         }
     };
 

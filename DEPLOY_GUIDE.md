@@ -1,4 +1,4 @@
-# InfinityFree Deployment Guide for Offline AI Learning Platform
+# InfinityFree Deployment Guide for AILEARN Platform
 
 This guide walks you through the steps to successfully deploy this Laravel + React project to InfinityFree and resolve the **403 Forbidden** error.
 

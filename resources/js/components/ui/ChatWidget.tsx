@@ -105,7 +105,7 @@ async function generateOfflineResponse(message: string): Promise<string> {
             }
         }
     } catch (e) {
-        console.warn('Offline AI helper error:', e);
+        console.warn('AILEARN helper error:', e);
     }
 
     // 6. Default Dynamic Offline fallback message
@@ -114,7 +114,7 @@ async function generateOfflineResponse(message: string): Promise<string> {
     const subjectList = cachedSubjects.length > 0 ? cachedSubjects.map(s => s.name).join(', ') : 'all enrolled subjects';
     const sampleTopics = cachedTopics.slice(0, 3).map(t => `**${t.name}**`).join(', ');
 
-    return `🤖 **Offline AI Tutor Mode**\n\nI am operating in offline mode using your local curriculum library for **${subjectList}**.\n\nWhile offline, I can help you with:\n1. **"Recommend what to study"**: I will analyze your local mastery and suggest topics.\n2. **"List subjects"**: View your offline curriculum and descriptions.\n3. Ask about any topic in your library (e.g. ${sampleTopics || 'your topics'}) to see concept notes.`;
+    return `🤖 **AILEARN Tutor Mode**\n\nI am operating in offline mode using your local curriculum library for **${subjectList}**.\n\nWhile offline, I can help you with:\n1. **"Recommend what to study"**: I will analyze your local mastery and suggest topics.\n2. **"List subjects"**: View your offline curriculum and descriptions.\n3. Ask about any topic in your library (e.g. ${sampleTopics || 'your topics'}) to see concept notes.`;
 }
 
 export default function ChatWidget() {
@@ -148,7 +148,7 @@ export default function ChatWidget() {
         setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
         setChatLoading(true);
 
-        // If offline, use the local offline AI response generator
+        // If offline, use the local AILEARN response generator
         if (!navigator.onLine) {
             setTimeout(async () => {
                 const response = await generateOfflineResponse(userMessage);

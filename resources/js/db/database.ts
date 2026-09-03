@@ -145,7 +145,7 @@ export class OfflineDB extends Dexie {
     userProfile!: Table<CachedUserProfile, string>;
 
     constructor() {
-        super('OfflineAIDatabase');
+        super('AILEARNDatabase');
 
         this.version(1).stores({
             subjects: 'id, slug, status, cached_at',

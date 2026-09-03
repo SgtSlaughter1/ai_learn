@@ -5,7 +5,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 import { startAutoSync } from './services/SyncService';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Offline AI Learning Platform';
+const appName = import.meta.env.VITE_APP_NAME || 'AILEARN';
 
 // Handle offline navigation for Inertia.js:
 // The Service Worker caches both Inertia JSON and full HTML views.
