@@ -50,7 +50,7 @@ export default defineConfig({
                         // 1. Cache app routes (both HTML and Inertia JSON) — covers all main nav pages
                         // ignoreVary is critical: Inertia adds Vary: X-Inertia to responses
                         urlPattern: ({ url }) => {
-                            return /^\/(dashboard|subjects|quizzes|flashcards|login|)(\/.*)?$/.test(url.pathname);
+                            return /^\/(dashboard|admin|teacher|subjects|quizzes|flashcards|login|)(\/.*)?$/.test(url.pathname);
                         },
                         handler: 'NetworkFirst',
                         options: {

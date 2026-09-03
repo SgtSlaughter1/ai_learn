@@ -12,43 +12,63 @@ const appName = import.meta.env.VITE_APP_NAME || 'Offline AI Learning Platform';
 // Client-side Inertia transitions work smoothly offline from the SW cache.
 
 
-// 2. 'invalid' fires if SW returns cached HTML for an XHR request.
+// Helper to reliably extract the target navigation URL across Inertia v1 & v2 events
+function extractTargetUrl(detail: any): string | null {
+    if (!detail) return null;
+
+    // 1. Inertia v2 RequestParams (URL object) or visit URL
+    const requestUrl = detail.response?.requestParams?.all?.()?.url || detail.visit?.url;
+    if (requestUrl) {
+        return typeof requestUrl === 'string' ? requestUrl : requestUrl.href || requestUrl.pathname;
+    }
+
+    // 2. Underlying Axios response config / error config
+    const axiosUrl =
+        detail.response?.response?.config?.url ||
+        detail.response?.config?.url ||
+        detail.exception?.config?.url ||
+        detail.response?.url;
+    if (axiosUrl) {
+        return axiosUrl;
+    }
+
+    return null;
+}
+
+// 2. 'invalid' fires if SW returns cached HTML for an XHR request (e.g. offline route fallback).
+//    We redirect to the target URL to load the HTML layout properly.
 router.on('invalid', (event) => {
-    event.preventDefault();
-    const response = (event.detail as any)?.response;
-    const targetUrl = response?.config?.url || response?.url;
-    if (targetUrl && targetUrl !== window.location.href && !targetUrl.startsWith('/api/')) {
-        if (navigator.onLine) {
+    const detail = (event.detail as any);
+    const targetUrl = extractTargetUrl(detail);
+
+    if (targetUrl && !targetUrl.startsWith('/api/')) {
+        event.preventDefault();
+        if (targetUrl !== window.location.href) {
             window.location.href = targetUrl;
             return false;
-        }
-        if ('caches' in window) {
-            caches.match(targetUrl).then((cached) => {
-                if (cached) window.location.href = targetUrl;
-            });
         }
     }
     return true;
 });
 
 // 3. 'exception' fires if a network error occurred during an in-flight visit.
-//    We prevent Safari from dumping the entire SPA when offline.
+//    We catch network connection failures and perform standard navigation
+//    so the Service Worker can serve cached pages or the offline fallback.
 router.on('exception', (event) => {
-    const exception = (event.detail as any)?.exception;
-    const isNetworkError = !exception?.response || exception?.message === 'Network Error' || exception?.code === 'ERR_NETWORK';
+    const detail = (event.detail as any);
+    const exception = detail?.exception;
+    const isNetworkError =
+        !exception?.response ||
+        exception?.message === 'Network Error' ||
+        exception?.code === 'ERR_NETWORK';
 
     if (isNetworkError) {
-        event.preventDefault();
-        const targetUrl = exception?.config?.url;
-        if (targetUrl && targetUrl !== window.location.href && !targetUrl.startsWith('/api/')) {
-            if (navigator.onLine) {
+        const targetUrl = extractTargetUrl(detail);
+        if (targetUrl && !targetUrl.startsWith('/api/')) {
+            event.preventDefault();
+            if (targetUrl !== window.location.href) {
                 window.location.href = targetUrl;
                 return false;
-            }
-            if ('caches' in window) {
-                caches.match(targetUrl).then((cached) => {
-                    if (cached) window.location.href = targetUrl;
-                });
             }
         }
     }

@@ -21,6 +21,7 @@ interface PageProps {
 
 export default function AuthenticatedLayout({ children, header }: { children: React.ReactNode; header?: React.ReactNode }) {
     const { auth } = usePage<PageProps>().props;
+    const { url } = usePage();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     useEffect(() => {
@@ -29,7 +30,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
     }, []);
 
     const activeRouteClass = (path: string) => {
-        const currentPath = window.location.pathname;
+        const currentPath = url || window.location.pathname;
         const isActive = path === '/' ? currentPath === '/' : currentPath.startsWith(path);
         return isActive
             ? 'bg-white/10 text-white border-l-4 border-[var(--color-accent)] font-semibold'
