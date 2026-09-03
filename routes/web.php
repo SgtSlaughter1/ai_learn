@@ -52,6 +52,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
         Route::get('/admin/stats', [AdminDashboardController::class, 'getStats']);
         Route::get('/teacher/stats', [TeacherDashboardController::class, 'getStats']);
+        Route::get('/classes', [SubjectWebController::class, 'getClasses']);
         Route::get('/subjects', [SubjectWebController::class, 'getSubjects']);
         Route::get('/subjects/{subject}', [SubjectWebController::class, 'getSubjectDetails']);
         Route::get('/subjects/{subject}/topics', [SubjectWebController::class, 'getTopics']);

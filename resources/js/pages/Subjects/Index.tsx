@@ -13,15 +13,60 @@ interface Subject {
     topics_count: number;
 }
 
+interface ClassItem {
+    id: number;
+    name: string;
+    grade_level: string | null;
+    section: string | null;
+}
+
 export default function Index() {
     const [loading, setLoading] = useState<boolean>(true);
     const [subjects, setSubjects] = useState<Subject[]>([]);
+    const [classes, setClasses] = useState<ClassItem[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedClassId, setSelectedClassId] = useState<number | null>(() => {
+        if (typeof window !== 'undefined') {
+            const urlParam = new URLSearchParams(window.location.search).get('class_id');
+            if (urlParam) return Number(urlParam);
+            const stored = localStorage.getItem('selected_class_id');
+            if (stored) return Number(stored);
+        }
+        return null;
+    });
+
+    const handleClassSelect = (classId: number | null) => {
+        setSelectedClassId(classId);
+        if (classId) {
+            localStorage.setItem('selected_class_id', String(classId));
+            const url = new URL(window.location.href);
+            url.searchParams.set('class_id', String(classId));
+            window.history.replaceState({}, '', url.toString());
+        } else {
+            localStorage.removeItem('selected_class_id');
+            const url = new URL(window.location.href);
+            url.searchParams.delete('class_id');
+            window.history.replaceState({}, '', url.toString());
+        }
+    };
+
+    useEffect(() => {
+        fetch('/api/v1/classes')
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.classes && data.classes.length > 0) {
+                    setClasses(data.classes);
+                }
+            })
+            .catch(() => {});
+    }, []);
 
     useEffect(() => {
         let isMounted = true;
 
         async function loadSubjects() {
+            setLoading(true);
+
             // 1. Try reading from Dexie first (instant offline/cached render)
             try {
                 const local = await db.subjects.toArray();
@@ -42,11 +87,12 @@ export default function Index() {
 
             // 2. Fetch fresh data from network if online
             try {
-                const res = await fetch('/api/v1/subjects');
+                const classParam = selectedClassId ? `?class_id=${selectedClassId}` : '';
+                const res = await fetch(`/api/v1/subjects${classParam}`);
                 if (res.ok) {
                     const data = await res.json();
                     if (isMounted) {
-                        setSubjects(data.subjects);
+                        setSubjects(data.subjects || []);
                         setLoading(false);
                     }
                     // Save to Dexie for offline use
@@ -78,7 +124,7 @@ export default function Index() {
         return () => {
             isMounted = false;
         };
-    }, []);
+    }, [selectedClassId]);
 
     const filteredSubjects = subjects.filter((subject) =>
         subject.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -97,22 +143,54 @@ export default function Index() {
             <Head title="Subjects" />
 
             <div className="space-y-6">
-                {/* Search Bar filter */}
-                <div className="max-w-md">
-                    <div className="relative">
-                        <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[var(--color-muted)]">
-                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
-                        </span>
-                        <input
-                            type="text"
-                            placeholder="Search subjects..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="block w-full pl-10 pr-4 py-2.5 bg-[var(--color-surface)] backdrop-blur-md border border-[var(--color-border)] rounded-xl text-[var(--color-text)] placeholder-[var(--color-muted)] focus:outline-none focus:border-[var(--color-primary)]/80 focus:ring-1 focus:ring-[var(--color-primary)]/80 text-sm transition-all min-h-[48px]"
-                        />
+                {/* Search Bar & Class Filter */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="max-w-md flex-1">
+                        <div className="relative">
+                            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[var(--color-muted)]">
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </span>
+                            <input
+                                type="text"
+                                placeholder="Search subjects..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="block w-full pl-10 pr-4 py-2.5 bg-[var(--color-surface)] backdrop-blur-md border border-[var(--color-border)] rounded-xl text-[var(--color-text)] placeholder-[var(--color-muted)] focus:outline-none focus:border-[var(--color-primary)]/80 focus:ring-1 focus:ring-[var(--color-primary)]/80 text-sm transition-all min-h-[48px]"
+                            />
+                        </div>
                     </div>
+
+                    {classes.length > 0 && (
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
+                            <button
+                                type="button"
+                                onClick={() => handleClassSelect(null)}
+                                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap min-h-[40px] cursor-pointer border ${
+                                    selectedClassId === null
+                                        ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-sm'
+                                        : 'bg-[var(--color-surface)] text-[var(--color-muted)] border-[var(--color-border)] hover:text-[var(--color-text)]'
+                                }`}
+                            >
+                                All Classes
+                            </button>
+                            {classes.map((cls) => (
+                                <button
+                                    key={cls.id}
+                                    type="button"
+                                    onClick={() => handleClassSelect(cls.id)}
+                                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap min-h-[40px] cursor-pointer border ${
+                                        selectedClassId === cls.id
+                                            ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-sm'
+                                            : 'bg-[var(--color-surface)] text-[var(--color-muted)] border-[var(--color-border)] hover:text-[var(--color-text)]'
+                                    }`}
+                                >
+                                    {cls.name} {cls.grade_level ? `(${cls.grade_level})` : ''}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Subjects Grid / Skeleton Screen */}
@@ -182,7 +260,7 @@ export default function Index() {
 
                                     {/* Action Button */}
                                     <Link
-                                        href={`/subjects/${subject.slug}`}
+                                        href={`/subjects/${subject.slug}${selectedClassId ? `?class_id=${selectedClassId}` : ''}`}
                                         className="w-full inline-flex items-center justify-center px-4 py-2.5 text-sm font-semibold text-[var(--color-text)] hover:text-white bg-[var(--color-primary-5)] hover:bg-[var(--color-primary)] rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] shadow-md transition-all group focus:outline-none min-h-[48px]"
                                     >
                                         Explore Topics

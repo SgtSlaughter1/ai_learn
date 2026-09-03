@@ -15,7 +15,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'First Steps',
                 'description' => 'Complete your first quiz',
                 'icon'        => '🎯',
-                'xp_reward'   => 25,
+                'xp_reward'   => 5,
                 'category'    => 'quiz',
             ],
             [
@@ -23,7 +23,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'Getting Serious',
                 'description' => 'Complete 5 quizzes',
                 'icon'        => '📝',
-                'xp_reward'   => 25,
+                'xp_reward'   => 5,
                 'category'    => 'quiz',
             ],
             [
@@ -31,7 +31,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'Quiz Enthusiast',
                 'description' => 'Complete 10 quizzes',
                 'icon'        => '🏆',
-                'xp_reward'   => 25,
+                'xp_reward'   => 10,
                 'category'    => 'quiz',
             ],
             [
@@ -39,7 +39,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'Quiz Master',
                 'description' => 'Complete 25 quizzes',
                 'icon'        => '👑',
-                'xp_reward'   => 25,
+                'xp_reward'   => 10,
                 'category'    => 'quiz',
             ],
             [
@@ -47,7 +47,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'Flawless',
                 'description' => 'Get a perfect score on any quiz',
                 'icon'        => '💎',
-                'xp_reward'   => 25,
+                'xp_reward'   => 5,
                 'category'    => 'performance',
             ],
             [
@@ -55,7 +55,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'Triple Perfect',
                 'description' => 'Get 3 perfect scores',
                 'icon'        => '✨',
-                'xp_reward'   => 25,
+                'xp_reward'   => 10,
                 'category'    => 'performance',
             ],
             [
@@ -63,7 +63,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'On Fire',
                 'description' => 'Maintain a 3-day streak',
                 'icon'        => '🔥',
-                'xp_reward'   => 25,
+                'xp_reward'   => 5,
                 'category'    => 'streak',
             ],
             [
@@ -71,7 +71,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'Week Warrior',
                 'description' => 'Maintain a 7-day streak',
                 'icon'        => '⚡',
-                'xp_reward'   => 25,
+                'xp_reward'   => 5,
                 'category'    => 'streak',
             ],
             [
@@ -79,7 +79,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'Unstoppable',
                 'description' => 'Maintain a 14-day streak',
                 'icon'        => '🌟',
-                'xp_reward'   => 25,
+                'xp_reward'   => 10,
                 'category'    => 'streak',
             ],
             [
@@ -87,7 +87,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'Iron Will',
                 'description' => 'Maintain a 30-day streak',
                 'icon'        => '💪',
-                'xp_reward'   => 25,
+                'xp_reward'   => 10,
                 'category'    => 'streak',
             ],
             [
@@ -95,7 +95,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'Halfway There',
                 'description' => 'Reach 50% mastery in any subject',
                 'icon'        => '📈',
-                'xp_reward'   => 25,
+                'xp_reward'   => 5,
                 'category'    => 'mastery',
             ],
             [
@@ -103,7 +103,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'Subject Expert',
                 'description' => 'Reach 80% mastery in any subject',
                 'icon'        => '🎓',
-                'xp_reward'   => 25,
+                'xp_reward'   => 10,
                 'category'    => 'mastery',
             ],
             [
@@ -111,7 +111,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'Subject Master',
                 'description' => 'Reach 100% mastery in any subject',
                 'icon'        => '🥇',
-                'xp_reward'   => 25,
+                'xp_reward'   => 10,
                 'category'    => 'mastery',
             ],
             [
@@ -119,7 +119,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'Renaissance Student',
                 'description' => 'Reach 80% mastery in all subjects',
                 'icon'        => '🌍',
-                'xp_reward'   => 25,
+                'xp_reward'   => 10,
                 'category'    => 'mastery',
             ],
             [
@@ -127,7 +127,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'Level Up!',
                 'description' => 'Reach Level 5',
                 'icon'        => '⬆️',
-                'xp_reward'   => 25,
+                'xp_reward'   => 5,
                 'category'    => 'level',
             ],
             [
@@ -135,7 +135,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'High Roller',
                 'description' => 'Reach Level 10',
                 'icon'        => '🎰',
-                'xp_reward'   => 25,
+                'xp_reward'   => 10,
                 'category'    => 'level',
             ],
             [
@@ -143,7 +143,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'XP Hunter',
                 'description' => 'Earn 1,000 total XP',
                 'icon'        => '⭐',
-                'xp_reward'   => 25,
+                'xp_reward'   => 10,
                 'category'    => 'xp',
             ],
             [
@@ -151,7 +151,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'XP Legend',
                 'description' => 'Earn 5,000 total XP',
                 'icon'        => '🌟',
-                'xp_reward'   => 25,
+                'xp_reward'   => 10,
                 'category'    => 'xp',
             ],
             [
@@ -159,7 +159,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'Speed Demon',
                 'description' => 'Complete a quiz in under 2 minutes',
                 'icon'        => '⚡',
-                'xp_reward'   => 25,
+                'xp_reward'   => 5,
                 'category'    => 'speed',
             ],
             [
@@ -167,7 +167,7 @@ class AchievementSeeder extends Seeder
                 'name'        => 'Curious Mind',
                 'description' => 'Try a quiz in every subject',
                 'icon'        => '📚',
-                'xp_reward'   => 25,
+                'xp_reward'   => 5,
                 'category'    => 'exploration',
             ],
         ];

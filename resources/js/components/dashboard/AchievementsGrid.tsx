@@ -63,7 +63,7 @@ export function AchievementsGrid({
                                         </div>
                                     )}
                                     <div className="text-[9px] font-extrabold text-emerald-400 uppercase tracking-wider pt-0.5">
-                                        +{ach.xp_reward ?? 25} XP Earned
+                                        +{ach.xp_reward ?? 10} XP Earned
                                     </div>
                                 </div>
                                 <div className="w-2 h-2 bg-[var(--color-text)] transform rotate-45 -mt-1 shadow-sm" />

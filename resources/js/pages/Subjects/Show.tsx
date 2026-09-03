@@ -76,13 +76,20 @@ export default function Show({ slug }: Props) {
 
             // 2. Fetch fresh data from network if online
             try {
-                const res = await fetch(`/api/v1/subjects/${slug}`);
+                const classIdParam = typeof window !== 'undefined'
+                    ? new URLSearchParams(window.location.search).get('class_id')
+                    : null;
+                const classQuery = classIdParam ? `?class_id=${classIdParam}` : '';
+                const res = await fetch(`/api/v1/subjects/${slug}${classQuery}`);
                 if (res.ok) {
                     const data = await res.json();
                     if (isMounted) {
                         setSubject(data.subject);
                         setTopics(data.topics || []);
                         setQuizzes(data.quizzes || []);
+                        if (data.selected_level) {
+                            setSelectedLevel(data.selected_level);
+                        }
                         setLoading(false);
                     }
                     // Cache in Dexie for offline use

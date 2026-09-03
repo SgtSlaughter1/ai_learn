@@ -27,7 +27,7 @@ export default function Dashboard() {
     const [showXpGuide, setShowXpGuide] = useState<boolean>(false);
     const [offlineStats, setOfflineStats] = useState<DashboardStats | null>(null);
     const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
-    const { isOnline } = useNetworkStatus();
+    const { isOnline, lastSyncTime } = useNetworkStatus();
 
     // Auto-dismiss mobile tooltips when clicking anywhere else
     useEffect(() => {
@@ -55,17 +55,17 @@ export default function Dashboard() {
                         setLoading(false);
                     }
 
-                    // Cache recent attempts and stats for offline fallback
+                    // Cache recent attempts, stats, and full gamification profile for offline fallback
                     if (statsData.recentAttempts) {
                         localStorage.setItem('cached_dashboard_recent_attempts', JSON.stringify(statsData.recentAttempts));
                     }
                     if (statsData.stats) {
                         localStorage.setItem('cached_dashboard_stats', JSON.stringify(statsData.stats));
                     }
-
-                    // Save gamification locally for offline
                     if (gamData) {
+                        localStorage.setItem('cached_dashboard_gamification', JSON.stringify(gamData));
                         saveLocalGamification({
+                            id: 1,
                             user_id: 'current',
                             total_xp: gamData.total_xp,
                             level: gamData.level,
@@ -83,10 +83,9 @@ export default function Dashboard() {
                     if (isMounted) setLoading(false);
                 }
             } else {
-                // Offline: load from Dexie & cached localStorage
-                const [subjects, progress, gamCache, attempts, quizzes] = await Promise.all([
+                // Offline: load from Dexie & cached server snapshots
+                const [subjects, gamCache, attempts, quizzes] = await Promise.all([
                     db.subjects.toArray(),
-                    db.learnerProgress.toArray(),
                     db.gamification.toCollection().first(),
                     db.quizAttempts.toArray(),
                     db.quizzes.toArray(),
@@ -109,34 +108,58 @@ export default function Dashboard() {
                         } catch {}
                     }
 
-                    if (progress.length > 0) {
-                        const totalAttempted = progress.reduce((s, p) => s + (p.questions_attempted ?? 0), 0);
-                        const totalCorrect = progress.reduce((s, p) => s + (p.questions_correct ?? 0), 0);
-                        const masteredTopics = progress.filter((p) => (p.mastery_score ?? 0) >= 80).length;
-                        const avgMastery = Math.round(progress.reduce((s, p) => s + (p.mastery_score ?? 0), 0) / progress.length);
-
-                        baseStats.questionsAttempted = Math.max(baseStats.questionsAttempted, totalAttempted);
-                        baseStats.questionsCorrect = Math.max(baseStats.questionsCorrect, totalCorrect);
-                        baseStats.completedTopics = Math.max(baseStats.completedTopics, masteredTopics);
-                        baseStats.averageMastery = Math.max(baseStats.averageMastery, avgMastery);
+                    // Incorporate only un-synced offline attempts completed during this offline period
+                    const unsyncedAttempts = attempts.filter((a) => !a.synced);
+                    if (unsyncedAttempts.length > 0) {
+                        const unsyncedQuestions = unsyncedAttempts.reduce((s, a) => s + (a.total_marks || (a.answers ? a.answers.length : 0)), 0);
+                        const unsyncedCorrect = unsyncedAttempts.reduce((s, a) => s + (a.score || 0), 0);
+                        baseStats.questionsAttempted += unsyncedQuestions;
+                        baseStats.questionsCorrect += unsyncedCorrect;
+                        if (baseStats.questionsAttempted > 0) {
+                            baseStats.averageMastery = Math.round((baseStats.questionsCorrect / baseStats.questionsAttempted) * 100);
+                        }
                     }
 
-                    const localAttempted = attempts.reduce((s, a) => s + (a.total_marks || (a.answers ? a.answers.length : 0)), 0);
-                    const localCorrect = attempts.reduce((s, a) => s + (a.score || 0), 0);
-                    if (localAttempted > baseStats.questionsAttempted) {
-                        baseStats.questionsAttempted = localAttempted;
-                        baseStats.questionsCorrect = localCorrect;
+                    if (subjects.length > 0) {
+                        baseStats.totalSubjects = Math.max(baseStats.totalSubjects, subjects.length);
                     }
-
-                    if (baseStats.questionsAttempted > 0) {
-                        baseStats.averageMastery = Math.round((baseStats.questionsCorrect / baseStats.questionsAttempted) * 100);
-                    }
-                    baseStats.totalSubjects = Math.max(baseStats.totalSubjects, subjects.length);
 
                     setOfflineStats(baseStats);
 
-                    // Accurate offline XP & level threshold calculations
-                    if (gamCache) {
+                    // Hydrate full gamification from cached online snapshot
+                    let fullGamification: GamificationData | null = null;
+                    const cachedGamStr = localStorage.getItem('cached_dashboard_gamification');
+                    if (cachedGamStr) {
+                        try {
+                            fullGamification = JSON.parse(cachedGamStr);
+                        } catch {}
+                    }
+
+                    if (fullGamification) {
+                        // Apply any local XP progression from Dexie if higher
+                        if (gamCache && gamCache.total_xp > fullGamification.total_xp) {
+                            const lvl = gamCache.level || fullGamification.level;
+                            const currThreshold = LEVEL_THRESHOLDS[lvl] ?? 0;
+                            const nextThreshold = LEVEL_THRESHOLDS[lvl + 1] ?? (currThreshold + 100);
+                            const xpIntoLevel = Math.max(0, gamCache.total_xp - currThreshold);
+                            const xpForNext = nextThreshold - currThreshold;
+                            const progressPercent = Math.min(100, Math.round((xpIntoLevel / xpForNext) * 100));
+
+                            fullGamification = {
+                                ...fullGamification,
+                                total_xp: gamCache.total_xp,
+                                level: lvl,
+                                rank: gamCache.rank || fullGamification.rank,
+                                current_streak: gamCache.current_streak || fullGamification.current_streak,
+                                longest_streak: Math.max(gamCache.longest_streak || 0, fullGamification.longest_streak),
+                                xp_progress_percent: progressPercent,
+                                xp_into_level: xpIntoLevel,
+                                xp_for_next_level: xpForNext,
+                                next_level: lvl + 1,
+                            };
+                        }
+                        setGamification(fullGamification);
+                    } else if (gamCache) {
                         const lvl = gamCache.level || 1;
                         const currThreshold = LEVEL_THRESHOLDS[lvl] ?? 0;
                         const nextThreshold = LEVEL_THRESHOLDS[lvl + 1] ?? (currThreshold + 100);
@@ -224,7 +247,7 @@ export default function Dashboard() {
         return () => {
             isMounted = false;
         };
-    }, [isOnline]);
+    }, [isOnline, lastSyncTime]);
 
     const activeStats = isOnline && stats ? stats : (offlineStats || stats);
     const accuracy =

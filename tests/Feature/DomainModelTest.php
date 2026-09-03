@@ -235,8 +235,8 @@ class DomainModelTest extends TestCase
             'new_rank',
             'new_achievements'
         ]);
-        // Calculate: easy (5) + good (3) + again (1) + easy (5) = 14 XP. Deck complete bonus = 15 XP. Total = 29 XP.
-        $completeResponse->assertJsonFragment(['xp_earned' => 29]);
+        // Calculate: easy (2) + good (1) + again (0) + easy (2) = 5 XP. Deck complete bonus = 5 XP. Total = 10 XP.
+        $completeResponse->assertJsonFragment(['xp_earned' => 10]);
     }
 
     public function test_teacher_dashboard_access_and_stats(): void

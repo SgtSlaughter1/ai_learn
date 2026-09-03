@@ -163,6 +163,18 @@ export async function markAttemptSynced(id: string): Promise<void> {
 // ── Learner Progress (Local) ──
 
 export async function saveLocalProgress(progress: LocalLearnerProgress): Promise<void> {
+    if (!progress.id) {
+        const existing = await db.learnerProgress
+            .where('user_id')
+            .equals(progress.user_id)
+            .and(p => p.topic_id === progress.topic_id)
+            .first();
+        if (existing && existing.id) {
+            progress.id = existing.id;
+        } else {
+            progress.id = Number(progress.topic_id) || Date.now();
+        }
+    }
     await db.learnerProgress.put(progress);
 }
 
@@ -181,6 +193,17 @@ export async function markProgressSynced(id: number): Promise<void> {
 // ── Gamification (Local) ──
 
 export async function saveLocalGamification(gamification: LocalGamification): Promise<void> {
+    if (!gamification.id) {
+        const existing = await db.gamification
+            .where('user_id')
+            .equals(gamification.user_id)
+            .first();
+        if (existing && existing.id) {
+            gamification.id = existing.id;
+        } else {
+            gamification.id = 1;
+        }
+    }
     await db.gamification.put(gamification);
 }
 
@@ -224,6 +247,19 @@ export async function getPendingSyncCount(): Promise<number> {
 let isPreloading = false;
 let hasPreloadedThisSession = false;
 
+function getInertiaVersion(): string {
+    try {
+        const el = document.getElementById('app') || document.querySelector('[data-page]');
+        if (el && el.getAttribute('data-page')) {
+            const page = JSON.parse(el.getAttribute('data-page') || '{}');
+            return page.version || '';
+        }
+    } catch {
+        // ignore
+    }
+    return '';
+}
+
 /**
  * Pre-warm a route by fetching the full HTML page and storing it in
  * the SW runtime caches. Each cache.put() needs its own Response object
@@ -248,15 +284,22 @@ async function prewarmRoute(url: string): Promise<void> {
         }
 
         // 2. Prewarm Inertia JSON payload (for SPA <Link> navigations)
+        const inertiaVersion = getInertiaVersion();
+        const inertiaHeaders: Record<string, string> = {
+            'X-Inertia': 'true',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'text/html, application/xhtml+xml',
+        };
+        if (inertiaVersion) {
+            inertiaHeaders['X-Inertia-Version'] = inertiaVersion;
+        }
+
         const inertiaRes = await fetch(fullUrl, {
             credentials: 'same-origin',
-            headers: {
-                'X-Inertia': 'true',
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'text/html, application/xhtml+xml',
-            },
-        });
-        if (inertiaRes.ok) {
+            headers: inertiaHeaders,
+        }).catch(() => null);
+
+        if (inertiaRes && inertiaRes.ok) {
             const inertiaReq = new Request(fullUrl, {
                 headers: { 'X-Inertia': 'true' },
             });
@@ -326,6 +369,7 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
                         for (const t of subData.topics) {
                             if (t.progress) {
                                 progressList.push({
+                                    id: t.progress.id || t.id,
                                     user_id: 'current',
                                     topic_id: t.id,
                                     questions_attempted: t.progress.questions_attempted || 0,

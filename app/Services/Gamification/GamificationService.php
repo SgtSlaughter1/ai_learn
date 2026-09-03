@@ -55,11 +55,11 @@ class GamificationService
 
     // ── XP Rewards ──
 
-    private const XP_CORRECT_ANSWER = 10;
-    private const XP_QUIZ_COMPLETE_BASE = 25;
-    private const XP_PERFECT_SCORE_BONUS = 50;
-    private const XP_FIRST_ATTEMPT_BONUS = 20;
-    private const XP_STREAK_DAILY_BONUS = 15;
+    private const XP_CORRECT_ANSWER = 1;
+    private const XP_QUIZ_COMPLETE_BASE = 5;
+    private const XP_PERFECT_SCORE_BONUS = 3;
+    private const XP_FIRST_ATTEMPT_BONUS = 2;
+    private const XP_STREAK_DAILY_BONUS = 5;
     private array $profileCache = [];
 
     // ── Public Methods ──
@@ -467,26 +467,26 @@ class GamificationService
         }
 
         return [
-            ['key' => 'first_quiz',          'name' => 'First Steps',        'description' => 'Complete your first quiz',               'icon' => '🎯', 'xp_reward' => 25],
-            ['key' => 'quiz_5',              'name' => 'Getting Serious',     'description' => 'Complete 5 quizzes',                     'icon' => '📝', 'xp_reward' => 25],
-            ['key' => 'quiz_10',             'name' => 'Quiz Enthusiast',     'description' => 'Complete 10 quizzes',                    'icon' => '🏆', 'xp_reward' => 25],
-            ['key' => 'quiz_25',             'name' => 'Quiz Master',         'description' => 'Complete 25 quizzes',                    'icon' => '👑', 'xp_reward' => 25],
-            ['key' => 'perfect_score',       'name' => 'Flawless',            'description' => 'Get a perfect score on any quiz',        'icon' => '💎', 'xp_reward' => 25],
-            ['key' => 'perfect_3',           'name' => 'Triple Perfect',      'description' => 'Get 3 perfect scores',                  'icon' => '✨', 'xp_reward' => 25],
-            ['key' => 'streak_3',            'name' => 'On Fire',             'description' => 'Maintain a 3-day streak',               'icon' => '🔥', 'xp_reward' => 25],
-            ['key' => 'streak_7',            'name' => 'Week Warrior',        'description' => 'Maintain a 7-day streak',               'icon' => '⚡', 'xp_reward' => 25],
-            ['key' => 'streak_14',           'name' => 'Unstoppable',         'description' => 'Maintain a 14-day streak',              'icon' => '🌟', 'xp_reward' => 25],
-            ['key' => 'streak_30',           'name' => 'Iron Will',           'description' => 'Maintain a 30-day streak',              'icon' => '💪', 'xp_reward' => 25],
-            ['key' => 'mastery_50',          'name' => 'Halfway There',       'description' => 'Reach 50% mastery in any subject',      'icon' => '📈', 'xp_reward' => 25],
-            ['key' => 'mastery_80',          'name' => 'Subject Expert',      'description' => 'Reach 80% mastery in any subject',      'icon' => '🎓', 'xp_reward' => 25],
-            ['key' => 'mastery_100',         'name' => 'Subject Master',      'description' => 'Reach 100% mastery in any subject',     'icon' => '🥇', 'xp_reward' => 25],
-            ['key' => 'all_subjects_80',     'name' => 'Renaissance Student', 'description' => 'Reach 80% mastery in all subjects',     'icon' => '🌍', 'xp_reward' => 25],
-            ['key' => 'level_5',             'name' => 'Level Up!',           'description' => 'Reach Level 5',                         'icon' => '⬆️', 'xp_reward' => 25],
-            ['key' => 'level_10',            'name' => 'High Roller',         'description' => 'Reach Level 10',                        'icon' => '🎰', 'xp_reward' => 25],
-            ['key' => 'xp_1000',             'name' => 'XP Hunter',           'description' => 'Earn 1,000 total XP',                   'icon' => '⭐', 'xp_reward' => 25],
-            ['key' => 'xp_5000',             'name' => 'XP Legend',            'description' => 'Earn 5,000 total XP',                   'icon' => '🌟', 'xp_reward' => 25],
-            ['key' => 'speed_demon',         'name' => 'Speed Demon',         'description' => 'Complete a quiz in under 2 minutes',    'icon' => '⚡', 'xp_reward' => 25],
-            ['key' => 'try_all_subjects',    'name' => 'Curious Mind',        'description' => 'Try a quiz in every subject',           'icon' => '📚', 'xp_reward' => 25],
+            ['key' => 'first_quiz',          'name' => 'First Steps',        'description' => 'Complete your first quiz',               'icon' => '🎯', 'xp_reward' => 5],
+            ['key' => 'quiz_5',              'name' => 'Getting Serious',     'description' => 'Complete 5 quizzes',                     'icon' => '📝', 'xp_reward' => 5],
+            ['key' => 'quiz_10',             'name' => 'Quiz Enthusiast',     'description' => 'Complete 10 quizzes',                    'icon' => '🏆', 'xp_reward' => 10],
+            ['key' => 'quiz_25',             'name' => 'Quiz Master',         'description' => 'Complete 25 quizzes',                    'icon' => '👑', 'xp_reward' => 10],
+            ['key' => 'perfect_score',       'name' => 'Flawless',            'description' => 'Get a perfect score on any quiz',        'icon' => '💎', 'xp_reward' => 5],
+            ['key' => 'perfect_3',           'name' => 'Triple Perfect',      'description' => 'Get 3 perfect scores',                  'icon' => '✨', 'xp_reward' => 10],
+            ['key' => 'streak_3',            'name' => 'On Fire',             'description' => 'Maintain a 3-day streak',               'icon' => '🔥', 'xp_reward' => 5],
+            ['key' => 'streak_7',            'name' => 'Week Warrior',        'description' => 'Maintain a 7-day streak',               'icon' => '⚡', 'xp_reward' => 5],
+            ['key' => 'streak_14',           'name' => 'Unstoppable',         'description' => 'Maintain a 14-day streak',              'icon' => '🌟', 'xp_reward' => 10],
+            ['key' => 'streak_30',           'name' => 'Iron Will',           'description' => 'Maintain a 30-day streak',              'icon' => '💪', 'xp_reward' => 10],
+            ['key' => 'mastery_50',          'name' => 'Halfway There',       'description' => 'Reach 50% mastery in any subject',      'icon' => '📈', 'xp_reward' => 5],
+            ['key' => 'mastery_80',          'name' => 'Subject Expert',      'description' => 'Reach 80% mastery in any subject',      'icon' => '🎓', 'xp_reward' => 10],
+            ['key' => 'mastery_100',         'name' => 'Subject Master',      'description' => 'Reach 100% mastery in any subject',     'icon' => '🥇', 'xp_reward' => 10],
+            ['key' => 'all_subjects_80',     'name' => 'Renaissance Student', 'description' => 'Reach 80% mastery in all subjects',     'icon' => '🌍', 'xp_reward' => 10],
+            ['key' => 'level_5',             'name' => 'Level Up!',           'description' => 'Reach Level 5',                         'icon' => '⬆️', 'xp_reward' => 5],
+            ['key' => 'level_10',            'name' => 'High Roller',         'description' => 'Reach Level 10',                        'icon' => '🎰', 'xp_reward' => 10],
+            ['key' => 'xp_1000',             'name' => 'XP Hunter',           'description' => 'Earn 1,000 total XP',                   'icon' => '⭐', 'xp_reward' => 10],
+            ['key' => 'xp_5000',             'name' => 'XP Legend',            'description' => 'Earn 5,000 total XP',                   'icon' => '🌟', 'xp_reward' => 10],
+            ['key' => 'speed_demon',         'name' => 'Speed Demon',         'description' => 'Complete a quiz in under 2 minutes',    'icon' => '⚡', 'xp_reward' => 5],
+            ['key' => 'try_all_subjects',    'name' => 'Curious Mind',        'description' => 'Try a quiz in every subject',           'icon' => '📚', 'xp_reward' => 5],
         ];
     }
 

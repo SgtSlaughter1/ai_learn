@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\ClassModel;
+use App\Models\LearnerProfile;
 use App\Models\LearnerProgress;
 use App\Models\Quiz;
 use App\Models\Subject;
@@ -29,14 +31,29 @@ class SubjectWebController extends Controller
     public function getSubjects(Request $request): JsonResponse
     {
         $user = $request->user();
+        $classId = $request->get('class_id');
+        $gradeLevel = $request->get('grade_level') ?? $request->get('level');
 
-        // 1. Batch compute topic counts and completed topics per subject in ONE query (eliminates 2N+1 queries)
+        $selectedClass = null;
+        if ($classId) {
+            $selectedClass = DB::table('classes')->where('id', $classId)->first();
+            if ($selectedClass && $selectedClass->grade_level && !$gradeLevel) {
+                $gradeLevel = $selectedClass->grade_level;
+            }
+        }
+
+        $level = $gradeLevel ? strtolower($gradeLevel) : null;
+
+        // 1. Query 1: Fast aggregate on indexed integer columns (topic_id, subject_id, user_id)
         $topicsSummary = DB::table('topics as t')
             ->leftJoin('learner_progress as lp', function ($join) use ($user) {
-                $join->on('lp.topic_id', '=', 't.id')
-                     ->where('lp.user_id', '=', $user->id);
+                $join->on('lp.topic_id', '=', 't.id');
+                if ($user) {
+                    $join->where('lp.user_id', '=', $user->id);
+                }
             })
             ->where('t.status', 'active')
+            ->when($level, fn ($q) => $q->where('t.level', $level))
             ->groupBy('t.subject_id')
             ->selectRaw('
                 t.subject_id,
@@ -46,8 +63,15 @@ class SubjectWebController extends Controller
             ->get()
             ->keyBy('subject_id');
 
-        // 2. Fetch active subjects (single query)
-        $subjects = Subject::where('status', 'active')
+        // 2. Query 2: Fetch subjects metadata without heavy multi-table grouping
+        $subjectsQuery = DB::table('subjects')
+            ->where('status', 'active');
+
+        if ($level) {
+            $subjectsQuery->whereIn('id', $topicsSummary->keys());
+        }
+
+        $subjects = $subjectsQuery
             ->select(['id', 'name', 'slug', 'description'])
             ->orderBy('sort_order')
             ->get()
@@ -57,7 +81,7 @@ class SubjectWebController extends Controller
                 $completedTopics = (int) ($summary?->completed_topics ?? 0);
 
                 return [
-                    'id' => $subject->id,
+                    'id' => (int) $subject->id,
                     'name' => $subject->name,
                     'slug' => $subject->slug,
                     'description' => $subject->description,
@@ -66,14 +90,58 @@ class SubjectWebController extends Controller
                 ];
             });
 
+        $classes = $request->boolean('include_classes', false) && $user
+            ? DB::table('classes as c')
+                ->where('c.is_active', true)
+                ->select(['c.id', 'c.name', 'c.grade_level', 'c.section'])
+                ->orderBy('c.grade_level')
+                ->orderBy('c.name')
+                ->get()
+            : [];
+
         return response()->json([
             'subjects' => $subjects,
+            'classes' => $classes,
+            'selected_class' => $selectedClass ? [
+                'id' => $selectedClass->id,
+                'name' => $selectedClass->name,
+                'grade_level' => $selectedClass->grade_level,
+            ] : null,
+            'selected_level' => $level,
+        ]);
+    }
+
+    public function getClasses(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $classes = $user
+            ? DB::table('classes as c')
+                ->where('c.is_active', true)
+                ->select(['c.id', 'c.name', 'c.grade_level', 'c.section'])
+                ->orderBy('c.grade_level')
+                ->orderBy('c.name')
+                ->get()
+            : [];
+
+        return response()->json([
+            'classes' => $classes,
         ]);
     }
 
     public function getSubjectDetails(Request $request, string $slug): JsonResponse
     {
         $user = $request->user();
+        $classId = $request->get('class_id');
+        $gradeLevel = $request->get('grade_level') ?? $request->get('level');
+
+        if ($classId && !$gradeLevel) {
+            $selectedClass = ClassModel::find($classId);
+            if ($selectedClass && $selectedClass->grade_level) {
+                $gradeLevel = $selectedClass->grade_level;
+            }
+        }
+        $level = $gradeLevel ? strtolower($gradeLevel) : null;
 
         $subject = DB::table('subjects')
             ->where('slug', $slug)
@@ -88,11 +156,14 @@ class SubjectWebController extends Controller
         // 1. Efficient single-join query for topics and user progress (eliminates N+1)
         $topics = DB::table('topics as t')
             ->leftJoin('learner_progress as lp', function ($join) use ($user) {
-                $join->on('lp.topic_id', '=', 't.id')
-                     ->where('lp.user_id', '=', $user->id);
+                $join->on('lp.topic_id', '=', 't.id');
+                if ($user) {
+                    $join->where('lp.user_id', '=', $user->id);
+                }
             })
             ->where('t.subject_id', $subject->id)
             ->where('t.status', 'active')
+            ->when($level, fn ($q) => $q->where('t.level', $level))
             ->orderBy('t.sort_order')
             ->select([
                 't.id',
@@ -131,6 +202,7 @@ class SubjectWebController extends Controller
             ->where('t.subject_id', $subject->id)
             ->where('q.status', 'active')
             ->where('qn.status', 'active')
+            ->when($level, fn ($q) => $q->where('t.level', $level))
             ->select([
                 'q.id as quiz_id',
                 'q.title as quiz_title',

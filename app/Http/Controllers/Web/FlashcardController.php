@@ -87,22 +87,22 @@ class FlashcardController extends Controller
         $cardsCount = count($ratings);
         
         // Calculate XP per rating:
-        // 'easy' => 5 XP
-        // 'good' => 3 XP
-        // 'again' => 1 XP
+        // 'easy' => 2 XP
+        // 'good' => 1 XP
+        // 'again' => 0 XP
         $xpEarned = 0;
         foreach ($ratings as $rating) {
             $xpEarned += match ($rating) {
-                'easy' => 5,
-                'good' => 3,
-                'again' => 1,
+                'easy' => 2,
+                'good' => 1,
+                'again' => 0,
                 default => 0,
             };
         }
         
-        // Add a flat +15 XP deck completion bonus if they reviewed at least 1 card
+        // Add a flat +5 XP deck completion bonus if they reviewed at least 1 card
         if ($cardsCount > 0) {
-            $xpEarned += 15;
+            $xpEarned += 5;
         }
         
         $gamificationService = app(GamificationService::class);

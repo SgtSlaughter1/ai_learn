@@ -6,12 +6,12 @@ interface XpGuideModalProps {
 }
 
 const XP_RULES = [
-    { icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />, label: 'Correct Answer', xp: '+10 XP', desc: 'Every right answer in any quiz' },
-    { icon: <FileText className="w-4 h-4 text-sky-500" />, label: 'Quiz Complete', xp: '+25 XP', desc: 'Finish any quiz attempt' },
-    { icon: <Sparkles className="w-4 h-4 text-amber-500" />, label: 'Perfect Score', xp: '+50 XP', desc: 'Get 100% on any quiz' },
-    { icon: <BookOpen className="w-4 h-4 text-indigo-500" />, label: 'First Attempt', xp: '+20 XP', desc: 'Try a quiz for the first time' },
-    { icon: <Flame className="w-4 h-4 text-orange-500" />, label: 'Daily Streak', xp: '+15+ XP', desc: 'Every 7 days you study in a row' },
-    { icon: <Trophy className="w-4 h-4 text-yellow-500" />, label: 'Achievement', xp: '+25 XP', desc: 'Unlock any badge or milestone' },
+    { icon: <FileText className="w-4 h-4 text-sky-500" />, label: 'Assignment Complete', xp: '+5 XP', desc: 'Finish any quiz or assignment attempt' },
+    { icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />, label: 'Correct Answer', xp: '+1 XP', desc: 'Each right answer in any assignment' },
+    { icon: <Sparkles className="w-4 h-4 text-amber-500" />, label: 'Perfect Score', xp: '+3 XP', desc: '100% accuracy bonus on a quiz' },
+    { icon: <BookOpen className="w-4 h-4 text-indigo-500" />, label: 'First Attempt', xp: '+2 XP', desc: 'First time attempting a new assignment' },
+    { icon: <Flame className="w-4 h-4 text-orange-500" />, label: 'Daily Streak', xp: '+5 XP', desc: 'Every 7 consecutive active study days' },
+    { icon: <Trophy className="w-4 h-4 text-yellow-500" />, label: 'Achievement Badge', xp: '+5–10 XP', desc: 'Unlock milestones, badges, and awards' },
 ];
 
 export function XpGuideModal({ isOpen, onToggle }: XpGuideModalProps) {

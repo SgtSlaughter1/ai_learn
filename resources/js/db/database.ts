@@ -162,3 +162,16 @@ export class OfflineDB extends Dexie {
 }
 
 export const db = new OfflineDB();
+
+// Auto-recovery if database was left in closed/failed upgrade state
+db.open().catch(async (err) => {
+    if (err.name === 'DatabaseClosedError' || err.name === 'UpgradeError' || err.name === 'VersionError') {
+        console.warn('Dexie schema upgrade issue detected, recreating offline database...', err);
+        try {
+            await db.delete();
+            await db.open();
+        } catch {
+            // Ignore reset error
+        }
+    }
+});
