@@ -69,7 +69,41 @@ export default defineConfig({
                             },
                             plugins: [
                                 {
-                                    handlerDidError: async () => {
+                                    handlerDidError: async ({ request }) => {
+                                        const isInertia = request?.headers?.get('X-Inertia') === 'true' || request?.headers?.get('x-inertia') === 'true';
+                                        const url = request?.url ? new URL(request.url) : null;
+                                        if (isInertia && url) {
+                                            const p = url.pathname;
+                                            let component = 'Dashboard';
+                                            if (p === '/' || p === '') component = 'Welcome';
+                                            else if (p === '/login') component = 'auth/Login';
+                                            else if (p.startsWith('/admin')) component = 'admin/Dashboard';
+                                            else if (p.startsWith('/teacher')) component = 'teacher/Dashboard';
+                                            else if (p === '/subjects') component = 'Subjects/Index';
+                                            else if (p.startsWith('/subjects/')) component = 'Subjects/Show';
+                                            else if (p.startsWith('/quizzes/attempts/')) component = 'quizzes/Result';
+                                            else if (p.startsWith('/quizzes/')) component = 'quizzes/Show';
+                                            else if (p.startsWith('/flashcards')) component = 'Flashcards/Index';
+
+                                            const inertiaPayload = {
+                                                component: component,
+                                                props: {
+                                                    auth: { user: null },
+                                                    errors: {}
+                                                },
+                                                url: p,
+                                                version: ''
+                                            };
+
+                                            return new Response(JSON.stringify(inertiaPayload), {
+                                                status: 200,
+                                                headers: {
+                                                    'Content-Type': 'application/json',
+                                                    'X-Inertia': 'true',
+                                                }
+                                            });
+                                        }
+
                                         const offlinePage = await caches.match('/offline.html');
                                         return offlinePage || Response.error();
                                     }

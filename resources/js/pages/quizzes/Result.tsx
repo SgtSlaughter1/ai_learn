@@ -22,6 +22,12 @@ export default function Result({ attemptId }: Props) {
     const [loading, setLoading] = useState<boolean>(true);
     const [attempt, setAttempt] = useState<Attempt | null>(null);
 
+    const effectiveAttemptId =
+        attemptId ||
+        (typeof window !== 'undefined'
+            ? window.location.pathname.split('/').filter(Boolean).pop() || ''
+            : '');
+
     // AI Explainer Sidebar States
     const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
     const [explainQuestionText, setExplainQuestionText] = useState<string>('');
@@ -34,7 +40,7 @@ export default function Result({ attemptId }: Props) {
         async function loadAttempt() {
             // 1. Try reading from Dexie first (instant offline render)
             try {
-                const localAttempt = await db.quizAttempts.get(attemptId);
+                const localAttempt = await db.quizAttempts.get(effectiveAttemptId);
                 if (localAttempt && isMounted) {
                     const localQuiz = await db.quizzes.get(localAttempt.quiz_id);
                     const questions = localQuiz?.questions || [];

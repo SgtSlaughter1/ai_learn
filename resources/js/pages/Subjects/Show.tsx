@@ -25,13 +25,19 @@ export default function Show({ slug }: Props) {
     const [quizzes, setQuizzes] = useState<SubjectQuiz[]>([]);
     const [selectedLevel, setSelectedLevel] = useState<string>('all');
 
+    const effectiveSlug =
+        slug ||
+        (typeof window !== 'undefined'
+            ? window.location.pathname.split('/').filter(Boolean).pop() || ''
+            : '');
+
     useEffect(() => {
         let isMounted = true;
 
         async function loadSubjectDetails() {
             // 1. Try reading from Dexie first (instant offline/cached render)
             try {
-                const localSubject = await db.subjects.where('slug').equals(slug).first();
+                const localSubject = await db.subjects.where('slug').equals(effectiveSlug).first();
                 if (localSubject && isMounted) {
                     setSubject(localSubject);
                     const localTopics = await db.topics.where('subject_id').equals(localSubject.id).toArray();
