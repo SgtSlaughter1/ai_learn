@@ -98,7 +98,7 @@ Instructions:
             $masterySummary = "No diagnostic test records logged yet. Recommend they take a quiz under 'Subjects' to calculate their initial mastery.";
         }
 
-        $systemInstruction = "You are the Offline AI Learning Companion, a friendly, encouraging personal study assistant for secondary school students. 
+        $systemInstruction = "You are the AILEARN Learning Companion, a friendly, encouraging personal study assistant for secondary school students. 
 You know the student's name is: {$user->name}.
 Here is their current subject mastery progress:
 {$masterySummary}

@@ -4,7 +4,7 @@ import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt';
 export default function Welcome() {
     return (
         <>
-            <Head title="Antigravity AI — Offline-First Adaptive Learning" />
+            <Head title="AILEARN — Offline-First Adaptive Learning" />
 
             <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] font-sans">
                 {/* ── Navbar ─────────────────────────────────── */}
@@ -16,7 +16,7 @@ export default function Welcome() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                                 </svg>
                             </div>
-                            <span className="text-xl font-bold text-[var(--color-primary)]">Antigravity AI</span>
+                            <span className="text-xl font-bold text-[var(--color-primary)]">AILEARN</span>
                         </div>
                         <div className="flex items-center gap-3">
                             <Link
@@ -275,7 +275,7 @@ export default function Welcome() {
                             Ready to Start Learning?
                         </h2>
                         <p className="mt-4 text-[var(--color-primary-light)] text-lg">
-                            Join students who are already improving their grades with Antigravity AI.
+                            Join students who are already improving their grades with AILEARN.
                             No credit card. No subscription. Just learning.
                         </p>
                         <div className="mt-8">
@@ -301,13 +301,13 @@ export default function Welcome() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                                 </svg>
                             </div>
-                            <span className="font-bold text-[var(--color-primary)]">Antigravity AI</span>
+                            <span className="font-bold text-[var(--color-primary)]">AILEARN</span>
                         </div>
                         <p className="text-sm text-[var(--color-muted)]">
                             Offline-first adaptive learning for every student.
                         </p>
                         <p className="text-xs text-[var(--color-muted)]/60 mt-4">
-                            © {new Date().getFullYear()} Antigravity AI. Built for learners, by learners.
+                            © {new Date().getFullYear()} AILEARN. Built for learners, by learners.
                         </p>
                     </div>
                 </footer>

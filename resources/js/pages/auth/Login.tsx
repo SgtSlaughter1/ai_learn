@@ -48,7 +48,7 @@ export default function Login() {
                 {/* Brand Header */}
                 <div className="text-center space-y-2">
                     <h1 className="text-4xl font-extrabold tracking-tight text-[var(--color-primary)]">
-                        Antigravity AI
+                        AILEARN
                     </h1>
                     <p className="text-sm text-[var(--color-muted)]">
                         Sign in to access your offline-first curriculum.

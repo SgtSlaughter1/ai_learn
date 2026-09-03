@@ -111,8 +111,8 @@ $serveManifest = function () {
 
     // Fallback: Return a complete, valid PWA manifest instead of an empty `{}`
     $fallbackManifest = [
-        'name' => 'Offline AI Learning Platform',
-        'short_name' => 'OfflineAI',
+        'name' => 'AILEARN',
+        'short_name' => 'AILEARN',
         'start_url' => '/',
         'display' => 'standalone',
         'background_color' => '#F7F4EC',

@@ -48,7 +48,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                     href="/dashboard"
                     className="text-xl font-bold text-[var(--color-primary)]"
                 >
-                    Antigravity AI
+                    AILEARN
                 </Link>
                 <div className="flex items-center gap-2">
                     <div className="bg-[var(--color-background)] border border-[var(--color-border)] px-3 py-1 rounded-full scale-90">
@@ -92,7 +92,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                             href="/dashboard"
                             className="text-2xl font-bold text-white"
                         >
-                            Antigravity AI
+                            AILEARN
                         </Link>
                         <p className="text-xs text-[var(--color-primary-light)] mt-1">Offline-First Learning</p>
                     </div>

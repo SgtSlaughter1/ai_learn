@@ -17,14 +17,14 @@ class SchoolSeeder extends Seeder
     {
         // 1. Create the school
         $school = School::updateOrCreate(
-            ['slug' => 'antigravity-academy'],
+            ['slug' => 'ailearn-academy'],
             [
-                'name' => 'Antigravity Academy',
+                'name' => 'AILEARN Academy',
                 'address' => '12 Innovation Drive, Tech City',
                 'city' => 'Lagos',
                 'state' => 'Lagos',
                 'phone' => '+234 800 000 0000',
-                'email' => 'admin@antigravityacademy.com',
+                'email' => 'admin@ailearnacademy.com',
                 'description' => 'A modern secondary school focused on STEM and AI-powered learning.',
                 'is_active' => true,
             ]

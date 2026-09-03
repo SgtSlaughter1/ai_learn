@@ -7,9 +7,9 @@
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-        <meta name="apple-mobile-web-app-title" content="OfflineAI">
+        <meta name="apple-mobile-web-app-title" content="AILEARN">
 
-        <title inertia>{{ config('app.name', 'Offline AI Learning Platform') }}</title>
+        <title inertia>{{ config('app.name', 'AILEARN') }}</title>
 
         <!-- Favicons -->
         <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">

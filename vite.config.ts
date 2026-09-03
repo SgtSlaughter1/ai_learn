@@ -154,8 +154,8 @@ export default defineConfig({
             },
             manifest: {
                 id: '/',
-                name: 'Offline AI Learning Platform',
-                short_name: 'OfflineAI',
+                name: 'AILEARN',
+                short_name: 'AILEARN',
                 description: 'An offline-first adaptive AI learning platform.',
                 theme_color: '#183B2B',
                 background_color: '#F7F4EC',
