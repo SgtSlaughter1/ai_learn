@@ -377,7 +377,7 @@ class QuizWebController extends Controller
         return response()->json([
             'attempt' => [
                 'id' => $attempt->id,
-                'quiz_title' => $attempt->quiz->title,
+                'quiz_title' => $attempt->quiz?->title ?? 'Quiz Assessment',
                 'score' => $attempt->score,
                 'total_marks' => $attempt->total_marks,
                 'completed_at' => $attempt->completed_at ? $attempt->completed_at->toIso8601String() : null,

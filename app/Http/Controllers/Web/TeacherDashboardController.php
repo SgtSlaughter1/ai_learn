@@ -32,7 +32,14 @@ class TeacherDashboardController extends Controller
         $school = $teacherProfile?->school;
 
         if (!$school) {
-            return response()->json(['classes' => [], 'overview' => $this->emptyOverview()]);
+            return response()->json([
+                'stats' => ['totalStudents' => 0, 'classAverageMastery' => 0, 'activeStudents' => 0],
+                'recentActivities' => [],
+                'classes' => [],
+                'top_performers' => [],
+                'struggling_learners' => [],
+                'overview' => $this->emptyOverview(),
+            ]);
         }
 
         // Get all class IDs this teacher teaches
@@ -88,6 +95,12 @@ class TeacherDashboardController extends Controller
             ->get();
 
         return response()->json([
+            'stats' => [
+                'totalStudents' => (int) ($progressStats->total_learners ?? 0),
+                'classAverageMastery' => round($progressStats->avg_mastery ?? 0),
+                'activeStudents' => count($topPerformers),
+            ],
+            'recentActivities' => [],
             'overview' => [
                 'total_learners' => (int) ($progressStats->total_learners ?? 0),
                 'total_attempted' => (int) ($progressStats->total_attempted ?? 0),

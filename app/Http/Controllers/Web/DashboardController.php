@@ -36,7 +36,7 @@ class DashboardController extends Controller
             ->map(function ($attempt) {
                 return [
                     'id' => $attempt->id,
-                    'quiz_title' => $attempt->quiz?->title ?? ('Quiz #' . $attempt->quiz_id),
+                    'quiz_title' => $attempt->quiz?->title ?? 'Quiz Assessment',
                     'status' => $attempt->status,
                     'score' => $attempt->score,
                     'total_marks' => $attempt->total_marks,

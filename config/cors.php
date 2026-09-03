@@ -15,7 +15,7 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'login', 'logout'],
 
     'allowed_methods' => ['*'],
 
@@ -28,12 +28,15 @@ return [
         'http://127.0.0.1:5175',
         'http://localhost:3000',
         'http://localhost:8000',
+        'http://127.0.0.1:8000',
+        'http://localhost:8001',
+        'http://127.0.0.1:8001',
         'http://localhost:8002',
         'https://ailearn.gt.tc',
     ],
 
     'allowed_origins_patterns' => [
-        '#^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$#',
+        '#^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$#',
         '#^https:\/\/.*\.github\.io$#',
         '#^https:\/\/.*\.vercel\.app$#',
         '#^https:\/\/.*\.netlify\.app$#',
@@ -41,9 +44,9 @@ return [
 
     'allowed_headers' => ['*'],
 
-    'exposed_headers' => [],
+    'exposed_headers' => ['*'],
 
-    'max_age' => 0,
+    'max_age' => 86400,
 
     'supports_credentials' => true,
 
