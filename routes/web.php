@@ -141,9 +141,23 @@ Route::get('/api/health', function () {
 });
 
 // ── Shared Hosting & Maintenance Utilities ──
+//
+// InfinityFree has no SSH, so Artisan commands have to be triggered over HTTP.
+// If you set MAINTENANCE_TOKEN in your .env, every route below requires
+// ?token=YOUR_TOKEN before it will do anything.
+
+// Optional shared-secret guard for the maintenance routes below
+$guardMaintenance = function () {
+    $token = env('MAINTENANCE_TOKEN');
+    if ($token !== null && $token !== '' && ! hash_equals((string) $token, (string) request()->query('token', ''))) {
+        abort(403, 'Invalid or missing maintenance token.');
+    }
+};
 
 // Clear Cache utility
-Route::get('/clear-cache', function () {
+Route::get('/clear-cache', function () use ($guardMaintenance) {
+    $guardMaintenance();
+
     \Illuminate\Support\Facades\Artisan::call('view:clear');
     \Illuminate\Support\Facades\Artisan::call('route:clear');
     \Illuminate\Support\Facades\Artisan::call('config:clear');
@@ -152,7 +166,9 @@ Route::get('/clear-cache', function () {
 });
 
 // Run standard migrations
-Route::get('/run-migrations', function () {
+Route::get('/run-migrations', function () use ($guardMaintenance) {
+    $guardMaintenance();
+
     try {
         \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
         $output = \Illuminate\Support\Facades\Artisan::output();
@@ -169,29 +185,110 @@ Route::get('/run-migrations', function () {
     }
 });
 
-// Run migrate:fresh --seed
-Route::get('/run-migrate-fresh-seed', function () {
+// Run migrate:fresh --seed.
+// Drops every table individually (shared-hosting MySQL users often can't drop
+// the database or run `db:wipe`), then re-runs migrations and seeds.
+// The response includes a diagnostic report so privilege problems are visible
+// instead of showing up as a confusing "table already exists" error.
+Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
+    $guardMaintenance();
+
+    // Best-effort: long drop + migrate + seed jobs can outlive PHP defaults
+    @set_time_limit(300);
+    @ini_set('memory_limit', '256M');
+
+    $report = [
+        'database' => \Illuminate\Support\Facades\DB::getDatabaseName(),
+        'driver'   => \Illuminate\Support\Facades\DB::getDriverName(),
+    ];
+
     try {
-        \Illuminate\Support\Facades\Artisan::call('migrate:fresh', [
-            '--seed' => true,
-            '--force' => true,
-        ]);
-        $output = \Illuminate\Support\Facades\Artisan::output();
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Database refreshed and seeded successfully! ✨',
-            'output' => $output
-        ]);
-    } catch (\Exception $e) {
+        // What privileges does this MySQL user actually have? (diagnostic)
+        try {
+            $report['grants'] = array_values(array_map(
+                fn ($row) => reset((array) $row),
+                \Illuminate\Support\Facades\DB::select('SHOW GRANTS')
+            ));
+        } catch (\Throwable $e) {
+            $report['grants'] = 'Unable to read grants: ' . $e->getMessage();
+        }
+
+        // 1. Every table that exists right now
+        $tablesBefore = array_map(
+            fn ($table) => reset((array) $table),
+            \Illuminate\Support\Facades\Schema::getAllTables()
+        );
+        $report['tables_before'] = $tablesBefore;
+
+        // 2. Drop each table on its own, so one denied DROP can't abort the wipe
+        $drop = ['dropped' => [], 'failed' => []];
+        \Illuminate\Support\Facades\Schema::disableForeignKeyConstraints();
+        foreach ($tablesBefore as $table) {
+            try {
+                \Illuminate\Support\Facades\DB::statement("DROP TABLE IF EXISTS `{$table}`");
+                $drop['dropped'][] = $table;
+            } catch (\Throwable $e) {
+                $drop['failed'][$table] = $e->getMessage();
+            }
+        }
+        \Illuminate\Support\Facades\Schema::enableForeignKeyConstraints();
+        $report['drop_results'] = $drop;
+
+        // 3. Verify the wipe actually happened. If tables remain here, the MySQL
+        //    user cannot DROP tables, so "fresh" can never work via SQL alone.
+        $report['tables_remaining_after_drop'] = array_map(
+            fn ($table) => reset((array) $table),
+            \Illuminate\Support\Facades\Schema::getAllTables()
+        );
+
+        // 4. Rebuild the schema
+        try {
+            \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+            $report['migrate'] = [
+                'status' => 'success',
+                'output' => \Illuminate\Support\Facades\Artisan::output(),
+            ];
+        } catch (\Throwable $e) {
+            $report['migrate'] = ['status' => 'error', 'error' => $e->getMessage()];
+        }
+
+        // 5. Seed
+        try {
+            \Illuminate\Support\Facades\Artisan::call('db:seed', ['--force' => true]);
+            $report['seed'] = [
+                'status' => 'success',
+                'output' => \Illuminate\Support\Facades\Artisan::output(),
+            ];
+        } catch (\Throwable $e) {
+            $report['seed'] = ['status' => 'error', 'error' => $e->getMessage()];
+        }
+
+        $status = match (true) {
+            count($report['tables_remaining_after_drop']) > 0 => 'error',
+            ($report['migrate']['status'] ?? '') !== 'success' => 'error',
+            ($report['seed']['status'] ?? '') !== 'success' => 'partial',
+            default => 'success',
+        };
+
+        return response()->json(
+            array_merge(['status' => $status], $report),
+            $status === 'success' ? 200 : 500
+        );
+    } catch (\Throwable $e) {
+        \Illuminate\Support\Facades\Schema::enableForeignKeyConstraints();
+
         return response()->json([
             'status' => 'error',
-            'message' => 'Failed to run migrate:fresh --seed: ' . $e->getMessage()
+            'message' => 'Failed to run migrate:fresh --seed: ' . $e->getMessage(),
+            'report' => $report,
         ], 500);
     }
 });
 
 // Run seeders only
-Route::get('/run-seed', function () {
+Route::get('/run-seed', function () use ($guardMaintenance) {
+    $guardMaintenance();
+
     try {
         \Illuminate\Support\Facades\Artisan::call('db:seed', ['--force' => true]);
         $output = \Illuminate\Support\Facades\Artisan::output();
