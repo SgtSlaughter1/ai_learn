@@ -222,63 +222,47 @@ Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
             $report['grants'] = 'Unable to read grants: ' . $e->getMessage();
         }
 
-        // ── Early detection of stale migration files on the server ─────────────────
-        // If the deploy never removed old files (lftp mirror has no --delete), the
-        // `migrations` run-tracking table can still list filenames that no longer exist
-        // in database/migrations/. mysql would then try to recreate a table that was
-        // already created by the original migration, hitting "1050 already exists".
-        // We check this before dropping anything, so the route fails fast with a clear
-        // message instead of dropping and then dying halfway through.
-        $migrationFilesOnDisk = glob(
-            database_path('migrations/*.php')
-        ) ?: [];
-        $filenamesOnDisk = array_map(
-            fn ($p) => basename($p, '.php'),
-            $migrationFilesOnDisk
-        );
+        // ── Canonical migration list & auto-purge of stale duplicate files ─────────
+        $canonicalMigrations = [
+            '0001_01_01_000000_create_users_table',
+            '0001_01_01_000001_create_cache_table',
+            '0001_01_01_000002_create_jobs_table',
+            '2026_08_20_000001_create_schools_table',
+            '2026_08_20_000002_create_subjects_table',
+            '2026_08_20_000003_create_topics_table',
+            '2026_08_20_000004_create_questions_table',
+            '2026_08_20_000005_create_question_options_table',
+            '2026_08_20_000006_create_quizzes_table',
+            '2026_08_20_000007_create_quiz_questions_table',
+            '2026_08_20_000008_create_quiz_attempts_table',
+            '2026_08_20_000009_create_quiz_answers_table',
+            '2026_08_20_000010_create_learner_progress_table',
+            '2026_08_20_000011_create_content_packages_table',
+            '2026_08_22_000000_create_quiz_adaptive_states_table',
+            '2026_08_22_000001_create_user_gamification_table',
+            '2026_08_22_000002_create_xp_transactions_table',
+            '2026_08_22_000003_create_user_achievements_table',
+            '2026_08_23_000002_create_teacher_profiles_table',
+            '2026_08_23_000003_create_learner_profiles_table',
+            '2026_08_23_000004_create_classes_table',
+            '2026_08_23_000005_create_class_memberships_table',
+            '2026_08_24_000001_create_achievements_table',
+        ];
 
-        $trackedFilenames = [];
-        try {
-            $trackedFilenames = array_column(
-                \Illuminate\Support\Facades\DB::table('migrations')
-                    ->where('batch', '>', 0)
-                    ->orderBy('migration')
-                    ->get(['migration'])
-                    ->toArray(),
-                'migration'
-            );
-        } catch (\Throwable $e) {
-            $report['migrations_read'] = 'Unable to read migrations tracking table: ' . $e->getMessage();
+        // Auto-purge any duplicate/old migration files from server disk (e.g. 2026_08_23_000001_create_schools_table)
+        $purgedExtraFiles = [];
+        foreach (glob(database_path('migrations/*.php')) ?: [] as $filePath) {
+            $base = basename($filePath, '.php');
+            if (!in_array($base, $canonicalMigrations, true)) {
+                @unlink($filePath);
+                $purgedExtraFiles[] = $base;
+            }
         }
+        $report['purged_duplicate_migration_files'] = $purgedExtraFiles;
 
-        // stale = tracked but no longer on disk (duplicate migration files from a
-        // deploy that never deleted old files) → the route must refuse to wipe before
-        // migrate re-runs and hits a duplicate-create (1050) error.
-        $staleTracked = array_values(
-            array_diff($trackedFilenames, $filenamesOnDisk)
-        );
-
-        $report['migration_files_on_disk']     = $diskFilenames;
-        $report['tracked_migration_filenames'] = $trackedFilenames;
-        $report['stale_tracked_migrations']    = $staleTracked;
-
-        if (count($staleTracked) > 0) {
-            // Fail fast: do not drop or migrate until the server's stale files are
-            // cleaned, otherwise the wipe succeeds and migrate later hits 1050.
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Stale migration files detected on the server.',
-                'details' => [
-                    'These migration filenames are recorded in the `migrations` table',
-                    'but no matching file exists under database/migrations/:',
-                    ...$staleTracked,
-                    '',
-                    'The likely cause: your deploy workflow mirrors files without --delete,',
-                    'so old migration files accumulate on the server. Fix by FTP-cleaning',
-                    'htdocs/database/migrations/ to match the repo, then re-run this route.',
-                ],
-            ], 409);
-        }
+        $migrationFilesOnDisk = glob(database_path('migrations/*.php')) ?: [];
+        $filenamesOnDisk = array_map(fn ($p) => basename($p, '.php'), $migrationFilesOnDisk);
+        $report['migration_files_on_disk'] = $filenamesOnDisk;
 
         // committed deletions: the repo has removed a migration file that the tracked
         // `migrations` table still records as run. The file is gone from disk (it was

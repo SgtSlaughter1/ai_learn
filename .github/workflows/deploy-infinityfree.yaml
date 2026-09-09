@@ -186,8 +186,8 @@ jobs:
           rm -f /htdocs/manifest.webmanifest || true
           rm -f /htdocs/public/sw.js || true
           rm -f /htdocs/public/manifest.webmanifest || true
-          rm -f /htdocs/public/registerSW.js || true
-          rm -f /htdocs/public/workbox-*.js || true
+          # Clean old migrations on server so renamed/deleted migrations never accumulate
+          mrm -f /htdocs/database/migrations/* || true
 
           bye
           EOF
