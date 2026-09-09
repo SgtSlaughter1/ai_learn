@@ -205,18 +205,18 @@ Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
     try {
         // What privileges does this MySQL user actually have? (diagnostic)
         try {
-            $report['grants'] = array_values(array_map(
-                fn ($row) => reset((array) $row),
+            $report['grants'] = array_map(
+                fn ($row) => array_values((array) $row)[0],
                 \Illuminate\Support\Facades\DB::select('SHOW GRANTS')
-            ));
+            );
         } catch (\Throwable $e) {
             $report['grants'] = 'Unable to read grants: ' . $e->getMessage();
         }
 
         // 1. Every table that exists right now
         $tablesBefore = array_map(
-            fn ($table) => reset((array) $table),
-            \Illuminate\Support\Facades\Schema::getAllTables()
+            fn ($table) => array_values((array) $table)[0],
+            \Illuminate\Support\Facades\DB::select('SHOW FULL TABLES WHERE Table_type = ?', ['BASE TABLE'])
         );
         $report['tables_before'] = $tablesBefore;
 
@@ -237,8 +237,8 @@ Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
         // 3. Verify the wipe actually happened. If tables remain here, the MySQL
         //    user cannot DROP tables, so "fresh" can never work via SQL alone.
         $report['tables_remaining_after_drop'] = array_map(
-            fn ($table) => reset((array) $table),
-            \Illuminate\Support\Facades\Schema::getAllTables()
+            fn ($table) => array_values((array) $table)[0],
+            \Illuminate\Support\Facades\DB::select('SHOW FULL TABLES WHERE Table_type = ?', ['BASE TABLE'])
         );
 
         // 4. Rebuild the schema
