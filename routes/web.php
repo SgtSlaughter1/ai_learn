@@ -197,6 +197,15 @@ Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
     @set_time_limit(300);
     @ini_set('memory_limit', '256M');
 
+    // collect a clean lookup of the migration files currently on disk (only *.php)
+    // so we can compare against what the migrations run-tracking table still records
+    $diskFilenames = [];
+    foreach (glob(database_path('migrations/*.php')) ?: [] as $path) {
+        $b = basename($path, '.php');
+        // only count real PHP files (skip symlinks / deleted-but-linked files)
+        $diskFilenames[] = $b;
+    }
+
     $report = [
         'database' => \Illuminate\Support\Facades\DB::getDatabaseName(),
         'driver'   => \Illuminate\Support\Facades\DB::getDriverName(),
@@ -213,6 +222,69 @@ Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
             $report['grants'] = 'Unable to read grants: ' . $e->getMessage();
         }
 
+        // ── Early detection of stale migration files on the server ─────────────────
+        // If the deploy never removed old files (lftp mirror has no --delete), the
+        // `migrations` run-tracking table can still list filenames that no longer exist
+        // in database/migrations/. mysql would then try to recreate a table that was
+        // already created by the original migration, hitting "1050 already exists".
+        // We check this before dropping anything, so the route fails fast with a clear
+        // message instead of dropping and then dying halfway through.
+        $migrationFilesOnDisk = glob(
+            database_path('migrations/*.php')
+        ) ?: [];
+        $filenamesOnDisk = array_map(
+            fn ($p) => basename($p, '.php'),
+            $migrationFilesOnDisk
+        );
+
+        $trackedFilenames = [];
+        try {
+            $trackedFilenames = array_column(
+                \Illuminate\Support\Facades\DB::table('migrations')
+                    ->where('batch', '>', 0)
+                    ->orderBy('migration')
+                    ->get(['migration'])
+                    ->toArray(),
+                'migration'
+            );
+        } catch (\Throwable $e) {
+            $report['migrations_read'] = 'Unable to read migrations tracking table: ' . $e->getMessage();
+        }
+
+        // stale = tracked but no longer on disk (duplicate migration files from a
+        // deploy that never deleted old files) → the route must refuse to wipe before
+        // migrate re-runs and hits a duplicate-create (1050) error.
+        $staleTracked = array_values(
+            array_diff($trackedFilenames, $filenamesOnDisk)
+        );
+
+        $report['migration_files_on_disk']     = $diskFilenames;
+        $report['tracked_migration_filenames'] = $trackedFilenames;
+        $report['stale_tracked_migrations']    = $staleTracked;
+
+        if (count($staleTracked) > 0) {
+            // Fail fast: do not drop or migrate until the server's stale files are
+            // cleaned, otherwise the wipe succeeds and migrate later hits 1050.
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Stale migration files detected on the server.',
+                'details' => [
+                    'These migration filenames are recorded in the `migrations` table',
+                    'but no matching file exists under database/migrations/:',
+                    ...$staleTracked,
+                    '',
+                    'The likely cause: your deploy workflow mirrors files without --delete,',
+                    'so old migration files accumulate on the server. Fix by FTP-cleaning',
+                    'htdocs/database/migrations/ to match the repo, then re-run this route.',
+                ],
+            ], 409);
+        }
+
+        // committed deletions: the repo has removed a migration file that the tracked
+        // `migrations` table still records as run. The file is gone from disk (it was
+        // never part of this deployment), so it won't be re-run by `migrate`.
+        // (Note: `stale_tracked_migrations` above is the same set.)
+
         // 1. Every table that exists right now
         $tablesBefore = array_map(
             fn ($table) => array_values((array) $table)[0],
@@ -222,8 +294,8 @@ Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
 
         // 2. Drop each table on its own, so one denied DROP can't abort the wipe
         $drop = ['dropped' => [], 'failed' => []];
-        \Illuminate\Support\Facades\Schema::disableForeignKeyConstraints();
-        foreach ($tablesBefore as $table) {
+    \Illuminate\Support\Facades\Schema::disableForeignKeyConstraints();
+    foreach ($tablesBefore as $table) {
             try {
                 \Illuminate\Support\Facades\DB::statement("DROP TABLE IF EXISTS `{$table}`");
                 $drop['dropped'][] = $table;
