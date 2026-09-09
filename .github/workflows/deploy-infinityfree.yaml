@@ -154,7 +154,11 @@ jobs:
 
       # ── Deploy via lftp ────────────────────────────────────
       - name: 📦 Install lftp
-        run: sudo apt-get update && sudo apt-get install -y lftp
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google*.list /etc/apt/sources.list.d/chrome*.list 2>/dev/null || true
+          sudo apt-get clean 2>/dev/null || true
+          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::No-Cache=true 2>/dev/null || sudo apt-get update --fix-missing || true
+          which lftp || sudo apt-get install -y --no-install-recommends lftp
 
       # Clean old Vite build assets to ensure fresh hash references
       - name: 🧹 Clean old build assets on server
