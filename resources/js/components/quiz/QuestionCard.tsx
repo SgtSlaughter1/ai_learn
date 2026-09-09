@@ -77,16 +77,16 @@ export function QuestionCard({
                             onClick={() => onSelectOption(option.id)}
                             className={`w-full text-left px-5 py-4 rounded-2xl border text-sm font-semibold transition-all flex items-center justify-between min-h-[58px] focus:outline-none cursor-pointer ${
                                 isSelected
-                                    ? 'bg-[var(--color-accent)]/10 text-indigo-200 border-indigo-500 shadow-md shadow-[var(--color-accent)]/5'
-                                    : 'bg-[var(--color-background)]/40 hover:bg-[var(--color-primary-5)]/40 text-[var(--color-muted)] border-[var(--color-border)] hover:border-[var(--color-border)]'
+                                    ? 'bg-[var(--color-primary-5)] text-[var(--color-primary)] border-[var(--color-primary)] shadow-sm'
+                                    : 'bg-[var(--color-background)]/40 hover:bg-[var(--color-primary-5)]/40 text-[var(--color-text)] border-[var(--color-border)]'
                             }`}
                         >
                             <span className="leading-snug">{option.option_text}</span>
                             <div
                                 className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 ml-3 ${
                                     isSelected
-                                        ? 'border-indigo-500 bg-[var(--color-accent)]'
-                                        : 'border-slate-700 bg-[var(--color-background)]/80'
+                                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)]'
+                                        : 'border-[var(--color-border)] bg-[var(--color-background)]'
                                 }`}
                             >
                                 {isSelected && <div className="h-2 w-2 rounded-full bg-white" />}

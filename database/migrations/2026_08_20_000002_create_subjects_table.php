@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('subjects', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('school_id')->nullable()->constrained('schools')->nullOnDelete();
             $table->string('name');
             $table->string('slug')->unique();
             $table->text('description')->nullable();
@@ -18,6 +19,7 @@ return new class extends Migration
             $table->softDeletes();
             $table->timestamps();
 
+            $table->index('school_id');
             $table->index('status');
             $table->index('deleted_at');
         });

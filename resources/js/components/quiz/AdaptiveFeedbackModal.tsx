@@ -95,7 +95,7 @@ export function AdaptiveFeedbackModal({
                 <button
                     type="button"
                     onClick={onContinue}
-                    className="px-8 py-3 rounded-xl bg-[var(--color-accent)] hover:bg-[var(--color-accent)] text-white text-sm font-extrabold shadow-lg shadow-indigo-600/10 transition-all focus:outline-none min-h-[48px] cursor-pointer"
+                    className="px-8 py-3 rounded-xl bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-extrabold shadow-sm transition-all focus:outline-none min-h-[48px] cursor-pointer"
                 >
                     Next Question →
                 </button>

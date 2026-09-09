@@ -164,7 +164,7 @@ export default function Result({ attemptId }: Props) {
             const selectedOption = selectedOptionId ? options.find((o) => o.id === selectedOptionId) : null;
             const correctOption = options.find((o) => o.is_correct);
 
-            let out = `### 📚 AILEARN Tutor Explanation\n\n`;
+            let out = `### AILEARN Tutor Explanation\n\n`;
 
             if (subjectName || topicName) {
                 out += `**Curriculum Topic:** ${subjectName ? subjectName + ' → ' : ''}**${topicName || 'General Practice'}** ${
@@ -174,12 +174,12 @@ export default function Result({ attemptId }: Props) {
 
             if (selectedOption) {
                 if (selectedOption.is_correct) {
-                    out += `🎉 **Correct!** You selected **"${selectedOption.option_text}"**, which is the right answer.\n\n`;
+                    out += `**Correct!** You selected **"${selectedOption.option_text}"**, which is the right answer.\n\n`;
                 } else {
-                    out += `❌ **Incorrect Choice:** You chose **"${selectedOption.option_text}"**. Let's review why this isn't correct and how to find the right answer.\n\n`;
+                    out += `**Incorrect Choice:** You chose **"${selectedOption.option_text}"**. Let's review why this isn't correct and how to find the right answer.\n\n`;
                 }
             } else {
-                out += `⏳ **Skipped Question:** You didn't select an answer. Let's study the correct answer together.\n\n`;
+                out += `**Skipped Question:** You didn't select an answer. Let's study the correct answer together.\n\n`;
             }
 
             if (correctOption) {
@@ -198,21 +198,21 @@ export default function Result({ attemptId }: Props) {
                 otherOptions.forEach((opt) => {
                     const isUserChoice = opt.id === selectedOptionId;
                     if (isUserChoice) {
-                        out += `* ❌ **"${opt.option_text}"** *(Your choice)* — Does not satisfy the key requirement for this question.\n`;
+                        out += `* **"${opt.option_text}"** *(Your choice)* — Does not satisfy the key requirement for this question.\n`;
                     } else {
-                        out += `* ⚪ **"${opt.option_text}"** — Incorrect choice for this question.\n`;
+                        out += `* **"${opt.option_text}"** — Incorrect choice for this question.\n`;
                     }
                 });
                 out += `\n`;
             }
 
             out += `---\n\n`;
-            out += `💡 **Study Tip:** Review the core notes on **${topicName || 'this subject'}**. Practicing similar questions will help reinforce this concept!`;
+            out += `**Study Tip:** Review the core notes on **${topicName || 'this subject'}**. Practicing similar questions will help reinforce this concept!`;
 
             return out;
         } catch (e) {
             console.error('Offline explanation generation error:', e);
-            return `### 📚 AILEARN Tutor\n\n**Question:** ${questionText}\n\nReview your answer and study notes for this question. Your offline progress has been saved.`;
+            return `### AILEARN Tutor\n\n**Question:** ${questionText}\n\nReview your answer and study notes for this question. Your offline progress has been saved.`;
         }
     };
 
@@ -313,8 +313,10 @@ export default function Result({ attemptId }: Props) {
             <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex items-center justify-center p-4">
                 <Head title="Assessment Recorded" />
                 <div className="max-w-md w-full text-center bg-[var(--color-surface)] border border-[var(--color-border)] p-8 rounded-3xl space-y-5">
-                    <div className="w-16 h-16 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center mx-auto text-2xl font-black">
-                        ✓
+                    <div className="w-16 h-16 rounded-full bg-[var(--color-primary-5)] border border-[var(--color-primary)]/20 text-[var(--color-primary)] flex items-center justify-center mx-auto shadow-sm">
+                        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
                     </div>
                     <h1 className="text-xl font-bold">Assessment Recorded</h1>
                     <p className="text-sm text-[var(--color-muted)]">

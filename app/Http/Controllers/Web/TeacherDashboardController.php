@@ -229,7 +229,7 @@ class TeacherDashboardController extends Controller
                 'u.name',
                 'u.email',
                 DB::raw('COALESCE(ug.level, 1) as level'),
-                DB::raw("COALESCE(ug.rank, 'Newcomer') as rank"),
+                DB::raw("COALESCE(ug.`rank`, 'Newcomer') as `rank`"),
                 DB::raw('COALESCE(ug.total_xp, 0) as total_xp'),
                 DB::raw('COALESCE(ug.current_streak, 0) as streak'),
                 DB::raw('COALESCE(lp.topics_covered, 0) as topics_covered'),

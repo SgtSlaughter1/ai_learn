@@ -1,7 +1,95 @@
 import { Head, Link } from '@inertiajs/react';
 import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt';
 
-export default function Welcome() {
+interface SubjectItem {
+    id: number;
+    name: string;
+    slug?: string;
+    description?: string;
+    topics_count?: number;
+    school_id?: number | null;
+}
+
+interface WelcomeProps {
+    subjects?: SubjectItem[];
+}
+
+function getSubjectIcon(name: string) {
+    const lower = name.toLowerCase();
+    if (lower.includes('math') || lower.includes('algebra') || lower.includes('calc') || lower.includes('geometry')) {
+        return (
+            <svg className="w-6 h-6 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+        );
+    }
+    if (lower.includes('physic') || lower.includes('energy') || lower.includes('force')) {
+        return (
+            <svg className="w-6 h-6 text-[var(--color-success)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+        );
+    }
+    if (lower.includes('chem') || lower.includes('lab') || lower.includes('element')) {
+        return (
+            <svg className="w-6 h-6 text-[var(--color-primary-light)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+            </svg>
+        );
+    }
+    if (lower.includes('bio') || lower.includes('life') || lower.includes('genet') || lower.includes('health') || lower.includes('agric')) {
+        return (
+            <svg className="w-6 h-6 text-[var(--color-success)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+        );
+    }
+    if (lower.includes('eng') || lower.includes('lang') || lower.includes('gramm') || lower.includes('vocab')) {
+        return (
+            <svg className="w-6 h-6 text-[var(--color-accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+            </svg>
+        );
+    }
+    if (lower.includes('econ') || lower.includes('commerc') || lower.includes('financ') || lower.includes('account') || lower.includes('busin')) {
+        return (
+            <svg className="w-6 h-6 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+        );
+    }
+    if (lower.includes('lit') || lower.includes('art') || lower.includes('write') || lower.includes('history')) {
+        return (
+            <svg className="w-6 h-6 text-[var(--color-primary-light)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+        );
+    }
+    if (lower.includes('comput') || lower.includes('tech') || lower.includes('ict') || lower.includes('data') || lower.includes('code')) {
+        return (
+            <svg className="w-6 h-6 text-[var(--color-accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+        );
+    }
+    return (
+        <svg className="w-6 h-6 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+        </svg>
+    );
+}
+
+export default function Welcome({ subjects = [] }: WelcomeProps) {
+    const displaySubjects = subjects.length > 0 ? subjects : [
+        { id: 1, name: 'Mathematics', topics_count: 8 },
+        { id: 2, name: 'Further Maths', topics_count: 5 },
+        { id: 3, name: 'Physics', topics_count: 6 },
+        { id: 4, name: 'Chemistry', topics_count: 6 },
+        { id: 5, name: 'Biology', topics_count: 7 },
+        { id: 6, name: 'English', topics_count: 8 },
+        { id: 7, name: 'Economics', topics_count: 5 },
+        { id: 8, name: 'Literature', topics_count: 4 },
+    ];
     return (
         <>
             <Head title="AILEARN — Offline-First Adaptive Learning" />
@@ -246,23 +334,22 @@ export default function Welcome() {
                         </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                            {[
-                                { name: 'Mathematics', emoji: '📐', color: 'var(--color-primary)' },
-                                { name: 'Further Maths', emoji: '📊', color: 'var(--color-accent)' },
-                                { name: 'Physics', emoji: '⚛️', color: 'var(--color-success)' },
-                                { name: 'Chemistry', emoji: '🧪', color: 'var(--color-primary-light)' },
-                                { name: 'Biology', emoji: '🧬', color: 'var(--color-success)' },
-                                { name: 'English', emoji: '📖', color: 'var(--color-accent)' },
-                                { name: 'Economics', emoji: '📈', color: 'var(--color-primary)' },
-                                { name: 'Literature', emoji: '✍️', color: 'var(--color-primary-light)' },
-                            ].map((subject) => (
-                                <div
-                                    key={subject.name}
-                                    className="p-4 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] text-center hover:shadow-md transition-shadow cursor-default"
+                            {displaySubjects.map((subject) => (
+                                <Link
+                                    key={subject.id}
+                                    href="/login"
+                                    className="p-5 rounded-2xl bg-[var(--color-background)] border border-[var(--color-border)] hover:border-[var(--color-primary-light)] text-center hover:shadow-lg transition-all duration-200 group block cursor-pointer"
                                 >
-                                    <div className="text-3xl mb-2">{subject.emoji}</div>
-                                    <div className="text-sm font-semibold text-[var(--color-text)]">{subject.name}</div>
-                                </div>
+                                    <div className="mb-3 flex items-center justify-center h-12 w-12 rounded-xl bg-[var(--color-surface)] group-hover:scale-110 transition-transform mx-auto border border-[var(--color-border)]">
+                                        {getSubjectIcon(subject.name)}
+                                    </div>
+                                    <div className="text-sm font-bold text-[var(--color-text)] group-hover:text-[var(--color-primary)] transition-colors line-clamp-1">
+                                        {subject.name}
+                                    </div>
+                                    <span className="inline-block mt-1 text-[11px] font-semibold text-[var(--color-muted)]">
+                                        {subject.topics_count !== undefined ? `${subject.topics_count} Topics` : 'Interactive Modules'}
+                                    </span>
+                                </Link>
                             ))}
                         </div>
                     </div>

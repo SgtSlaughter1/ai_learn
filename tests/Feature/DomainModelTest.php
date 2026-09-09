@@ -261,7 +261,7 @@ class DomainModelTest extends TestCase
                 'recentActivities'
             ]);
 
-        // 4. Teacher gets redirected from /dashboard to /teacher/dashboard
-        $this->get('/dashboard')->assertRedirect('/teacher/dashboard');
+        // 4. Teacher gets redirected from /dashboard to /admin/dashboard
+        $this->get('/dashboard')->assertRedirect('/admin/dashboard');
     }
 }

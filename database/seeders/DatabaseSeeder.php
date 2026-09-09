@@ -16,7 +16,49 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Seed users for different roles with explicit password 'password' using updateOrCreate for idempotency
+        // 1. Super Admin Accounts
+        User::updateOrCreate(
+            ['email' => 'superadmin@example.com'],
+            [
+                'name' => 'Platform Super Admin',
+                'password' => \Illuminate\Support\Facades\Hash::make('password'),
+                'role' => UserRole::SUPER_ADMIN,
+                'email_verified_at' => now(),
+            ]
+        );
+
+        User::updateOrCreate(
+            ['email' => 'admin@example.com'],
+            [
+                'name' => 'Super Admin',
+                'password' => \Illuminate\Support\Facades\Hash::make('password'),
+                'role' => UserRole::SUPER_ADMIN,
+                'email_verified_at' => now(),
+            ]
+        );
+
+        // 2. School Admin Accounts
+        User::updateOrCreate(
+            ['email' => 'schooladmin@example.com'],
+            [
+                'name' => 'AILEARN School Admin',
+                'password' => \Illuminate\Support\Facades\Hash::make('password'),
+                'role' => UserRole::SCHOOL_ADMIN,
+                'email_verified_at' => now(),
+            ]
+        );
+
+        User::updateOrCreate(
+            ['email' => 'greenwood.admin@example.com'],
+            [
+                'name' => 'Greenwood Admin',
+                'password' => \Illuminate\Support\Facades\Hash::make('password'),
+                'role' => UserRole::SCHOOL_ADMIN,
+                'email_verified_at' => now(),
+            ]
+        );
+
+        // 3. Learner Accounts
         User::updateOrCreate(
             ['email' => 'learner@example.com'],
             [
@@ -28,30 +70,31 @@ class DatabaseSeeder extends Seeder
         );
 
         User::updateOrCreate(
-            ['email' => 'teacher@example.com'],
+            ['email' => 'ada.learner@example.com'],
             [
-                'name' => 'Jane Teacher',
+                'name' => 'Ada Lovelace',
                 'password' => \Illuminate\Support\Facades\Hash::make('password'),
-                'role' => UserRole::TEACHER,
+                'role' => UserRole::LEARNER,
                 'email_verified_at' => now(),
             ]
         );
 
         User::updateOrCreate(
-            ['email' => 'admin@example.com'],
+            ['email' => 'chidi.learner@example.com'],
             [
-                'name' => 'Super Admin',
+                'name' => 'Chidi Anagonye',
                 'password' => \Illuminate\Support\Facades\Hash::make('password'),
-                'role' => UserRole::ADMIN,
+                'role' => UserRole::LEARNER,
                 'email_verified_at' => now(),
             ]
         );
 
         // Call modular seeders
         $this->call([
+            SchoolSeeder::class,
             SubjectSeeder::class,
             QuizSeeder::class,
-            SchoolSeeder::class,
+            AchievementSeeder::class,
         ]);
     }
 }

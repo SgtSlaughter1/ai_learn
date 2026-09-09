@@ -10,12 +10,14 @@ return new class extends Migration
     {
         Schema::create('quizzes', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('school_id')->nullable()->constrained('schools')->nullOnDelete();
             $table->string('title');
             $table->text('description')->nullable();
             $table->integer('time_limit_minutes')->nullable();
             $table->string('status')->default('active');
             $table->timestamps();
 
+            $table->index('school_id');
             $table->index('status');
         });
     }

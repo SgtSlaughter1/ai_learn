@@ -9,7 +9,7 @@ const XP_RULES = [
     { icon: <FileText className="w-4 h-4 text-sky-500" />, label: 'Assignment Complete', xp: '+5 XP', desc: 'Finish any quiz or assignment attempt' },
     { icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />, label: 'Correct Answer', xp: '+1 XP', desc: 'Each right answer in any assignment' },
     { icon: <Sparkles className="w-4 h-4 text-amber-500" />, label: 'Perfect Score', xp: '+3 XP', desc: '100% accuracy bonus on a quiz' },
-    { icon: <BookOpen className="w-4 h-4 text-indigo-500" />, label: 'First Attempt', xp: '+2 XP', desc: 'First time attempting a new assignment' },
+    { icon: <BookOpen className="w-4 h-4 text-[var(--color-primary)]" />, label: 'First Attempt', xp: '+2 XP', desc: 'First time attempting a new assignment' },
     { icon: <Flame className="w-4 h-4 text-orange-500" />, label: 'Daily Streak', xp: '+5 XP', desc: 'Every 7 consecutive active study days' },
     { icon: <Trophy className="w-4 h-4 text-yellow-500" />, label: 'Achievement Badge', xp: '+5–10 XP', desc: 'Unlock milestones, badges, and awards' },
 ];

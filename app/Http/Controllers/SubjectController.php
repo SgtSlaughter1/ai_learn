@@ -23,7 +23,8 @@ class SubjectController extends Controller
 
         // Explicit projection selects only columns required by the client to prevent over-fetching
         $subjects = Subject::query()
-            ->select(['id', 'name', 'slug', 'description', 'status', 'sort_order'])
+            ->select(['id', 'name', 'code', 'slug', 'description', 'status', 'sort_order', 'school_id'])
+            ->withCount('topics')
             ->where('status', 'active')
             ->when($level, function ($query) use ($level) {
                 $query->whereHas('topics', function ($q) use ($level) {

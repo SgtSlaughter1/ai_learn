@@ -1,20 +1,20 @@
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 
-export default function SyncIndicator() {
+export default function SyncIndicator({ className = '' }: { className?: string }) {
     const { isOnline, pendingSync, isSyncing, triggerSync } = useNetworkStatus();
 
     return (
-        <div className="flex items-center gap-2">
+        <div className={`flex items-center gap-2 ${className}`}>
             {/* Online/Offline dot */}
             <div className="flex items-center gap-1.5">
                 <div
-                    className={`h-2 w-2 rounded-full transition-colors ${
+                    className={`h-2.5 w-2.5 rounded-full transition-colors ${
                         isOnline
-                            ? 'bg-[var(--color-success)] shadow-sm shadow-[var(--color-success)]/30'
-                            : 'bg-[var(--color-error)] shadow-sm shadow-[var(--color-error)]/30'
+                            ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50 animate-pulse'
+                            : 'bg-rose-400 shadow-sm shadow-rose-400/50'
                     }`}
                 />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-muted)]">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-inherit opacity-90">
                     {isOnline ? 'Online' : 'Offline'}
                 </span>
             </div>
@@ -24,7 +24,7 @@ export default function SyncIndicator() {
                 <button
                     onClick={triggerSync}
                     disabled={!isOnline || isSyncing}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/20 transition-all disabled:opacity-50 cursor-pointer"
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[var(--color-accent)]/20 border border-[var(--color-accent)]/30 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/30 transition-all disabled:opacity-50 cursor-pointer"
                     title={`${pendingSync} items waiting to sync`}
                 >
                     {isSyncing ? (
@@ -45,11 +45,11 @@ export default function SyncIndicator() {
 
             {/* All synced checkmark */}
             {pendingSync === 0 && isOnline && !isSyncing && (
-                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[var(--color-success)]/10 border border-[var(--color-success)]/20">
-                    <svg className="w-3 h-3 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300">
+                    <svg className="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
                     </svg>
-                    <span className="text-[10px] font-bold text-[var(--color-success)]">Synced</span>
+                    <span className="text-[10px] font-extrabold">Synced</span>
                 </div>
             )}
         </div>

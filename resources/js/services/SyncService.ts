@@ -129,6 +129,78 @@ async function syncGamification(): Promise<number> {
     return synced;
 }
 
+import { db } from '../db/database';
+import { getAdminAuthHeaders, notifyAdminDataChanged } from './AdminOfflineService';
+
+async function syncAdminQueue(): Promise<number> {
+    try {
+        const queueItems = await db.syncQueue.filter(item => !item.synced).toArray();
+        let syncedCount = 0;
+
+        for (const item of queueItems) {
+            try {
+                const res = await fetch(item.endpoint, {
+                    method: item.method,
+                    headers: getAdminAuthHeaders(),
+                    credentials: 'same-origin',
+                    body: item.payload && item.payload !== '{}' ? item.payload : undefined,
+                });
+
+                if (res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    try {
+                        const tableObj = (db as any)[item.table_name];
+                        if (tableObj) {
+                            if (item.action === 'insert' && item.record_id.startsWith('temp_')) {
+                                await tableObj.delete(item.record_id);
+                                const saved = data.learner || data.subject || data.question || data.class || data.school || data.admin;
+                                if (saved) {
+                                    await tableObj.put(saved);
+                                }
+                            } else if (item.action === 'delete') {
+                                const key = isNaN(Number(item.record_id)) ? item.record_id : Number(item.record_id);
+                                await tableObj.delete(key);
+                            } else if (item.action === 'update') {
+                                const saved = data.learner || data.subject || data.question || data.class || data.school || data.admin;
+                                if (saved) {
+                                    await tableObj.put({ ...saved, _pendingSync: false });
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('[SyncService] Local table sync update error:', e);
+                    }
+
+                    if (item.id) {
+                        await db.syncQueue.delete(item.id);
+                    }
+                    syncedCount++;
+                    console.log(`[SyncService] Successfully synced queued admin action ${item.action} on ${item.table_name}`);
+                } else if (res.status === 404 || res.status === 422 || res.status === 400) {
+                    if (item.id) {
+                        await db.syncQueue.delete(item.id);
+                    }
+                } else {
+                    if (item.id) {
+                        await db.syncQueue.update(item.id, { retries: (item.retries || 0) + 1 });
+                    }
+                }
+            } catch (err) {
+                console.warn(`[SyncService] Network error syncing admin queue item ${item.id}:`, err);
+            }
+        }
+
+        if (syncedCount > 0) {
+            notifyAdminDataChanged();
+        }
+
+        return syncedCount;
+    } catch (e) {
+        console.warn('[SyncService] Failed accessing sync queue:', e);
+        return 0;
+    }
+}
+
 // ── Main sync orchestrator ──
 
 export async function syncAll(): Promise<{ synced: number; errors: number }> {
@@ -140,13 +212,14 @@ export async function syncAll(): Promise<{ synced: number; errors: number }> {
     let totalErrors = 0;
 
     try {
-        const [attemptSynced, progressSynced, gamificationSynced] = await Promise.all([
+        const [attemptSynced, progressSynced, gamificationSynced, adminSynced] = await Promise.all([
             syncQuizAttempts().catch(() => { totalErrors++; return 0; }),
             syncProgress().catch(() => { totalErrors++; return 0; }),
             syncGamification().catch(() => { totalErrors++; return 0; }),
+            syncAdminQueue().catch(() => { totalErrors++; return 0; }),
         ]);
 
-        totalSynced = attemptSynced + progressSynced + gamificationSynced;
+        totalSynced = attemptSynced + progressSynced + gamificationSynced + adminSynced;
     } finally {
         syncInProgress = false;
     }

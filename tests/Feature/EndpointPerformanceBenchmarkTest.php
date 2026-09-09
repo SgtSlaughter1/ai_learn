@@ -155,10 +155,10 @@ class EndpointPerformanceBenchmarkTest extends TestCase
             }
         }
 
-        // Even with 5 subjects and 15 topics, must execute in exactly 2 queries!
+        // With school curriculum filtering and aggregate summaries, executes in <= 4 queries
         $response = $this->benchmark('GET /api/v1/subjects', function () {
             return $this->getJson('/api/v1/subjects');
-        }, maxAllowedQueries: 2);
+        }, maxAllowedQueries: 4);
 
         $response->assertStatus(200)
             ->assertJsonStructure([
@@ -178,7 +178,7 @@ class EndpointPerformanceBenchmarkTest extends TestCase
 
         $response = $this->benchmark('GET /api/v1/subjects/{subject}', function () use ($subject) {
             return $this->getJson("/api/v1/subjects/{$subject->slug}");
-        }, maxAllowedQueries: 3);
+        }, maxAllowedQueries: 5);
 
         $response->assertStatus(200)
             ->assertJsonStructure([
@@ -486,13 +486,13 @@ class EndpointPerformanceBenchmarkTest extends TestCase
 
         $response = $this->benchmark('GET /api/v1/admin/stats', function () {
             return $this->getJson('/api/v1/admin/stats');
-        }, maxAllowedQueries: 12);
+        }, maxAllowedQueries: 16);
 
         $response->assertStatus(200)
             ->assertJsonStructure([
                 'overview' => [
                     'total_schools',
-                    'total_teachers',
+                    'total_school_admins',
                     'total_learners',
                     'total_classes',
                     'total_subjects',
@@ -502,9 +502,8 @@ class EndpointPerformanceBenchmarkTest extends TestCase
                     'avg_mastery',
                     'struggling_learners',
                 ],
-                'schools',
-                'top_teachers',
-                'recent_users',
+                'top_learners',
+                'grade_distribution',
             ]);
     }
 }

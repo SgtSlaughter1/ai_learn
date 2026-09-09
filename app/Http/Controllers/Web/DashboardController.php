@@ -16,10 +16,8 @@ class DashboardController extends Controller
     public function index(Request $request): mixed
     {
         $user = $request->user();
-        if ($user->role === \App\Enums\UserRole::TEACHER) {
-            return redirect('/teacher/dashboard');
-        }
-        if ($user->role === \App\Enums\UserRole::ADMIN) {
+        $role = $user?->role?->value ?? $user?->role;
+        if (in_array($role, ['teacher', 'admin', 'super_admin', 'school_admin'], true)) {
             return redirect('/admin/dashboard');
         }
         return Inertia::render('Dashboard');

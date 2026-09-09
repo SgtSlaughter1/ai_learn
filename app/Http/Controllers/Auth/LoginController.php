@@ -29,6 +29,9 @@ class LoginController extends Controller
             $request->session()->regenerate();
             $user = Auth::user();
 
+            $role = $user->role?->value ?? $user->role;
+            $redirectPath = in_array($role, ['admin', 'super_admin', 'school_admin', 'teacher']) ? '/admin/dashboard' : '/dashboard';
+
             if ($request->wantsJson()) {
                 return response()->json([
                     'status' => 'success',
@@ -37,12 +40,13 @@ class LoginController extends Controller
                         'id' => $user->id,
                         'name' => $user->name,
                         'email' => $user->email,
-                        'role' => $user->role?->value ?? $user->role ?? 'learner',
+                        'role' => $role ?? 'learner',
                     ],
+                    'redirect' => $redirectPath,
                 ]);
             }
 
-            return redirect()->intended('/dashboard');
+            return redirect()->intended($redirectPath);
         }
 
         if ($request->wantsJson()) {

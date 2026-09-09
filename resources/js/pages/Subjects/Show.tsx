@@ -80,7 +80,7 @@ export default function Show({ slug }: Props) {
                     ? new URLSearchParams(window.location.search).get('class_id')
                     : null;
                 const classQuery = classIdParam ? `?class_id=${classIdParam}` : '';
-                const res = await fetch(`/api/v1/subjects/${slug}${classQuery}`);
+                const res = await fetch(`/api/v1/subjects/${effectiveSlug}${classQuery}`);
                 if (res.ok) {
                     const data = await res.json();
                     if (isMounted) {

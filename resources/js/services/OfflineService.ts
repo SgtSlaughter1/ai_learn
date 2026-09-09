@@ -320,8 +320,8 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
         await prewarmRoute('/subjects');
         await prewarmRoute('/flashcards');
 
-        // 2. Fetch and cache all subjects (API data → IndexedDB)
-        const subjectsRes = await fetch('/api/v1/subjects');
+        // 2. Fetch and cache all subjects across both school and general knowledge (API data → IndexedDB)
+        const subjectsRes = await fetch('/api/v1/subjects?scope=general');
         if (!subjectsRes.ok) return;
         const subjectsData = await subjectsRes.json();
         const subjectsList = subjectsData.subjects || subjectsData || [];
@@ -330,6 +330,9 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
             await db.subjects.bulkPut(
                 subjectsList.map((s: any) => ({
                     id: s.id,
+                    school_id: s.school_id,
+                    school_name: s.school_name,
+                    is_general_knowledge: s.is_general_knowledge,
                     name: s.name,
                     slug: s.slug,
                     description: s.description,
@@ -346,7 +349,7 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
                 try {
                     await prewarmRoute(`/subjects/${subject.slug}`);
 
-                    const subRes = await fetch(`/api/v1/subjects/${subject.slug}`);
+                    const subRes = await fetch(`/api/v1/subjects/${subject.slug}?scope=general`);
                     if (!subRes.ok) continue;
                     const subData = await subRes.json();
 
@@ -439,7 +442,7 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
             // Ignore flashcard failure
         }
 
-        console.log('✅ Offline curriculum fully preloaded and cached.');
+        console.log('[OfflineService] Offline curriculum fully preloaded and cached.');
     } catch (e) {
         console.warn('Background offline preload encountered an error:', e);
     } finally {

@@ -4,6 +4,9 @@ import Dexie, { type Table } from 'dexie';
 
 export interface CachedSubject {
     id: number;
+    school_id?: number | null;
+    school_name?: string | null;
+    is_general_knowledge?: boolean;
     name: string;
     slug: string;
     description: string | null;
@@ -26,6 +29,8 @@ export interface CachedTopic {
 
 export interface CachedQuiz {
     id: number;
+    school_id?: number | null;
+    is_general_knowledge?: boolean;
     title: string;
     description: string | null;
     time_limit_minutes: number | null;
@@ -36,6 +41,7 @@ export interface CachedQuiz {
 
 export interface CachedQuestion {
     id: number;
+    school_id?: number | null;
     topic_id: number;
     question_text: string;
     type: string;
@@ -112,15 +118,20 @@ export interface LocalGamification {
     synced: boolean;
 }
 
+import type { Learner, SchoolItem, ClassItem, QuestionItem, SchoolAdminItem } from '../types/admin';
+
 export interface SyncQueueItem {
     id?: number;
     table_name: string;
     action: 'insert' | 'update' | 'delete';
     record_id: string;
+    endpoint: string;
+    method: 'POST' | 'PUT' | 'DELETE';
     payload: string;
     created_at: string;
     synced: boolean;
     retries: number;
+    error?: string;
 }
 
 export interface CachedUserProfile {
@@ -128,6 +139,8 @@ export interface CachedUserProfile {
     name: string;
     email: string;
     role: string;
+    school_id?: number | null;
+    school_name?: string | null;
     cached_at: string;
 }
 
@@ -143,20 +156,30 @@ export class OfflineDB extends Dexie {
     gamification!: Table<LocalGamification, number>;
     syncQueue!: Table<SyncQueueItem, number>;
     userProfile!: Table<CachedUserProfile, string>;
+    adminLearners!: Table<Learner, string>;
+    adminSchools!: Table<SchoolItem, number>;
+    adminClasses!: Table<ClassItem, number>;
+    adminQuestions!: Table<QuestionItem, number>;
+    adminSchoolAdmins!: Table<SchoolAdminItem, string>;
 
     constructor() {
         super('AILEARNDatabase');
 
-        this.version(1).stores({
-            subjects: 'id, slug, status, cached_at',
-            topics: 'id, subject_id, slug, level, status, cached_at',
-            quizzes: 'id, status, cached_at',
+        this.version(3).stores({
+            subjects: 'id, school_id, slug, status, cached_at, _pendingSync',
+            topics: 'id, subject_id, slug, level, status, cached_at, _pendingSync',
+            quizzes: 'id, school_id, status, cached_at',
             flashcards: 'id, subject_name, topic_name, cached_at',
             quizAttempts: 'id, user_id, quiz_id, status, synced, completed_at',
             learnerProgress: 'id, user_id, topic_id, synced',
             gamification: 'id, user_id, synced',
             syncQueue: '++id, table_name, action, synced, created_at',
-            userProfile: 'id, role',
+            userProfile: 'id, role, school_id',
+            adminLearners: 'id, name, email, _pendingSync',
+            adminSchools: 'id, name, _pendingSync',
+            adminClasses: 'id, school_id, name, _pendingSync',
+            adminQuestions: 'id, topic_id, school_id, _pendingSync',
+            adminSchoolAdmins: 'id, email, school_id, _pendingSync',
         });
     }
 }

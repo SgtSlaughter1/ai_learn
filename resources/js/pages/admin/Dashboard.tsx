@@ -1,295 +1,487 @@
 import { useEffect, useState } from 'react';
-import { Head } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
-
-interface Overview {
-    total_schools: number;
-    total_teachers: number;
-    total_learners: number;
-    total_classes: number;
-    total_subjects: number;
-    total_quizzes: number;
-    total_attempts: number;
-    total_questions_answered: number;
-    avg_mastery: number;
-    struggling_learners: number;
-}
-
-interface School {
-    id: number;
-    name: string;
-    city: string | null;
-    teacher_count: number;
-    learner_count: number;
-    class_count: number;
-}
-
-interface Teacher {
-    id: string;
-    name: string;
-    school: string;
-    learner_count: number;
-}
-
-interface Stats {
-    overview: Overview;
-    schools: School[];
-    top_teachers: Teacher[];
-    recent_users: Record<string, { role: string; count: number; date: string }[]>;
-}
+import { Stats, SchoolItem, SchoolAdminItem, ClassItem, Learner, SubjectItem, QuestionItem, TopicItem } from '@/types/admin';
+import {
+    cacheAdminSchools,
+    getCachedAdminSchools,
+    cacheAdminSchoolAdmins,
+    getCachedAdminSchoolAdmins,
+    cacheAdminClasses,
+    getCachedAdminClasses,
+    cacheAdminLearners,
+    getCachedAdminLearners,
+    cacheAdminSubjects,
+    getCachedAdminSubjects,
+    cacheAdminQuestions,
+    getCachedAdminQuestions,
+    ADMIN_DATA_CHANGED_EVENT,
+} from '@/services/AdminOfflineService';
+import OverviewTab from '@/components/admin/OverviewTab';
+import SchoolsTab from '@/components/admin/SchoolsTab';
+import SchoolAdminsTab from '@/components/admin/SchoolAdminsTab';
+import ClassesTab from '@/components/admin/ClassesTab';
+import LearnersTab from '@/components/admin/LearnersTab';
+import SubjectsTab from '@/components/admin/SubjectsTab';
+import QuestionBankTab from '@/components/admin/QuestionBankTab';
 
 export default function Dashboard() {
+    const { auth } = usePage<{ auth: { user: { id: number; name: string; email: string; role: string } } }>().props;
+    const [activeTab, setActiveTab] = useState<'overview' | 'schools' | 'school_admins' | 'classes' | 'learners' | 'subjects' | 'questions'>('overview');
+    
+    // Data States
     const [stats, setStats] = useState<Stats | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [loadingStats, setLoadingStats] = useState(true);
+    
+    const isSuperAdmin = auth?.user?.role === 'super_admin' || auth?.user?.role === 'admin' || (stats?.is_super_admin === true);
+    
+    const [schools, setSchools] = useState<SchoolItem[]>([]);
+    const [loadingSchools, setLoadingSchools] = useState(false);
 
+    const [schoolAdmins, setSchoolAdmins] = useState<SchoolAdminItem[]>([]);
+    const [loadingSchoolAdmins, setLoadingSchoolAdmins] = useState(false);
+    
+    const [classes, setClasses] = useState<ClassItem[]>([]);
+    const [loadingClasses, setLoadingClasses] = useState(false);
+    
+    const [learners, setLearners] = useState<Learner[]>([]);
+    const [loadingLearners, setLoadingLearners] = useState(false);
+    
+    const [subjects, setSubjects] = useState<SubjectItem[]>([]);
+    const [loadingSubjects, setLoadingSubjects] = useState(false);
+    
+    const [questions, setQuestions] = useState<QuestionItem[]>([]);
+    const [loadingQuestions, setLoadingQuestions] = useState(false);
+    
+    // Toast Notification
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+    const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 4000);
+    };
+
+    // Fetch Stats
+    const fetchStats = async () => {
+        setLoadingStats(true);
+        try {
+            const res = await fetch('/api/v1/admin/stats');
+            if (res.ok) {
+                const data = await res.json();
+                if (data.status === 'success') {
+                    setStats(data.data);
+                    localStorage.setItem('cached_admin_stats', JSON.stringify(data.data));
+                } else if (data.overview) {
+                    setStats(data);
+                    localStorage.setItem('cached_admin_stats', JSON.stringify(data));
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to load stats online, checking local cache:', e);
+            const cached = localStorage.getItem('cached_admin_stats');
+            if (cached) {
+                try { setStats(JSON.parse(cached)); } catch {}
+            }
+        } finally {
+            setLoadingStats(false);
+        }
+    };
+
+    // Fetch Schools
+    const fetchSchools = async () => {
+        setLoadingSchools(true);
+        try {
+            const res = await fetch('/api/v1/admin/schools');
+            if (res.ok) {
+                const data = await res.json();
+                const items = data.data || data.schools || [];
+                setSchools(items);
+                cacheAdminSchools(items);
+            } else {
+                throw new Error('Server error');
+            }
+        } catch (err) {
+            console.warn('Loading schools from offline storage:', err);
+            const cached = await getCachedAdminSchools();
+            if (cached.length > 0) setSchools(cached);
+        } finally {
+            setLoadingSchools(false);
+        }
+    };
+
+    // Fetch School Admins (Super Admin Only)
+    const fetchSchoolAdmins = async () => {
+        if (!isSuperAdmin) return;
+        setLoadingSchoolAdmins(true);
+        try {
+            const res = await fetch('/api/v1/admin/school-admins');
+            if (res.ok) {
+                const data = await res.json();
+                const items = data.data || data.school_admins || [];
+                setSchoolAdmins(items);
+                cacheAdminSchoolAdmins(items);
+            } else {
+                throw new Error('Server error');
+            }
+        } catch (err) {
+            console.warn('Loading school admins from offline storage:', err);
+            const cached = await getCachedAdminSchoolAdmins();
+            if (cached.length > 0) setSchoolAdmins(cached);
+        } finally {
+            setLoadingSchoolAdmins(false);
+        }
+    };
+
+    // Fetch Classes
+    const fetchClasses = async () => {
+        setLoadingClasses(true);
+        try {
+            const res = await fetch('/api/v1/admin/classes');
+            if (res.ok) {
+                const data = await res.json();
+                const items = data.data || data.classes || [];
+                setClasses(items);
+                cacheAdminClasses(items);
+            } else {
+                throw new Error('Server error');
+            }
+        } catch (err) {
+            console.warn('Loading classes from offline storage:', err);
+            const cached = await getCachedAdminClasses();
+            if (cached.length > 0) setClasses(cached);
+        } finally {
+            setLoadingClasses(false);
+        }
+    };
+
+    // Fetch Learners
+    const fetchLearners = async () => {
+        setLoadingLearners(true);
+        try {
+            const res = await fetch('/api/v1/admin/learners');
+            if (res.ok) {
+                const data = await res.json();
+                const items = data.data || data.learners || [];
+                setLearners(items);
+                cacheAdminLearners(items);
+            } else {
+                throw new Error('Server error');
+            }
+        } catch (err) {
+            console.warn('Loading learners from offline storage:', err);
+            const cached = await getCachedAdminLearners();
+            if (cached.length > 0) setLearners(cached);
+        } finally {
+            setLoadingLearners(false);
+        }
+    };
+
+    // Fetch Subjects
+    const fetchSubjects = async () => {
+        setLoadingSubjects(true);
+        try {
+            const res = await fetch('/api/v1/admin/subjects');
+            if (res.ok) {
+                const data = await res.json();
+                const items = data.data || data.subjects || [];
+                setSubjects(items);
+                cacheAdminSubjects(items);
+            } else {
+                throw new Error('Server error');
+            }
+        } catch (err) {
+            console.warn('Loading subjects from offline storage:', err);
+            const cached = await getCachedAdminSubjects();
+            if (cached.length > 0) setSubjects(cached);
+        } finally {
+            setLoadingSubjects(false);
+        }
+    };
+
+    // Fetch Questions
+    const fetchQuestions = async () => {
+        setLoadingQuestions(true);
+        try {
+            const res = await fetch('/api/v1/admin/questions');
+            if (res.ok) {
+                const data = await res.json();
+                const items = data.data || data.questions || [];
+                setQuestions(items);
+                cacheAdminQuestions(items);
+            } else {
+                throw new Error('Server error');
+            }
+        } catch (err) {
+            console.warn('Loading questions from offline storage:', err);
+            const cached = await getCachedAdminQuestions();
+            if (cached.length > 0) setQuestions(cached);
+        } finally {
+            setLoadingQuestions(false);
+        }
+    };
+
+    // Initial load & sync event listener
     useEffect(() => {
-        fetch('/api/v1/admin/stats')
-            .then((res) => res.json())
-            .then((data) => {
-                setStats(data);
-                setLoading(false);
-            })
-            .catch((err) => {
-                console.error('Failed to load admin stats', err);
-                setLoading(false);
-            });
-    }, []);
+        fetchStats();
+        fetchSchools();
+
+        const handleDataChange = () => {
+            if (activeTab === 'learners') fetchLearners();
+            if (activeTab === 'subjects') fetchSubjects();
+            if (activeTab === 'questions') fetchQuestions();
+            if (activeTab === 'classes') fetchClasses();
+            if (activeTab === 'schools') fetchSchools();
+            if (activeTab === 'school_admins') fetchSchoolAdmins();
+        };
+
+        window.addEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
+        window.addEventListener('online', handleDataChange);
+        return () => {
+            window.removeEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
+            window.removeEventListener('online', handleDataChange);
+        };
+    }, [activeTab]);
+
+    // Ensure non-super-admins cannot remain on super-admin-only tabs
+    useEffect(() => {
+        if (!isSuperAdmin && (activeTab === 'schools' || activeTab === 'school_admins')) {
+            setActiveTab('overview');
+        }
+    }, [isSuperAdmin, activeTab]);
+
+    // Lazy load tab data
+    useEffect(() => {
+        if (activeTab === 'schools' && isSuperAdmin && schools.length === 0) fetchSchools();
+        if (activeTab === 'school_admins' && isSuperAdmin) {
+            if (schoolAdmins.length === 0) fetchSchoolAdmins();
+            if (schools.length === 0) fetchSchools();
+        }
+        if (activeTab === 'classes' && classes.length === 0) fetchClasses();
+        if (activeTab === 'learners' && learners.length === 0) fetchLearners();
+        if (activeTab === 'subjects' && subjects.length === 0) fetchSubjects();
+        if (activeTab === 'questions') {
+            if (questions.length === 0) fetchQuestions();
+            if (subjects.length === 0) fetchSubjects();
+        }
+    }, [activeTab, isSuperAdmin]);
+
+    // Flatten all topics across subjects for QuestionBank dropdowns
+    const allTopics: TopicItem[] = subjects.flatMap(s => s.topics || []);
+
+    const allTabs = [
+        {
+            id: 'overview' as const,
+            label: 'Overview',
+            icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+            ),
+            superAdminOnly: false,
+        },
+        {
+            id: 'schools' as const,
+            label: 'Schools',
+            icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+            ),
+            count: schools.length || undefined,
+            superAdminOnly: true,
+        },
+        {
+            id: 'school_admins' as const,
+            label: 'School Admins',
+            icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+            ),
+            count: schoolAdmins.length || undefined,
+            superAdminOnly: true,
+        },
+        {
+            id: 'classes' as const,
+            label: 'Classes & Cohorts',
+            icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
+                </svg>
+            ),
+            count: classes.length || undefined,
+            superAdminOnly: false,
+        },
+        {
+            id: 'learners' as const,
+            label: 'Learners Directory',
+            icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+            ),
+            count: learners.length || undefined,
+            superAdminOnly: false,
+        },
+        {
+            id: 'subjects' as const,
+            label: 'Subjects & Topics',
+            icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+            ),
+            count: subjects.length || undefined,
+            superAdminOnly: false,
+        },
+        {
+            id: 'questions' as const,
+            label: 'Question Bank',
+            icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            ),
+            count: questions.length || undefined,
+            superAdminOnly: false,
+        },
+    ];
+
+    const visibleTabs = allTabs.filter(tab => !tab.superAdminOnly || isSuperAdmin);
 
     return (
-        <AuthenticatedLayout
-            header={
-                <div>
-                    <h1 className="text-3xl font-extrabold text-[var(--color-text)] tracking-tight">Admin Dashboard</h1>
-                    <p className="text-[var(--color-muted)] mt-1">Platform-wide overview and monitoring.</p>
-                </div>
-            }
-        >
-            <Head title="Admin Dashboard" />
+        <AuthenticatedLayout>
+            <Head title={isSuperAdmin ? "Super Admin Command Center" : `${stats?.school?.name || 'School'} Admin Portal`} />
 
-            <div className="space-y-8">
-                {/* Platform Stats Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                    <AdminStatCard
-                        label="Schools"
-                        value={loading ? '...' : stats?.overview.total_schools}
-                        icon="🏫"
-                        loading={loading}
-                    />
-                    <AdminStatCard
-                        label="Teachers"
-                        value={loading ? '...' : stats?.overview.total_teachers}
-                        icon="👨‍🏫"
-                        loading={loading}
-                    />
-                    <AdminStatCard
-                        label="Learners"
-                        value={loading ? '...' : stats?.overview.total_learners}
-                        icon="👥"
-                        loading={loading}
-                    />
-                    <AdminStatCard
-                        label="Classes"
-                        value={loading ? '...' : stats?.overview.total_classes}
-                        icon="📚"
-                        loading={loading}
-                    />
-                    <AdminStatCard
-                        label="Quizzes Taken"
-                        value={loading ? '...' : stats?.overview.total_attempts?.toLocaleString()}
-                        icon="📝"
-                        loading={loading}
-                    />
-                </div>
-
-                {/* Second Row */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <AdminStatCard
-                        label="Questions Answered"
-                        value={loading ? '...' : stats?.overview.total_questions_answered?.toLocaleString()}
-                        icon="❓"
-                        loading={loading}
-                    />
-                    <AdminStatCard
-                        label="Avg Mastery"
-                        value={loading ? '...' : `${stats?.overview.avg_mastery}%`}
-                        icon="📊"
-                        loading={loading}
-                    />
-                    <AdminStatCard
-                        label="Subjects"
-                        value={loading ? '...' : stats?.overview.total_subjects}
-                        icon="📖"
-                        loading={loading}
-                    />
-                    <AdminStatCard
-                        label="Struggling Learners"
-                        value={loading ? '...' : stats?.overview.struggling_learners}
-                        icon="⚠️"
-                        loading={loading}
-                        alert={(stats?.overview.struggling_learners ?? 0) > 0}
-                    />
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-6">
-                    {/* Schools Table */}
-                    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-[var(--color-text)] mb-4">🏫 Registered Schools</h3>
-                        {loading ? (
-                            <div className="space-y-3">
-                                {[1, 2, 3].map((n) => (
-                                    <div key={n} className="h-10 bg-[var(--color-primary-5)] rounded-lg animate-pulse" />
-                                ))}
-                            </div>
-                        ) : stats?.schools.length === 0 ? (
-                            <p className="text-[var(--color-muted)] text-sm text-center py-8">No schools registered yet</p>
+            <div className="w-full space-y-5 sm:space-y-6">
+                {/* Toast Notification */}
+                {toast && (
+                    <div className={`fixed top-5 right-5 z-50 px-5 py-3 rounded-xl shadow-xl flex items-center gap-3 transition-all transform duration-300 ${
+                        toast.type === 'success' ? 'bg-[var(--color-success)] text-white' : 'bg-[var(--color-error)] text-white'
+                    }`}>
+                        {toast.type === 'success' ? (
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                            </svg>
                         ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="text-left text-[var(--color-muted)] border-b border-[var(--color-border)]">
-                                            <th className="pb-2 font-semibold">School</th>
-                                            <th className="pb-2 font-semibold">City</th>
-                                            <th className="pb-2 font-semibold text-center">Teachers</th>
-                                            <th className="pb-2 font-semibold text-center">Learners</th>
-                                            <th className="pb-2 font-semibold text-center">Classes</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-[var(--color-border)]/50">
-                                        {stats?.schools.map((school) => (
-                                            <tr key={school.id} className="hover:bg-[var(--color-primary-5)]/50 transition-colors">
-                                                <td className="py-2.5 font-semibold text-[var(--color-text)]">{school.name}</td>
-                                                <td className="py-2.5 text-[var(--color-muted)]">{school.city || '—'}</td>
-                                                <td className="py-2.5 text-center font-bold text-[var(--color-primary)]">{school.teacher_count}</td>
-                                                <td className="py-2.5 text-center font-bold text-[var(--color-primary)]">{school.learner_count}</td>
-                                                <td className="py-2.5 text-center font-bold text-[var(--color-primary)]">{school.class_count}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
                         )}
+                        <span className="font-medium text-sm">{toast.message}</span>
                     </div>
+                )}
 
-                    {/* Top Teachers */}
-                    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-[var(--color-text)] mb-4">🏆 Top Teachers by Learners</h3>
-                        {loading ? (
-                            <div className="space-y-3">
-                                {[1, 2, 3].map((n) => (
-                                    <div key={n} className="h-10 bg-[var(--color-primary-5)] rounded-lg animate-pulse" />
-                                ))}
-                            </div>
-                        ) : stats?.top_teachers.length === 0 ? (
-                            <p className="text-[var(--color-muted)] text-sm text-center py-8">No teachers with learners yet</p>
-                        ) : (
-                            <div className="space-y-3">
-                                {stats?.top_teachers.map((teacher, i) => (
-                                    <div key={teacher.id} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--color-primary-5)]/30">
-                                        <span className={`text-lg font-black w-8 text-center ${i === 0 ? 'text-[var(--color-accent)]' : i === 1 ? 'text-[var(--color-primary-light)]' : 'text-[var(--color-muted)]'}`}>
-                                            #{i + 1}
-                                        </span>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-bold text-[var(--color-text)]">{teacher.name}</p>
-                                            <p className="text-xs text-[var(--color-muted)]">{teacher.school}</p>
-                                        </div>
-                                        <span className="text-sm font-bold text-[var(--color-primary)]">
-                                            {teacher.learner_count} learners
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                {/* Header Title */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--color-text)] flex items-center gap-3">
+                            <span className="p-2 bg-[var(--color-primary-5)] text-[var(--color-primary)] border border-[var(--color-border)] rounded-xl">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                </svg>
+                            </span>
+                            {isSuperAdmin ? 'Super Admin Command Center' : `${stats?.school?.name || 'School'} Admin Portal`}
+                        </h1>
+                        <p className="text-[var(--color-muted)] text-sm mt-1">
+                            {isSuperAdmin 
+                                ? 'Super admin platform oversight, school provisioning, admin assignment, and global curriculum management.'
+                                : `School administration for ${stats?.school?.name || 'your institution'} — manage cohorts, learners, and learning performance.`
+                            }
+                        </p>
                     </div>
                 </div>
 
-                {/* Activity Summary */}
-                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 shadow-sm">
-                    <h3 className="text-lg font-bold text-[var(--color-text)] mb-4">📈 Platform Health</h3>
-                    {loading ? (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {[1, 2, 3, 4].map((n) => (
-                                <div key={n} className="h-16 bg-[var(--color-primary-5)] rounded-xl animate-pulse" />
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <HealthIndicator label="Avg Mastery" value={stats?.overview.avg_mastery ?? 0} type="mastery" />
-                            <HealthIndicator label="Quiz Completion Rate" value={stats?.overview.total_attempts ?? 0} type="count" />
-                            <HealthIndicator label="Learner-to-Teacher Ratio" value={
-                                (stats?.overview.total_teachers ?? 0) > 0
-                                    ? Math.round((stats?.overview.total_learners ?? 0) / stats!.overview.total_teachers)
-                                    : 0
-                            } type="ratio" />
-                            <HealthIndicator label="Struggling Learners" value={stats?.overview.struggling_learners ?? 0} type="alert" />
-                        </div>
-                    )}
+                {/* Navigation Tabs */}
+                <div className="flex items-center gap-2 border-b border-[var(--color-border)] pb-2 overflow-x-auto">
+                    {visibleTabs.map((tab) => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 cursor-pointer active:scale-[0.98] whitespace-nowrap ${
+                                activeTab === tab.id
+                                    ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
+                            }`}
+                        >
+                            <span>{tab.icon}</span>
+                            <span>{tab.label}</span>
+                            {tab.count !== undefined && (
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                    activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-[var(--color-primary-5)] text-[var(--color-muted)]'
+                                }`}>
+                                    {tab.count}
+                                </span>
+                            )}
+                        </button>
+                    ))}
                 </div>
+
+                {/* Sub-Component Tabs */}
+                {activeTab === 'overview' && (
+                    <OverviewTab stats={stats} loading={loadingStats} />
+                )}
+
+                {activeTab === 'schools' && isSuperAdmin && (
+                    <SchoolsTab
+                        schools={schools}
+                        loading={loadingSchools}
+                        onRefresh={() => { fetchSchools(); fetchStats(); }}
+                        showToast={showToast}
+                    />
+                )}
+
+                {activeTab === 'school_admins' && isSuperAdmin && (
+                    <SchoolAdminsTab
+                        admins={schoolAdmins}
+                        schools={schools}
+                        loading={loadingSchoolAdmins}
+                        onRefresh={() => { fetchSchoolAdmins(); fetchSchools(); fetchStats(); }}
+                        showToast={showToast}
+                    />
+                )}
+
+                {activeTab === 'classes' && (
+                    <ClassesTab
+                        classes={classes}
+                        schools={schools}
+                        loading={loadingClasses}
+                        onRefresh={() => { fetchClasses(); fetchStats(); }}
+                        showToast={showToast}
+                    />
+                )}
+
+                {activeTab === 'learners' && (
+                    <LearnersTab
+                        learners={learners}
+                        schools={schools}
+                        loading={loadingLearners}
+                        onRefresh={() => { fetchLearners(); fetchStats(); }}
+                        showToast={showToast}
+                    />
+                )}
+
+                {activeTab === 'subjects' && (
+                    <SubjectsTab
+                        subjects={subjects}
+                        loading={loadingSubjects}
+                        onRefresh={() => { fetchSubjects(); fetchStats(); }}
+                        showToast={showToast}
+                    />
+                )}
+
+                {activeTab === 'questions' && (
+                    <QuestionBankTab
+                        questions={questions}
+                        subjects={subjects}
+                        allTopics={allTopics}
+                        loading={loadingQuestions}
+                        onRefresh={() => { fetchQuestions(); fetchStats(); }}
+                        showToast={showToast}
+                    />
+                )}
             </div>
         </AuthenticatedLayout>
     );
 }
 
-function AdminStatCard({ label, value, icon, loading, alert }: {
-    label: string;
-    value: any;
-    icon: string;
-    loading: boolean;
-    alert?: boolean;
-}) {
-    return (
-        <div className={`bg-[var(--color-surface)] border rounded-2xl p-5 shadow-sm transition-all ${alert ? 'border-[var(--color-error)]/30 bg-[var(--color-error)]/5' : 'border-[var(--color-border)]'}`}>
-            <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">{icon}</span>
-            </div>
-            {loading ? (
-                <div className="h-8 w-16 bg-[var(--color-primary-5)] rounded-lg animate-pulse" />
-            ) : (
-                <p className="text-2xl font-black text-[var(--color-text)]">{value}</p>
-            )}
-            <p className="text-xs text-[var(--color-muted)] mt-1 font-medium">{label}</p>
-        </div>
-    );
-}
-
-function HealthIndicator({ label, value, type }: {
-    label: string;
-    value: number;
-    type: 'mastery' | 'count' | 'ratio' | 'alert';
-}) {
-    const getColor = () => {
-        switch (type) {
-            case 'mastery':
-                if (value >= 70) return 'text-[var(--color-success)]';
-                if (value >= 40) return 'text-[var(--color-accent)]';
-                return 'text-[var(--color-error)]';
-            case 'alert':
-                if (value === 0) return 'text-[var(--color-success)]';
-                if (value <= 5) return 'text-[var(--color-accent)]';
-                return 'text-[var(--color-error)]';
-            case 'ratio':
-                return 'text-[var(--color-primary)]';
-            default:
-                return 'text-[var(--color-primary)]';
-        }
-    };
-
-    const getLabel = () => {
-        switch (type) {
-            case 'mastery': return value >= 70 ? 'Healthy' : value >= 40 ? 'Moderate' : 'Needs Attention';
-            case 'alert': return value === 0 ? 'All Good' : value <= 5 ? 'Watch Closely' : 'Urgent';
-            default: return '';
-        }
-    };
-
-    return (
-        <div className="text-center p-4 rounded-xl bg-[var(--color-primary-5)]/30">
-            <p className={`text-2xl font-black ${getColor()}`}>{type === 'ratio' ? `${value}:1` : value.toLocaleString()}</p>
-            <p className="text-xs text-[var(--color-muted)] font-semibold mt-1">{label}</p>
-            {getLabel() && (
-                <span className={`text-[10px] font-bold uppercase tracking-wider ${getColor()}`}>
-                    {getLabel()}
-                </span>
-            )}
-        </div>
-    );
-}

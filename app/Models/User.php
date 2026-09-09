@@ -40,14 +40,14 @@ class User extends Authenticatable
 
     // --- School Relationships ---
 
-    public function teacherProfile(): HasMany
+    public function teacherProfile(): HasOne
     {
-        return $this->hasMany(TeacherProfile::class);
+        return $this->hasOne(TeacherProfile::class);
     }
 
-    public function learnerProfile(): HasMany
+    public function learnerProfile(): HasOne
     {
-        return $this->hasMany(LearnerProfile::class);
+        return $this->hasOne(LearnerProfile::class);
     }
 
     public function classMemberships(): HasMany
@@ -80,11 +80,42 @@ class User extends Authenticatable
         return $this->hasMany(LearnerProgress::class);
     }
 
+    public function administeredSchool(): HasOne
+    {
+        return $this->hasOne(School::class, 'admin_user_id');
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === UserRole::SUPER_ADMIN;
+    }
+
+    public function isSchoolAdmin(): bool
+    {
+        return $this->role === UserRole::SCHOOL_ADMIN || $this->role === UserRole::ADMIN;
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->isSuperAdmin() || $this->isSchoolAdmin();
+    }
+
+    public function isLearner(): bool
+    {
+        return $this->role === UserRole::LEARNER;
+    }
+
     /**
      * Get the primary school for this user (first school found).
      */
     public function primarySchool()
     {
+        if ($this->role === UserRole::SUPER_ADMIN) {
+            return School::first();
+        }
+        if ($this->role === UserRole::ADMIN || $this->role === UserRole::SCHOOL_ADMIN) {
+            return $this->administeredSchool()->first() ?? School::first();
+        }
         if ($this->role === UserRole::TEACHER) {
             return $this->teacherProfile()->first()?->school;
         }

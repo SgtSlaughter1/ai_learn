@@ -151,32 +151,69 @@ export default function Login() {
                 </div>
 
                 {/* Helper Login Credentials Card with Click-to-Fill */}
-                <div className="bg-[var(--color-primary)]/5 border border-[var(--color-border)] p-5 rounded-2xl text-xs text-[var(--color-muted)] space-y-2.5">
-                    <p className="font-bold text-[var(--color-text)]">Quick Fill Demo Accounts (Tap to fill):</p>
-                    <div className="space-y-1.5">
+                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] p-5 rounded-3xl shadow-sm text-xs text-[var(--color-muted)] space-y-3">
+                    <p className="font-bold text-[var(--color-text)] flex items-center justify-between">
+                        <span>Demo Accounts (Tap to fill):</span>
+                        <span className="text-[10px] font-normal text-[var(--color-muted)]">pwd: password</span>
+                    </p>
+                    <div className="space-y-2">
+                        <button
+                            type="button"
+                            onClick={() => fillCredentials('superadmin@example.com', 'password')}
+                            className="w-full text-left p-2.5 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-surface-hover)] active:scale-[0.98] transition-all duration-200 cursor-pointer flex items-center justify-between group"
+                        >
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-lg bg-[var(--color-primary-5)] border border-[var(--color-primary)]/20 flex items-center justify-center text-[var(--color-primary)] shrink-0">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p className="font-bold text-[var(--color-text)] leading-tight">Super Admin</p>
+                                    <p className="text-[10px] text-[var(--color-muted)]">Platform oversight & schools</p>
+                                </div>
+                            </div>
+                            <span className="text-[11px] font-mono text-[var(--color-muted)] group-hover:text-[var(--color-primary)]">superadmin@example.com</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => fillCredentials('schooladmin@example.com', 'password')}
+                            className="w-full text-left p-2.5 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-surface-hover)] active:scale-[0.98] transition-all duration-200 cursor-pointer flex items-center justify-between group"
+                        >
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-lg bg-[var(--color-surface-elevated)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-text)] shrink-0">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p className="font-bold text-[var(--color-text)] leading-tight">School Admin</p>
+                                    <p className="text-[10px] text-[var(--color-muted)]">AILEARN Academy activities</p>
+                                </div>
+                            </div>
+                            <span className="text-[11px] font-mono text-[var(--color-muted)] group-hover:text-[var(--color-primary)]">schooladmin@example.com</span>
+                        </button>
+
                         <button
                             type="button"
                             onClick={() => fillCredentials('learner@example.com', 'password')}
-                            className="w-full text-left p-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors cursor-pointer flex items-center justify-between group"
+                            className="w-full text-left p-2.5 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-surface-hover)] active:scale-[0.98] transition-all duration-200 cursor-pointer flex items-center justify-between group"
                         >
-                            <span className="font-semibold text-[var(--color-text)]">Learner</span>
-                            <span className="text-[11px] text-[var(--color-muted)] group-hover:text-[var(--color-primary)]">learner@example.com / password</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => fillCredentials('teacher@example.com', 'password')}
-                            className="w-full text-left p-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors cursor-pointer flex items-center justify-between group"
-                        >
-                            <span className="font-semibold text-[var(--color-text)]">Teacher</span>
-                            <span className="text-[11px] text-[var(--color-muted)] group-hover:text-[var(--color-primary)]">teacher@example.com / password</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => fillCredentials('admin@example.com', 'password')}
-                            className="w-full text-left p-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors cursor-pointer flex items-center justify-between group"
-                        >
-                            <span className="font-semibold text-[var(--color-text)]">Admin</span>
-                            <span className="text-[11px] text-[var(--color-muted)] group-hover:text-[var(--color-primary)]">admin@example.com / password</span>
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-lg bg-[var(--color-primary-5)] border border-[var(--color-primary)]/20 flex items-center justify-center text-[var(--color-primary)] shrink-0">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path d="M12 14l9-5-9-5-9 5 9 5z" />
+                                        <path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-5.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-5.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p className="font-bold text-[var(--color-text)] leading-tight">Learner</p>
+                                    <p className="text-[10px] text-[var(--color-muted)]">SS1 Student assessments</p>
+                                </div>
+                            </div>
+                            <span className="text-[11px] font-mono text-[var(--color-muted)] group-hover:text-[var(--color-primary)]">learner@example.com</span>
                         </button>
                     </div>
                 </div>

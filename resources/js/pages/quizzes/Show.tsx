@@ -445,7 +445,7 @@ export default function Show({ quizId }: Props) {
                 <footer className="max-w-4xl w-full mx-auto space-y-4">
                     <div className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] h-2.5 rounded-full overflow-hidden">
                         <div
-                            className="bg-[var(--color-accent)] h-full transition-all duration-300 rounded-full shadow-md shadow-indigo-600/20"
+                            className="bg-[var(--color-accent)] h-full transition-all duration-300 rounded-full shadow-sm"
                             style={{ width: `${adaptiveProgress}%` }}
                         />
                     </div>
@@ -455,7 +455,7 @@ export default function Show({ quizId }: Props) {
                             type="button"
                             onClick={submitAdaptiveAnswer}
                             disabled={isSubmitting}
-                            className="px-6 py-3 rounded-xl bg-[var(--color-accent)] hover:bg-[var(--color-accent)] text-white text-sm font-extrabold shadow-lg shadow-indigo-600/10 transition-all focus:outline-none min-h-[48px] disabled:opacity-50 cursor-pointer"
+                            className="px-6 py-3 rounded-xl bg-[var(--color-accent)] hover:bg-[var(--color-accent)] text-white text-sm font-extrabold shadow-sm transition-all focus:outline-none min-h-[48px] disabled:opacity-50 cursor-pointer"
                         >
                             {isSubmitting ? 'Submitting...' : 'Submit Answer'}
                         </button>
@@ -512,7 +512,7 @@ export default function Show({ quizId }: Props) {
                 {questions.length > 0 && (
                     <div className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] h-2.5 rounded-full overflow-hidden">
                         <div
-                            className="bg-[var(--color-accent)] h-full transition-all duration-300 rounded-full shadow-md shadow-indigo-600/20"
+                            className="bg-[var(--color-accent)] h-full transition-all duration-300 rounded-full shadow-sm"
                             style={{ width: `${progressPercent}%` }}
                         />
                     </div>
@@ -541,7 +541,7 @@ export default function Show({ quizId }: Props) {
                             type="button"
                             onClick={() => handleStandardSubmit()}
                             disabled={isSubmitting}
-                            className="px-6 py-3 rounded-xl bg-[var(--color-accent)] hover:bg-[var(--color-accent)] text-white text-sm font-extrabold shadow-lg shadow-indigo-600/10 transition-all focus:outline-none min-h-[48px] cursor-pointer"
+                            className="px-6 py-3 rounded-xl bg-[var(--color-accent)] hover:bg-[var(--color-accent)] text-white text-sm font-extrabold shadow-sm transition-all focus:outline-none min-h-[48px] cursor-pointer"
                         >
                             {isSubmitting ? 'Submitting...' : 'Finish Assessment'}
                         </button>

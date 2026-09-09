@@ -4,7 +4,9 @@ namespace App\Enums;
 
 enum UserRole: string
 {
-    case LEARNER = 'learner';
-    case TEACHER = 'teacher';
+    case SUPER_ADMIN = 'super_admin';
+    case SCHOOL_ADMIN = 'school_admin';
     case ADMIN = 'admin';
+    case TEACHER = 'teacher';
+    case LEARNER = 'learner';
 }

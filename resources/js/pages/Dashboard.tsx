@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { db } from '@/db/database';
@@ -20,6 +20,14 @@ interface DashboardStats {
 }
 
 export default function Dashboard() {
+    const { auth } = usePage<{ auth?: { user?: { role?: string } } }>().props;
+
+    useEffect(() => {
+        const role = auth?.user?.role;
+        if (role === 'admin' || role === 'super_admin' || role === 'school_admin' || role === 'teacher') {
+            window.location.href = '/admin/dashboard';
+        }
+    }, [auth]);
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [recentAttempts, setRecentAttempts] = useState<DashboardAttempt[]>([]);
     const [gamification, setGamification] = useState<GamificationData | null>(null);

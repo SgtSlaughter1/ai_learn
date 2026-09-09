@@ -1,0 +1,194 @@
+export interface Overview {
+    total_schools: number;
+    total_school_admins?: number;
+    total_learners: number;
+    total_classes: number;
+    total_subjects: number;
+    total_topics: number;
+    total_quizzes: number;
+    total_questions: number;
+    total_attempts: number;
+    total_questions_answered: number;
+    avg_mastery: number;
+    struggling_learners: number;
+}
+
+export interface SchoolItem {
+    id: number;
+    name: string;
+    slug?: string;
+    address?: string | null;
+    city: string | null;
+    state?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    description?: string | null;
+    is_active?: boolean;
+    admin_user_id?: string | null;
+    admin?: {
+        id: string;
+        name: string;
+        email: string;
+    } | null;
+    classes_count?: number;
+    learners_count?: number;
+    classes?: { id: number; name: string; grade_level?: string }[];
+    _pendingSync?: boolean;
+    _offlineDeleted?: boolean;
+}
+
+export interface SchoolAdminItem {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    created_at?: string;
+    administered_school?: {
+        id: number;
+        name: string;
+        city?: string | null;
+        state?: string | null;
+    } | null;
+    school_id?: number | null;
+    _pendingSync?: boolean;
+    _offlineDeleted?: boolean;
+}
+
+export interface TopLearner {
+    id: string;
+    name: string;
+    email: string;
+    school: string;
+    grade_level: string;
+    total_xp: number;
+    rank: string;
+    level: number;
+}
+
+export interface StrugglingLearner {
+    id: string;
+    name: string;
+    email: string;
+    school: string;
+    grade_level: string;
+    avg_mastery: number;
+    questions_attempted: number;
+}
+
+export interface Stats {
+    is_super_admin?: boolean;
+    role?: string;
+    school?: { id: number; name: string; city?: string | null; state?: string | null } | null;
+    overview: Overview;
+    grade_distribution: Record<string, number>;
+    top_learners: TopLearner[];
+    struggling_learners?: StrugglingLearner[];
+}
+
+export interface ClassItem {
+    id: number;
+    school_id: number;
+    name: string;
+    slug: string;
+    grade_level: string;
+    section: string | null;
+    description: string | null;
+    is_active: boolean;
+    learner_count?: number;
+    school?: { id: number; name: string };
+    _pendingSync?: boolean;
+    _offlineDeleted?: boolean;
+}
+
+export interface ClassLearner {
+    id: string;
+    name: string;
+    email: string;
+    level: number;
+    rank: string;
+    total_xp: number;
+    streak: number;
+    topics_covered: number;
+    avg_mastery: number;
+    total_attempted: number;
+    total_correct: number;
+}
+
+export interface Learner {
+    id: string;
+    name: string;
+    email: string;
+    learner_profile?: {
+        id: number;
+        school_id: number | null;
+        student_id: string | null;
+        grade_level: string | null;
+        is_active: boolean;
+        school?: { id: number; name: string };
+    };
+    gamification?: {
+        total_xp: number;
+        level: number;
+        rank: string;
+    };
+    classes?: { id: number; name: string }[];
+    _pendingSync?: boolean;
+    _offlineDeleted?: boolean;
+}
+
+export interface TopicItem {
+    id: number;
+    subject_id: number;
+    name: string;
+    slug: string;
+    level: string;
+    description: string | null;
+    status: string;
+    sort_order: number;
+    questions_count?: number;
+    subject?: { id: number; name: string; slug: string };
+    _pendingSync?: boolean;
+    _offlineDeleted?: boolean;
+}
+
+export interface SubjectItem {
+    id: number;
+    school_id?: number | null;
+    school?: { id: number; name: string } | null;
+    name: string;
+    slug: string;
+    description: string | null;
+    status: string;
+    sort_order: number;
+    topics_count?: number;
+    topics?: TopicItem[];
+    _pendingSync?: boolean;
+    _offlineDeleted?: boolean;
+}
+
+export interface QuestionOptionItem {
+    id?: number;
+    option_text: string;
+    is_correct: boolean;
+    sort_order?: number;
+}
+
+export interface QuestionItem {
+    id: number;
+    school_id?: number | null;
+    school?: { id: number; name: string } | null;
+    topic_id: number;
+    question_text: string;
+    type: string;
+    difficulty: string;
+    explanation: string | null;
+    status: string;
+    options: QuestionOptionItem[];
+    topic?: {
+        id: number;
+        name: string;
+        subject?: { id: number; name: string; school_id?: number | null };
+    };
+    _pendingSync?: boolean;
+    _offlineDeleted?: boolean;
+}

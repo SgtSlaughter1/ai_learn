@@ -31,7 +31,7 @@ async function generateOfflineResponse(message: string): Promise<string> {
             });
 
             if (lowProgressTopics.length === 0) {
-                return "🎉 Excellent work! You have mastered all topics. You can review your flashcards or take standard quizzes to maintain your score.";
+                return "Excellent work! You have mastered all topics. You can review your flashcards or take standard quizzes to maintain your score.";
             }
 
             const recommendations = lowProgressTopics.slice(0, 3).map(t => {
@@ -74,7 +74,7 @@ async function generateOfflineResponse(message: string): Promise<string> {
 
             let response = `Here is what I found in your offline library about **${matchedTopic.name}** (Level: ${matchedTopic.level.toUpperCase()}):\n\n*${matchedTopic.description || 'No description cached.'}*\n\nThis topic is part of your **${sub?.name || 'Curriculum'}** course.`;
             if (keyConcept) {
-                response += `\n\n💡 **Key Concept:**\n${keyConcept}`;
+                response += `\n\n**Key Concept:**\n${keyConcept}`;
             }
             response += `\n\nYou can practice this topic by taking the quiz for ${sub?.name || 'this subject'}!`;
             return response;
@@ -114,7 +114,7 @@ async function generateOfflineResponse(message: string): Promise<string> {
     const subjectList = cachedSubjects.length > 0 ? cachedSubjects.map(s => s.name).join(', ') : 'all enrolled subjects';
     const sampleTopics = cachedTopics.slice(0, 3).map(t => `**${t.name}**`).join(', ');
 
-    return `🤖 **AILEARN Tutor Mode**\n\nI am operating in offline mode using your local curriculum library for **${subjectList}**.\n\nWhile offline, I can help you with:\n1. **"Recommend what to study"**: I will analyze your local mastery and suggest topics.\n2. **"List subjects"**: View your offline curriculum and descriptions.\n3. Ask about any topic in your library (e.g. ${sampleTopics || 'your topics'}) to see concept notes.`;
+    return `**AILEARN Tutor Mode**\n\nI am operating in offline mode using your local curriculum library for **${subjectList}**.\n\nWhile offline, I can help you with:\n1. **"Recommend what to study"**: I will analyze your local mastery and suggest topics.\n2. **"List subjects"**: View your offline curriculum and descriptions.\n3. Ask about any topic in your library (e.g. ${sampleTopics || 'your topics'}) to see concept notes.`;
 }
 
 export default function ChatWidget() {

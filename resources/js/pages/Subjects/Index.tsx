@@ -1,11 +1,13 @@
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
-
 import { db } from '@/db/database';
 
 interface Subject {
     id: number;
+    school_id?: number | null;
+    school_name?: string | null;
+    is_general_knowledge?: boolean;
     name: string;
     slug: string;
     description: string | null;
@@ -20,10 +22,16 @@ interface ClassItem {
     section: string | null;
 }
 
+interface UserSchool {
+    id: number;
+    name: string;
+}
+
 export default function Index() {
     const [loading, setLoading] = useState<boolean>(true);
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [classes, setClasses] = useState<ClassItem[]>([]);
+    const [userSchool, setUserSchool] = useState<UserSchool | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedClassId, setSelectedClassId] = useState<number | null>(() => {
         if (typeof window !== 'undefined') {
@@ -71,15 +79,21 @@ export default function Index() {
             try {
                 const local = await db.subjects.toArray();
                 if (local.length > 0 && isMounted) {
-                    setSubjects(local.map((s: any) => ({
-                        id: s.id,
-                        name: s.name,
-                        slug: s.slug,
-                        description: s.description,
-                        progress_percent: s.progress_percent || 0,
-                        topics_count: s.topics_count || 0,
-                    })));
-                    setLoading(false);
+                    const filteredLocal = local.filter((s) => s.school_id !== null && s.school_id !== undefined);
+                    if (filteredLocal.length > 0) {
+                        setSubjects(filteredLocal.map((s: any) => ({
+                            id: s.id,
+                            school_id: s.school_id,
+                            school_name: s.school_name,
+                            is_general_knowledge: s.is_general_knowledge,
+                            name: s.name,
+                            slug: s.slug,
+                            description: s.description,
+                            progress_percent: s.progress_percent || 0,
+                            topics_count: s.topics_count || 0,
+                        })));
+                        setLoading(false);
+                    }
                 }
             } catch (e) {
                 console.error('Dexie read error:', e);
@@ -87,12 +101,18 @@ export default function Index() {
 
             // 2. Fetch fresh data from network if online
             try {
-                const classParam = selectedClassId ? `?class_id=${selectedClassId}` : '';
-                const res = await fetch(`/api/v1/subjects${classParam}`);
+                const params = new URLSearchParams();
+                params.set('scope', 'school');
+                if (selectedClassId) params.set('class_id', String(selectedClassId));
+
+                const res = await fetch(`/api/v1/subjects?${params.toString()}`);
                 if (res.ok) {
                     const data = await res.json();
                     if (isMounted) {
                         setSubjects(data.subjects || []);
+                        if (data.user_school) {
+                            setUserSchool(data.user_school);
+                        }
                         setLoading(false);
                     }
                     // Save to Dexie for offline use
@@ -100,6 +120,9 @@ export default function Index() {
                         await db.subjects.bulkPut(
                             data.subjects.map((s: any) => ({
                                 id: s.id,
+                                school_id: s.school_id,
+                                school_name: s.school_name,
+                                is_general_knowledge: s.is_general_knowledge,
                                 name: s.name,
                                 slug: s.slug,
                                 description: s.description,
@@ -134,13 +157,27 @@ export default function Index() {
     return (
         <AuthenticatedLayout
             header={
-                <div>
-                    <h1 className="text-3xl font-extrabold text-[var(--color-text)] tracking-tight">Academic Subjects</h1>
-                    <p className="text-[var(--color-muted)] mt-1">Select a subject to begin learning or take quizzes.</p>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-extrabold text-[var(--color-text)] tracking-tight">School Curriculum</h1>
+                        <p className="text-[var(--color-muted)] mt-1">
+                            Curricula & diagnostic assessments for <strong className="text-[var(--color-primary)] font-semibold">{userSchool?.name || 'Your School'}</strong>.
+                        </p>
+                    </div>
+
+                    <Link
+                        href="/general-knowledge"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-xs font-bold text-[var(--color-text)] transition-all self-start md:self-auto shadow-sm"
+                    >
+                        <svg className="w-4 h-4 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>Open General Knowledge</span>
+                    </Link>
                 </div>
             }
         >
-            <Head title="Subjects" />
+            <Head title="School Curriculum" />
 
             <div className="space-y-6">
                 {/* Search Bar & Class Filter */}
@@ -154,7 +191,7 @@ export default function Index() {
                             </span>
                             <input
                                 type="text"
-                                placeholder="Search subjects..."
+                                placeholder="Search school subjects..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="block w-full pl-10 pr-4 py-2.5 bg-[var(--color-surface)] backdrop-blur-md border border-[var(--color-border)] rounded-xl text-[var(--color-text)] placeholder-[var(--color-muted)] focus:outline-none focus:border-[var(--color-primary)]/80 focus:ring-1 focus:ring-[var(--color-primary)]/80 text-sm transition-all min-h-[48px]"
@@ -219,8 +256,17 @@ export default function Index() {
                         ))}
                     </div>
                 ) : filteredSubjects.length === 0 ? (
-                    <div className="text-center py-16 border border-dashed border-[var(--color-border)] rounded-2xl bg-[var(--color-surface)]/10">
-                        <p className="text-[var(--color-muted)]">No subjects match your search.</p>
+                    <div className="text-center py-16 border border-dashed border-[var(--color-border)] rounded-2xl bg-[var(--color-surface)]/10 space-y-3">
+                        <p className="text-[var(--color-muted)]">No curriculum subjects assigned to your school yet.</p>
+                        <Link
+                            href="/general-knowledge"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-xl text-xs font-bold shadow-sm"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>Explore General Knowledge</span>
+                        </Link>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -230,13 +276,21 @@ export default function Index() {
                                 className="bg-[var(--color-surface)] backdrop-blur-md border border-[var(--color-border)] hover:border-[var(--color-primary-light)] rounded-2xl p-6 flex flex-col justify-between hover:shadow-xl hover:shadow-black/20 transition-all group"
                             >
                                 <div className="space-y-3">
-                                    <div className="flex justify-between items-start">
+                                    <div className="flex justify-between items-start gap-2">
                                         <h2 className="text-xl font-bold text-[var(--color-text)] group-hover:text-[var(--color-primary)] transition-colors">
                                             {subject.name}
                                         </h2>
-                                        <span className="text-xs font-semibold px-2.5 py-1 bg-[var(--color-primary-5)]/80 text-[var(--color-muted)] rounded-md border border-[var(--color-border)]">
-                                            {subject.topics_count} {subject.topics_count === 1 ? 'Topic' : 'Topics'}
-                                        </span>
+                                        <div className="flex flex-col items-end gap-1">
+                                            <span className="text-xs font-semibold px-2.5 py-1 bg-[var(--color-primary-5)]/80 text-[var(--color-muted)] rounded-md border border-[var(--color-border)]">
+                                                {subject.topics_count} {subject.topics_count === 1 ? 'Topic' : 'Topics'}
+                                            </span>
+                                            {subject.school_name && (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-[var(--color-primary-5)] text-[var(--color-primary)] rounded-md border border-[var(--color-primary)]/20">
+                                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                                                    {subject.school_name}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <p className="text-sm text-[var(--color-muted)] leading-relaxed line-clamp-3">
                                         {subject.description || 'Explore curricula and complete exercises to master concepts.'}
@@ -252,7 +306,7 @@ export default function Index() {
                                         </div>
                                         <div className="w-full bg-[var(--color-background)] rounded-full h-2 overflow-hidden border border-[var(--color-border)]">
                                             <div
-                                                className="bg-gradient-to-r from-teal-500 to-[var(--color-success)] h-full rounded-full transition-all duration-500"
+                                                className="bg-[var(--color-success)] h-full rounded-full transition-all duration-500"
                                                 style={{ width: `${subject.progress_percent}%` }}
                                             />
                                         </div>
@@ -260,7 +314,7 @@ export default function Index() {
 
                                     {/* Action Button */}
                                     <Link
-                                        href={`/subjects/${subject.slug}${selectedClassId ? `?class_id=${selectedClassId}` : ''}`}
+                                        href={`/subjects/${subject.slug}`}
                                         className="w-full inline-flex items-center justify-center px-4 py-2.5 text-sm font-semibold text-[var(--color-text)] hover:text-white bg-[var(--color-primary-5)] hover:bg-[var(--color-primary)] rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] shadow-md transition-all group focus:outline-none min-h-[48px]"
                                     >
                                         Explore Topics

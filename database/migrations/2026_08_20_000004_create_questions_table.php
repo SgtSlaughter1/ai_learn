@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('questions', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('school_id')->nullable()->constrained('schools')->nullOnDelete();
             $table->foreignId('topic_id')->constrained()->cascadeOnDelete();
             $table->text('question_text');
             $table->string('type')->default('multiple_choice');
@@ -18,6 +19,7 @@ return new class extends Migration
             $table->string('status')->default('active');
             $table->timestamps();
 
+            $table->index('school_id');
             $table->index('topic_id');
             $table->index('type');
             $table->index('difficulty');

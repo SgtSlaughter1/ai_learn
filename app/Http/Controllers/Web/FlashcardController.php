@@ -17,8 +17,16 @@ class FlashcardController extends Controller
     /**
      * Render the flashcards study shell page.
      */
-    public function index(Request $request): Response
+    public function index(Request $request): mixed
     {
+        $user = $request->user();
+        $role = $user?->role?->value ?? $user?->role;
+        if (in_array($role, ['admin', 'super_admin', 'school_admin'], true)) {
+            return redirect('/admin/dashboard');
+        }
+        if ($role === 'teacher') {
+            return redirect('/teacher/dashboard');
+        }
         return Inertia::render('Flashcards/Index');
     }
 

@@ -92,18 +92,19 @@ export function QuizModeSelect({
                         type="button"
                         onClick={onSelectAdaptive}
                         disabled={adaptiveLoading || !isOnline}
-                        className="group bg-[var(--color-surface)] border border-[var(--color-accent)]/20 p-8 rounded-3xl text-left transition-all hover:border-indigo-500/40 hover:bg-indigo-950/20 hover:shadow-xl hover:shadow-indigo-500/10 focus:outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="group bg-[var(--color-surface)] border border-[var(--color-accent)]/20 p-8 rounded-3xl text-left transition-all hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-accent)]/5 hover:shadow-lg focus:outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <div className="space-y-4">
                             <div className="h-12 w-12 rounded-2xl bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20 flex items-center justify-center group-hover:bg-[var(--color-accent)]/20 group-hover:border-[var(--color-accent)]/30 transition-all">
                                 {adaptiveLoading ? (
-                                    <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                                    <div className="w-6 h-6 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
                                 ) : (
-                                    <Sparkles className="w-6 h-6 text-[var(--color-accent)] group-hover:text-indigo-300 transition-colors" />
+                                    <Sparkles className="w-6 h-6 text-[var(--color-accent)] group-hover:text-[var(--color-accent-hover)] transition-colors" />
                                 )}
                             </div>
-                            <h3 className="text-lg font-bold text-indigo-400 group-hover:text-indigo-300 transition-colors">
-                                Adaptive Quiz ✨
+                            <h3 className="text-lg font-bold text-[var(--color-accent)] group-hover:text-[var(--color-accent-hover)] transition-colors flex items-center gap-1.5">
+                                <span>Adaptive Quiz</span>
+                                <Sparkles className="w-4 h-4 text-[var(--color-accent)]" />
                             </h3>
                             <p className="text-sm text-[var(--color-muted)] leading-relaxed">
                                 AI-powered difficulty adjustment. Requires internet connection.

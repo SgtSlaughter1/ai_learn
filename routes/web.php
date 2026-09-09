@@ -15,7 +15,14 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', function () {
-    return Inertia::render('Welcome');
+    $subjects = \App\Models\Subject::where('status', 'active')
+        ->withCount('topics')
+        ->orderBy('sort_order')
+        ->get(['id', 'name', 'code', 'slug', 'description', 'icon', 'school_id']);
+
+    return Inertia::render('Welcome', [
+        'subjects' => $subjects,
+    ]);
 });
 
 // Authentication Routes
@@ -35,8 +42,9 @@ Route::middleware('auth')->group(function () {
     // Shell Pages Renders
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/admin/dashboard', [AdminDashboardController::class, 'index']);
-    Route::get('/teacher/dashboard', [TeacherDashboardController::class, 'index']);
+    Route::get('/teacher/dashboard', [AdminDashboardController::class, 'index']);
     Route::get('/subjects', [SubjectWebController::class, 'index']);
+    Route::get('/general-knowledge', [SubjectWebController::class, 'generalKnowledge']);
     Route::get('/subjects/{subject}', [SubjectWebController::class, 'show']);
     
     // Quiz Exercises & Attempts
@@ -81,14 +89,121 @@ Route::middleware('auth')->group(function () {
         Route::post('/progress/sync', [SyncController::class, 'syncProgress']);
         Route::post('/gamification/sync', [SyncController::class, 'syncGamification']);
 
-        // Teacher Dashboard & Class Management
+        // Teacher Dashboard & Class Management (backward compatibility)
         Route::get('/teacher/classes/{classId}/learners', [TeacherDashboardController::class, 'getClassLearners']);
         Route::post('/teacher/classes', [TeacherDashboardController::class, 'createClass']);
         Route::post('/teacher/classes/{classId}/enroll', [TeacherDashboardController::class, 'enrollLearner']);
         Route::delete('/teacher/classes/{classId}/learners/{learnerId}', [TeacherDashboardController::class, 'removeLearner']);
+
+        // Admin Management: Schools, School Admins, Classes, Learners, Subjects, Topics, Questions
+        Route::get('/admin/schools', [AdminDashboardController::class, 'getSchools']);
+        Route::post('/admin/schools', [AdminDashboardController::class, 'storeSchool']);
+        Route::put('/admin/schools/{id}', [AdminDashboardController::class, 'updateSchool']);
+        Route::delete('/admin/schools/{id}', [AdminDashboardController::class, 'deleteSchool']);
+
+        Route::get('/admin/school-admins', [AdminDashboardController::class, 'getSchoolAdmins']);
+        Route::post('/admin/school-admins', [AdminDashboardController::class, 'storeSchoolAdmin']);
+        Route::put('/admin/school-admins/{id}', [AdminDashboardController::class, 'updateSchoolAdmin']);
+        Route::delete('/admin/school-admins/{id}', [AdminDashboardController::class, 'deleteSchoolAdmin']);
+
+        Route::get('/admin/classes', [AdminDashboardController::class, 'getClasses']);
+        Route::post('/admin/classes', [AdminDashboardController::class, 'storeClass']);
+        Route::put('/admin/classes/{id}', [AdminDashboardController::class, 'updateClass']);
+        Route::delete('/admin/classes/{id}', [AdminDashboardController::class, 'deleteClass']);
+        Route::get('/admin/classes/{classId}/learners', [AdminDashboardController::class, 'getClassLearners']);
+        Route::post('/admin/classes/{classId}/enroll', [AdminDashboardController::class, 'enrollClassLearner']);
+        Route::delete('/admin/classes/{classId}/learners/{learnerId}', [AdminDashboardController::class, 'removeClassLearner']);
+
+        Route::get('/admin/learners', [AdminDashboardController::class, 'getLearners']);
+        Route::post('/admin/learners', [AdminDashboardController::class, 'storeLearner']);
+        Route::put('/admin/learners/{id}', [AdminDashboardController::class, 'updateLearner']);
+        Route::delete('/admin/learners/{id}', [AdminDashboardController::class, 'deleteLearner']);
+
+        Route::get('/admin/subjects', [AdminDashboardController::class, 'getSubjects']);
+        Route::post('/admin/subjects', [AdminDashboardController::class, 'storeSubject']);
+        Route::put('/admin/subjects/{id}', [AdminDashboardController::class, 'updateSubject']);
+        Route::delete('/admin/subjects/{id}', [AdminDashboardController::class, 'deleteSubject']);
+
+        Route::get('/admin/topics', [AdminDashboardController::class, 'getTopics']);
+        Route::post('/admin/topics', [AdminDashboardController::class, 'storeTopic']);
+        Route::put('/admin/topics/{id}', [AdminDashboardController::class, 'updateTopic']);
+        Route::delete('/admin/topics/{id}', [AdminDashboardController::class, 'deleteTopic']);
+
+        Route::get('/admin/questions', [AdminDashboardController::class, 'getQuestions']);
+        Route::post('/admin/questions', [AdminDashboardController::class, 'storeQuestion']);
+        Route::put('/admin/questions/{id}', [AdminDashboardController::class, 'updateQuestion']);
+        Route::delete('/admin/questions/{id}', [AdminDashboardController::class, 'deleteQuestion']);
     });
 });
 
 Route::get('/api/health', function () {
     return response()->json('OK');
+});
+
+// ── Shared Hosting & Maintenance Utilities ──
+
+// Clear Cache utility
+Route::get('/clear-cache', function () {
+    \Illuminate\Support\Facades\Artisan::call('view:clear');
+    \Illuminate\Support\Facades\Artisan::call('route:clear');
+    \Illuminate\Support\Facades\Artisan::call('config:clear');
+    \Illuminate\Support\Facades\Artisan::call('cache:clear');
+    return 'All caches cleared successfully! ✨';
+});
+
+// Run standard migrations
+Route::get('/run-migrations', function () {
+    try {
+        \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+        $output = \Illuminate\Support\Facades\Artisan::output();
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Migrations ran successfully! ✨',
+            'output' => $output
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Failed to run migrations: ' . $e->getMessage()
+        ], 500);
+    }
+});
+
+// Run migrate:fresh --seed
+Route::get('/run-migrate-fresh-seed', function () {
+    try {
+        \Illuminate\Support\Facades\Artisan::call('migrate:fresh', [
+            '--seed' => true,
+            '--force' => true,
+        ]);
+        $output = \Illuminate\Support\Facades\Artisan::output();
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Database refreshed and seeded successfully! ✨',
+            'output' => $output
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Failed to run migrate:fresh --seed: ' . $e->getMessage()
+        ], 500);
+    }
+});
+
+// Run seeders only
+Route::get('/run-seed', function () {
+    try {
+        \Illuminate\Support\Facades\Artisan::call('db:seed', ['--force' => true]);
+        $output = \Illuminate\Support\Facades\Artisan::output();
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Database seeded successfully! ✨',
+            'output' => $output
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Failed to run seeders: ' . $e->getMessage()
+        ], 500);
+    }
 });
