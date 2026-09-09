@@ -12,8 +12,8 @@ return new class extends Migration
             $table->id();
             $table->foreignId('subject_id')->constrained()->cascadeOnDelete();
             $table->string('name');
-            $table->string('slug');
-            $table->string('level')->default('ss1');
+            $table->string('slug', 150);
+            $table->string('level', 50)->default('ss1');
             $table->text('description')->nullable();
             $table->string('status')->default('active');
             $table->integer('sort_order')->default(0);

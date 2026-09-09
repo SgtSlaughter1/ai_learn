@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('user_achievements', function (Blueprint $table) {
             $table->id();
             $table->foreignUuid('user_id')->constrained()->cascadeOnDelete();
-            $table->string('achievement_key');
+            $table->string('achievement_key', 100);
             $table->string('name');
             $table->string('description')->nullable();
             $table->string('icon')->nullable();

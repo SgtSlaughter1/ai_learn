@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('school_id')->nullable()->constrained('schools')->nullOnDelete();
             $table->string('name');
-            $table->string('slug')->unique();
+            $table->string('slug', 150)->unique();
             $table->text('description')->nullable();
             $table->string('status')->default('active');
             $table->integer('sort_order')->default(0);

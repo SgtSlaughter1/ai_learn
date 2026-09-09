@@ -12,8 +12,8 @@ return new class extends Migration
             $table->id();
             $table->foreignId('school_id')->constrained('schools')->cascadeOnDelete();
             $table->string('name'); // e.g. "JSS3 Blue", "SS1 Science"
-            $table->string('slug')->unique();
-            $table->string('grade_level')->nullable();
+            $table->string('slug', 150)->unique();
+            $table->string('grade_level', 50)->nullable();
             $table->string('section')->nullable();
             $table->text('description')->nullable();
             $table->boolean('is_active')->default(true);
