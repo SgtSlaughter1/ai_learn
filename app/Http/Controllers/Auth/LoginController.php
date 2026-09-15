@@ -29,8 +29,7 @@ class LoginController extends Controller
             $request->session()->regenerate();
             $user = Auth::user();
 
-            $role = $user->role?->value ?? $user->role;
-            $redirectPath = in_array($role, ['admin', 'super_admin', 'school_admin', 'teacher']) ? '/admin/dashboard' : '/dashboard';
+            $redirectPath = $user->isAdmin() ? '/admin/dashboard' : '/dashboard';
 
             if ($request->wantsJson()) {
                 return response()->json([
@@ -99,5 +98,30 @@ class LoginController extends Controller
     public function logout(Request $request): JsonResponse|RedirectResponse
     {
         return $this->destroy($request);
+    }
+
+    /**
+     * Refresh the active session token and return the newly generated session ID.
+     */
+    public function refresh(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        $request->session()->regenerate();
+        $role = $user->role?->value ?? $user->role;
+
+        return response()->json([
+            'status' => 'success',
+            'token' => session()->getId(),
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $role ?? 'learner',
+            ],
+        ]);
     }
 }

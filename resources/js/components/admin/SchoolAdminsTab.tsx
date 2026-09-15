@@ -265,11 +265,11 @@ export default function SchoolAdminsTab({
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                                                    admin.role === 'super_admin'
+                                                    admin.role === 'platform_admin'
                                                         ? 'bg-[var(--color-accent-10)] text-[var(--color-accent)] border border-[var(--color-accent-20)]'
                                                         : 'bg-[var(--color-primary-10)] text-[var(--color-primary)] border border-[var(--color-primary-20)]'
                                                 }`}>
-                                                    {admin.role === 'super_admin' ? 'Super Admin' : 'School Admin'}
+                                                    {admin.role === 'platform_admin' ? 'Platform Admin' : 'School Admin'}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4">

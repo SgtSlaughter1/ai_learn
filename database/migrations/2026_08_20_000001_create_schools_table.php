@@ -12,6 +12,7 @@ return new class extends Migration
             Schema::create('schools', function (Blueprint $table) {
                 $table->id();
                 $table->string('name');
+                $table->string('category', 50)->default('senior')->index(); // primary, junior, senior, combined
                 $table->string('slug', 150)->unique();
                 $table->string('address')->nullable();
                 $table->string('city')->nullable();

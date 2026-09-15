@@ -81,7 +81,11 @@ export function QuestionCard({
                                     : 'bg-[var(--color-background)]/40 hover:bg-[var(--color-primary-5)]/40 text-[var(--color-text)] border-[var(--color-border)]'
                             }`}
                         >
-                            <span className="leading-snug">{option.option_text}</span>
+                            <span className="leading-snug [&_p]:inline">
+                                <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                                    {option.option_text}
+                                </Markdown>
+                            </span>
                             <div
                                 className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 ml-3 ${
                                     isSelected

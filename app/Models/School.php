@@ -9,24 +9,38 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class School extends Model
 {
-    protected $fillable = [
-        'name',
-        'slug',
-        'address',
-        'city',
-        'state',
-        'phone',
-        'email',
-        'description',
-        'admin_user_id',
-        'is_active',
-    ];
+    protected $guarded = [];
 
     protected function casts(): array
     {
         return [
             'is_active' => 'boolean',
         ];
+    }
+
+    public static function allowedGradeLevelsForCategory(?string $category): array
+    {
+        return match ($category) {
+            'primary' => ['CRECHE', 'KG1', 'KG2', 'NUR1', 'NUR2', 'PRI1', 'PRI2', 'PRI3', 'PRI4', 'PRI5', 'PRI6'],
+            'junior' => ['JSS1', 'JSS2', 'JSS3'],
+            'senior' => ['SS1', 'SS2', 'SS3'],
+            default => [
+                'CRECHE', 'KG1', 'KG2', 'NUR1', 'NUR2',
+                'PRI1', 'PRI2', 'PRI3', 'PRI4', 'PRI5', 'PRI6',
+                'JSS1', 'JSS2', 'JSS3',
+                'SS1', 'SS2', 'SS3',
+            ],
+        };
+    }
+
+    public function allowedGradeLevels(): array
+    {
+        return self::allowedGradeLevelsForCategory($this->category);
+    }
+
+    public function supportsGradeLevel(string $gradeLevel): bool
+    {
+        return in_array(strtoupper($gradeLevel), $this->allowedGradeLevels(), true);
     }
 
     public function admin(): BelongsTo

@@ -8,6 +8,7 @@ use App\Models\ClassMembership;
 use App\Models\ClassModel;
 use App\Models\LearnerProfile;
 use App\Models\LearnerProgress;
+use App\Models\Program;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Quiz;
@@ -35,17 +36,17 @@ class AdminDashboardController extends Controller
     public function getStats(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user || !in_array($user->role, [UserRole::ADMIN, UserRole::SUPER_ADMIN, UserRole::SCHOOL_ADMIN])) {
+        if (!$user || !$user->isAdmin()) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
-        $isSuperAdmin = in_array($user->role, [UserRole::ADMIN, UserRole::SUPER_ADMIN]);
+        $isSuperAdmin = $user->isPlatformAdmin();
         $school = $user->isSchoolAdmin() ? $user->primarySchool() : null;
         $schoolId = $school?->id;
 
         // Platform & School counts
         $totalSchools = School::where('is_active', true)->count();
-        $totalSchoolAdmins = User::whereIn('role', ['admin', 'school_admin'])->count();
+        $totalSchoolAdmins = User::where('role', 'school_admin')->count();
 
         // Learners query scoped by school if school_admin
         $learnersQuery = User::where('role', 'learner');
@@ -97,32 +98,36 @@ class AdminDashboardController extends Controller
             ->pluck('count', 'grade_level')
             ->toArray();
 
-        // Top Performing Learners by XP
-        $topLearnersQuery = User::where('role', 'learner')
-            ->select(['id', 'name', 'email'])
-            ->with([
-                'learnerProfile.school:id,name',
-                'gamification:id,user_id,total_xp,level,rank',
+        // Top Performing Learners by XP (optimized at database level with indexed order and limit)
+        $topLearners = DB::table('users as u')
+            ->join('user_gamification as ug', 'ug.user_id', '=', 'u.id')
+            ->leftJoin('learner_profiles as lp', 'lp.user_id', '=', 'u.id')
+            ->leftJoin('schools as s', 's.id', '=', 'lp.school_id')
+            ->where('u.role', 'learner')
+            ->where('ug.total_xp', '>', 0)
+            ->when(!$isSuperAdmin && $schoolId, fn ($q) => $q->where('lp.school_id', $schoolId))
+            ->select([
+                'u.id',
+                'u.name',
+                'u.email',
+                DB::raw('COALESCE(s.name, "Primary School") as school'),
+                DB::raw('COALESCE(lp.grade_level, "SS1") as grade_level'),
+                DB::raw('COALESCE(ug.total_xp, 0) as total_xp'),
+                DB::raw("COALESCE(ug.tier, 'Newcomer') as tier"),
+                DB::raw('COALESCE(ug.level, 1) as level'),
             ])
-            ->whereHas('gamification', fn ($q) => $q->where('total_xp', '>', 0));
-
-        if (!$isSuperAdmin && $schoolId) {
-            $topLearnersQuery->whereHas('learnerProfile', fn ($q) => $q->where('school_id', $schoolId));
-        }
-
-        $topLearners = $topLearnersQuery->get()
-            ->sortByDesc(fn ($u) => $u->gamification?->total_xp ?? 0)
-            ->take(5)
-            ->values()
+            ->orderByDesc('ug.total_xp')
+            ->limit(5)
+            ->get()
             ->map(fn ($u) => [
-                'id' => $u->id,
+                'id' => (string) $u->id,
                 'name' => $u->name,
                 'email' => $u->email,
-                'school' => $u->learnerProfile?->school?->name ?? 'Primary School',
-                'grade_level' => $u->learnerProfile?->grade_level ?? 'SS1',
-                'total_xp' => $u->gamification?->total_xp ?? 0,
-                'rank' => $u->gamification?->rank ?? 'Newcomer',
-                'level' => $u->gamification?->level ?? 1,
+                'school' => $u->school,
+                'grade_level' => $u->grade_level,
+                'total_xp' => (int) $u->total_xp,
+                'tier' => $u->tier,
+                'level' => (int) $u->level,
             ]);
 
         // Struggling learners (avg mastery < 40%)
@@ -182,7 +187,7 @@ class AdminDashboardController extends Controller
     {
         $this->authorizeAdmin($request);
         $user = $request->user();
-        $isSuperAdmin = in_array($user->role, [UserRole::ADMIN, UserRole::SUPER_ADMIN]);
+        $isSuperAdmin = $user->isPlatformAdmin();
 
         $query = School::with(['admin:id,name,email'])
             ->withCount(['classes', 'learnerProfiles as learners_count']);
@@ -192,17 +197,54 @@ class AdminDashboardController extends Controller
             $query->where('admin_user_id', $user->id);
         }
 
-        $schools = $query->orderBy('name')->get();
+        if ($request->filled('category')) {
+            $query->where('category', $request->category);
+        }
 
-        return response()->json(['schools' => $schools, 'data' => $schools]);
+        if ($request->has('search')) {
+            $search = trim($request->get('search'));
+            if ($search !== '') {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('city', 'like', "%{$search}%")
+                      ->orWhere('state', 'like', "%{$search}%")
+                      ->orWhere('email', 'like', "%{$search}%");
+                });
+            }
+        }
+
+        $perPage = (int) $request->get('per_page', 15);
+        $perPage = max(1, min(100, $perPage));
+
+        $schools = $query->orderBy('name')->paginate($perPage);
+
+        return response()->json([
+            'schools' => $schools->items(),
+            'data' => $schools->items(),
+            'pagination' => [
+                'total' => $schools->total(),
+                'per_page' => $schools->perPage(),
+                'current_page' => $schools->currentPage(),
+                'last_page' => $schools->lastPage(),
+                'from' => $schools->firstItem(),
+                'to' => $schools->lastItem(),
+            ],
+            'meta' => [
+                'current_page' => $schools->currentPage(),
+                'last_page' => $schools->lastPage(),
+                'per_page' => $schools->perPage(),
+                'total' => $schools->total(),
+            ],
+        ]);
     }
 
-    public function storeSchool(Request $request): JsonResponse
+    public function saveSchool(Request $request): JsonResponse
     {
         $this->authorizeSuperAdmin($request);
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'category' => 'nullable|string|in:primary,junior,senior,combined',
             'slug' => 'nullable|string|max:255|unique:schools,slug',
             'address' => 'nullable|string|max:255',
             'city' => 'nullable|string|max:100',
@@ -224,6 +266,7 @@ class AdminDashboardController extends Controller
 
         $school = School::create([
             'name' => $validated['name'],
+            'category' => $validated['category'] ?? 'senior',
             'slug' => $slug,
             'address' => $validated['address'] ?? null,
             'city' => $validated['city'] ?? null,
@@ -249,6 +292,7 @@ class AdminDashboardController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'category' => 'nullable|string|in:primary,junior,senior,combined',
             'slug' => 'nullable|string|max:255|unique:schools,slug,' . $id,
             'address' => 'nullable|string|max:255',
             'city' => 'nullable|string|max:100',
@@ -290,7 +334,7 @@ class AdminDashboardController extends Controller
     {
         $this->authorizeSuperAdmin($request);
 
-        $admins = User::whereIn('role', ['admin', 'school_admin', 'super_admin'])
+        $admins = User::whereIn('role', ['platform_admin', 'school_admin'])
             ->with(['administeredSchool:id,name,city,state,admin_user_id'])
             ->orderBy('name')
             ->get()
@@ -309,7 +353,7 @@ class AdminDashboardController extends Controller
         return response()->json(['school_admins' => $admins, 'data' => $admins]);
     }
 
-    public function storeSchoolAdmin(Request $request): JsonResponse
+    public function saveSchoolAdmin(Request $request): JsonResponse
     {
         $this->authorizeSuperAdmin($request);
 
@@ -355,7 +399,7 @@ class AdminDashboardController extends Controller
     {
         $this->authorizeSuperAdmin($request);
 
-        $user = User::where('id', $id)->whereIn('role', ['admin', 'school_admin', 'super_admin'])->firstOrFail();
+        $user = User::where('id', $id)->whereIn('role', ['platform_admin', 'school_admin'])->firstOrFail();
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -422,14 +466,15 @@ class AdminDashboardController extends Controller
     {
         $this->authorizeAdmin($request);
         $user = $request->user();
-        $isSuperAdmin = in_array($user->role, [UserRole::ADMIN, UserRole::SUPER_ADMIN]);
+        $isSuperAdmin = $user->isPlatformAdmin();
         $schoolId = $user->isSchoolAdmin() ? $user->primarySchool()?->id : null;
 
         $query = User::where('role', 'learner')
             ->with([
                 'learnerProfile.school:id,name',
-                'gamification:id,user_id,total_xp,level,rank',
-                'classes:id,name,grade_level',
+                'gamification:id,user_id,total_xp,level,tier',
+                'classes:id,name,grade_level,arm,section,program_id',
+                'classes.program:id,name,code',
             ]);
 
         if (!$isSuperAdmin && $schoolId) {
@@ -457,19 +502,49 @@ class AdminDashboardController extends Controller
         return response()->json($learners);
     }
 
-    public function storeLearner(Request $request): JsonResponse
+    public function saveLearner(Request $request): JsonResponse
     {
         $this->authorizeAdmin($request);
+
+        $authUser = $request->user();
+        $isSchoolAdmin = $authUser && $authUser->isSchoolAdmin();
+        $schoolAdminSchoolId = $isSchoolAdmin ? $authUser->primarySchool()?->id : null;
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email',
             'password' => 'required|string|min:6',
-            'school_id' => 'nullable|exists:schools,id',
+            'school_id' => $isSchoolAdmin ? 'nullable|exists:schools,id' : 'nullable|exists:schools,id',
             'grade_level' => 'nullable|string|max:50',
             'student_id' => 'nullable|string|max:50',
             'class_id' => 'nullable|exists:classes,id',
         ]);
+
+        if ($isSchoolAdmin && $schoolAdminSchoolId) {
+            $validated['school_id'] = $schoolAdminSchoolId;
+        }
+
+        $targetSchool = !empty($validated['school_id']) ? School::find($validated['school_id']) : null;
+
+        if (!empty($validated['class_id'])) {
+            $targetClass = ClassModel::find($validated['class_id']);
+            if (!$targetClass) {
+                return response()->json(['error' => 'Selected class does not exist.'], 422);
+            }
+            if ($targetSchool && $targetClass->school_id !== $targetSchool->id) {
+                return response()->json(['error' => 'The selected class does not belong to the selected school.'], 422);
+            }
+            if ($targetSchool && !$targetSchool->supportsGradeLevel($targetClass->grade_level)) {
+                return response()->json(['error' => "Class grade level ({$targetClass->grade_level}) is not supported by the school's category ({$targetSchool->category})."], 422);
+            }
+            if (empty($validated['grade_level'])) {
+                $validated['grade_level'] = $targetClass->grade_level;
+            }
+        }
+
+        if (!empty($validated['grade_level']) && $targetSchool && !$targetSchool->supportsGradeLevel($validated['grade_level'])) {
+            return response()->json(['error' => "Grade level {$validated['grade_level']} is not supported by the school's category ({$targetSchool->category})."], 422);
+        }
 
         $user = DB::transaction(function () use ($validated) {
             $user = User::create([
@@ -492,7 +567,7 @@ class AdminDashboardController extends Controller
                 'total_xp' => 0,
                 'current_streak' => 0,
                 'level' => 1,
-                'rank' => 'Newcomer',
+                'tier' => 'Newcomer',
             ]);
 
             if (!empty($validated['class_id'])) {
@@ -519,6 +594,10 @@ class AdminDashboardController extends Controller
     {
         $this->authorizeAdmin($request);
 
+        $authUser = $request->user();
+        $isSchoolAdmin = $authUser && $authUser->isSchoolAdmin();
+        $schoolAdminSchoolId = $isSchoolAdmin ? $authUser->primarySchool()?->id : null;
+
         $user = User::where('id', $id)->where('role', 'learner')->firstOrFail();
 
         $validated = $request->validate([
@@ -531,6 +610,30 @@ class AdminDashboardController extends Controller
             'is_active' => 'nullable|boolean',
             'class_id' => 'nullable|exists:classes,id',
         ]);
+
+        if ($isSchoolAdmin && $schoolAdminSchoolId) {
+            $validated['school_id'] = $schoolAdminSchoolId;
+        }
+
+        $effectiveSchoolId = $validated['school_id'] ?? $user->learnerProfile?->school_id;
+        $targetSchool = $effectiveSchoolId ? School::find($effectiveSchoolId) : null;
+
+        if (!empty($validated['class_id'])) {
+            $targetClass = ClassModel::find($validated['class_id']);
+            if (!$targetClass) {
+                return response()->json(['error' => 'Selected class does not exist.'], 422);
+            }
+            if ($targetSchool && $targetClass->school_id !== $targetSchool->id) {
+                return response()->json(['error' => 'The selected class does not belong to the selected school.'], 422);
+            }
+            if ($targetSchool && !$targetSchool->supportsGradeLevel($targetClass->grade_level)) {
+                return response()->json(['error' => "Class grade level ({$targetClass->grade_level}) is not supported by the school's category ({$targetSchool->category})."], 422);
+            }
+        }
+
+        if (!empty($validated['grade_level']) && $targetSchool && !$targetSchool->supportsGradeLevel($validated['grade_level'])) {
+            return response()->json(['error' => "Grade level {$validated['grade_level']} is not supported by the school's category ({$targetSchool->category})."], 422);
+        }
 
         DB::transaction(function () use ($user, $validated) {
             $userData = [
@@ -589,12 +692,13 @@ class AdminDashboardController extends Controller
     {
         $this->authorizeAdmin($request);
         $user = $request->user();
-        $isSuperAdmin = in_array($user->role, [UserRole::ADMIN, UserRole::SUPER_ADMIN]);
+        $isSuperAdmin = $user->isPlatformAdmin();
         $schoolId = $user->isSchoolAdmin() ? $user->primarySchool()?->id : null;
 
         $query = Subject::withCount(['topics'])
             ->with([
                 'school:id,name',
+                'schoolClass:id,name,grade_level,section',
                 'topics' => function ($q) {
                     $q->withCount('questions')->orderBy('sort_order');
                 }
@@ -606,16 +710,20 @@ class AdminDashboardController extends Controller
             });
         }
 
-        $subjects = $query->orderBy('sort_order')->get();
+        if ($request->filled('class_id')) {
+            $query->where('class_id', $request->class_id);
+        }
+
+        $subjects = $query->orderBy('sort_order')->orderBy('name')->get();
 
         return response()->json(['subjects' => $subjects]);
     }
 
-    public function storeSubject(Request $request): JsonResponse
+    public function saveSubject(Request $request): JsonResponse
     {
         $this->authorizeAdmin($request);
         $user = $request->user();
-        $isSuperAdmin = in_array($user->role, [UserRole::ADMIN, UserRole::SUPER_ADMIN]);
+        $isSuperAdmin = $user->isPlatformAdmin();
         $schoolId = $user->isSchoolAdmin() ? $user->primarySchool()?->id : null;
 
         $validated = $request->validate([
@@ -625,10 +733,10 @@ class AdminDashboardController extends Controller
             'status' => 'nullable|string|in:active,inactive',
             'sort_order' => 'nullable|integer',
             'school_id' => 'nullable|exists:schools,id',
+            'class_id' => 'nullable|exists:classes,id',
         ]);
 
         $slug = !empty($validated['slug']) ? Str::slug($validated['slug']) : Str::slug($validated['name']);
-        // Ensure slug uniqueness
         $originalSlug = $slug;
         $count = 1;
         while (Subject::where('slug', $slug)->exists()) {
@@ -636,10 +744,31 @@ class AdminDashboardController extends Controller
             $count++;
         }
 
-        $assignedSchoolId = $isSuperAdmin ? ($validated['school_id'] ?? null) : $schoolId;
+        $targetClass = !empty($validated['class_id']) ? ClassModel::find($validated['class_id']) : null;
+        if (!empty($validated['class_id']) && !$targetClass) {
+            return response()->json(['error' => 'Selected class does not exist.'], 422);
+        }
+
+        if (!$isSuperAdmin && $schoolId && $targetClass && $targetClass->school_id !== $schoolId) {
+            return response()->json(['error' => 'The selected class does not belong to your school.'], 403);
+        }
+
+        $assignedSchoolId = $isSuperAdmin
+            ? ($validated['school_id'] ?? $targetClass?->school_id)
+            : ($schoolId ?? $targetClass?->school_id);
+
+        if ($targetClass && $assignedSchoolId && $targetClass->school_id !== (int) $assignedSchoolId) {
+            return response()->json(['error' => 'The selected class does not belong to the designated school.'], 422);
+        }
+
+        $targetSchool = $assignedSchoolId ? School::find($assignedSchoolId) : null;
+        if ($targetClass && $targetSchool && !$targetSchool->supportsGradeLevel($targetClass->grade_level)) {
+            return response()->json(['error' => "The selected class grade level ({$targetClass->grade_level}) is not permitted under school category ({$targetSchool->category})."], 422);
+        }
 
         $subject = Subject::create([
             'school_id' => $assignedSchoolId,
+            'class_id' => $validated['class_id'] ?? null,
             'name' => $validated['name'],
             'slug' => $slug,
             'description' => $validated['description'] ?? null,
@@ -649,15 +778,22 @@ class AdminDashboardController extends Controller
 
         return response()->json([
             'message' => 'Subject created successfully',
-            'subject' => $subject->load(['school:id,name'])->loadCount('topics'),
+            'subject' => $subject->load(['school:id,name', 'schoolClass:id,name,grade_level'])->loadCount('topics'),
         ], 201);
     }
 
     public function updateSubject(Request $request, int $id): JsonResponse
     {
         $this->authorizeAdmin($request);
+        $user = $request->user();
+        $isSuperAdmin = $user->isPlatformAdmin();
+        $schoolId = $user->isSchoolAdmin() ? $user->primarySchool()?->id : null;
 
         $subject = Subject::findOrFail($id);
+
+        if (!$isSuperAdmin && $schoolId && $subject->school_id && $subject->school_id !== $schoolId) {
+            return response()->json(['error' => 'You do not have permission to update subjects from another school.'], 403);
+        }
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -665,17 +801,42 @@ class AdminDashboardController extends Controller
             'description' => 'nullable|string',
             'status' => 'nullable|string|in:active,inactive',
             'sort_order' => 'nullable|integer',
+            'class_id' => 'nullable|exists:classes,id',
+            'school_id' => 'nullable|exists:schools,id',
         ]);
 
         if (!empty($validated['slug'])) {
             $validated['slug'] = Str::slug($validated['slug']);
         }
 
+        if (array_key_exists('class_id', $validated) && !empty($validated['class_id'])) {
+            $targetClass = ClassModel::find($validated['class_id']);
+            if ($targetClass) {
+                if (!$isSuperAdmin && $schoolId && $targetClass->school_id !== $schoolId) {
+                    return response()->json(['error' => 'The selected class does not belong to your school.'], 403);
+                }
+
+                $effectiveSchoolId = $validated['school_id'] ?? $subject->school_id ?? $targetClass->school_id;
+                if ($effectiveSchoolId && $targetClass->school_id !== (int) $effectiveSchoolId) {
+                    return response()->json(['error' => 'The selected class does not belong to the designated school.'], 422);
+                }
+
+                $targetSchool = $effectiveSchoolId ? School::find($effectiveSchoolId) : null;
+                if ($targetSchool && !$targetSchool->supportsGradeLevel($targetClass->grade_level)) {
+                    return response()->json(['error' => "The selected class grade level ({$targetClass->grade_level}) is not permitted under school category ({$targetSchool->category})."], 422);
+                }
+
+                if (empty($validated['school_id']) && !$subject->school_id && $targetClass->school_id) {
+                    $validated['school_id'] = $targetClass->school_id;
+                }
+            }
+        }
+
         $subject->update($validated);
 
         return response()->json([
             'message' => 'Subject updated successfully',
-            'subject' => $subject->loadCount('topics'),
+            'subject' => $subject->fresh(['school:id,name', 'schoolClass:id,name,grade_level'])->loadCount('topics'),
         ]);
     }
 
@@ -693,10 +854,25 @@ class AdminDashboardController extends Controller
     {
         $this->authorizeAdmin($request);
 
-        $query = Topic::with('subject:id,name,slug')->withCount('questions');
+        $query = Topic::with(['subject:id,name,slug,school_id,class_id', 'subject.schoolClass:id,name,grade_level'])->withCount('questions');
 
         if ($request->filled('subject_id')) {
             $query->where('subject_id', $request->subject_id);
+        }
+
+        if ($request->filled('class_id')) {
+            $class = ClassModel::find($request->class_id);
+            $query->where(function ($q) use ($request, $class) {
+                $q->whereHas('subject', fn ($sub) => $sub->where('class_id', $request->class_id));
+                if ($class && $class->grade_level) {
+                    $q->orWhere('level', strtolower($class->grade_level))
+                      ->orWhere('level', strtoupper($class->grade_level));
+                }
+            });
+        }
+
+        if ($request->filled('level')) {
+            $query->where('level', $request->level);
         }
 
         $topics = $query->orderBy('sort_order')->get();
@@ -704,7 +880,7 @@ class AdminDashboardController extends Controller
         return response()->json(['topics' => $topics]);
     }
 
-    public function storeTopic(Request $request): JsonResponse
+    public function saveTopic(Request $request): JsonResponse
     {
         $this->authorizeAdmin($request);
 
@@ -726,11 +902,14 @@ class AdminDashboardController extends Controller
             $count++;
         }
 
+        $subject = Subject::with('schoolClass')->find($validated['subject_id']);
+        $inferredLevel = $validated['level'] ?? ($subject?->schoolClass?->grade_level ? strtoupper($subject->schoolClass->grade_level) : 'SS1');
+
         $topic = Topic::create([
             'subject_id' => $validated['subject_id'],
             'name' => $validated['name'],
             'slug' => $slug,
-            'level' => $validated['level'] ?? 'ss1',
+            'level' => $inferredLevel,
             'description' => $validated['description'] ?? null,
             'status' => $validated['status'] ?? 'active',
             'sort_order' => $validated['sort_order'] ?? 0,
@@ -738,7 +917,7 @@ class AdminDashboardController extends Controller
 
         return response()->json([
             'message' => 'Topic created successfully',
-            'topic' => $topic->load('subject:id,name,slug')->loadCount('questions'),
+            'topic' => $topic->load(['subject:id,name,slug,school_id,class_id', 'subject.schoolClass:id,name,grade_level'])->loadCount('questions'),
         ], 201);
     }
 
@@ -787,10 +966,15 @@ class AdminDashboardController extends Controller
     {
         $this->authorizeAdmin($request);
         $user = $request->user();
-        $isSuperAdmin = in_array($user->role, [UserRole::ADMIN, UserRole::SUPER_ADMIN]);
+        $isSuperAdmin = $user->isPlatformAdmin();
         $schoolId = $user->isSchoolAdmin() ? $user->primarySchool()?->id : null;
 
-        $query = Question::with(['options', 'topic.subject:id,name,slug,school_id', 'school:id,name']);
+        $query = Question::with([
+            'options',
+            'topic.subject:id,name,slug,school_id,class_id',
+            'topic.subject.schoolClass:id,name,grade_level',
+            'school:id,name'
+        ]);
 
         if (!$isSuperAdmin && $schoolId) {
             $query->where(function ($q) use ($schoolId) {
@@ -804,6 +988,8 @@ class AdminDashboardController extends Controller
             $query->where('topic_id', $request->topic_id);
         } elseif ($request->filled('subject_id')) {
             $query->whereHas('topic', fn ($q) => $q->where('subject_id', $request->subject_id));
+        } elseif ($request->filled('class_id')) {
+            $query->whereHas('topic.subject', fn ($q) => $q->where('class_id', $request->class_id));
         }
 
         if ($request->filled('difficulty')) {
@@ -824,11 +1010,11 @@ class AdminDashboardController extends Controller
         return response()->json($questions);
     }
 
-    public function storeQuestion(Request $request): JsonResponse
+    public function saveQuestion(Request $request): JsonResponse
     {
         $this->authorizeAdmin($request);
         $user = $request->user();
-        $isSuperAdmin = in_array($user->role, [UserRole::ADMIN, UserRole::SUPER_ADMIN]);
+        $isSuperAdmin = $user->isPlatformAdmin();
         $schoolId = $user->isSchoolAdmin() ? $user->primarySchool()?->id : null;
 
         $validated = $request->validate([
@@ -903,11 +1089,134 @@ class AdminDashboardController extends Controller
         ], 201);
     }
 
+    public function aiExtractQuestions(Request $request): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+
+        $validated = $request->validate([
+            'raw_text' => 'required|string',
+            'subject_id' => 'nullable|exists:subjects,id',
+            'topic_id' => 'nullable|exists:topics,id',
+        ]);
+
+        $subjectName = null;
+        if (!empty($validated['subject_id'])) {
+            $subject = Subject::find($validated['subject_id']);
+            $subjectName = $subject?->name;
+        }
+
+        $topicName = null;
+        if (!empty($validated['topic_id'])) {
+            $topic = Topic::with('subject')->find($validated['topic_id']);
+            $topicName = $topic?->name;
+            if (!$subjectName && $topic?->subject) {
+                $subjectName = $topic->subject->name;
+            }
+        }
+
+        $aiService = app(\App\Services\AIService::class);
+        $extracted = $aiService->extractAndSolveQuestions($validated['raw_text'], $subjectName, $topicName);
+
+        return response()->json([
+            'count' => count($extracted),
+            'questions' => $extracted,
+        ]);
+    }
+
+    public function bulkSaveQuestions(Request $request): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+        $user = $request->user();
+        $isSuperAdmin = $user->isPlatformAdmin();
+        $schoolId = $user->isSchoolAdmin() ? $user->primarySchool()?->id : null;
+
+        $validated = $request->validate([
+            'topic_id' => 'required|exists:topics,id',
+            'school_id' => 'nullable|exists:schools,id',
+            'questions' => 'required|array|min:1',
+            'questions.*.question_text' => 'required|string',
+            'questions.*.type' => 'nullable|string|in:multiple_choice,true_false,short_answer',
+            'questions.*.difficulty' => 'nullable|string|in:easy,medium,hard',
+            'questions.*.explanation' => 'nullable|string',
+            'questions.*.status' => 'nullable|string|in:active,inactive',
+            'questions.*.options' => 'required|array|min:2',
+            'questions.*.options.*.option_text' => 'required|string',
+            'questions.*.options.*.is_correct' => 'required|boolean',
+            'questions.*.options.*.sort_order' => 'nullable|integer',
+        ]);
+
+        $createdQuestions = DB::transaction(function () use ($validated, $isSuperAdmin, $schoolId) {
+            $topic = Topic::with('subject')->find($validated['topic_id']);
+            $assignedSchoolId = $isSuperAdmin
+                ? ($validated['school_id'] ?? $topic?->subject?->school_id)
+                : ($schoolId ?? $topic?->subject?->school_id);
+
+            $results = [];
+
+            // Prepare Quiz for auto-linking
+            $quiz = null;
+            if ($topic && $topic->subject) {
+                $subjectName = $topic->subject->name;
+                $quiz = Quiz::firstOrCreate(
+                    [
+                        'title' => "{$subjectName} Assessment & Practice",
+                        'school_id' => $assignedSchoolId,
+                    ],
+                    [
+                        'description' => "Comprehensive diagnostic assessment and practice exercises for {$subjectName}.",
+                        'time_limit_minutes' => 30,
+                        'status' => 'active',
+                    ]
+                );
+            }
+
+            foreach ($validated['questions'] as $qData) {
+                $question = Question::create([
+                    'topic_id' => $validated['topic_id'],
+                    'school_id' => $assignedSchoolId,
+                    'question_text' => $qData['question_text'],
+                    'type' => $qData['type'] ?? 'multiple_choice',
+                    'difficulty' => $qData['difficulty'] ?? 'medium',
+                    'explanation' => $qData['explanation'] ?? null,
+                    'status' => $qData['status'] ?? 'active',
+                ]);
+
+                foreach ($qData['options'] as $index => $opt) {
+                    QuestionOption::create([
+                        'question_id' => $question->id,
+                        'option_text' => $opt['option_text'],
+                        'is_correct' => (bool) $opt['is_correct'],
+                        'sort_order' => $opt['sort_order'] ?? $index,
+                    ]);
+                }
+
+                if ($quiz && !$quiz->questions()->where('questions.id', $question->id)->exists()) {
+                    $maxSort = (int) $quiz->questions()->max('quiz_questions.sort_order');
+                    $quiz->questions()->attach($question->id, [
+                        'sort_order' => $maxSort + 1,
+                        'marks' => 2,
+                    ]);
+                }
+
+                $results[] = $question->load(['options', 'topic.subject:id,name', 'school:id,name']);
+            }
+
+            return $results;
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => count($createdQuestions) . ' questions imported successfully',
+            'count' => count($createdQuestions),
+            'questions' => $createdQuestions,
+        ], 201);
+    }
+
     public function updateQuestion(Request $request, int $id): JsonResponse
     {
         $this->authorizeAdmin($request);
         $user = $request->user();
-        $isSuperAdmin = in_array($user->role, [UserRole::ADMIN, UserRole::SUPER_ADMIN]);
+        $isSuperAdmin = $user->isPlatformAdmin();
         $schoolId = $user->isSchoolAdmin() ? $user->primarySchool()?->id : null;
 
         $question = Question::findOrFail($id);
@@ -1006,17 +1315,36 @@ class AdminDashboardController extends Controller
         $isSchoolAdmin = $user && $user->isSchoolAdmin();
         $schoolId = $isSchoolAdmin ? $user->primarySchool()?->id : $request->school_id;
 
-        $classes = ClassModel::with(['school:id,name'])
+        $gradeOrder = [
+            'CRECHE' => 1, 'KG1' => 2, 'KG2' => 3, 'NUR1' => 4, 'NUR2' => 5,
+            'PRI1' => 6, 'PRI2' => 7, 'PRI3' => 8, 'PRI4' => 9, 'PRI5' => 10, 'PRI6' => 11,
+            'JSS1' => 12, 'JSS2' => 13, 'JSS3' => 14, 'SS1' => 15, 'SS2' => 16, 'SS3' => 17,
+        ];
+
+        $classes = ClassModel::with(['school:id,name', 'program:id,name,code,slug'])
             ->withCount(['learnerUsers as learner_count'])
             ->when($schoolId, fn ($q) => $q->where('school_id', $schoolId))
             ->when($request->filled('grade_level'), fn ($q) => $q->where('grade_level', $request->grade_level))
-            ->orderBy('name')
-            ->get();
+            ->when($request->filled('program_id'), fn ($q) => $q->where('program_id', $request->program_id))
+            ->get()
+            ->sortBy(fn ($c) => $gradeOrder[strtoupper($c->grade_level ?? '')] ?? 99)
+            ->values();
 
         return response()->json(['classes' => $classes]);
     }
 
-    public function storeClass(Request $request): JsonResponse
+    public function getPrograms(Request $request): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+
+        $programs = Program::where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'code', 'slug', 'description']);
+
+        return response()->json(['programs' => $programs]);
+    }
+
+    public function saveClass(Request $request): JsonResponse
     {
         $this->authorizeAdmin($request);
 
@@ -1026,51 +1354,86 @@ class AdminDashboardController extends Controller
 
         $validated = $request->validate([
             'school_id' => $isSchoolAdmin ? 'nullable|exists:schools,id' : 'required|exists:schools,id',
+            'program_id' => 'nullable|exists:programs,id',
             'name' => 'required|string|max:100',
-            'grade_level' => 'required|string|in:JSS1,JSS2,JSS3,SS1,SS2,SS3',
+            'grade_level' => 'required|string|in:CRECHE,KG1,KG2,NUR1,NUR2,PRI1,PRI2,PRI3,PRI4,PRI5,PRI6,JSS1,JSS2,JSS3,SS1,SS2,SS3',
+            'arm' => 'nullable|string|max:50',
             'section' => 'nullable|string|max:50',
             'description' => 'nullable|string|max:500',
         ]);
 
         $assignedSchoolId = $schoolId ?: $validated['school_id'];
+        $targetSchool = School::find($assignedSchoolId);
+        if (!$targetSchool) {
+            return response()->json(['error' => 'Designated school not found.'], 404);
+        }
+
+        if (!$targetSchool->supportsGradeLevel($validated['grade_level'])) {
+            return response()->json(['error' => "Grade level '{$validated['grade_level']}' is not permitted for school '{$targetSchool->name}' under category '{$targetSchool->category}'."], 422);
+        }
+
         $slug = Str::slug($validated['name']) . '-' . Str::random(5);
+        $arm = $validated['arm'] ?? $validated['section'] ?? null;
 
         $class = ClassModel::create([
             'school_id' => $assignedSchoolId,
+            'program_id' => $validated['program_id'] ?? null,
             'name' => $validated['name'],
             'slug' => $slug,
             'grade_level' => $validated['grade_level'],
-            'section' => $validated['section'] ?? null,
+            'arm' => $arm,
+            'section' => $validated['section'] ?? $arm,
             'description' => $validated['description'] ?? null,
             'is_active' => true,
         ]);
 
         return response()->json([
             'message' => 'Class created successfully',
-            'class' => $class->load(['school:id,name'])->loadCount(['learnerUsers as learner_count']),
+            'class' => $class->load(['school:id,name', 'program:id,name,code,slug'])->loadCount(['learnerUsers as learner_count']),
         ], 201);
     }
 
     public function updateClass(Request $request, int $id): JsonResponse
     {
         $this->authorizeAdmin($request);
+        $user = $request->user();
+        $isSchoolAdmin = $user && $user->isSchoolAdmin();
+        $schoolId = $isSchoolAdmin ? $user->primarySchool()?->id : null;
 
         $class = ClassModel::findOrFail($id);
 
+        if (!$user->isPlatformAdmin() && $schoolId && $class->school_id !== $schoolId) {
+            return response()->json(['error' => 'You do not have permission to modify classes from another school.'], 403);
+        }
+
         $validated = $request->validate([
             'school_id' => 'nullable|exists:schools,id',
+            'program_id' => 'nullable|exists:programs,id',
             'name' => 'required|string|max:100',
-            'grade_level' => 'required|string|in:JSS1,JSS2,JSS3,SS1,SS2,SS3',
+            'grade_level' => 'required|string|in:CRECHE,KG1,KG2,NUR1,NUR2,PRI1,PRI2,PRI3,PRI4,PRI5,PRI6,JSS1,JSS2,JSS3,SS1,SS2,SS3',
+            'arm' => 'nullable|string|max:50',
             'section' => 'nullable|string|max:50',
             'description' => 'nullable|string|max:500',
             'is_active' => 'nullable|boolean',
         ]);
 
+        $effectiveSchoolId = $validated['school_id'] ?? $class->school_id;
+        $targetSchool = School::find($effectiveSchoolId);
+        if ($targetSchool && !$targetSchool->supportsGradeLevel($validated['grade_level'])) {
+            return response()->json(['error' => "Grade level '{$validated['grade_level']}' is not permitted for school '{$targetSchool->name}' under category '{$targetSchool->category}'."], 422);
+        }
+
+        if (isset($validated['arm']) && !isset($validated['section'])) {
+            $validated['section'] = $validated['arm'];
+        } elseif (isset($validated['section']) && !isset($validated['arm'])) {
+            $validated['arm'] = $validated['section'];
+        }
+
         $class->update($validated);
 
         return response()->json([
             'message' => 'Class updated successfully',
-            'class' => $class->fresh(['school:id,name'])->loadCount(['learnerUsers as learner_count']),
+            'class' => $class->fresh(['school:id,name', 'program:id,name,code,slug'])->loadCount(['learnerUsers as learner_count']),
         ]);
     }
 
@@ -1102,33 +1465,49 @@ class AdminDashboardController extends Controller
             ]);
         }
 
+        $progressMap = DB::table('learner_progress')
+            ->whereIn('user_id', $learnerIds)
+            ->groupBy('user_id')
+            ->selectRaw('
+                user_id,
+                COUNT(*) as topics_covered,
+                AVG(mastery_score) as avg_mastery,
+                SUM(questions_attempted) as total_attempted,
+                SUM(questions_correct) as total_correct
+            ')
+            ->get()
+            ->keyBy('user_id');
+
         $learners = DB::table('users as u')
             ->whereIn('u.id', $learnerIds)
             ->leftJoin('user_gamification as ug', 'ug.user_id', '=', 'u.id')
-            ->leftJoin(DB::raw('(
-                SELECT user_id,
-                       COUNT(*) as topics_covered,
-                       AVG(mastery_score) as avg_mastery,
-                       SUM(questions_attempted) as total_attempted,
-                       SUM(questions_correct) as total_correct
-                FROM learner_progress
-                GROUP BY user_id
-            ) as lp'), 'lp.user_id', '=', 'u.id')
             ->select([
                 'u.id',
                 'u.name',
                 'u.email',
                 DB::raw('COALESCE(ug.level, 1) as level'),
-                DB::raw("COALESCE(ug.`rank`, 'Newcomer') as `rank`"),
+                DB::raw("COALESCE(ug.tier, 'Newcomer') as tier"),
                 DB::raw('COALESCE(ug.total_xp, 0) as total_xp'),
                 DB::raw('COALESCE(ug.current_streak, 0) as streak'),
-                DB::raw('COALESCE(lp.topics_covered, 0) as topics_covered'),
-                DB::raw('ROUND(COALESCE(lp.avg_mastery, 0)) as avg_mastery'),
-                DB::raw('COALESCE(lp.total_attempted, 0) as total_attempted'),
-                DB::raw('COALESCE(lp.total_correct, 0) as total_correct'),
             ])
-            ->orderByDesc('total_xp')
-            ->get();
+            ->orderByDesc('ug.total_xp')
+            ->get()
+            ->map(function ($u) use ($progressMap) {
+                $p = $progressMap->get($u->id);
+                return [
+                    'id' => (string) $u->id,
+                    'name' => $u->name,
+                    'email' => $u->email,
+                    'level' => (int) $u->level,
+                    'tier' => $u->tier,
+                    'total_xp' => (int) $u->total_xp,
+                    'streak' => (int) $u->streak,
+                    'topics_covered' => (int) ($p?->topics_covered ?? 0),
+                    'avg_mastery' => (int) round($p?->avg_mastery ?? 0),
+                    'total_attempted' => (int) ($p?->total_attempted ?? 0),
+                    'total_correct' => (int) ($p?->total_correct ?? 0),
+                ];
+            });
 
         return response()->json([
             'class' => $class,
@@ -1148,7 +1527,7 @@ class AdminDashboardController extends Controller
 
         $learner = User::where('email', $validated['email'])->firstOrFail();
 
-        if ($learner->role !== UserRole::LEARNER) {
+        if (!$learner->isLearner()) {
             return response()->json(['error' => 'Selected user is not a learner'], 400);
         }
 
@@ -1189,8 +1568,7 @@ class AdminDashboardController extends Controller
     private function authorizeAdmin(Request $request): void
     {
         $user = $request->user();
-        $role = $user?->role?->value ?? $user?->role;
-        if (!$user || !in_array($role, ['admin', 'super_admin', 'school_admin', 'teacher'])) {
+        if (!$user || !$user->isAdmin()) {
             abort(403, 'Forbidden');
         }
     }
@@ -1198,8 +1576,8 @@ class AdminDashboardController extends Controller
     private function authorizeSuperAdmin(Request $request): void
     {
         $user = $request->user();
-        if (!$user || !in_array($user->role, [UserRole::ADMIN, UserRole::SUPER_ADMIN])) {
-            abort(403, 'Forbidden. Super Admin access required.');
+        if (!$user || !$user->isPlatformAdmin()) {
+            abort(403, 'Forbidden. Platform Admin access required.');
         }
     }
 }

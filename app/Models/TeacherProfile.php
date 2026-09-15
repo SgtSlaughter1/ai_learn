@@ -7,14 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TeacherProfile extends Model
 {
-    protected $fillable = [
-        'user_id',
-        'school_id',
-        'employee_id',
-        'department',
-        'bio',
-        'is_active',
-    ];
+    protected $guarded = [];
 
     protected function casts(): array
     {

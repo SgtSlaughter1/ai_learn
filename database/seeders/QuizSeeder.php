@@ -20,7 +20,7 @@ class QuizSeeder extends Seeder
             ['title' => 'SS1 Mathematics Diagnostic Assessment'],
             [
                 'school_id' => $school1?->id,
-                'description' => 'A diagnostic quiz covering basic Algebra and Geometry principles.',
+                'description' => 'A diagnostic quiz covering fundamental Algebra, Geometry, and Trigonometric concepts with LaTeX math notation.',
                 'time_limit_minutes' => 30,
                 'status' => 'active',
             ]
@@ -38,12 +38,12 @@ class QuizSeeder extends Seeder
             })->toArray()
         );
 
-        // 2. English Quiz (School 1: AILEARN Academy)
+        // 2. English Language Placement Quiz (School 1: AILEARN Academy)
         $englishQuiz = Quiz::updateOrCreate(
             ['title' => 'SS1 English Language Placement Quiz'],
             [
                 'school_id' => $school1?->id,
-                'description' => 'Verify your command of basic grammar tenses and structural verbs.',
+                'description' => 'Verify your command of verb tenses, aspect, and advanced concord rules.',
                 'time_limit_minutes' => 20,
                 'status' => 'active',
             ]
@@ -63,10 +63,10 @@ class QuizSeeder extends Seeder
 
         // 3. Biology Quiz (School 1: AILEARN Academy)
         $biologyQuiz = Quiz::updateOrCreate(
-            ['title' => 'SS1 Biology Intro Quiz'],
+            ['title' => 'SS1 Biology Foundations Quiz'],
             [
                 'school_id' => $school1?->id,
-                'description' => 'A test mapping cell structures and mitochondria operations.',
+                'description' => 'Evaluation of cell organelles, membrane transport, and Mendelian genetics.',
                 'time_limit_minutes' => 15,
                 'status' => 'active',
             ]
@@ -84,12 +84,35 @@ class QuizSeeder extends Seeder
             })->toArray()
         );
 
-        // 4. Chemistry & Physics Assessment (School 2: Greenwood High School)
+        // 4. SS1 Government Assessment (School 1: AILEARN Academy)
+        $govQuiz = Quiz::updateOrCreate(
+            ['title' => 'SS1 Government Foundations Assessment'],
+            [
+                'school_id' => $school1?->id,
+                'description' => 'Senior secondary assessment covering arms of government, separation of powers, and civic structures.',
+                'time_limit_minutes' => 15,
+                'status' => 'active',
+            ]
+        );
+
+        $govTopicIds = Topic::whereHas('subject', function ($query) {
+            $query->where('slug', 'ss1-government');
+        })->pluck('id');
+
+        $govQuestions = Question::whereIn('topic_id', $govTopicIds)->get();
+
+        $govQuiz->questions()->sync(
+            $govQuestions->pluck('id')->mapWithKeys(function ($id, $index) {
+                return [$id => ['sort_order' => $index + 1, 'marks' => 5]];
+            })->toArray()
+        );
+
+        // 5. Chemistry & Physics Assessment (School 2: Greenwood High School)
         $school2Quiz = Quiz::updateOrCreate(
-            ['title' => 'Greenwood Science Diagnostic Exam'],
+            ['title' => 'Greenwood Senior Science Diagnostic Exam'],
             [
                 'school_id' => $school2?->id,
-                'description' => 'Chemistry bonding and Newton\'s laws of motion evaluation.',
+                'description' => 'Chemistry stoichiometry, chemical bonding, and Newton\'s laws of motion evaluation.',
                 'time_limit_minutes' => 25,
                 'status' => 'active',
             ]
@@ -107,12 +130,12 @@ class QuizSeeder extends Seeder
             })->toArray()
         );
 
-        // 5. Global General Knowledge Tech Quiz (Cross-school / General Knowledge)
+        // 6. Global General Knowledge Tech Quiz (Cross-school / Platform-wide)
         $techQuiz = Quiz::updateOrCreate(
             ['title' => 'Global AI & Digital Skills Bowl'],
             [
-                'school_id' => null, // General Knowledge
-                'description' => 'Open assessment testing fundamentals of computing, data structures, and AI.',
+                'school_id' => null, // General Knowledge platform-wide
+                'description' => 'Open assessment testing fundamentals of computing, algorithm complexity, and AI paradigms.',
                 'time_limit_minutes' => 15,
                 'status' => 'active',
             ]
@@ -129,5 +152,7 @@ class QuizSeeder extends Seeder
                 return [$id => ['sort_order' => $index + 1, 'marks' => 5]];
             })->toArray()
         );
+
+        $this->command?->info("Quizzes seeded and linked with questions successfully.");
     }
 }

@@ -247,7 +247,7 @@ export default function OverviewTab({ stats, loading }: Props) {
                                     </span>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-bold text-[var(--color-text)]">{learner.name}</p>
-                                        <p className="text-xs text-[var(--color-muted)]">{learner.grade_level} • {learner.rank} (Lvl {learner.level})</p>
+                                        <p className="text-xs text-[var(--color-muted)]">{learner.grade_level} • {learner.tier || 'Newcomer'} (Lvl {learner.level})</p>
                                     </div>
                                     <span className="text-sm font-bold text-[var(--color-primary)]">
                                         {learner.total_xp.toLocaleString()} XP

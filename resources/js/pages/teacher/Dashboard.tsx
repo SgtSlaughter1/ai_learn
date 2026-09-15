@@ -21,7 +21,7 @@ interface Learner {
     name: string;
     email: string;
     level: number;
-    rank: string;
+    tier: string;
     total_xp: number;
     streak: number;
     topics_covered: number;
@@ -122,7 +122,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
         }
     };
 
-    const getRankColor = (level: number): string => {
+    const getTierColor = (level: number): string => {
         if (level <= 2) return 'text-[var(--color-muted)]';
         if (level <= 4) return 'text-[var(--color-primary-light)]';
         if (level <= 6) return 'text-[var(--color-success)]';
@@ -347,7 +347,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                                 </span>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-sm font-semibold text-[var(--color-text)] truncate">{p.name}</p>
-                                                    <p className="text-xs text-[var(--color-muted)]">Lv.{p.level} {p.rank}</p>
+                                                    <p className="text-xs text-[var(--color-muted)]">Lv.{p.level} {p.tier}</p>
                                                 </div>
                                                 <span className="text-xs font-bold text-[var(--color-accent)] bg-[var(--color-accent-10)] px-2.5 py-1 rounded-full border border-[var(--color-accent-20)]">
                                                     {p.total_xp} XP
@@ -389,7 +389,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                     )}
 
                     {activeTab === 'learners' && (
-                        <ClassLearnersPanel selectedClass={selectedClass} getRankColor={getRankColor} getMasteryColor={getMasteryColor} />
+                        <ClassLearnersPanel selectedClass={selectedClass} getTierColor={getTierColor} getMasteryColor={getMasteryColor} />
                     )}
 
                     {activeTab === 'top' && (
@@ -427,7 +427,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                                 <p className="text-xs text-[var(--color-muted)]">{p.total_attempted} questions answered</p>
                                             </div>
                                             <div className="text-right">
-                                                <p className={`text-sm font-bold ${getRankColor(p.level)}`}>{p.rank}</p>
+                                                <p className={`text-sm font-bold ${getTierColor(p.level)}`}>{p.tier}</p>
                                                 <p className="text-xs text-[var(--color-muted)]">Lv.{p.level}</p>
                                             </div>
                                             <span className="text-sm font-extrabold text-[var(--color-accent)] bg-[var(--color-accent-10)] px-3 py-1 rounded-full border border-[var(--color-accent-20)]">
@@ -611,11 +611,11 @@ function Modal({ children, onClose, title }: { children: React.ReactNode; onClos
 
 function ClassLearnersPanel({
     selectedClass,
-    getRankColor,
+    getTierColor,
     getMasteryColor,
 }: {
     selectedClass: number | null;
-    getRankColor: (level: number) => string;
+    getTierColor: (level: number) => string;
     getMasteryColor: (score: number) => string;
 }) {
     const [learners, setLearners] = useState<Learner[]>([]);
@@ -706,8 +706,8 @@ function ClassLearnersPanel({
                                         <p className="text-[11px] text-[var(--color-muted)]">{l.email}</p>
                                     </td>
                                     <td className="py-3">
-                                        <span className={`font-bold ${getRankColor(l.level)}`}>Lv.{l.level}</span>
-                                        <span className="text-[11px] text-[var(--color-muted)] ml-1">{l.rank}</span>
+                                        <span className={`font-bold ${getTierColor(l.level)}`}>Lv.{l.level}</span>
+                                        <span className="text-[11px] text-[var(--color-muted)] ml-1">{l.tier}</span>
                                     </td>
                                     <td className="py-3 font-bold text-[var(--color-accent)]">{l.total_xp}</td>
                                     <td className="py-3">

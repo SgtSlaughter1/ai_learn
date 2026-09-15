@@ -159,27 +159,27 @@ class DomainModelTest extends TestCase
     public function test_subject_policies_authorize_actions(): void
     {
         $learner = User::factory()->create(['role' => UserRole::LEARNER]);
-        $teacher = User::factory()->create(['role' => UserRole::TEACHER]);
-        $admin = User::factory()->create(['role' => UserRole::ADMIN]);
+        $schoolAdmin = User::factory()->create(['role' => UserRole::SCHOOL_ADMIN]);
+        $platformAdmin = User::factory()->create(['role' => UserRole::PLATFORM_ADMIN]);
 
         $subject = Subject::factory()->create(['status' => 'inactive']);
 
         // Inactive subjects cannot be viewed by learners
         $this->assertFalse($learner->can('view', $subject));
-        // Inactive subjects can be viewed by teachers and admins
-        $this->assertTrue($teacher->can('view', $subject));
-        $this->assertTrue($admin->can('view', $subject));
+        // Inactive subjects can be viewed by school admins and platform admins
+        $this->assertTrue($schoolAdmin->can('view', $subject));
+        $this->assertTrue($platformAdmin->can('view', $subject));
 
         // Learners cannot create subjects
         $this->assertFalse($learner->can('create', Subject::class));
-        // Teachers and Admins can create subjects
-        $this->assertTrue($teacher->can('create', Subject::class));
-        $this->assertTrue($admin->can('create', Subject::class));
+        // School admins and Platform Admins can create subjects
+        $this->assertTrue($schoolAdmin->can('create', Subject::class));
+        $this->assertTrue($platformAdmin->can('create', Subject::class));
 
-        // Only Admins can delete subjects
+        // Only Platform Admins can delete subjects
         $this->assertFalse($learner->can('delete', $subject));
-        $this->assertFalse($teacher->can('delete', $subject));
-        $this->assertTrue($admin->can('delete', $subject));
+        $this->assertFalse($schoolAdmin->can('delete', $subject));
+        $this->assertTrue($platformAdmin->can('delete', $subject));
     }
 
     public function test_ai_endpoints_explain_and_chat(): void
@@ -232,7 +232,7 @@ class DomainModelTest extends TestCase
             'success',
             'xp_earned',
             'new_level',
-            'new_rank',
+            'new_tier',
             'new_achievements'
         ]);
         // Calculate: easy (2) + good (1) + again (0) + easy (2) = 5 XP. Deck complete bonus = 5 XP. Total = 10 XP.
@@ -242,7 +242,7 @@ class DomainModelTest extends TestCase
     public function test_teacher_dashboard_access_and_stats(): void
     {
         $learner = User::factory()->create(['role' => UserRole::LEARNER]);
-        $teacher = User::factory()->create(['role' => UserRole::TEACHER]);
+        $schoolAdmin = User::factory()->create(['role' => UserRole::SCHOOL_ADMIN]);
 
         // 1. Learner gets 403 trying to access teacher dashboard or stats
         $this->actingAs($learner);
@@ -252,8 +252,8 @@ class DomainModelTest extends TestCase
         // 2. Learner gets default /dashboard view (loads Inertia page, status 200)
         $this->get('/dashboard')->assertStatus(200);
 
-        // 3. Teacher can access dashboard and stats
-        $this->actingAs($teacher);
+        // 3. School admin can access dashboard and stats
+        $this->actingAs($schoolAdmin);
         $this->get('/teacher/dashboard')->assertStatus(200);
         $this->getJson('/api/v1/teacher/stats')->assertStatus(200)
             ->assertJsonStructure([
@@ -261,7 +261,46 @@ class DomainModelTest extends TestCase
                 'recentActivities'
             ]);
 
-        // 4. Teacher gets redirected from /dashboard to /admin/dashboard
+        // 4. Admin/School Admin gets redirected from /dashboard to /admin/dashboard
         $this->get('/dashboard')->assertRedirect('/admin/dashboard');
+    }
+
+    public function test_learner_class_progression_window_follows_program_track(): void
+    {
+        $school = \App\Models\School::create([
+            'name' => 'Test School',
+            'slug' => 'test-school',
+            'is_active' => true,
+        ]);
+
+        $scienceProg = \App\Models\Program::create(['name' => 'Science', 'slug' => 'science', 'code' => 'SCI']);
+        $businessProg = \App\Models\Program::create(['name' => 'Business', 'slug' => 'business', 'code' => 'BUS']);
+
+        $ss1Sci = \App\Models\ClassModel::create(['school_id' => $school->id, 'program_id' => $scienceProg->id, 'name' => 'SS1 Science', 'slug' => 'ss1-sci', 'grade_level' => 'SS1', 'is_active' => true]);
+        $ss1Bus = \App\Models\ClassModel::create(['school_id' => $school->id, 'program_id' => $businessProg->id, 'name' => 'SS1 Business', 'slug' => 'ss1-bus', 'grade_level' => 'SS1', 'is_active' => true]);
+        $ss2Sci = \App\Models\ClassModel::create(['school_id' => $school->id, 'program_id' => $scienceProg->id, 'name' => 'SS2 Science', 'slug' => 'ss2-sci', 'grade_level' => 'SS2', 'is_active' => true]);
+        $ss2Bus = \App\Models\ClassModel::create(['school_id' => $school->id, 'program_id' => $businessProg->id, 'name' => 'SS2 Business', 'slug' => 'ss2-bus', 'grade_level' => 'SS2', 'is_active' => true]);
+        $ss3Sci = \App\Models\ClassModel::create(['school_id' => $school->id, 'program_id' => $scienceProg->id, 'name' => 'SS3 Science', 'slug' => 'ss3-sci', 'grade_level' => 'SS3', 'is_active' => true]);
+        $ss3Bus = \App\Models\ClassModel::create(['school_id' => $school->id, 'program_id' => $businessProg->id, 'name' => 'SS3 Business', 'slug' => 'ss3-bus', 'grade_level' => 'SS3', 'is_active' => true]);
+
+        // Science Learner
+        $sciLearner = User::factory()->create(['role' => UserRole::LEARNER]);
+        \App\Models\ClassMembership::create(['class_id' => $ss1Sci->id, 'user_id' => $sciLearner->id, 'role' => 'learner', 'is_active' => true]);
+
+        $this->actingAs($sciLearner);
+        $resSci = $this->getJson('/api/v1/classes');
+        $resSci->assertStatus(200);
+        $sciClassNames = collect($resSci->json('classes'))->pluck('name')->all();
+        $this->assertEquals(['SS1 Science', 'SS2 Science', 'SS3 Science'], $sciClassNames);
+
+        // Business Learner
+        $busLearner = User::factory()->create(['role' => UserRole::LEARNER]);
+        \App\Models\ClassMembership::create(['class_id' => $ss1Bus->id, 'user_id' => $busLearner->id, 'role' => 'learner', 'is_active' => true]);
+
+        $this->actingAs($busLearner);
+        $resBus = $this->getJson('/api/v1/classes');
+        $resBus->assertStatus(200);
+        $busClassNames = collect($resBus->json('classes'))->pluck('name')->all();
+        $this->assertEquals(['SS1 Business', 'SS2 Business', 'SS3 Business'], $busClassNames);
     }
 }

@@ -33,7 +33,7 @@ export default function Dashboard() {
     const [stats, setStats] = useState<Stats | null>(null);
     const [loadingStats, setLoadingStats] = useState(true);
     
-    const isSuperAdmin = auth?.user?.role === 'super_admin' || auth?.user?.role === 'admin' || (stats?.is_super_admin === true);
+    const isSuperAdmin = auth?.user?.role === 'platform_admin' || (stats?.is_super_admin === true);
     
     const [schools, setSchools] = useState<SchoolItem[]>([]);
     const [loadingSchools, setLoadingSchools] = useState(false);
@@ -464,6 +464,7 @@ export default function Dashboard() {
                 {activeTab === 'subjects' && (
                     <SubjectsTab
                         subjects={subjects}
+                        classes={classes}
                         loading={loadingSubjects}
                         onRefresh={() => { fetchSubjects(); fetchStats(); }}
                         showToast={showToast}
@@ -474,6 +475,7 @@ export default function Dashboard() {
                     <QuestionBankTab
                         questions={questions}
                         subjects={subjects}
+                        classes={classes}
                         allTopics={allTopics}
                         loading={loadingQuestions}
                         onRefresh={() => { fetchQuestions(); fetchStats(); }}

@@ -330,7 +330,7 @@ class EndpointPerformanceBenchmarkTest extends TestCase
         }, maxAllowedQueries: 15);
 
         $response->assertStatus(200)
-            ->assertJsonStructure(['success', 'xp_earned', 'new_level', 'new_rank']);
+            ->assertJsonStructure(['success', 'xp_earned', 'new_level', 'new_tier']);
     }
 
     // ── 6. Gamification ──
@@ -348,7 +348,7 @@ class EndpointPerformanceBenchmarkTest extends TestCase
             ->assertJsonStructure([
                 'total_xp',
                 'level',
-                'rank',
+                'tier',
                 'current_streak',
                 'achievements',
             ]);
@@ -366,7 +366,7 @@ class EndpointPerformanceBenchmarkTest extends TestCase
                 'user_id' => $other->id,
                 'total_xp' => 100 * ($i + 1),
                 'level' => 1,
-                'rank' => 'Newcomer',
+                'tier' => 'Newcomer',
             ]);
         }
 
@@ -385,15 +385,14 @@ class EndpointPerformanceBenchmarkTest extends TestCase
         $school = School::create([
             'name' => 'Demo High School',
             'slug' => 'demo-high-school',
-            'code' => 'DHS101',
             'is_active' => true,
         ]);
 
-        $teacher = User::factory()->create(['role' => UserRole::TEACHER]);
+        $teacher = User::factory()->create(['role' => UserRole::SCHOOL_ADMIN]);
         TeacherProfile::create([
             'user_id' => $teacher->id,
             'school_id' => $school->id,
-            'is_primary' => true,
+            'is_active' => true,
         ]);
 
         $class = ClassModel::create([
@@ -437,11 +436,10 @@ class EndpointPerformanceBenchmarkTest extends TestCase
         $school = School::create([
             'name' => 'Science Academy',
             'slug' => 'science-academy',
-            'code' => 'SA102',
             'is_active' => true,
         ]);
 
-        $teacher = User::factory()->create(['role' => UserRole::TEACHER]);
+        $teacher = User::factory()->create(['role' => UserRole::SCHOOL_ADMIN]);
         $class = ClassModel::create([
             'school_id' => $school->id,
             'name' => 'Biology AP',
@@ -481,7 +479,7 @@ class EndpointPerformanceBenchmarkTest extends TestCase
 
     public function test_admin_stats_endpoint_performance(): void
     {
-        $admin = User::factory()->create(['role' => UserRole::ADMIN]);
+        $admin = User::factory()->create(['role' => UserRole::PLATFORM_ADMIN]);
         $this->actingAs($admin);
 
         $response = $this->benchmark('GET /api/v1/admin/stats', function () {

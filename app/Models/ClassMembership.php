@@ -7,12 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ClassMembership extends Model
 {
-    protected $fillable = [
-        'class_id',
-        'user_id',
-        'role',
-        'is_active',
-    ];
+    protected $guarded = [];
 
     protected function casts(): array
     {

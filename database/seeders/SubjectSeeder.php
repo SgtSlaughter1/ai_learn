@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\ClassModel;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\School;
@@ -16,232 +17,375 @@ class SubjectSeeder extends Seeder
         $school1 = School::where('slug', 'ailearn-academy')->first();
         $school2 = School::where('slug', 'greenwood-high-school')->first();
 
-        // 1. Mathematics (School 1: AILEARN Academy)
-        $math = Subject::updateOrCreate(
-            ['slug' => 'mathematics'],
+        $classSS1Science = ClassModel::where('slug', 'ss1-science')->first();
+        $classSS2Science = ClassModel::where('slug', 'ss2-science')->first();
+        $classSS3Science = ClassModel::where('slug', 'ss3-science')->first();
+
+        $classSS1Business = ClassModel::where('slug', 'ss1-business')->first();
+        $classSS2Business = ClassModel::where('slug', 'ss2-business')->first();
+        $classSS3Business = ClassModel::where('slug', 'ss3-business')->first();
+
+        $classSS1Humanities = ClassModel::where('slug', 'ss1-humanities')->first();
+        $classSS2Humanities = ClassModel::where('slug', 'ss2-humanities')->first();
+        $classSS3Humanities = ClassModel::where('slug', 'ss3-humanities')->first();
+
+        $classGreenwoodSS1 = ClassModel::where('slug', 'ss1-greenwood-science')->first();
+        $classGreenwoodSS2 = ClassModel::where('slug', 'ss2-greenwood-science')->first();
+
+        // =========================================================================
+        // 1. SS1 SCIENCE (AILEARN Academy)
+        // =========================================================================
+
+        // 1.1 Mathematics (SS1 Science)
+        $mathSS1 = Subject::updateOrCreate(
+            ['slug' => 'ss1-mathematics'],
             [
                 'school_id' => $school1?->id,
+                'class_id' => $classSS1Science?->id,
                 'name' => 'Mathematics',
-                'description' => 'Core secondary school mathematics curriculum covering Algebra, Geometry, Trigonometry, and Calculus.',
+                'description' => 'Algebra, Euclidean Geometry, Mensuration, and Set Theory.',
                 'status' => 'active',
                 'sort_order' => 1,
             ]
         );
 
-        // SS1 Algebra
         $algebra = Topic::updateOrCreate(
-            ['subject_id' => $math->id, 'slug' => 'algebraic-expressions'],
+            ['subject_id' => $mathSS1->id, 'slug' => 'algebraic-expressions'],
             [
-                'name' => 'Algebraic Expressions',
-                'level' => 'ss1',
-                'description' => 'Introduction to algebraic terms, expressions, and linear equations.',
+                'name' => 'Algebraic Expressions & Equations',
+                'level' => 'SS1',
+                'description' => 'Linear equations, factorisation, quadratic expansions, and algebraic fractions.',
                 'status' => 'active',
                 'sort_order' => 1,
             ]
         );
 
-        $this->createQuestion($algebra, 'What is the value of x if 2x + 5 = 15?', 'Solve the simple linear equation by subtracting 5 and dividing by 2.', ['5' => true, '10' => false, '15' => false, '2' => false], $school1?->id);
-        $this->createQuestion($algebra, 'Simplify: 3(x + 2) - 2x', 'Distribute 3 to x and 2, then combine like terms: 3x + 6 - 2x = x + 6.', ['x + 6' => true, 'x + 2' => false, '5x + 6' => false, 'x + 5' => false], $school1?->id);
-        $this->createQuestion($algebra, 'Factorize completely: x^2 - 5x + 6', 'Find two numbers that multiply to 6 and add to -5. They are -2 and -3.', ['(x - 2)(x - 3)' => true, '(x - 6)(x - 1)' => false, '(x + 2)(x + 3)' => false, '(x - 5)(x - 6)' => false], $school1?->id);
-        $this->createQuestion($algebra, 'If 3x - 7 = 5x + 9, find x.', 'Subtract 3x from both sides: -7 = 2x + 9. Subtract 9: -16 = 2x. Divide by 2: x = -8.', ['-8' => true, '8' => false, '-1' => false, '2' => false], $school1?->id);
-        $this->createQuestion($algebra, 'Solve for y: (y/3) + 4 = 10', 'Subtract 4 from both sides: y/3 = 6. Multiply by 3: y = 18.', ['18' => true, '14' => false, '6' => false, '12' => false], $school1?->id);
+        $this->createQuestion(
+            $algebra,
+            'Solve for $x$: $2x + 5 = 15$',
+            'Subtract 5 from both sides: $2x = 10$. Divide by 2: $x = 5$.',
+            ['$x = 5$' => true, '$x = 10$' => false, '$x = 15$' => false, '$x = 2$' => false],
+            $school1?->id
+        );
 
-        // SS1 Geometry
+        $this->createQuestion(
+            $algebra,
+            'Simplify the algebraic expression: $3(x + 2) - 2(x - 1)$',
+            'Expand the terms: $3x + 6 - 2x + 2 = (3x - 2x) + (6 + 2) = x + 8$.',
+            ['$x + 8$' => true, '$x + 4$' => false, '$5x + 8$' => false, '$x + 6$' => false],
+            $school1?->id
+        );
+
+        $this->createQuestion(
+            $algebra,
+            'Factorize completely: $x^2 - 5x + 6$',
+            'Find two integers whose product is $6$ and sum is $-5$. They are $-2$ and $-3$: $(x - 2)(x - 3)$.',
+            ['$(x - 2)(x - 3)$' => true, '$(x - 6)(x - 1)$' => false, '$(x + 2)(x + 3)$' => false, '$(x - 5)(x - 6)$' => false],
+            $school1?->id
+        );
+
         $geometry = Topic::updateOrCreate(
-            ['subject_id' => $math->id, 'slug' => 'euclidean-geometry'],
+            ['subject_id' => $mathSS1->id, 'slug' => 'euclidean-geometry'],
             [
-                'name' => 'Euclidean Geometry',
-                'level' => 'ss1',
-                'description' => 'Introduction to plane shapes, lines, angles, and proofs.',
+                'name' => 'Euclidean Geometry & Mensuration',
+                'level' => 'SS1',
+                'description' => 'Plane geometry, polygons, circle theorems, and Pythagorean calculations.',
                 'status' => 'active',
                 'sort_order' => 2,
             ]
         );
 
-        $this->createQuestion($geometry, 'What is the sum of angles in a triangle?', 'By Euclidean theorem, the sum of internal angles of any triangle is always 180 degrees.', ['180°' => true, '90°' => false, '360°' => false, '270°' => false], $school1?->id);
-        $this->createQuestion($geometry, 'What is the sum of interior angles of a regular hexagon?', 'Use the formula (n - 2) * 180. For a hexagon, (6 - 2) * 180 = 720 degrees.', ['720°' => true, '540°' => false, '360°' => false, '180°' => false], $school1?->id);
-        $this->createQuestion($geometry, 'An isosceles triangle has two equal angles of 50° each. What is the measure of the third angle?', 'The sum is 180°. 180° - 50° - 50° = 80°.', ['80°' => true, '50°' => false, '90°' => false, '100°' => false], $school1?->id);
-        $this->createQuestion($geometry, 'What is the area of a circle with radius 7 cm? (Use pi = 22/7)', 'Area = pi * r^2. (22/7) * 7 * 7 = 154 cm².', ['154 cm²' => true, '44 cm²' => false, '196 cm²' => false, '49 cm²' => false], $school1?->id);
-        $this->createQuestion($geometry, 'Find the perimeter of a rectangle with length 10 cm and width 6 cm.', 'Perimeter = 2 * (length + width) = 2 * (10 + 6) = 32 cm.', ['32 cm' => true, '60 cm' => false, '16 cm' => false, '20 cm' => false], $school1?->id);
-
-        // SS2 Trigonometry
-        $trig = Topic::updateOrCreate(
-            ['subject_id' => $math->id, 'slug' => 'trigonometry'],
-            [
-                'name' => 'Trigonometry',
-                'level' => 'ss2',
-                'description' => 'Trigonometric ratios, identities, sine and cosine rules, and graphs.',
-                'status' => 'active',
-                'sort_order' => 3,
-            ]
+        $this->createQuestion(
+            $geometry,
+            'What is the formula for the sum of interior angles in an $n$-sided convex polygon?',
+            'The sum of interior angles of an $n$-gon is given by $(n - 2) \times 180^\circ$.',
+            ['$(n - 2) \times 180^\circ$' => true, '$n \times 180^\circ$' => false, '$(n + 2) \times 180^\circ$' => false, '$(2n - 4) \times 90^\circ$' => false],
+            $school1?->id
         );
 
-        $this->createQuestion($trig, 'In a right-angled triangle, if the opposite side is 3 and the adjacent side is 4, what is the sine of the angle?', 'Sine is Opposite/Hypotenuse. First, find hypotenuse using Pythagoras: sqrt(3^2 + 4^2) = 5. So, sin = 3/5.', ['3/5' => true, '4/5' => false, '3/4' => false, '5/3' => false], $school1?->id);
-        $this->createQuestion($trig, 'What is the value of cos(90°)?', 'From the trigonometric unit circle, cosine of 90 degrees is exactly 0.', ['0' => true, '1' => false, '0.5' => false, '-1' => false], $school1?->id);
-        $this->createQuestion($trig, 'What is the value of sin(30°)?', 'Sine of 30 degrees is exactly 0.5 (or 1/2).', ['0.5' => true, '1' => false, '0.866' => false, '0.707' => false], $school1?->id);
-        $this->createQuestion($trig, 'Which trigonometric identity is correct?', 'By definition, the sum of the squares of sine and cosine of an angle is 1.', ['sin²(x) + cos²(x) = 1' => true, 'sin²(x) - cos²(x) = 1' => false, 'sec²(x) + tan²(x) = 1' => false, 'cosec²(x) + cot²(x) = 1' => false], $school1?->id);
-        $this->createQuestion($trig, 'What is the value of tan(45°)?', 'Tan of 45 degrees is sin(45°)/cos(45°) = 1.', ['1' => true, '0' => false, '0.5' => false, 'Infinity' => false], $school1?->id);
-
-        // SS3 Calculus
-        $calculus = Topic::updateOrCreate(
-            ['subject_id' => $math->id, 'slug' => 'calculus-intro'],
-            [
-                'name' => 'Introduction to Calculus',
-                'level' => 'ss3',
-                'description' => 'Basic limits, differentiation from first principles, and simple integration.',
-                'status' => 'active',
-                'sort_order' => 4,
-            ]
+        $this->createQuestion(
+            $geometry,
+            'What is the area of a circle with radius $r = 7\text{ cm}$? (Take $\pi = \frac{22}{7}$)',
+            'Area $A = \pi r^2 = \frac{22}{7} \times 7 \times 7 = 154\text{ cm}^2$.',
+            ['$154\text{ cm}^2$' => true, '$44\text{ cm}^2$' => false, '$196\text{ cm}^2$' => false, '$49\text{ cm}^2$' => false],
+            $school1?->id
         );
 
-        $this->createQuestion($calculus, 'What is the derivative of x^2 with respect to x?', 'Using the power rule of differentiation: d/dx (x^n) = n * x^(n-1). For x^2, it is 2x.', ['2x' => true, 'x' => false, '2' => false, 'x^3 / 3' => false], $school1?->id);
-        $this->createQuestion($calculus, 'Find the limit of (x^2 - 4)/(x - 2) as x approaches 2.', 'Factor the numerator: (x - 2)(x + 2). Cancel (x - 2), leaving (x + 2). Sub x = 2 to get 4.', ['4' => true, '2' => false, '0' => false, 'Undefined' => false], $school1?->id);
-        $this->createQuestion($calculus, 'What is the derivative of 5x + 3 with respect to x?', 'The derivative of a linear term mx is m, and the derivative of a constant is 0. So it is 5.', ['5' => true, '3' => false, '5x' => false, '0' => false], $school1?->id);
-        $this->createQuestion($calculus, 'Integrate: 2x dx', 'The integral is x^2 + C, where C is the constant of integration.', ['x² + C' => true, '2x² + C' => false, 'x²' => false, '2 + C' => false], $school1?->id);
-        $this->createQuestion($calculus, 'Evaluate the limit as x approaches 0 of sin(x)/x.', 'By L\'Hopital\'s rule or standard calculus limits, the limit is 1.', ['1' => true, '0' => false, 'Undefined' => false, '0.5' => false], $school1?->id);
-
-
-        // 2. English Language (School 1: AILEARN Academy)
-        $english = Subject::updateOrCreate(
-            ['slug' => 'english'],
+        // 1.2 Biology (SS1 Science)
+        $bioSS1 = Subject::updateOrCreate(
+            ['slug' => 'ss1-biology'],
             [
                 'school_id' => $school1?->id,
-                'name' => 'English Language',
-                'description' => 'Grammar, concord rules, comprehension, and structural syntax.',
-                'status' => 'active',
-                'sort_order' => 2,
-            ]
-        );
-
-        // SS1 Verb Tenses
-        $tenses = Topic::updateOrCreate(
-            ['subject_id' => $english->id, 'slug' => 'verb-tenses'],
-            [
-                'name' => 'Verb Tenses',
-                'level' => 'ss1',
-                'description' => 'Mastery of present, past, and future perfect tense structures.',
-                'status' => 'active',
-                'sort_order' => 1,
-            ]
-        );
-
-        $this->createQuestion($tenses, 'Which sentence is in the present perfect tense?', 'The present perfect tense is formed with subject + have/has + past participle.', ['She has written three essays.' => true, 'She wrote three essays.' => false, 'She is writing three essays.' => false, 'She will write three essays.' => false], $school1?->id);
-        $this->createQuestion($tenses, 'Complete the sentence: "By this time next year, they ______ the project."', 'The future perfect tense (will have + past participle) represents an action completed before a future time.', ['will have completed' => true, 'will complete' => false, 'have completed' => false, 'would complete' => false], $school1?->id);
-        $this->createQuestion($tenses, 'Identify the tense: "He was running when I saw him."', 'The sentence represents an action that was ongoing in the past, which is Past Continuous.', ['Past continuous' => true, 'Past perfect' => false, 'Simple past' => false, 'Present continuous' => false], $school1?->id);
-        $this->createQuestion($tenses, 'Choose the correct form: "She ______ to school every day."', 'For simple present singular subjects, append -s or -es to the base verb.', ['goes' => true, 'go' => false, 'going' => false, 'gone' => false], $school1?->id);
-        $this->createQuestion($tenses, 'Choose the correct form: "Yesterday, I ______ my wallet."', 'The action occurred in the past, so we use the simple past form "lost".', ['lost' => true, 'lose' => false, 'losing' => false, 'have lost' => false], $school1?->id);
-
-        // SS2 Concord
-        $concord = Topic::updateOrCreate(
-            ['subject_id' => $english->id, 'slug' => 'concord-rules'],
-            [
-                'name' => 'Concord Rules',
-                'level' => 'ss2',
-                'description' => 'Mastery of subject-verb agreement under complex conditions.',
-                'status' => 'active',
-                'sort_order' => 2,
-            ]
-        );
-
-        $this->createQuestion($concord, 'Choose the correct verb: "The committee ______ submitted its report."', 'A collective noun acting as a single unit takes a singular verb.', ['has' => true, 'have' => false, 'are' => false, 'were' => false], $school1?->id);
-        $this->createQuestion($concord, 'Choose the correct verb: "Either the teacher or the students ______ to present today."', 'When subjects are joined by either/or, the verb agrees with the closer subject ("students" is plural).', ['are' => true, 'is' => false, 'was' => false, 'has' => false], $school1?->id);
-        $this->createQuestion($concord, 'Choose the correct verb: "Bread and butter ______ my favorite breakfast."', 'When two singular nouns refer to a single compound concept/unit, they take a singular verb.', ['is' => true, 'are' => false, 'were' => false, 'have been' => false], $school1?->id);
-
-
-        // 3. Biology (School 1: AILEARN Academy)
-        $biology = Subject::updateOrCreate(
-            ['slug' => 'biology'],
-            [
-                'school_id' => $school1?->id,
+                'class_id' => $classSS1Science?->id,
                 'name' => 'Biology',
-                'description' => 'Study of life processes, nutrition, genetics, and structural ecology.',
+                'description' => 'Cell biology, classification of living things, nutrition, and respiration.',
                 'status' => 'active',
-                'sort_order' => 3,
+                'sort_order' => 2,
             ]
         );
 
-        // SS1 Cells
         $cells = Topic::updateOrCreate(
-            ['subject_id' => $biology->id, 'slug' => 'cell-structure'],
+            ['subject_id' => $bioSS1->id, 'slug' => 'cell-structure-function'],
             [
                 'name' => 'Cell Structure & Function',
-                'level' => 'ss1',
-                'description' => 'Understanding plant and animal cells, organelles, and respiration.',
+                'level' => 'SS1',
+                'description' => 'Plant and animal cell organelles, membrane transport, and cellular respiration.',
                 'status' => 'active',
                 'sort_order' => 1,
             ]
         );
 
-        $this->createQuestion($cells, 'Which organelle is known as the powerhouse of the cell?', 'Mitochondria perform cellular respiration to produce ATP, the cell\'s energy currency.', ['Mitochondrion' => true, 'Nucleus' => false, 'Ribosome' => false, 'Chloroplast' => false], $school1?->id);
-        $this->createQuestion($cells, 'Which organelle contains chlorophyll and is the site of photosynthesis?', 'Chloroplasts capture light energy to produce sugars via photosynthesis in plant cells.', ['Chloroplast' => true, 'Mitochondrion' => false, 'Vacuole' => false, 'Cell Wall' => false], $school1?->id);
-        $this->createQuestion($cells, 'What is the primary function of the ribosomes?', 'Ribosomes serve as the cellular machinery for protein synthesis.', ['Protein synthesis' => true, 'Energy production' => false, 'Lipid storage' => false, 'Cellular division' => false], $school1?->id);
-        $this->createQuestion($cells, 'Which structure is present in plant cells but absent in animal cells?', 'Plant cells possess rigid outer cell walls, whereas animal cells do not.', ['Cell wall' => true, 'Cell membrane' => false, 'Mitochondrion' => false, 'Nucleus' => false], $school1?->id);
-
-
-        // 4. Chemistry (School 2: Greenwood High School)
-        $chemistry = Subject::updateOrCreate(
-            ['slug' => 'chemistry'],
-            [
-                'school_id' => $school2?->id,
-                'name' => 'Chemistry',
-                'description' => 'Matter, chemical bonding, atomic structure, and reactions.',
-                'status' => 'active',
-                'sort_order' => 4,
-            ]
+        $this->createQuestion(
+            $cells,
+            'Which organelle is referred to as the powerhouse of the eukaryotic cell?',
+            'Mitochondria generate adenosine triphosphate (ATP) through cellular aerobic respiration.',
+            ['Mitochondrion' => true, 'Nucleus' => false, 'Ribosome' => false, 'Chloroplast' => false],
+            $school1?->id
         );
 
-        $bonding = Topic::updateOrCreate(
-            ['subject_id' => $chemistry->id, 'slug' => 'chemical-bonding'],
-            [
-                'name' => 'Chemical Bonding & Structure',
-                'level' => 'ss2',
-                'description' => 'Ionic, covalent, metallic bonding, and molecular geometries.',
-                'status' => 'active',
-                'sort_order' => 1,
-            ]
+        $this->createQuestion(
+            $cells,
+            'Which cellular structure is present in plant cells but absent in animal cells?',
+            'Plant cells possess a rigid outer cell wall composed of cellulose, whereas animal cells only have a plasma membrane.',
+            ['Cell wall' => true, 'Cell membrane' => false, 'Mitochondrion' => false, 'Ribosome' => false],
+            $school1?->id
         );
 
-        $this->createQuestion($bonding, 'What type of bond is formed by the transfer of electrons from a metal to a non-metal?', 'Electrovalent (ionic) bonding involves complete transfer of electrons.', ['Ionic bond' => true, 'Covalent bond' => false, 'Metallic bond' => false, 'Hydrogen bond' => false], $school2?->id);
-        $this->createQuestion($bonding, 'What is the atomic number of Carbon?', 'Carbon has 6 protons, giving it an atomic number of 6.', ['6' => true, '12' => false, '14' => false, '8' => false], $school2?->id);
-        $this->createQuestion($bonding, 'What is the pH value of pure water at 25°C?', 'Pure neutral water has a pH of 7.', ['7' => true, '0' => false, '14' => false, '1' => false], $school2?->id);
-
-
-        // 5. Physics (School 2: Greenwood High School)
-        $physics = Subject::updateOrCreate(
-            ['slug' => 'physics'],
+        // 1.3 Physics (SS1 Science)
+        $physicsSS1 = Subject::updateOrCreate(
+            ['slug' => 'ss1-physics'],
             [
-                'school_id' => $school2?->id,
+                'school_id' => $school1?->id,
+                'class_id' => $classSS1Science?->id,
                 'name' => 'Physics',
-                'description' => 'Mechanics, energy, wave motion, electricity, and modern physics.',
+                'description' => 'Units, measurements, kinematics, and vectors in introductory physics.',
                 'status' => 'active',
-                'sort_order' => 5,
+                'sort_order' => 3,
+            ]
+        );
+
+        $unitsTopic = Topic::updateOrCreate(
+            ['subject_id' => $physicsSS1->id, 'slug' => 'units-and-measurements'],
+            [
+                'name' => 'Units & Measurements',
+                'level' => 'SS1',
+                'description' => 'Fundamental and derived physical quantities and dimensions.',
+                'status' => 'active',
+                'sort_order' => 1,
+            ]
+        );
+
+        $this->createQuestion(
+            $unitsTopic,
+            'Which of the following is a fundamental SI unit?',
+            'Kilogram (kg) is a fundamental SI base unit of mass.',
+            ['Kilogram' => true, 'Newton' => false, 'Joule' => false, 'Watt' => false],
+            $school1?->id
+        );
+
+        // =========================================================================
+        // 2. SS2 SCIENCE (AILEARN Academy)
+        // =========================================================================
+        $physicsSS2 = Subject::updateOrCreate(
+            ['slug' => 'ss2-physics'],
+            [
+                'school_id' => $school1?->id,
+                'class_id' => $classSS2Science?->id,
+                'name' => 'Physics',
+                'description' => 'Mechanics, Newton\'s laws, projectile motion, and wave optics.',
+                'status' => 'active',
+                'sort_order' => 1,
             ]
         );
 
         $mechanics = Topic::updateOrCreate(
-            ['subject_id' => $physics->id, 'slug' => 'motion-forces'],
+            ['subject_id' => $physicsSS2->id, 'slug' => 'motion-forces'],
             [
-                'name' => 'Motion & Newton\'s Laws',
-                'level' => 'ss2',
-                'description' => 'Kinematics, dynamics, friction, and Newton\'s laws of motion.',
+                'name' => 'Kinematics & Newton\'s Laws of Motion',
+                'level' => 'SS2',
+                'description' => 'Linear motion equations, friction, momentum, and Newton\'s laws.',
                 'status' => 'active',
                 'sort_order' => 1,
             ]
         );
 
-        $this->createQuestion($mechanics, 'What is the SI unit of Force?', 'Force is measured in Newtons (N = kg m/s²).', ['Newton' => true, 'Joule' => false, 'Watt' => false, 'Pascal' => false], $school2?->id);
-        $this->createQuestion($mechanics, 'According to Newton\'s Second Law, Force is equal to:', 'Force is mass multiplied by acceleration (F = ma).', ['Mass × Acceleration' => true, 'Mass / Acceleration' => false, 'Velocity × Time' => false, 'Work / Distance' => false], $school2?->id);
+        $this->createQuestion(
+            $mechanics,
+            'According to Newton\'s Second Law of Motion, what is the formula relating Force ($F$), mass ($m$), and acceleration ($a$)?',
+            'Force is directly proportional to the product of mass and acceleration: $F = ma$.',
+            ['$F = ma$' => true, '$F = \frac{m}{a}$' => false, '$F = \frac{1}{2}ma^2$' => false, '$F = m + a$' => false],
+            $school1?->id
+        );
 
+        $this->createQuestion(
+            $mechanics,
+            'Which equation of uniform linear motion relates final velocity ($v$), initial velocity ($u$), acceleration ($a$), and displacement ($s$)?',
+            'The third equation of motion independent of time is $v^2 = u^2 + 2as$.',
+            ['$v^2 = u^2 + 2as$' => true, '$v = u + \frac{1}{2}at^2$' => false, '$s = vt + \frac{1}{2}at$' => false, '$v^2 = u^2 - 2at$' => false],
+            $school1?->id
+        );
 
-        // 6. Computer Studies & AI (General Knowledge - Available across all schools & platforms)
+        // =========================================================================
+        // 3. SS1 BUSINESS (AILEARN Academy)
+        // =========================================================================
+        $accountingSS1 = Subject::updateOrCreate(
+            ['slug' => 'ss1-financial-accounting'],
+            [
+                'school_id' => $school1?->id,
+                'class_id' => $classSS1Business?->id,
+                'name' => 'Financial Accounting',
+                'description' => 'Principles of double entry, ledger posting, trial balance, and source documents.',
+                'status' => 'active',
+                'sort_order' => 1,
+            ]
+        );
+
+        $doubleEntry = Topic::updateOrCreate(
+            ['subject_id' => $accountingSS1->id, 'slug' => 'double-entry-system'],
+            [
+                'name' => 'Double Entry Bookkeeping & Ledgers',
+                'level' => 'SS1',
+                'description' => 'Debit and credit conventions, cash book, and general ledger accounts.',
+                'status' => 'active',
+                'sort_order' => 1,
+            ]
+        );
+
+        $this->createQuestion(
+            $doubleEntry,
+            'In the double entry bookkeeping system, an increase in assets is recorded as a:',
+            'Assets increase on the debit side and decrease on the credit side.',
+            ['Debit entry' => true, 'Credit entry' => false, 'Contra entry' => false, 'Journal adjustment' => false],
+            $school1?->id
+        );
+
+        $this->createQuestion(
+            $doubleEntry,
+            'What is the primary accounting equation?',
+            'Assets always equal Liabilities plus Owner\'s Equity (Capital).',
+            ['$\text{Assets} = \text{Liabilities} + \text{Capital}$' => true, '$\text{Assets} = \text{Liabilities} - \text{Capital}$' => false, '$\text{Capital} = \text{Assets} + \text{Liabilities}$' => false, '$\text{Profit} = \text{Assets} + \text{Income}$' => false],
+            $school1?->id
+        );
+
+        $commerceSS1 = Subject::updateOrCreate(
+            ['slug' => 'ss1-commerce'],
+            [
+                'school_id' => $school1?->id,
+                'class_id' => $classSS1Business?->id,
+                'name' => 'Commerce',
+                'description' => 'Introduction to trade, aids to trade, production, and business organizations.',
+                'status' => 'active',
+                'sort_order' => 2,
+            ]
+        );
+
+        $tradeTopic = Topic::updateOrCreate(
+            ['subject_id' => $commerceSS1->id, 'slug' => 'trade-and-production'],
+            [
+                'name' => 'Nature of Commerce & Aids to Trade',
+                'level' => 'SS1',
+                'description' => 'Home trade, foreign trade, banking, insurance, transportation, and warehousing.',
+                'status' => 'active',
+                'sort_order' => 1,
+            ]
+        );
+
+        $this->createQuestion(
+            $tradeTopic,
+            'Which of the following functions as an aid to trade by providing compensation against potential financial loss?',
+            'Insurance indemnifies businesses against unforeseen losses and risks.',
+            ['Insurance' => true, 'Advertising' => false, 'Warehousing' => false, 'Transportation' => false],
+            $school1?->id
+        );
+
+        // =========================================================================
+        // 4. SS2 BUSINESS (AILEARN Academy)
+        // =========================================================================
+        $accountingSS2 = Subject::updateOrCreate(
+            ['slug' => 'ss2-financial-accounting'],
+            [
+                'school_id' => $school1?->id,
+                'class_id' => $classSS2Business?->id,
+                'name' => 'Financial Accounting',
+                'description' => 'Bank reconciliation, final accounts of sole traders, and adjustment entries.',
+                'status' => 'active',
+                'sort_order' => 1,
+            ]
+        );
+
+        $bankRecon = Topic::updateOrCreate(
+            ['subject_id' => $accountingSS2->id, 'slug' => 'bank-reconciliation'],
+            [
+                'name' => 'Bank Reconciliation Statements',
+                'level' => 'SS2',
+                'description' => 'Unpresented cheques, uncredited deposits, and adjusted cash book balances.',
+                'status' => 'active',
+                'sort_order' => 1,
+            ]
+        );
+
+        $this->createQuestion(
+            $bankRecon,
+            'An unpresented cheque is a cheque that has been:',
+            'Drawn and entered in the cash book but not yet presented to the bank for payment.',
+            ['Issued to a creditor but not yet cleared by the bank' => true, 'Received from a debtor but not yet paid into bank' => false, 'Dishonoured by the bank' => false, 'Lost in transit' => false],
+            $school1?->id
+        );
+
+        // =========================================================================
+        // 5. SS1 HUMANITIES (AILEARN Academy)
+        // =========================================================================
+        $govSS1 = Subject::updateOrCreate(
+            ['slug' => 'ss1-government'],
+            [
+                'school_id' => $school1?->id,
+                'class_id' => $classSS1Humanities?->id,
+                'name' => 'Government',
+                'description' => 'Structure of government, basic concepts of democracy, and constitutional development.',
+                'status' => 'active',
+                'sort_order' => 1,
+            ]
+        );
+
+        $armsGov = Topic::updateOrCreate(
+            ['subject_id' => $govSS1->id, 'slug' => 'arms-of-government'],
+            [
+                'name' => 'Arms of Government & Separation of Powers',
+                'level' => 'SS1',
+                'description' => 'Legislature, Executive, Judiciary, and the doctrine of checks and balances.',
+                'status' => 'active',
+                'sort_order' => 1,
+            ]
+        );
+
+        $this->createQuestion(
+            $armsGov,
+            'Which arm of government is constitutionally empowered to interpret laws and administer justice?',
+            'The Judiciary is responsible for interpreting laws, adjudicating disputes, and administering justice.',
+            ['Judiciary' => true, 'Legislature' => false, 'Executive' => false, 'Electoral Commission' => false],
+            $school1?->id
+        );
+
+        $this->createQuestion(
+            $armsGov,
+            'The principle of Separation of Powers was prominently propounded by which political philosopher?',
+            'Baron de Montesquieu formulated the modern doctrine of separation of powers in 1748.',
+            ['Baron de Montesquieu' => true, 'John Locke' => false, 'Thomas Hobbes' => false, 'Jean-Jacques Rousseau' => false],
+            $school1?->id
+        );
+
+        // =========================================================================
+        // 6. GENERAL KNOWLEDGE (Platform-Wide)
+        // =========================================================================
         $tech = Subject::updateOrCreate(
             ['slug' => 'computer-studies'],
             [
-                'school_id' => null, // General Knowledge
+                'school_id' => null, // General Knowledge platform-wide
+                'class_id' => null,
                 'name' => 'Computer Studies & AI',
-                'description' => 'Foundational digital literacy, computational algorithms, and artificial intelligence concepts.',
+                'description' => 'Digital literacy, algorithm design, data structures, and foundational artificial intelligence.',
                 'status' => 'active',
-                'sort_order' => 6,
+                'sort_order' => 10,
             ]
         );
 
@@ -249,16 +393,38 @@ class SubjectSeeder extends Seeder
             ['subject_id' => $tech->id, 'slug' => 'ai-foundations'],
             [
                 'name' => 'AI & Digital Foundations',
-                'level' => 'ss1',
-                'description' => 'Introduction to artificial intelligence, neural concepts, and digital literacy.',
+                'level' => 'SS1',
+                'description' => 'Artificial intelligence principles, machine learning concepts, and computational thinking.',
                 'status' => 'active',
                 'sort_order' => 1,
             ]
         );
 
-        $this->createQuestion($aiIntro, 'What does AI stand for in modern computing?', 'AI stands for Artificial Intelligence.', ['Artificial Intelligence' => true, 'Automated Internet' => false, 'Applied Informatics' => false, 'Advanced Integration' => false], null);
-        $this->createQuestion($aiIntro, 'What is the primary function of a Central Processing Unit (CPU)?', 'The CPU executes program instructions and processes data.', ['Execute program instructions' => true, 'Store files permanently' => false, 'Display images on screen' => false, 'Supply electrical power' => false], null);
-        $this->createQuestion($aiIntro, 'Which data structure follows the First-In, First-Out (FIFO) principle?', 'A Queue processes items in the exact order they arrive (FIFO).', ['Queue' => true, 'Stack' => false, 'Binary Tree' => false, 'Array' => false], null);
+        $this->createQuestion(
+            $aiIntro,
+            'What is the primary learning paradigm where an AI model learns patterns from labeled training data?',
+            'Supervised learning trains models using input-output pairs where ground truth labels are provided.',
+            ['Supervised Learning' => true, 'Unsupervised Learning' => false, 'Reinforcement Learning' => false, 'Heuristic Search' => false],
+            null
+        );
+
+        $this->createQuestion(
+            $aiIntro,
+            'Which data structure operates on a First-In, First-Out (FIFO) principle?',
+            'A Queue processes elements in the exact order they arrived (FIFO).',
+            ['Queue' => true, 'Stack' => false, 'Binary Search Tree' => false, 'Hash Map' => false],
+            null
+        );
+
+        $this->createQuestion(
+            $aiIntro,
+            'What is the time complexity of the optimal Merge Sort and Heap Sort comparison algorithms?',
+            'Optimal comparison sorting achieves an average and worst-case time complexity of $\mathcal{O}(n \log n)$.',
+            ['$\mathcal{O}(n \log n)$' => true, '$\mathcal{O}(n^2)$' => false, '$\mathcal{O}(n)$' => false, '$\mathcal{O}(1)$' => false],
+            null
+        );
+
+        $this->command?->info("Subjects, Topics, and Questions seeded cleanly by class.");
     }
 
     private function createQuestion(Topic $topic, string $text, string $explanation, array $optionsData, ?int $schoolId = null): Question

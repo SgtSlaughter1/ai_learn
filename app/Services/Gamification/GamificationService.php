@@ -3,69 +3,80 @@
 namespace App\Services\Gamification;
 
 use App\Models\Achievement;
+use App\Models\LearnerProgress;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
+use App\Models\Subject;
 use App\Models\User;
 use App\Models\UserAchievement;
 use App\Models\UserGamification;
 use App\Models\XpTransaction;
-use App\Models\LearnerProgress;
-use App\Models\Subject;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class GamificationService
 {
-    // ── Level & Rank System ──
-
     /**
-     * XP thresholds for each level.
-     * Level 1 = 0, Level 2 = 100, Level 3 = 250, etc.
+     * XP thresholds required to reach each level.
+     * Level 1 starts at 0 XP.
      */
-    private const LEVEL_THRESHOLDS = [
-        1   => 0,
-        2   => 100,
-        3   => 250,
-        4   => 500,
-        5   => 800,
-        6   => 1200,
-        7   => 1700,
-        8   => 2300,
-        9   => 3000,
-        10  => 4000,
-        11  => 5200,
-        12  => 6600,
-        13  => 8200,
-        14  => 10000,
-        15  => 12500,
+    public const LEVEL_THRESHOLDS = [
+        1  => 0,
+        2  => 100,
+        3  => 250,
+        4  => 500,
+        5  => 800,
+        6  => 1200,
+        7  => 1700,
+        8  => 2300,
+        9  => 3000,
+        10 => 4000,
+        11 => 5200,
+        12 => 6600,
+        13 => 8200,
+        14 => 10000,
+        15 => 12500,
     ];
 
     /**
-     * Rank names mapped to level ranges.
+     * Tier definitions mapped to level ranges and visual color tokens.
      */
-    private const RANK_MAP = [
-        ['min_level' => 1,  'max_level' => 2,  'rank' => 'Newcomer',      'color' => '#94a3b8'],
-        ['min_level' => 3,  'max_level' => 4,  'rank' => 'Learner',       'color' => '#60a5fa'],
-        ['min_level' => 5,  'max_level' => 6,  'rank' => 'Scholar',       'color' => '#34d399'],
-        ['min_level' => 7,  'max_level' => 8,  'rank' => 'Achiever',      'color' => '#a78bfa'],
-        ['min_level' => 9,  'max_level' => 10, 'rank' => 'Expert',        'color' => '#fbbf24'],
-        ['min_level' => 11, 'max_level' => 12, 'rank' => 'Master',        'color' => '#f97316'],
-        ['min_level' => 13, 'max_level' => 14, 'rank' => 'Champion',      'color' => '#ef4444'],
-        ['min_level' => 15, 'max_level' => 99, 'rank' => 'Legend',         'color' => '#ec4899'],
+    public const TIER_MAP = [
+        ['min_level' => 1,  'max_level' => 2,  'tier' => 'Newcomer',  'color' => '#94a3b8'],
+        ['min_level' => 3,  'max_level' => 4,  'tier' => 'Learner',   'color' => '#60a5fa'],
+        ['min_level' => 5,  'max_level' => 6,  'tier' => 'Scholar',   'color' => '#34d399'],
+        ['min_level' => 7,  'max_level' => 8,  'tier' => 'Achiever',  'color' => '#a78bfa'],
+        ['min_level' => 9,  'max_level' => 10, 'tier' => 'Expert',    'color' => '#fbbf24'],
+        ['min_level' => 11, 'max_level' => 12, 'tier' => 'Master',    'color' => '#f97316'],
+        ['min_level' => 13, 'max_level' => 14, 'tier' => 'Champion',  'color' => '#ef4444'],
+        ['min_level' => 15, 'max_level' => 99, 'tier' => 'Legend',    'color' => '#ec4899'],
     ];
 
-    // ── XP Rewards ──
+    /**
+     * Base XP reward amounts.
+     */
+    public const XP_CORRECT_ANSWER      = 1;
+    public const XP_QUIZ_COMPLETE_BASE  = 5;
+    public const XP_PERFECT_SCORE_BONUS = 3;
+    public const XP_FIRST_ATTEMPT_BONUS = 2;
+    public const XP_STREAK_DAILY_BONUS  = 5;
 
-    private const XP_CORRECT_ANSWER = 1;
-    private const XP_QUIZ_COMPLETE_BASE = 5;
-    private const XP_PERFECT_SCORE_BONUS = 3;
-    private const XP_FIRST_ATTEMPT_BONUS = 2;
-    private const XP_STREAK_DAILY_BONUS = 5;
+    /**
+     * In-memory cache for loaded user profiles during the current request lifecycle.
+     *
+     * @var array<string, UserGamification>
+     */
     private array $profileCache = [];
 
-    // ── Public Methods ──
+    // ──────────────────────────────────────────────────────────────────────────
+    // Public API Methods
+    // ──────────────────────────────────────────────────────────────────────────
 
     /**
-     * Get or create gamification profile for a user.
+     * Retrieve or initialize the gamification profile for a user.
+     *
+     * @param  User  $user
+     * @return UserGamification
      */
     public function getProfile(User $user): UserGamification
     {
@@ -76,11 +87,11 @@ class GamificationService
         $profile = UserGamification::firstOrCreate(
             ['user_id' => $user->id],
             [
-                'total_xp'      => 0,
-                'level'         => 1,
-                'rank'          => 'Newcomer',
-                'current_streak'=> 0,
-                'longest_streak'=> 0,
+                'total_xp'       => 0,
+                'level'          => 1,
+                'tier'           => 'Newcomer',
+                'current_streak' => 0,
+                'longest_streak' => 0,
             ]
         );
 
@@ -91,91 +102,100 @@ class GamificationService
     }
 
     /**
-     * Award XP and process all gamification updates after a quiz attempt.
-     * Returns the list of newly earned achievements.
+     * Process XP awards, streaks, and achievements upon quiz completion.
+     *
+     * @param  User         $user
+     * @param  QuizAttempt  $attempt
+     * @param  Quiz         $quiz
+     * @return array        Newly earned achievements
      */
     public function processQuizCompletion(User $user, QuizAttempt $attempt, Quiz $quiz): array
     {
-        $profile = $this->getProfile($user);
+        return DB::transaction(function () use ($user, $attempt, $quiz) {
+            $profile = $this->getProfile($user);
 
-        $totalQuestions = $attempt->relationLoaded('answers') ? $attempt->answers->count() : $attempt->answers()->count();
-        $correctCount = $attempt->relationLoaded('answers')
-            ? $attempt->answers->where('is_correct', true)->count()
-            : $attempt->answers()->where('is_correct', true)->count();
+            $answers = $attempt->relationLoaded('answers') ? $attempt->answers : $attempt->answers()->get();
+            $totalQuestions = $answers->count();
+            $correctCount   = $answers->where('is_correct', true)->count();
 
-        $xpEarnedTotal = self::XP_QUIZ_COMPLETE_BASE;
-        $now = now();
-        $transactions = [
-            [
-                'user_id' => $user->id,
-                'amount' => self::XP_QUIZ_COMPLETE_BASE,
-                'source' => 'quiz_complete',
-                'description' => "Completed: {$quiz->title}",
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]
-        ];
-
-        $answerXp = $correctCount * self::XP_CORRECT_ANSWER;
-        if ($answerXp > 0) {
-            $xpEarnedTotal += $answerXp;
-            $transactions[] = [
-                'user_id' => $user->id,
-                'amount' => $answerXp,
-                'source' => 'correct_answer',
-                'description' => "{$correctCount} correct answers in {$quiz->title}",
-                'created_at' => $now,
-                'updated_at' => $now,
+            $xpEarnedTotal = self::XP_QUIZ_COMPLETE_BASE;
+            $now = now();
+            $transactions = [
+                [
+                    'user_id'     => $user->id,
+                    'amount'      => self::XP_QUIZ_COMPLETE_BASE,
+                    'source'      => 'quiz_complete',
+                    'description' => "Completed: {$quiz->title}",
+                    'created_at'  => $now,
+                    'updated_at'  => $now,
+                ],
             ];
-        }
 
-        if ($totalQuestions > 0 && $correctCount === $totalQuestions) {
-            $xpEarnedTotal += self::XP_PERFECT_SCORE_BONUS;
-            $transactions[] = [
-                'user_id' => $user->id,
-                'amount' => self::XP_PERFECT_SCORE_BONUS,
-                'source' => 'perfect_score',
-                'description' => "Perfect score on {$quiz->title}!",
-                'created_at' => $now,
-                'updated_at' => $now,
-            ];
-        }
+            // 1. Correct answers reward
+            $answerXp = $correctCount * self::XP_CORRECT_ANSWER;
+            if ($answerXp > 0) {
+                $xpEarnedTotal += $answerXp;
+                $transactions[] = [
+                    'user_id'     => $user->id,
+                    'amount'      => $answerXp,
+                    'source'      => 'correct_answer',
+                    'description' => "{$correctCount} correct answers in {$quiz->title}",
+                    'created_at'  => $now,
+                    'updated_at'  => $now,
+                ];
+            }
 
-        $previousAttempts = QuizAttempt::where('user_id', $user->id)
-            ->where('quiz_id', $quiz->id)
-            ->where('id', '!=', $attempt->id)
-            ->where('status', 'completed')
-            ->count();
+            // 2. Perfect score bonus
+            if ($totalQuestions > 0 && $correctCount === $totalQuestions) {
+                $xpEarnedTotal += self::XP_PERFECT_SCORE_BONUS;
+                $transactions[] = [
+                    'user_id'     => $user->id,
+                    'amount'      => self::XP_PERFECT_SCORE_BONUS,
+                    'source'      => 'perfect_score',
+                    'description' => "Perfect score on {$quiz->title}!",
+                    'created_at'  => $now,
+                    'updated_at'  => $now,
+                ];
+            }
 
-        if ($previousAttempts === 0) {
-            $xpEarnedTotal += self::XP_FIRST_ATTEMPT_BONUS;
-            $transactions[] = [
-                'user_id' => $user->id,
-                'amount' => self::XP_FIRST_ATTEMPT_BONUS,
-                'source' => 'first_attempt',
-                'description' => "First attempt on {$quiz->title}",
-                'created_at' => $now,
-                'updated_at' => $now,
-            ];
-        }
+            // 3. First attempt bonus
+            $previousAttempts = QuizAttempt::where('user_id', $user->id)
+                ->where('quiz_id', $quiz->id)
+                ->where('id', '!=', $attempt->id)
+                ->where('status', 'completed')
+                ->count();
 
-        // Batch update XP in a single query and insert transactions in 1 bulk write
-        $profile->increment('total_xp', $xpEarnedTotal);
-        $profile->total_xp += $xpEarnedTotal;
-        $this->recalculateLevel($profile);
-        XpTransaction::insert($transactions);
+            if ($previousAttempts === 0) {
+                $xpEarnedTotal += self::XP_FIRST_ATTEMPT_BONUS;
+                $transactions[] = [
+                    'user_id'     => $user->id,
+                    'amount'      => self::XP_FIRST_ATTEMPT_BONUS,
+                    'source'      => 'first_attempt',
+                    'description' => "First attempt on {$quiz->title}",
+                    'created_at'  => $now,
+                    'updated_at'  => $now,
+                ];
+            }
 
-        // 5. Update streak
-        $this->updateStreak($user);
+            // 4. Update profile XP and write transactions
+            $profile->total_xp += $xpEarnedTotal;
+            $profile->save();
+            $this->recalculateLevel($profile);
+            XpTransaction::insert($transactions);
 
-        // 6. Check and award achievements
-        $newAchievements = $this->checkAchievements($user);
+            // 5. Update streak
+            $this->updateStreak($user);
 
-        return $newAchievements;
+            // 6. Check and award achievements
+            return $this->checkAchievements($user);
+        });
     }
 
     /**
-     * Record daily activity and update streak.
+     * Record daily activity to maintain user streak.
+     *
+     * @param  User  $user
+     * @return void
      */
     public function recordDailyActivity(User $user): void
     {
@@ -183,48 +203,54 @@ class GamificationService
     }
 
     /**
-     * Award XP and process gamification updates after a flashcard session completion.
-     * Returns gamification progress (xp earned, level, rank, new achievements).
+     * Award XP and process gamification updates after a flashcard session.
+     *
+     * @param  User  $user
+     * @param  int   $xpEarned
+     * @param  int   $cardsReviewed
+     * @return array Progress summary (xp_earned, new_level, new_tier, new_achievements)
      */
     public function processFlashcardCompletion(User $user, int $xpEarned, int $cardsReviewed): array
     {
-        $profile = $this->getProfile($user);
-        $oldLevel = $profile->level;
-        $oldRank = $profile->rank;
+        return DB::transaction(function () use ($user, $xpEarned, $cardsReviewed) {
+            $profile  = $this->getProfile($user);
+            $oldLevel = $profile->level;
+            $oldTier  = $profile->tier;
 
-        // 1. Award flashcard XP
-        if ($xpEarned > 0) {
-            $this->awardXp($user, $xpEarned, 'flashcard_review', "Reviewed {$cardsReviewed} flashcards");
-        }
+            if ($xpEarned > 0) {
+                $this->awardXp($user, $xpEarned, 'flashcard_review', "Reviewed {$cardsReviewed} flashcards");
+            }
 
-        // 2. Update streak
-        $this->updateStreak($user);
+            $this->updateStreak($user);
+            $newAchievements = $this->checkAchievements($user);
 
-        // 3. Check achievements
-        $newAchievements = $this->checkAchievements($user);
-
-        return [
-            'xp_earned'        => $xpEarned,
-            'new_level'        => $profile->level > $oldLevel ? $profile->level : null,
-            'new_rank'         => $profile->rank !== $oldRank ? $profile->rank : null,
-            'new_achievements' => $newAchievements,
-        ];
+            return [
+                'xp_earned'        => $xpEarned,
+                'new_level'        => $profile->level > $oldLevel ? $profile->level : null,
+                'new_tier'         => $profile->tier !== $oldTier ? $profile->tier : null,
+                'new_achievements' => $newAchievements,
+            ];
+        });
     }
 
     /**
-     * Get full gamification dashboard data.
+     * Get aggregated gamification dashboard metrics for a user.
+     *
+     * @param  User  $user
+     * @return array
      */
     public function getDashboardData(User $user): array
     {
         $profile = $this->getProfile($user);
 
-        // Calculate XP needed for next level
-        $nextLevelThreshold = self::LEVEL_THRESHOLDS[$profile->level + 1] ?? null;
+        // Level & XP Progress Calculations
+        $nextLevelThreshold    = self::LEVEL_THRESHOLDS[$profile->level + 1] ?? null;
         $currentLevelThreshold = self::LEVEL_THRESHOLDS[$profile->level] ?? 0;
-        $xpIntoLevel = $profile->total_xp - $currentLevelThreshold;
-        $xpForNextLevel = $nextLevelThreshold !== null
+        $xpIntoLevel           = $profile->total_xp - $currentLevelThreshold;
+        $xpForNextLevel        = $nextLevelThreshold !== null
             ? $nextLevelThreshold - $currentLevelThreshold
             : 0;
+
         $xpProgressPercent = $xpForNextLevel > 0
             ? min(100, round(($xpIntoLevel / $xpForNextLevel) * 100))
             : 100;
@@ -234,19 +260,19 @@ class GamificationService
             ->orderByDesc('created_at')
             ->limit(5)
             ->get()
-            ->map(fn($t) => [
+            ->map(fn(XpTransaction $t) => [
                 'amount'      => $t->amount,
                 'source'      => $t->source,
                 'description' => $t->description,
                 'created_at'  => $t->created_at->diffForHumans(),
             ]);
 
-        // Achievements
+        // Unlocked user achievements
         $achievements = UserAchievement::where('user_id', $user->id)
             ->with('achievement')
             ->orderByDesc('earned_at')
             ->get()
-            ->map(fn($a) => [
+            ->map(fn(UserAchievement $a) => [
                 'key'         => $a->achievement_key,
                 'name'        => $a->name,
                 'description' => $a->description ?? $a->achievement?->description,
@@ -255,18 +281,21 @@ class GamificationService
                 'earned_at'   => $a->earned_at->diffForHumans(),
             ]);
 
-        // All possible achievements (for showing locked ones)
-        $allAchievements = $this->getAllAchievementDefinitions();
-        $earnedKeys = $achievements->pluck('key')->toArray();
+        // Locked achievements
+        $allAchievements    = $this->getAllAchievementDefinitions();
+        $earnedKeys         = $achievements->pluck('key')->toArray();
         $lockedAchievements = collect($allAchievements)
-            ->filter(fn($a) => !in_array($a['key'], $earnedKeys))
+            ->filter(fn(array $a) => !in_array($a['key'], $earnedKeys, true))
             ->values();
+
+        $tier      = $profile->tier ?? 'Newcomer';
+        $tierColor = $this->getTierColor($profile->level);
 
         return [
             'total_xp'            => $profile->total_xp,
             'level'               => $profile->level,
-            'rank'                => $profile->rank,
-            'rank_color'          => $this->getRankColor($profile->level),
+            'tier'                => $tier,
+            'tier_color'          => $tierColor,
             'current_streak'      => $profile->current_streak,
             'longest_streak'      => $profile->longest_streak,
             'xp_progress_percent' => $xpProgressPercent,
@@ -282,7 +311,11 @@ class GamificationService
     }
 
     /**
-     * Get leaderboard (top users by XP).
+     * Retrieve the leaderboard standings and the current user's placement.
+     *
+     * @param  User  $currentUser
+     * @param  int   $limit
+     * @return array
      */
     public function getLeaderboard(User $currentUser, int $limit = 10): array
     {
@@ -290,51 +323,58 @@ class GamificationService
             ->orderByDesc('total_xp')
             ->limit($limit)
             ->get()
-            ->map(fn($g, $index) => [
-                'rank_position' => $index + 1,
-                'user_id'       => $g->user_id,
-                'name'          => $g->user->name ?? 'Unknown',
-                'total_xp'      => $g->total_xp,
-                'level'         => $g->level,
-                'rank'          => $g->rank,
+            ->map(fn(UserGamification $g, int $index) => [
+                'position'        => $index + 1,
+                'user_id'         => $g->user_id,
+                'name'            => $g->user->name ?? 'Unknown',
+                'total_xp'        => $g->total_xp,
+                'level'           => $g->level,
+                'tier'            => $g->tier ?? 'Newcomer',
                 'is_current_user' => $g->user_id === $currentUser->id,
             ]);
 
-        // If current user not in top, add them with their position
-        $currentUserRank = UserGamification::where('total_xp', '>', function ($query) use ($currentUser) {
+        $currentUserPosition = UserGamification::where('total_xp', '>', function ($query) use ($currentUser) {
             $query->select('total_xp')
                 ->from('user_gamification')
                 ->where('user_id', $currentUser->id);
-        }) ->count() + 1;
+        })->count() + 1;
 
         $currentUserProfile = $this->getProfile($currentUser);
         $currentUserEntry = [
-            'rank_position'   => $currentUserRank,
+            'position'        => $currentUserPosition,
             'user_id'         => $currentUser->id,
             'name'            => $currentUser->name,
             'total_xp'        => $currentUserProfile->total_xp,
             'level'           => $currentUserProfile->level,
-            'rank'            => $currentUserProfile->rank,
+            'tier'            => $currentUserProfile->tier ?? 'Newcomer',
             'is_current_user' => true,
         ];
 
         return [
-            'top_users'       => $topUsers->toArray(),
-            'current_user'    => $currentUserEntry,
+            'top_users'           => $topUsers->toArray(),
+            'current_user'        => $currentUserEntry,
             'current_user_in_top' => $topUsers->contains('user_id', $currentUser->id),
         ];
     }
 
-    // ── Private Helpers ──
+    // ──────────────────────────────────────────────────────────────────────────
+    // Internal Progression & Recalculation
+    // ──────────────────────────────────────────────────────────────────────────
 
     /**
-     * Award XP to a user and log the transaction.
+     * Award XP to a user and record the transaction log.
+     *
+     * @param  User         $user
+     * @param  int          $amount
+     * @param  string       $source
+     * @param  string|null  $description
+     * @return void
      */
     private function awardXp(User $user, int $amount, string $source, ?string $description = null): void
     {
         $profile = $this->getProfile($user);
-        $profile->increment('total_xp', $amount);
         $profile->total_xp += $amount;
+        $profile->save();
         $this->recalculateLevel($profile);
 
         XpTransaction::create([
@@ -346,20 +386,22 @@ class GamificationService
     }
 
     /**
-     * Update daily streak based on last active date.
+     * Update user daily activity streak based on the last recorded date.
+     *
+     * @param  User  $user
+     * @return void
      */
     private function updateStreak(User $user): void
     {
         $profile = $this->getProfile($user);
-        $today = Carbon::today();
+        $today   = Carbon::today();
         /** @var Carbon|null $lastActive */
         $lastActive = $profile->last_active_date;
 
         if ($lastActive === null) {
-            // First time active
             $profile->update([
-                'current_streak' => 1,
-                'longest_streak' => max($profile->longest_streak, 1),
+                'current_streak'   => 1,
+                'longest_streak'   => max($profile->longest_streak, 1),
                 'last_active_date' => $today,
             ]);
             return;
@@ -368,12 +410,10 @@ class GamificationService
         $daysSinceLastActive = $lastActive->diffInDays($today);
 
         if ($daysSinceLastActive === 0) {
-            // Already active today, no streak change
             return;
         }
 
         if ($daysSinceLastActive === 1) {
-            // Consecutive day — extend streak
             $newStreak = $profile->current_streak + 1;
             $profile->update([
                 'current_streak'   => $newStreak,
@@ -381,13 +421,12 @@ class GamificationService
                 'last_active_date' => $today,
             ]);
 
-            // Streak bonus XP every 7 days
+            // Award weekly milestone streak bonus
             if ($newStreak % 7 === 0) {
-                $bonusXp = self::XP_STREAK_DAILY_BONUS * ($newStreak / 7);
+                $bonusXp = (int) (self::XP_STREAK_DAILY_BONUS * ($newStreak / 7));
                 $this->awardXp($user, $bonusXp, 'streak_bonus', "{$newStreak}-day streak bonus!");
             }
         } else {
-            // Streak broken
             $profile->update([
                 'current_streak'   => 1,
                 'last_active_date' => $today,
@@ -396,7 +435,10 @@ class GamificationService
     }
 
     /**
-     * Recalculate level and rank based on total XP.
+     * Recalculate level and tier based on accumulated total XP.
+     *
+     * @param  UserGamification  $profile
+     * @return void
      */
     public function recalculateLevel(UserGamification $profile): void
     {
@@ -409,37 +451,43 @@ class GamificationService
             }
         }
 
-        $newRank = $this->getRankForLevel($newLevel);
+        $newTier = $this->getTierForLevel($newLevel);
 
-        if ($newLevel !== $profile->level || $newRank !== $profile->rank) {
+        if ($newLevel !== $profile->level || $newTier !== $profile->tier) {
             $profile->update([
                 'level' => $newLevel,
-                'rank'  => $newRank,
+                'tier'  => $newTier,
             ]);
             $profile->level = $newLevel;
-            $profile->rank = $newRank;
+            $profile->tier  = $newTier;
         }
     }
 
     /**
-     * Get rank name for a given level.
+     * Resolve tier title based on player level.
+     *
+     * @param  int  $level
+     * @return string
      */
-    private function getRankForLevel(int $level): string
+    public function getTierForLevel(int $level): string
     {
-        foreach (self::RANK_MAP as $range) {
+        foreach (self::TIER_MAP as $range) {
             if ($level >= $range['min_level'] && $level <= $range['max_level']) {
-                return $range['rank'];
+                return $range['tier'];
             }
         }
         return 'Newcomer';
     }
 
     /**
-     * Get rank color for a given level.
+     * Resolve tier color token based on player level.
+     *
+     * @param  int  $level
+     * @return string
      */
-    private function getRankColor(int $level): string
+    public function getTierColor(int $level): string
     {
-        foreach (self::RANK_MAP as $range) {
+        foreach (self::TIER_MAP as $range) {
             if ($level >= $range['min_level'] && $level <= $range['max_level']) {
                 return $range['color'];
             }
@@ -447,16 +495,20 @@ class GamificationService
         return '#94a3b8';
     }
 
-    // ── Achievement System ──
+    // ──────────────────────────────────────────────────────────────────────────
+    // Achievement System
+    // ──────────────────────────────────────────────────────────────────────────
 
     /**
-     * Define all possible achievements.
+     * Retrieve all achievement definitions from DB or fallback configuration.
+     *
+     * @return array<int, array{key: string, name: string, description: string, icon: string, xp_reward: int, category?: string}>
      */
     private function getAllAchievementDefinitions(): array
     {
         $dbAchievements = Achievement::all();
         if ($dbAchievements->isNotEmpty()) {
-            return $dbAchievements->map(fn($a) => [
+            return $dbAchievements->map(fn(Achievement $a) => [
                 'key'         => $a->key,
                 'name'        => $a->name,
                 'description' => $a->description,
@@ -467,46 +519,52 @@ class GamificationService
         }
 
         return [
-            ['key' => 'first_quiz',          'name' => 'First Steps',        'description' => 'Complete your first quiz',               'icon' => '🎯', 'xp_reward' => 5],
-            ['key' => 'quiz_5',              'name' => 'Getting Serious',     'description' => 'Complete 5 quizzes',                     'icon' => '📝', 'xp_reward' => 5],
-            ['key' => 'quiz_10',             'name' => 'Quiz Enthusiast',     'description' => 'Complete 10 quizzes',                    'icon' => '🏆', 'xp_reward' => 10],
-            ['key' => 'quiz_25',             'name' => 'Quiz Master',         'description' => 'Complete 25 quizzes',                    'icon' => '👑', 'xp_reward' => 10],
-            ['key' => 'perfect_score',       'name' => 'Flawless',            'description' => 'Get a perfect score on any quiz',        'icon' => '💎', 'xp_reward' => 5],
-            ['key' => 'perfect_3',           'name' => 'Triple Perfect',      'description' => 'Get 3 perfect scores',                  'icon' => '✨', 'xp_reward' => 10],
-            ['key' => 'streak_3',            'name' => 'On Fire',             'description' => 'Maintain a 3-day streak',               'icon' => '🔥', 'xp_reward' => 5],
-            ['key' => 'streak_7',            'name' => 'Week Warrior',        'description' => 'Maintain a 7-day streak',               'icon' => '⚡', 'xp_reward' => 5],
-            ['key' => 'streak_14',           'name' => 'Unstoppable',         'description' => 'Maintain a 14-day streak',              'icon' => '🌟', 'xp_reward' => 10],
-            ['key' => 'streak_30',           'name' => 'Iron Will',           'description' => 'Maintain a 30-day streak',              'icon' => '💪', 'xp_reward' => 10],
-            ['key' => 'mastery_50',          'name' => 'Halfway There',       'description' => 'Reach 50% mastery in any subject',      'icon' => '📈', 'xp_reward' => 5],
-            ['key' => 'mastery_80',          'name' => 'Subject Expert',      'description' => 'Reach 80% mastery in any subject',      'icon' => '🎓', 'xp_reward' => 10],
-            ['key' => 'mastery_100',         'name' => 'Subject Master',      'description' => 'Reach 100% mastery in any subject',     'icon' => '🥇', 'xp_reward' => 10],
-            ['key' => 'all_subjects_80',     'name' => 'Renaissance Student', 'description' => 'Reach 80% mastery in all subjects',     'icon' => '🌍', 'xp_reward' => 10],
-            ['key' => 'level_5',             'name' => 'Level Up!',           'description' => 'Reach Level 5',                         'icon' => '⬆️', 'xp_reward' => 5],
-            ['key' => 'level_10',            'name' => 'High Roller',         'description' => 'Reach Level 10',                        'icon' => '🎰', 'xp_reward' => 10],
-            ['key' => 'xp_1000',             'name' => 'XP Hunter',           'description' => 'Earn 1,000 total XP',                   'icon' => '⭐', 'xp_reward' => 10],
-            ['key' => 'xp_5000',             'name' => 'XP Legend',            'description' => 'Earn 5,000 total XP',                   'icon' => '🌟', 'xp_reward' => 10],
-            ['key' => 'speed_demon',         'name' => 'Speed Demon',         'description' => 'Complete a quiz in under 2 minutes',    'icon' => '⚡', 'xp_reward' => 5],
-            ['key' => 'try_all_subjects',    'name' => 'Curious Mind',        'description' => 'Try a quiz in every subject',           'icon' => '📚', 'xp_reward' => 5],
+            ['key' => 'first_quiz',          'name' => 'First Steps',        'description' => 'Complete your first quiz',               'icon' => 'target',         'xp_reward' => 5],
+            ['key' => 'quiz_5',              'name' => 'Getting Serious',     'description' => 'Complete 5 quizzes',                     'icon' => 'file-text',      'xp_reward' => 5],
+            ['key' => 'quiz_10',             'name' => 'Quiz Enthusiast',     'description' => 'Complete 10 quizzes',                    'icon' => 'award',          'xp_reward' => 10],
+            ['key' => 'quiz_25',             'name' => 'Quiz Master',         'description' => 'Complete 25 quizzes',                    'icon' => 'crown',          'xp_reward' => 10],
+            ['key' => 'perfect_score',       'name' => 'Flawless',            'description' => 'Get a perfect score on any quiz',        'icon' => 'gem',            'xp_reward' => 5],
+            ['key' => 'perfect_3',           'name' => 'Triple Perfect',      'description' => 'Get 3 perfect scores',                  'icon' => 'sparkles',       'xp_reward' => 10],
+            ['key' => 'streak_3',            'name' => 'On Fire',             'description' => 'Maintain a 3-day streak',               'icon' => 'flame',          'xp_reward' => 5],
+            ['key' => 'streak_7',            'name' => 'Week Warrior',        'description' => 'Maintain a 7-day streak',               'icon' => 'zap',            'xp_reward' => 5],
+            ['key' => 'streak_14',           'name' => 'Unstoppable',         'description' => 'Maintain a 14-day streak',              'icon' => 'star',           'xp_reward' => 10],
+            ['key' => 'streak_30',           'name' => 'Iron Will',           'description' => 'Maintain a 30-day streak',              'icon' => 'activity',       'xp_reward' => 10],
+            ['key' => 'mastery_50',          'name' => 'Halfway There',       'description' => 'Reach 50% mastery in any subject',      'icon' => 'trending-up',    'xp_reward' => 5],
+            ['key' => 'mastery_80',          'name' => 'Subject Expert',      'description' => 'Reach 80% mastery in any subject',      'icon' => 'graduation-cap', 'xp_reward' => 10],
+            ['key' => 'mastery_100',         'name' => 'Subject Master',      'description' => 'Reach 100% mastery in any subject',     'icon' => 'medal',          'xp_reward' => 10],
+            ['key' => 'all_subjects_80',     'name' => 'Renaissance Student', 'description' => 'Reach 80% mastery in all subjects',     'icon' => 'globe',          'xp_reward' => 10],
+            ['key' => 'level_5',             'name' => 'Level Up!',           'description' => 'Reach Level 5',                         'icon' => 'arrow-up',       'xp_reward' => 5],
+            ['key' => 'level_10',            'name' => 'High Roller',         'description' => 'Reach Level 10',                        'icon' => 'gift',           'xp_reward' => 10],
+            ['key' => 'xp_1000',             'name' => 'XP Hunter',           'description' => 'Earn 1,000 total XP',                   'icon' => 'star',           'xp_reward' => 10],
+            ['key' => 'xp_5000',             'name' => 'XP Legend',            'description' => 'Earn 5,000 total XP',                   'icon' => 'award',          'xp_reward' => 10],
+            ['key' => 'speed_demon',         'name' => 'Speed Demon',         'description' => 'Complete a quiz in under 2 minutes',    'icon' => 'zap',            'xp_reward' => 5],
+            ['key' => 'try_all_subjects',    'name' => 'Curious Mind',        'description' => 'Try a quiz in every subject',           'icon' => 'book-open',      'xp_reward' => 5],
         ];
     }
 
     /**
-     * Check all achievement conditions and award any newly earned ones.
+     * Evaluate pending achievements against user metrics snapshot.
+     *
+     * @param  User  $user
+     * @return array
      */
     private function checkAchievements(User $user): array
     {
-        $earned = [];
         $allDefinitions = $this->getAllAchievementDefinitions();
-        $existingKeys = UserAchievement::where('user_id', $user->id)
+        $existingKeys   = UserAchievement::where('user_id', $user->id)
             ->pluck('achievement_key')
             ->toArray();
 
-        $pendingDefs = array_filter($allDefinitions, fn($def) => !in_array($def['key'], $existingKeys));
+        $pendingDefs = array_filter(
+            $allDefinitions,
+            fn(array $def) => !in_array($def['key'], $existingKeys, true)
+        );
+
         if (empty($pendingDefs)) {
             return [];
         }
 
-        // Preload snapshot in only 2 indexed queries to avoid 20+ SQL queries per check
+        // Preload user snapshot in two indexed queries to prevent N+1 query bottlenecks
         $profile = $this->getProfile($user);
 
         $completedAttempts = QuizAttempt::where('user_id', $user->id)
@@ -515,9 +573,9 @@ class GamificationService
             ->get();
 
         $completedCount = $completedAttempts->count();
-        $perfectCount = $completedAttempts->filter(fn ($a) => $a->total_marks > 0 && $a->score >= $a->total_marks)->count();
-        $hasSpeedDemon = $completedAttempts->contains(
-            fn ($a) => $a->completed_at && $a->started_at && $a->completed_at->diffInSeconds($a->started_at) < 120
+        $perfectCount   = $completedAttempts->filter(fn(QuizAttempt $a) => $a->total_marks > 0 && $a->score >= $a->total_marks)->count();
+        $hasSpeedDemon  = $completedAttempts->contains(
+            fn(QuizAttempt $a) => $a->completed_at && $a->started_at && $a->completed_at->diffInSeconds($a->started_at) < 120
         );
 
         $progressStats = LearnerProgress::where('user_id', $user->id)
@@ -538,9 +596,10 @@ class GamificationService
             'count_100'       => (int) ($progressStats?->count_100 ?? 0),
         ];
 
-        $achievementBonusXp = 0;
+        $earned                  = [];
+        $achievementBonusXp      = 0;
         $achievementTransactions = [];
-        $now = now();
+        $now                     = now();
 
         foreach ($pendingDefs as $def) {
             if ($this->checkAchievementCondition($user, $def['key'], $snapshot)) {
@@ -569,8 +628,8 @@ class GamificationService
         }
 
         if ($achievementBonusXp > 0) {
-            $profile->increment('total_xp', $achievementBonusXp);
             $profile->total_xp += $achievementBonusXp;
+            $profile->save();
             $this->recalculateLevel($profile);
             XpTransaction::insert($achievementTransactions);
         }
@@ -579,29 +638,35 @@ class GamificationService
     }
 
     /**
-     * Check if a specific achievement condition is met using preloaded snapshot.
+     * Check if a specific achievement condition evaluates to true.
+     *
+     * @param  User    $user
+     * @param  string  $key
+     * @param  array   $snapshot
+     * @return bool
      */
     private function checkAchievementCondition(User $user, string $key, array $snapshot): bool
     {
+        /** @var UserGamification $profile */
         $profile = $snapshot['profile'];
 
         return match ($key) {
-            'first_quiz'    => $snapshot['completed_count'] >= 1,
-            'quiz_5'        => $snapshot['completed_count'] >= 5,
-            'quiz_10'       => $snapshot['completed_count'] >= 10,
-            'quiz_25'       => $snapshot['completed_count'] >= 25,
+            'first_quiz'       => $snapshot['completed_count'] >= 1,
+            'quiz_5'           => $snapshot['completed_count'] >= 5,
+            'quiz_10'          => $snapshot['completed_count'] >= 10,
+            'quiz_25'          => $snapshot['completed_count'] >= 25,
 
-            'perfect_score' => $snapshot['perfect_count'] >= 1,
-            'perfect_3'     => $snapshot['perfect_count'] >= 3,
+            'perfect_score'    => $snapshot['perfect_count'] >= 1,
+            'perfect_3'        => $snapshot['perfect_count'] >= 3,
 
-            'streak_3'      => $profile->longest_streak >= 3,
-            'streak_7'      => $profile->longest_streak >= 7,
-            'streak_14'     => $profile->longest_streak >= 14,
-            'streak_30'     => $profile->longest_streak >= 30,
+            'streak_3'         => $profile->longest_streak >= 3,
+            'streak_7'         => $profile->longest_streak >= 7,
+            'streak_14'        => $profile->longest_streak >= 14,
+            'streak_30'        => $profile->longest_streak >= 30,
 
-            'mastery_50'    => $snapshot['count_50'] >= 1,
-            'mastery_80'    => $snapshot['count_80'] >= 1,
-            'mastery_100'   => $snapshot['count_100'] >= 1,
+            'mastery_50'       => $snapshot['count_50'] >= 1,
+            'mastery_80'       => $snapshot['count_80'] >= 1,
+            'mastery_100'      => $snapshot['count_100'] >= 1,
 
             'all_subjects_80'  => $snapshot['count_80'] > 0 && $this->checkAllSubjectsMastery($user, 80),
             'level_5'          => $profile->level >= 5,
@@ -611,24 +676,29 @@ class GamificationService
             'speed_demon'      => $snapshot['has_speed_demon'],
             'try_all_subjects' => $snapshot['completed_count'] >= 2 && $this->checkTriedAllSubjects($user),
 
-            default => false,
+            default            => false,
         };
     }
 
     /**
-     * Check if user has 80%+ mastery in ALL subjects.
+     * Check if a user has achieved the mastery threshold across active subjects.
+     *
+     * @param  User  $user
+     * @param  int   $threshold
+     * @return bool
      */
     private function checkAllSubjectsMastery(User $user, int $threshold): bool
     {
         $totalSubjects = Subject::where('status', 'active')->count();
-        if ($totalSubjects === 0) return false;
+        if ($totalSubjects === 0) {
+            return false;
+        }
 
         $masteredSubjects = LearnerProgress::where('user_id', $user->id)
             ->where('mastery_score', '>=', $threshold)
             ->distinct('topic_id')
             ->count();
 
-        // Check if user has progress in all subjects
         $subjectsWithProgress = LearnerProgress::where('user_id', $user->id)
             ->whereHas('topic')
             ->join('topics', 'learner_progress.topic_id', '=', 'topics.id')
@@ -639,12 +709,17 @@ class GamificationService
     }
 
     /**
-     * Check if user has tried a quiz in every subject.
+     * Check if a user has attempted quizzes in all active subjects.
+     *
+     * @param  User  $user
+     * @return bool
      */
     private function checkTriedAllSubjects(User $user): bool
     {
         $totalSubjects = Subject::where('status', 'active')->count();
-        if ($totalSubjects === 0) return false;
+        if ($totalSubjects === 0) {
+            return false;
+        }
 
         $triedSubjects = QuizAttempt::where('quiz_attempts.user_id', $user->id)
             ->where('quiz_attempts.status', 'completed')

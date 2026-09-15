@@ -2,14 +2,13 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\UserRole;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreSubjectRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->role === UserRole::ADMIN || $this->user()?->role === UserRole::TEACHER;
+        return $this->user()?->isPlatformAdmin() || $this->user()?->isSchoolAdmin();
     }
 
     public function rules(): array

@@ -111,7 +111,7 @@ export interface LocalGamification {
     user_id: string;
     total_xp: number;
     level: number;
-    rank: string;
+    tier?: string;
     current_streak: number;
     longest_streak: number;
     last_active_date: string | null;

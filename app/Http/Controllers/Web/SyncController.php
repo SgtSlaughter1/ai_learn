@@ -68,7 +68,7 @@ class SyncController extends Controller
         $request->validate([
             'total_xp'       => ['required', 'integer', 'min:0'],
             'level'          => ['required', 'integer', 'min:1'],
-            'rank'           => ['required', 'string'],
+            'tier'           => ['nullable', 'string'],
             'current_streak' => ['required', 'integer', 'min:0'],
             'longest_streak' => ['required', 'integer', 'min:0'],
         ]);

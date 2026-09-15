@@ -7,6 +7,9 @@ interface Subject {
     id: number;
     school_id?: number | null;
     school_name?: string | null;
+    class_id?: number | null;
+    class_name?: string | null;
+    class_grade_level?: string | null;
     is_general_knowledge?: boolean;
     name: string;
     slug: string;
@@ -181,8 +184,40 @@ export default function Index() {
 
             <div className="space-y-6">
                 {/* Search Bar & Class Filter */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="max-w-md flex-1">
+                <div className="flex flex-col gap-3">
+                    {/* Class Filter Tabs */}
+                    {classes.length > 0 && (
+                        <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
+                            <button
+                                type="button"
+                                onClick={() => handleClassSelect(null)}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap min-h-[40px] cursor-pointer border shrink-0 ${
+                                    selectedClassId === null
+                                        ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-sm'
+                                        : 'bg-[var(--color-surface)] text-[var(--color-muted)] border-[var(--color-border)] hover:text-[var(--color-text)]'
+                                }`}
+                            >
+                                All Classes
+                            </button>
+                            {classes.map((cls) => (
+                                <button
+                                    key={cls.id}
+                                    type="button"
+                                    onClick={() => handleClassSelect(cls.id)}
+                                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap min-h-[40px] cursor-pointer border shrink-0 ${
+                                        selectedClassId === cls.id
+                                            ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-sm'
+                                            : 'bg-[var(--color-surface)] text-[var(--color-muted)] border-[var(--color-border)] hover:text-[var(--color-text)]'
+                                    }`}
+                                >
+                                    {cls.name} {cls.grade_level ? `(${cls.grade_level})` : ''}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Search Bar */}
+                    <div className="w-full max-w-md">
                         <div className="relative">
                             <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[var(--color-muted)]">
                                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -198,36 +233,6 @@ export default function Index() {
                             />
                         </div>
                     </div>
-
-                    {classes.length > 0 && (
-                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
-                            <button
-                                type="button"
-                                onClick={() => handleClassSelect(null)}
-                                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap min-h-[40px] cursor-pointer border ${
-                                    selectedClassId === null
-                                        ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-sm'
-                                        : 'bg-[var(--color-surface)] text-[var(--color-muted)] border-[var(--color-border)] hover:text-[var(--color-text)]'
-                                }`}
-                            >
-                                All Classes
-                            </button>
-                            {classes.map((cls) => (
-                                <button
-                                    key={cls.id}
-                                    type="button"
-                                    onClick={() => handleClassSelect(cls.id)}
-                                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap min-h-[40px] cursor-pointer border ${
-                                        selectedClassId === cls.id
-                                            ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-sm'
-                                            : 'bg-[var(--color-surface)] text-[var(--color-muted)] border-[var(--color-border)] hover:text-[var(--color-text)]'
-                                    }`}
-                                >
-                                    {cls.name} {cls.grade_level ? `(${cls.grade_level})` : ''}
-                                </button>
-                            ))}
-                        </div>
-                    )}
                 </div>
 
                 {/* Subjects Grid / Skeleton Screen */}
@@ -284,12 +289,17 @@ export default function Index() {
                                             <span className="text-xs font-semibold px-2.5 py-1 bg-[var(--color-primary-5)]/80 text-[var(--color-muted)] rounded-md border border-[var(--color-border)]">
                                                 {subject.topics_count} {subject.topics_count === 1 ? 'Topic' : 'Topics'}
                                             </span>
-                                            {subject.school_name && (
+                                            {subject.class_name ? (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-[var(--color-primary-10)] text-[var(--color-primary)] rounded-md border border-[var(--color-primary)]/20">
+                                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                                                    {subject.class_name} {subject.class_grade_level ? `(${subject.class_grade_level})` : ''}
+                                                </span>
+                                            ) : subject.school_name ? (
                                                 <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-[var(--color-primary-5)] text-[var(--color-primary)] rounded-md border border-[var(--color-primary)]/20">
                                                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                                                     {subject.school_name}
                                                 </span>
-                                            )}
+                                            ) : null}
                                         </div>
                                     </div>
                                     <p className="text-sm text-[var(--color-muted)] leading-relaxed line-clamp-3">

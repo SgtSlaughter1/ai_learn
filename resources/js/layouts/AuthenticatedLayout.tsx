@@ -37,9 +37,8 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
             : 'text-white/70 hover:bg-white/10 hover:text-white border-l-4 border-transparent';
     };
 
-    const isTeacher = auth?.user?.role === 'teacher';
-    const isSuperAdmin = auth?.user?.role === 'super_admin';
-    const isSchoolAdmin = auth?.user?.role === 'school_admin' || auth?.user?.role === 'admin';
+    const isSuperAdmin = auth?.user?.role === 'platform_admin';
+    const isSchoolAdmin = auth?.user?.role === 'school_admin';
     const isAdmin = isSuperAdmin || isSchoolAdmin;
 
     return (
@@ -113,7 +112,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                                 <h3 className="text-sm font-semibold text-white truncate">{auth?.user?.name}</h3>
                                 <p className="text-xs text-[var(--color-primary-light)] truncate">{auth?.user?.email}</p>
                                 <span className="inline-block mt-1 px-2 py-0.5 text-[9px] font-bold tracking-wider uppercase bg-[var(--color-accent)]/20 text-[var(--color-accent)] rounded-full border border-[var(--color-accent)]/30">
-                                    {auth?.user?.role === 'super_admin' ? 'Super Admin' : auth?.user?.role === 'school_admin' ? 'School Admin' : (auth?.user?.role || 'Learner')}
+                                    {auth?.user?.role === 'platform_admin' ? 'Platform Admin' : auth?.user?.role === 'school_admin' ? 'School Admin' : (auth?.user?.role || 'Learner')}
                                 </span>
                             </div>
                         </div>
@@ -145,19 +144,6 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
                                 </svg>
                                 Admin Dashboard
-                            </Link>
-                        ) : isTeacher ? (
-                            <Link
-                                href="/teacher/dashboard"
-                                className={`flex items-center px-6 py-3.5 text-sm transition-all ${
-                                    activeRouteClass('/teacher/dashboard')
-                                }`}
-                                onClick={() => setIsMobileMenuOpen(false)}
-                            >
-                                <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                                </svg>
-                                Teacher Dashboard
                             </Link>
                         ) : (
                             <>
@@ -220,7 +206,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                             <p className="text-xs text-[var(--color-primary-light)] truncate">{auth?.user?.email}</p>
                             <div className="flex items-center justify-between mt-1.5">
                                 <span className="inline-block px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase bg-[var(--color-accent)]/20 text-[var(--color-accent)] rounded-full border border-[var(--color-accent)]/30">
-                                    {auth?.user?.role === 'super_admin' ? 'Super Admin' : auth?.user?.role === 'school_admin' ? 'School Admin' : (auth?.user?.role || 'Learner')}
+                                    {auth?.user?.role === 'platform_admin' ? 'Platform Admin' : auth?.user?.role === 'school_admin' ? 'School Admin' : (auth?.user?.role || 'Learner')}
                                 </span>
                                 <Link
                                     href="/logout"

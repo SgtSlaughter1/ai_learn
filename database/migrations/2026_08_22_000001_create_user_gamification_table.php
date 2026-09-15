@@ -13,7 +13,7 @@ return new class extends Migration
             $table->foreignUuid('user_id')->constrained()->cascadeOnDelete();
             $table->integer('total_xp')->default(0);
             $table->integer('level')->default(1);
-            $table->string('rank')->default('Newcomer');
+            $table->string('tier')->default('Newcomer');
             $table->integer('current_streak')->default(0);
             $table->integer('longest_streak')->default(0);
             $table->date('last_active_date')->nullable();

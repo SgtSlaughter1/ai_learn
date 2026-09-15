@@ -22,12 +22,8 @@ class QuizWebController extends Controller
     public function show(Request $request, Quiz $quiz): mixed
     {
         $user = $request->user();
-        $role = $user?->role?->value ?? $user?->role;
-        if (in_array($role, ['admin', 'super_admin', 'school_admin'], true)) {
+        if ($user?->isAdmin()) {
             return redirect('/admin/dashboard');
-        }
-        if ($role === 'teacher') {
-            return redirect('/teacher/dashboard');
         }
         return Inertia::render('quizzes/Show', [
             'quizId' => $quiz->id,

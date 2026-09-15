@@ -111,7 +111,7 @@ async function syncGamification(): Promise<number> {
                 body: JSON.stringify({
                     total_xp: g.total_xp,
                     level: g.level,
-                    rank: g.rank,
+                    tier: g.tier,
                     current_streak: g.current_streak,
                     longest_streak: g.longest_streak,
                 }),

@@ -222,7 +222,7 @@ class RunLearnerE2ETestCommand extends Command
             'step' => '9. Gamification Profile',
             'endpoint' => 'GET /api/v1/gamification/profile',
             'status' => $xpDelta > 0 ? 'PASS' : 'FAIL',
-            'details' => "Level: {$level} ({$profileData['rank']}) | Total XP: {$finalXp} (+{$xpDelta} earned in session)",
+            'details' => "Level: {$level} ({$profileData['tier']}) | Total XP: {$finalXp} (+{$xpDelta} earned in session)",
             'latency' => "{$duration} ms",
         ];
 

@@ -7,14 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class LearnerProfile extends Model
 {
-    protected $fillable = [
-        'user_id',
-        'school_id',
-        'student_id',
-        'grade_level',
-        'date_of_birth',
-        'is_active',
-    ];
+    protected $guarded = [];
 
     protected function casts(): array
     {

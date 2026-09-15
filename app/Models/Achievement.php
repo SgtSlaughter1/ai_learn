@@ -12,14 +12,7 @@ class Achievement extends Model
 
     protected $table = 'achievements';
 
-    protected $fillable = [
-        'key',
-        'name',
-        'description',
-        'icon',
-        'xp_reward',
-        'category',
-    ];
+    protected $guarded = [];
 
     protected function casts(): array
     {

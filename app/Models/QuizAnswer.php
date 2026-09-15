@@ -2,16 +2,16 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['id', 'quiz_attempt_id', 'question_id', 'selected_option_id', 'is_correct', 'marks_awarded', 'answered_at'])]
 class QuizAnswer extends Model
 {
     use HasFactory, HasUuids;
+
+    protected $guarded = [];
 
     protected function casts(): array
     {

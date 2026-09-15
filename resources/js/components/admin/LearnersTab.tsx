@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Learner, SchoolItem } from '@/types/admin';
+import type { Learner, SchoolItem } from '@/types/admin';
 import { executeAdminAction } from '@/services/AdminOfflineService';
 
 interface Props {
@@ -48,7 +48,7 @@ export default function LearnersTab({ learners, schools, loading, onRefresh, sho
             gamification: {
                 total_xp: 0,
                 level: 1,
-                rank: 'Novice',
+                tier: 'Newcomer',
             },
             _pendingSync: true,
         };
@@ -316,6 +316,35 @@ export default function LearnersTab({ learners, schools, loading, onRefresh, sho
                                 </div>
                             )}
 
+                            <div>
+                                <label className="block font-bold text-[var(--color-muted)] mb-1">School *</label>
+                                <select
+                                    value={learnerForm.school_id}
+                                    onChange={(e) => {
+                                        const newSchoolId = e.target.value;
+                                        const target = schools.find((s) => String(s.id) === newSchoolId);
+                                        const cat = target?.category || 'combined';
+                                        let defaultGrade = learnerForm.grade_level;
+
+                                        if (cat === 'senior' && !['SS1', 'SS2', 'SS3'].includes(learnerForm.grade_level)) {
+                                            defaultGrade = 'SS1';
+                                        } else if (cat === 'junior' && !['JSS1', 'JSS2', 'JSS3'].includes(learnerForm.grade_level)) {
+                                            defaultGrade = 'JSS1';
+                                        } else if (cat === 'primary' && ['JSS1', 'JSS2', 'JSS3', 'SS1', 'SS2', 'SS3'].includes(learnerForm.grade_level)) {
+                                            defaultGrade = 'PRI1';
+                                        }
+
+                                        setLearnerForm({ ...learnerForm, school_id: newSchoolId, grade_level: defaultGrade });
+                                    }}
+                                    className="w-full px-3 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none cursor-pointer"
+                                >
+                                    <option value="">Select School...</option>
+                                    {schools.map((s) => (
+                                        <option key={s.id} value={s.id}>{s.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <label className="block font-bold text-[var(--color-muted)] mb-1">Grade Level *</label>
@@ -324,12 +353,52 @@ export default function LearnersTab({ learners, schools, loading, onRefresh, sho
                                         onChange={(e) => setLearnerForm({ ...learnerForm, grade_level: e.target.value })}
                                         className="w-full px-3 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none cursor-pointer"
                                     >
-                                        <option value="JSS1">JSS1</option>
-                                        <option value="JSS2">JSS2</option>
-                                        <option value="JSS3">JSS3</option>
-                                        <option value="SS1">SS1</option>
-                                        <option value="SS2">SS2</option>
-                                        <option value="SS3">SS3</option>
+                                        {(() => {
+                                            const sel = schools.find((s) => String(s.id) === String(learnerForm.school_id)) || schools[0];
+                                            const cat = sel?.category || 'combined';
+                                            const showEarly = cat === 'combined' || cat === 'primary';
+                                            const showPrimary = cat === 'combined' || cat === 'primary';
+                                            const showJunior = cat === 'combined' || cat === 'junior';
+                                            const showSenior = cat === 'combined' || cat === 'senior';
+
+                                            return (
+                                                <>
+                                                    {showEarly && (
+                                                        <optgroup label="Early Childhood">
+                                                            <option value="CRECHE">Creche</option>
+                                                            <option value="KG1">KG 1</option>
+                                                            <option value="KG2">KG 2</option>
+                                                            <option value="NUR1">Nursery 1</option>
+                                                            <option value="NUR2">Nursery 2</option>
+                                                        </optgroup>
+                                                    )}
+                                                    {showPrimary && (
+                                                        <optgroup label="Primary School">
+                                                            <option value="PRI1">Primary 1</option>
+                                                            <option value="PRI2">Primary 2</option>
+                                                            <option value="PRI3">Primary 3</option>
+                                                            <option value="PRI4">Primary 4</option>
+                                                            <option value="PRI5">Primary 5</option>
+                                                            <option value="PRI6">Primary 6</option>
+                                                        </optgroup>
+                                                    )}
+                                                    {showJunior && (
+                                                        <optgroup label="Junior Secondary">
+                                                            <option value="JSS1">JSS 1</option>
+                                                            <option value="JSS2">JSS 2</option>
+                                                            <option value="JSS3">JSS 3</option>
+                                                        </optgroup>
+                                                    )}
+                                                    {showSenior && (
+                                                        <optgroup label="Senior Secondary">
+                                                            <option value="SS1">SS 1</option>
+                                                            <option value="SS2">SS 2</option>
+                                                            <option value="SS3">SS 3</option>
+                                                        </optgroup>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
                                     </select>
                                 </div>
 
@@ -343,20 +412,6 @@ export default function LearnersTab({ learners, schools, loading, onRefresh, sho
                                         placeholder="e.g. STU-001"
                                     />
                                 </div>
-                            </div>
-
-                            <div>
-                                <label className="block font-bold text-[var(--color-muted)] mb-1">School</label>
-                                <select
-                                    value={learnerForm.school_id}
-                                    onChange={(e) => setLearnerForm({ ...learnerForm, school_id: e.target.value })}
-                                    className="w-full px-3 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none cursor-pointer"
-                                >
-                                    <option value="">Select School...</option>
-                                    {schools.map((s) => (
-                                        <option key={s.id} value={s.id}>{s.name}</option>
-                                    ))}
-                                </select>
                             </div>
 
                             <div className="pt-4 flex items-center justify-end gap-3 border-t border-[var(--color-border)]">

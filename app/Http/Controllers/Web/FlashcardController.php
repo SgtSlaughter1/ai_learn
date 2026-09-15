@@ -20,12 +20,8 @@ class FlashcardController extends Controller
     public function index(Request $request): mixed
     {
         $user = $request->user();
-        $role = $user?->role?->value ?? $user?->role;
-        if (in_array($role, ['admin', 'super_admin', 'school_admin'], true)) {
+        if ($user?->isAdmin()) {
             return redirect('/admin/dashboard');
-        }
-        if ($role === 'teacher') {
-            return redirect('/teacher/dashboard');
         }
         return Inertia::render('Flashcards/Index');
     }
@@ -120,7 +116,7 @@ class FlashcardController extends Controller
             'success' => true,
             'xp_earned' => $result['xp_earned'],
             'new_level' => $result['new_level'],
-            'new_rank' => $result['new_rank'],
+            'new_tier' => $result['new_tier'],
             'new_achievements' => $result['new_achievements'],
         ]);
     }

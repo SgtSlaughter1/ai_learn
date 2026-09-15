@@ -17,7 +17,7 @@ export default function Index() {
     const [completed, setCompleted] = useState<boolean>(false);
     const [ratings, setRatings] = useState<RecallRating[]>([]);
     const [xpEarned, setXpEarned] = useState<number>(0);
-    const [levelUpInfo, setLevelUpInfo] = useState<{ level: number; rank: string; achievements: any[] } | null>(null);
+    const [levelUpInfo, setLevelUpInfo] = useState<{ level: number; tier: string; achievements: any[] } | null>(null);
     const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
     const [offlineMessage, setOfflineMessage] = useState<string>('');
 
@@ -89,10 +89,10 @@ export default function Index() {
             if (!res.ok) throw new Error('Failed to submit flashcard session');
             const data = await res.json();
             setXpEarned(data.xp_earned);
-            if (data.new_level && data.new_rank) {
+            if (data.new_level && data.new_tier) {
                 setLevelUpInfo({
                     level: data.new_level,
-                    rank: data.new_rank,
+                    tier: data.new_tier,
                     achievements: data.new_achievements || [],
                 });
             }

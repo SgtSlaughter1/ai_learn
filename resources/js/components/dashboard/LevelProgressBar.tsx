@@ -5,8 +5,8 @@ import { XpGuideModal } from './XpGuideModal';
 export interface GamificationData {
     total_xp: number;
     level: number;
-    rank: string;
-    rank_color: string;
+    tier: string;
+    tier_color: string;
     current_streak: number;
     longest_streak: number;
     xp_progress_percent: number;
@@ -43,9 +43,9 @@ export function LevelProgressBar({
                         <div
                             className="h-16 w-16 rounded-2xl flex items-center justify-center text-2xl font-black border-2 shadow-lg"
                             style={{
-                                backgroundColor: `${gamification.rank_color}15`,
-                                borderColor: `${gamification.rank_color}40`,
-                                color: gamification.rank_color,
+                                backgroundColor: `${gamification.tier_color}15`,
+                                borderColor: `${gamification.tier_color}40`,
+                                color: gamification.tier_color,
                             }}
                         >
                             L{gamification.level}
@@ -57,8 +57,8 @@ export function LevelProgressBar({
 
                     <div className="space-y-1.5">
                         <div className="flex items-center gap-2">
-                            <span className="text-sm font-extrabold" style={{ color: gamification.rank_color }}>
-                                {gamification.rank}
+                            <span className="text-sm font-extrabold" style={{ color: gamification.tier_color }}>
+                                {gamification.tier}
                             </span>
                             <span className="text-xs text-[var(--color-muted)]">•</span>
                             <span className="text-xs text-[var(--color-muted)] font-semibold">
@@ -71,7 +71,7 @@ export function LevelProgressBar({
                                     className="h-full rounded-full transition-all duration-700 ease-out"
                                     style={{
                                         width: `${gamification.xp_progress_percent}%`,
-                                        backgroundColor: gamification.rank_color,
+                                        backgroundColor: gamification.tier_color,
                                     }}
                                 />
                             </div>

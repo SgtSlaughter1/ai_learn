@@ -159,7 +159,7 @@ export default function Login() {
                     <div className="space-y-2">
                         <button
                             type="button"
-                            onClick={() => fillCredentials('superadmin@example.com', 'password')}
+                            onClick={() => fillCredentials('platformadmin@example.com', 'password')}
                             className="w-full text-left p-2.5 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-surface-hover)] active:scale-[0.98] transition-all duration-200 cursor-pointer flex items-center justify-between group"
                         >
                             <div className="flex items-center gap-2.5">
@@ -169,11 +169,11 @@ export default function Login() {
                                     </svg>
                                 </div>
                                 <div>
-                                    <p className="font-bold text-[var(--color-text)] leading-tight">Super Admin</p>
-                                    <p className="text-[10px] text-[var(--color-muted)]">Platform oversight & schools</p>
+                                    <p className="font-bold text-[var(--color-text)] leading-tight">Platform Admin</p>
+                                    <p className="text-[10px] text-[var(--color-muted)]">Global platform & schools</p>
                                 </div>
                             </div>
-                            <span className="text-[11px] font-mono text-[var(--color-muted)] group-hover:text-[var(--color-primary)]">superadmin@example.com</span>
+                            <span className="text-[11px] font-mono text-[var(--color-muted)] group-hover:text-[var(--color-primary)]">platformadmin@example.com</span>
                         </button>
 
                         <button

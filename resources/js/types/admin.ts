@@ -16,6 +16,7 @@ export interface Overview {
 export interface SchoolItem {
     id: number;
     name: string;
+    category?: 'primary' | 'junior' | 'senior' | 'combined' | string;
     slug?: string;
     address?: string | null;
     city: string | null;
@@ -61,7 +62,7 @@ export interface TopLearner {
     school: string;
     grade_level: string;
     total_xp: number;
-    rank: string;
+    tier?: string;
     level: number;
 }
 
@@ -85,13 +86,25 @@ export interface Stats {
     struggling_learners?: StrugglingLearner[];
 }
 
+export interface ProgramItem {
+    id: number;
+    name: string;
+    code: string;
+    slug?: string;
+    description?: string | null;
+}
+
 export interface ClassItem {
     id: number;
     school_id: number;
+    program_id?: number | null;
+    program?: ProgramItem | null;
     name: string;
     slug: string;
     grade_level: string;
-    section: string | null;
+    arm?: string | null;
+    section?: string | null;
+    school_class_arm?: string | null;
     description: string | null;
     is_active: boolean;
     learner_count?: number;
@@ -105,7 +118,7 @@ export interface ClassLearner {
     name: string;
     email: string;
     level: number;
-    rank: string;
+    tier?: string;
     total_xp: number;
     streak: number;
     topics_covered: number;
@@ -129,7 +142,7 @@ export interface Learner {
     gamification?: {
         total_xp: number;
         level: number;
-        rank: string;
+        tier?: string;
     };
     classes?: { id: number; name: string }[];
     _pendingSync?: boolean;
@@ -155,6 +168,10 @@ export interface SubjectItem {
     id: number;
     school_id?: number | null;
     school?: { id: number; name: string } | null;
+    class_id?: number | null;
+    school_class?: { id: number; name: string; grade_level?: string } | null;
+    class_name?: string | null;
+    class_grade_level?: string | null;
     name: string;
     slug: string;
     description: string | null;
@@ -187,7 +204,14 @@ export interface QuestionItem {
     topic?: {
         id: number;
         name: string;
-        subject?: { id: number; name: string; school_id?: number | null };
+        subject?: {
+            id: number;
+            name: string;
+            school_id?: number | null;
+            class_id?: number | null;
+            class_name?: string | null;
+            school_class?: { id: number; name: string; grade_level?: string } | null;
+        };
     };
     _pendingSync?: boolean;
     _offlineDeleted?: boolean;

@@ -23,8 +23,7 @@ class TeacherDashboardController extends Controller
     public function index(Request $request): mixed
     {
         $user = $request->user();
-
-        if ($user->role !== UserRole::TEACHER && $user->role !== UserRole::ADMIN) {
+        if (!$user || (!$user->isAdmin() && !$user->teacherProfile()->exists())) {
             abort(403);
         }
 
@@ -41,11 +40,20 @@ class TeacherDashboardController extends Controller
             ]);
         }
 
+        $gradeOrder = [
+            'CRECHE' => 1, 'KG1' => 2, 'KG2' => 3, 'NUR1' => 4, 'NUR2' => 5,
+            'PRI1' => 6, 'PRI2' => 7, 'PRI3' => 8, 'PRI4' => 9, 'PRI5' => 10, 'PRI6' => 11,
+            'JSS1' => 12, 'JSS2' => 13, 'JSS3' => 14, 'SS1' => 15, 'SS2' => 16, 'SS3' => 17,
+        ];
+
         // Get teacher's classes
         $classes = ClassModel::where('school_id', $school->id)
             ->whereHas('memberships', fn ($q) => $q->where('user_id', $user->id)->where('role', 'teacher'))
+            ->with(['program:id,name,code,slug'])
             ->withCount(['learnerUsers as learner_count'])
-            ->get();
+            ->get()
+            ->sortBy(fn ($c) => $gradeOrder[strtoupper($c->grade_level ?? '')] ?? 99)
+            ->values();
 
         // Selected class (from query param or first class)
         $selectedClassId = $request->get('class_id');
@@ -64,6 +72,14 @@ class TeacherDashboardController extends Controller
                 'name' => $c->name,
                 'slug' => $c->slug,
                 'grade_level' => $c->grade_level,
+                'arm' => $c->arm,
+                'section' => $c->section,
+                'school_class_arm' => $c->school_class_arm,
+                'program' => $c->program ? [
+                    'id' => $c->program->id,
+                    'name' => $c->program->name,
+                    'code' => $c->program->code,
+                ] : null,
                 'learner_count' => $c->learner_count,
             ]),
             'selectedClass' => $selectedClass?->id,
@@ -76,8 +92,7 @@ class TeacherDashboardController extends Controller
     public function getStats(Request $request): JsonResponse
     {
         $user = $request->user();
-
-        if ($user->role !== UserRole::TEACHER && $user->role !== UserRole::ADMIN) {
+        if (!$user || (!$user->isAdmin() && !$user->teacherProfile()->exists())) {
             abort(403);
         }
 
@@ -126,11 +141,18 @@ class TeacherDashboardController extends Controller
                 'u.name',
                 DB::raw('COALESCE(ug.total_xp, 0) as total_xp'),
                 DB::raw('COALESCE(ug.level, 1) as level'),
-                DB::raw("COALESCE(ug.rank, 'Newcomer') as rank"),
+                DB::raw("COALESCE(ug.tier, 'Newcomer') as tier"),
             ])
             ->orderByDesc('total_xp')
             ->limit(10)
-            ->get();
+            ->get()
+            ->map(fn ($u) => [
+                'id' => (string) $u->id,
+                'name' => $u->name,
+                'total_xp' => (int) $u->total_xp,
+                'level' => (int) $u->level,
+                'tier' => $u->tier,
+            ]);
 
         // Optimized: Direct SQL having filter instead of loading full collections into PHP
         $strugglingLearners = DB::table('users as u')
@@ -166,13 +188,24 @@ class TeacherDashboardController extends Controller
             'top_performers' => $topPerformers,
             'struggling_learners' => $strugglingLearners,
             'classes' => ClassModel::where('school_id', $school->id)
-                ->select(['id', 'name', 'school_id'])
                 ->whereHas('memberships', fn ($q) => $q->where('user_id', $user->id)->where('role', 'teacher'))
+                ->with(['program:id,name,code,slug'])
                 ->withCount(['learnerUsers as learner_count'])
                 ->get()
+                ->sortBy(fn ($c) => $gradeOrder[strtoupper($c->grade_level ?? '')] ?? 99)
+                ->values()
                 ->map(fn ($c) => [
                     'id' => $c->id,
                     'name' => $c->name,
+                    'grade_level' => $c->grade_level,
+                    'arm' => $c->arm,
+                    'section' => $c->section,
+                    'school_class_arm' => $c->school_class_arm,
+                    'program' => $c->program ? [
+                        'id' => $c->program->id,
+                        'name' => $c->program->name,
+                        'code' => $c->program->code,
+                    ] : null,
                     'learner_count' => $c->learner_count,
                 ]),
         ]);
@@ -195,41 +228,32 @@ class TeacherDashboardController extends Controller
             return response()->json(['error' => 'Access denied'], 403);
         }
 
-        $class = ClassModel::withCount('learnerUsers')->find($classId);
-        $learnerIds = ClassMembership::where('class_id', $classId)
-            ->where('role', 'learner')
-            ->pluck('user_id');
+        $class = DB::table('classes')->where('id', $classId)->select(['id', 'name'])->first();
 
-        if ($learnerIds->isEmpty()) {
-            return response()->json([
-                'class' => [
-                    'id' => $class?->id ?? $classId,
-                    'name' => $class?->name ?? 'Class',
-                    'learner_count' => 0,
-                ],
-                'learners' => [],
-            ]);
-        }
-
-        // Single optimized joined query for learners, gamification, and topic progress
+        // Single optimized joined query using index-scoped subquery
         $learners = DB::table('users as u')
-            ->whereIn('u.id', $learnerIds)
+            ->join('class_memberships as cm', function ($join) use ($classId) {
+                $join->on('cm.user_id', '=', 'u.id')
+                    ->where('cm.class_id', '=', $classId)
+                    ->where('cm.role', '=', 'learner');
+            })
             ->leftJoin('user_gamification as ug', 'ug.user_id', '=', 'u.id')
-            ->leftJoin(DB::raw('(
+            ->leftJoin(DB::raw("(
                 SELECT user_id,
                        COUNT(*) as topics_covered,
                        AVG(mastery_score) as avg_mastery,
                        SUM(questions_attempted) as total_attempted,
                        SUM(questions_correct) as total_correct
                 FROM learner_progress
+                WHERE user_id IN (SELECT user_id FROM class_memberships WHERE class_id = {$classId} AND role = 'learner')
                 GROUP BY user_id
-            ) as lp'), 'lp.user_id', '=', 'u.id')
+            ) as lp"), 'lp.user_id', '=', 'u.id')
             ->select([
                 'u.id',
                 'u.name',
                 'u.email',
                 DB::raw('COALESCE(ug.level, 1) as level'),
-                DB::raw("COALESCE(ug.`rank`, 'Newcomer') as `rank`"),
+                DB::raw("COALESCE(ug.tier, 'Newcomer') as tier"),
                 DB::raw('COALESCE(ug.total_xp, 0) as total_xp'),
                 DB::raw('COALESCE(ug.current_streak, 0) as streak'),
                 DB::raw('COALESCE(lp.topics_covered, 0) as topics_covered'),
@@ -237,14 +261,27 @@ class TeacherDashboardController extends Controller
                 DB::raw('COALESCE(lp.total_attempted, 0) as total_attempted'),
                 DB::raw('COALESCE(lp.total_correct, 0) as total_correct'),
             ])
-            ->orderByDesc('total_xp')
-            ->get();
+            ->orderByDesc('ug.total_xp')
+            ->get()
+            ->map(fn ($u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'level' => (int) $u->level,
+                'tier' => $u->tier,
+                'total_xp' => (int) $u->total_xp,
+                'streak' => (int) $u->streak,
+                'topics_covered' => (int) $u->topics_covered,
+                'avg_mastery' => (int) $u->avg_mastery,
+                'total_attempted' => (int) $u->total_attempted,
+                'total_correct' => (int) $u->total_correct,
+            ]);
 
         return response()->json([
             'class' => [
-                'id' => $class->id,
-                'name' => $class->name,
-                'learner_count' => $class->learner_count,
+                'id' => $class?->id ?? $classId,
+                'name' => $class?->name ?? 'Class',
+                'learner_count' => count($learners),
             ],
             'learners' => $learners,
         ]);
@@ -320,7 +357,7 @@ class TeacherDashboardController extends Controller
 
         $learner = User::where('email', $validated['email'])->first();
 
-        if ($learner->role !== \App\Enums\UserRole::LEARNER) {
+        if (!$learner->isLearner()) {
             return response()->json(['error' => 'User is not a learner'], 400);
         }
 

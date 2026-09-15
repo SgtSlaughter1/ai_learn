@@ -24,7 +24,7 @@ export default function Dashboard() {
 
     useEffect(() => {
         const role = auth?.user?.role;
-        if (role === 'admin' || role === 'super_admin' || role === 'school_admin' || role === 'teacher') {
+        if (role === 'platform_admin' || role === 'school_admin') {
             window.location.href = '/admin/dashboard';
         }
     }, [auth]);
@@ -77,7 +77,7 @@ export default function Dashboard() {
                             user_id: 'current',
                             total_xp: gamData.total_xp,
                             level: gamData.level,
-                            rank: gamData.rank || 'Newcomer',
+                            tier: gamData.tier || 'Newcomer',
                             current_streak: gamData.current_streak,
                             longest_streak: gamData.longest_streak,
                             last_active_date: new Date().toISOString().split('T')[0],
@@ -157,7 +157,8 @@ export default function Dashboard() {
                                 ...fullGamification,
                                 total_xp: gamCache.total_xp,
                                 level: lvl,
-                                rank: gamCache.rank || fullGamification.rank,
+                                tier: gamCache.tier || fullGamification.tier || 'Newcomer',
+                                tier_color: fullGamification.tier_color || '#94a3b8',
                                 current_streak: gamCache.current_streak || fullGamification.current_streak,
                                 longest_streak: Math.max(gamCache.longest_streak || 0, fullGamification.longest_streak),
                                 xp_progress_percent: progressPercent,
@@ -178,8 +179,8 @@ export default function Dashboard() {
                         setGamification({
                             total_xp: gamCache.total_xp,
                             level: lvl,
-                            rank: gamCache.rank || 'Newcomer',
-                            rank_color: '#94a3b8',
+                            tier: gamCache.tier || 'Newcomer',
+                            tier_color: '#94a3b8',
                             current_streak: gamCache.current_streak || 0,
                             longest_streak: gamCache.longest_streak || 0,
                             xp_progress_percent: progressPercent,

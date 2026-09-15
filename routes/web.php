@@ -35,6 +35,7 @@ Route::prefix('api/v1/auth')->group(function () {
     Route::post('/login', [LoginController::class, 'login']);
     Route::get('/user', [LoginController::class, 'getUser']);
     Route::post('/logout', [LoginController::class, 'logout']);
+    Route::post('/refresh', [LoginController::class, 'refresh']);
 });
 
 // Protected Core Learning Routes
@@ -42,7 +43,7 @@ Route::middleware('auth')->group(function () {
     // Shell Pages Renders
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/admin/dashboard', [AdminDashboardController::class, 'index']);
-    Route::get('/teacher/dashboard', [AdminDashboardController::class, 'index']);
+    Route::get('/teacher/dashboard', [TeacherDashboardController::class, 'index']);
     Route::get('/subjects', [SubjectWebController::class, 'index']);
     Route::get('/general-knowledge', [SubjectWebController::class, 'generalKnowledge']);
     Route::get('/subjects/{subject}', [SubjectWebController::class, 'show']);
@@ -97,17 +98,18 @@ Route::middleware('auth')->group(function () {
 
         // Admin Management: Schools, School Admins, Classes, Learners, Subjects, Topics, Questions
         Route::get('/admin/schools', [AdminDashboardController::class, 'getSchools']);
-        Route::post('/admin/schools', [AdminDashboardController::class, 'storeSchool']);
+        Route::post('/admin/schools', [AdminDashboardController::class, 'saveSchool']);
         Route::put('/admin/schools/{id}', [AdminDashboardController::class, 'updateSchool']);
         Route::delete('/admin/schools/{id}', [AdminDashboardController::class, 'deleteSchool']);
 
         Route::get('/admin/school-admins', [AdminDashboardController::class, 'getSchoolAdmins']);
-        Route::post('/admin/school-admins', [AdminDashboardController::class, 'storeSchoolAdmin']);
+        Route::post('/admin/school-admins', [AdminDashboardController::class, 'saveSchoolAdmin']);
         Route::put('/admin/school-admins/{id}', [AdminDashboardController::class, 'updateSchoolAdmin']);
         Route::delete('/admin/school-admins/{id}', [AdminDashboardController::class, 'deleteSchoolAdmin']);
 
+        Route::get('/admin/programs', [AdminDashboardController::class, 'getPrograms']);
         Route::get('/admin/classes', [AdminDashboardController::class, 'getClasses']);
-        Route::post('/admin/classes', [AdminDashboardController::class, 'storeClass']);
+        Route::post('/admin/classes', [AdminDashboardController::class, 'saveClass']);
         Route::put('/admin/classes/{id}', [AdminDashboardController::class, 'updateClass']);
         Route::delete('/admin/classes/{id}', [AdminDashboardController::class, 'deleteClass']);
         Route::get('/admin/classes/{classId}/learners', [AdminDashboardController::class, 'getClassLearners']);
@@ -115,22 +117,24 @@ Route::middleware('auth')->group(function () {
         Route::delete('/admin/classes/{classId}/learners/{learnerId}', [AdminDashboardController::class, 'removeClassLearner']);
 
         Route::get('/admin/learners', [AdminDashboardController::class, 'getLearners']);
-        Route::post('/admin/learners', [AdminDashboardController::class, 'storeLearner']);
+        Route::post('/admin/learners', [AdminDashboardController::class, 'saveLearner']);
         Route::put('/admin/learners/{id}', [AdminDashboardController::class, 'updateLearner']);
         Route::delete('/admin/learners/{id}', [AdminDashboardController::class, 'deleteLearner']);
 
         Route::get('/admin/subjects', [AdminDashboardController::class, 'getSubjects']);
-        Route::post('/admin/subjects', [AdminDashboardController::class, 'storeSubject']);
+        Route::post('/admin/subjects', [AdminDashboardController::class, 'saveSubject']);
         Route::put('/admin/subjects/{id}', [AdminDashboardController::class, 'updateSubject']);
         Route::delete('/admin/subjects/{id}', [AdminDashboardController::class, 'deleteSubject']);
 
         Route::get('/admin/topics', [AdminDashboardController::class, 'getTopics']);
-        Route::post('/admin/topics', [AdminDashboardController::class, 'storeTopic']);
+        Route::post('/admin/topics', [AdminDashboardController::class, 'saveTopic']);
         Route::put('/admin/topics/{id}', [AdminDashboardController::class, 'updateTopic']);
         Route::delete('/admin/topics/{id}', [AdminDashboardController::class, 'deleteTopic']);
 
         Route::get('/admin/questions', [AdminDashboardController::class, 'getQuestions']);
-        Route::post('/admin/questions', [AdminDashboardController::class, 'storeQuestion']);
+        Route::post('/admin/questions', [AdminDashboardController::class, 'saveQuestion']);
+        Route::post('/admin/questions/ai-extract', [AdminDashboardController::class, 'aiExtractQuestions']);
+        Route::post('/admin/questions/bulk', [AdminDashboardController::class, 'bulkSaveQuestions']);
         Route::put('/admin/questions/{id}', [AdminDashboardController::class, 'updateQuestion']);
         Route::delete('/admin/questions/{id}', [AdminDashboardController::class, 'deleteQuestion']);
     });
@@ -162,7 +166,7 @@ Route::get('/clear-cache', function () use ($guardMaintenance) {
     \Illuminate\Support\Facades\Artisan::call('route:clear');
     \Illuminate\Support\Facades\Artisan::call('config:clear');
     \Illuminate\Support\Facades\Artisan::call('cache:clear');
-    return 'All caches cleared successfully! ✨';
+    return 'All caches cleared successfully!';
 });
 
 // Run standard migrations
@@ -174,7 +178,7 @@ Route::get('/run-migrations', function () use ($guardMaintenance) {
         $output = \Illuminate\Support\Facades\Artisan::output();
         return response()->json([
             'status' => 'success',
-            'message' => 'Migrations ran successfully! ✨',
+            'message' => 'Migrations ran successfully!',
             'output' => $output
         ]);
     } catch (\Exception $e) {
@@ -227,24 +231,26 @@ Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
             '0001_01_01_000000_create_users_table',
             '0001_01_01_000001_create_cache_table',
             '0001_01_01_000002_create_jobs_table',
+            '2026_08_20_000000_create_roles_table',
             '2026_08_20_000001_create_schools_table',
-            '2026_08_20_000002_create_subjects_table',
-            '2026_08_20_000003_create_topics_table',
-            '2026_08_20_000004_create_questions_table',
-            '2026_08_20_000005_create_question_options_table',
-            '2026_08_20_000006_create_quizzes_table',
-            '2026_08_20_000007_create_quiz_questions_table',
-            '2026_08_20_000008_create_quiz_attempts_table',
-            '2026_08_20_000009_create_quiz_answers_table',
-            '2026_08_20_000010_create_learner_progress_table',
-            '2026_08_20_000011_create_content_packages_table',
+            '2026_08_20_000002_create_programs_table',
+            '2026_08_20_000003_create_classes_table',
+            '2026_08_20_000004_create_subjects_table',
+            '2026_08_20_000005_create_topics_table',
+            '2026_08_20_000006_create_questions_table',
+            '2026_08_20_000007_create_question_options_table',
+            '2026_08_20_000008_create_quizzes_table',
+            '2026_08_20_000009_create_quiz_questions_table',
+            '2026_08_20_000010_create_quiz_attempts_table',
+            '2026_08_20_000011_create_quiz_answers_table',
+            '2026_08_20_000012_create_learner_progress_table',
+            '2026_08_20_000013_create_content_packages_table',
             '2026_08_22_000000_create_quiz_adaptive_states_table',
             '2026_08_22_000001_create_user_gamification_table',
             '2026_08_22_000002_create_xp_transactions_table',
             '2026_08_22_000003_create_user_achievements_table',
             '2026_08_23_000002_create_teacher_profiles_table',
             '2026_08_23_000003_create_learner_profiles_table',
-            '2026_08_23_000004_create_classes_table',
             '2026_08_23_000005_create_class_memberships_table',
             '2026_08_24_000001_create_achievements_table',
         ];
@@ -350,7 +356,7 @@ Route::get('/run-seed', function () use ($guardMaintenance) {
         $output = \Illuminate\Support\Facades\Artisan::output();
         return response()->json([
             'status' => 'success',
-            'message' => 'Database seeded successfully! ✨',
+            'message' => 'Database seeded successfully!',
             'output' => $output
         ]);
     } catch (\Exception $e) {

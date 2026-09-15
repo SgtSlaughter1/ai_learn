@@ -7,7 +7,7 @@ interface FlashcardSessionCompleteProps {
     isOnline: boolean;
     levelUpInfo: {
         level: number;
-        rank: string;
+        tier: string;
         achievements: any[];
     } | null;
     onRestart: () => void;
@@ -61,7 +61,7 @@ export function FlashcardSessionComplete({
                                 Current Standing
                             </span>
                             <span className="text-xs font-bold text-[var(--color-primary)]">
-                                Level {levelUpInfo.level} ({levelUpInfo.rank})
+                                Level {levelUpInfo.level} ({levelUpInfo.tier})
                             </span>
                         </div>
                         {levelUpInfo.achievements.length > 0 && (
