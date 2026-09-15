@@ -1,3 +1,4 @@
+import React from 'react';
 import { Stats } from '@/types/admin';
 
 interface Props {
@@ -159,16 +160,6 @@ export default function OverviewTab({ stats, loading }: Props) {
                         }
                     />
                     <AdminStatCard
-                        label="Quizzes & Tests"
-                        value={loading ? '...' : stats?.overview.total_quizzes}
-                        loading={loading}
-                        icon={
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                        }
-                    />
-                    <AdminStatCard
                         label="Question Bank"
                         value={loading ? '...' : stats?.overview.total_questions}
                         loading={loading}
@@ -178,24 +169,24 @@ export default function OverviewTab({ stats, loading }: Props) {
                             </svg>
                         }
                     />
+                    <AdminStatCard
+                        label="Quiz Attempts"
+                        value={loading ? '...' : stats?.overview.total_attempts}
+                        loading={loading}
+                        icon={
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                        }
+                    />
                 </div>
             )}
 
-            {/* Second Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Academic Diagnostic Highlights */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <AdminStatCard
-                    label="Quizzes Taken"
-                    value={loading ? '...' : stats?.overview.total_attempts?.toLocaleString()}
-                    loading={loading}
-                    icon={
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    }
-                />
-                <AdminStatCard
-                    label="Questions Answered"
-                    value={loading ? '...' : stats?.overview.total_questions_answered?.toLocaleString()}
+                    label="Questions Solved"
+                    value={loading ? '...' : stats?.overview.total_questions_answered}
                     loading={loading}
                     icon={
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -278,9 +269,9 @@ export default function OverviewTab({ stats, loading }: Props) {
                                     <div key={grade}>
                                         <div className="flex justify-between text-xs font-semibold mb-1">
                                             <span className="text-[var(--color-text)]">{grade}</span>
-                                            <span className="text-[var(--color-muted)]">{count} learners ({pct}%)</span>
+                                            <span className="text-[var(--color-muted)]">{count} ({pct}%)</span>
                                         </div>
-                                        <div className="h-2 w-full bg-[var(--color-primary-5)] rounded-full overflow-hidden">
+                                        <div className="h-2 bg-[var(--color-primary-5)] rounded-full overflow-hidden">
                                             <div className="h-full bg-[var(--color-primary)] rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
                                         </div>
                                     </div>
@@ -291,12 +282,13 @@ export default function OverviewTab({ stats, loading }: Props) {
                 </div>
             </div>
 
-            {/* Struggling Learners Remedial Alert Table */}
+            {/* Struggling Learners Table */}
             {stats?.struggling_learners && stats.struggling_learners.length > 0 && (
-                <div className="bg-[var(--color-surface)] border border-red-500/20 rounded-2xl p-6 shadow-sm">
+                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 shadow-sm">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-red-500 flex items-center gap-2">
-                            Learners Requiring Remedial Attention (&lt; 40% Mastery)
+                        <h3 className="text-lg font-bold text-[var(--color-text)] flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                            Learners Requiring Academic Attention
                         </h3>
                         <span className="px-3 py-1 bg-red-500/10 text-red-500 text-xs font-bold rounded-full">
                             {stats.struggling_learners.length} Students

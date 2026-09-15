@@ -303,4 +303,41 @@ class DomainModelTest extends TestCase
         $busClassNames = collect($resBus->json('classes'))->pluck('name')->all();
         $this->assertEquals(['SS1 Business', 'SS2 Business', 'SS3 Business'], $busClassNames);
     }
+
+    public function test_ai_chat_supports_both_school_admin_copilot_and_learner_study_companion(): void
+    {
+        $school = \App\Models\School::create([
+            'name' => 'Apex High School',
+            'slug' => 'apex-high-school',
+            'category' => 'secondary',
+            'is_active' => true,
+        ]);
+
+        $admin = User::factory()->create([
+            'name' => 'Admin Janet',
+            'role' => UserRole::SCHOOL_ADMIN,
+        ]);
+        $school->update(['admin_user_id' => $admin->id]);
+
+        $learner = User::factory()->create([
+            'name' => 'Student Emeka',
+            'role' => UserRole::LEARNER,
+        ]);
+
+        // 1. School Admin Chat
+        $this->actingAs($admin);
+        $adminRes = $this->postJson('/api/v1/ai/chat', [
+            'message' => 'Summarize school mastery and performance',
+        ]);
+        $adminRes->assertStatus(200);
+        $this->assertNotEmpty($adminRes->json('response'));
+
+        // 2. Learner Chat
+        $this->actingAs($learner);
+        $learnerRes = $this->postJson('/api/v1/ai/chat', [
+            'message' => 'What should I study next?',
+        ]);
+        $learnerRes->assertStatus(200);
+        $this->assertNotEmpty($learnerRes->json('response'));
+    }
 }

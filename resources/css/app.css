@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'katex/dist/katex.min.css';
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
@@ -283,3 +284,40 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--color-muted);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   KATEX MATH RENDERING SAFEGUARDS
+   ═══════════════════════════════════════════════════════════ */
+
+.katex-mathml {
+    clip: rect(1px, 1px, 1px, 1px) !important;
+    border: 0 !important;
+    height: 1px !important;
+    width: 1px !important;
+    padding: 0 !important;
+    position: absolute !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+}
+
+.katex-display {
+    margin: 0.5em 0 !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    max-width: 100% !important;
+    padding-bottom: 2px !important;
+}
+
+.katex {
+    font-size: 1.05em !important;
+    text-rendering: auto !important;
+    max-width: 100% !important;
+}
+
+.katex .katex-html {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    vertical-align: middle !important;
+}
+

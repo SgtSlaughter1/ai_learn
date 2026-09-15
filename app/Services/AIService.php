@@ -2,12 +2,16 @@
 
 namespace App\Services;
 
+use App\Models\ClassModel;
+use App\Models\LearnerProgress;
+use App\Models\LearnerProfile;
 use App\Models\Question;
 use App\Models\QuestionOption;
+use App\Models\School;
 use App\Models\Subject;
 use App\Models\Topic;
 use App\Models\User;
-use App\Models\LearnerProgress;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
 class AIService
@@ -19,8 +23,57 @@ class AIService
     public function __construct()
     {
         $this->apiKey = env('GEMINI_API_KEY') ?: env('GOOGLE_API_KEY') ?: env('AI_API_KEY');
-        $this->modelName = env('MODEL_NAME', 'gemini-3.6-flash');
+        $this->modelName = env('MODEL_NAME', 'gemini-3-flash-preview');
         $this->provider = env('AI_PROVIDER') ?: (empty($this->apiKey) ? 'local' : 'gemini');
+    }
+
+    /**
+     * Call Gemini API with automatic model fallback for high availability.
+     */
+    protected function callGemini(array $contents, ?string $systemInstruction = null, array $generationConfig = []): ?string
+    {
+        if (empty($this->apiKey) || $this->provider !== 'gemini') {
+            return null;
+        }
+
+        $modelsToTry = array_values(array_unique([
+            $this->modelName,
+            'gemini-3-flash-preview',
+            'gemini-3.1-flash-lite-preview',
+            'gemini-3.6-flash',
+            'gemini-3.5-flash',
+            'gemini-flash-latest',
+        ]));
+
+        $payload = ['contents' => $contents];
+        if (!empty($systemInstruction)) {
+            $payload['systemInstruction'] = [
+                'parts' => [['text' => $systemInstruction]]
+            ];
+        }
+        if (!empty($generationConfig)) {
+            $payload['generationConfig'] = $generationConfig;
+        }
+
+        foreach ($modelsToTry as $model) {
+            try {
+                $response = Http::timeout(15)
+                    ->withHeaders(['Content-Type' => 'application/json'])
+                    ->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$this->apiKey}", $payload);
+
+                if ($response->successful()) {
+                    $body = $response->json();
+                    $text = $body['candidates'][0]['content']['parts'][0]['text'] ?? null;
+                    if ($text) {
+                        return $this->cleanMathDuplicates(trim($text));
+                    }
+                }
+            } catch (\Exception $e) {
+                // Try next model
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -55,23 +108,12 @@ Instructions:
 5. Use clean markdown formatting without mentioning internal IDs. Keep it under 250 words.
 6. CRITICAL: When writing math, use ONLY LaTeX with dollar signs ($...$ for inline, $$...$$ for display). NEVER write the same expression in both LaTeX AND plain text. Use ONLY the LaTeX version, not both.";
 
-        if ($this->apiKey && ($this->provider === 'gemini')) {
-            try {
-                $response = Http::withHeaders(['Content-Type' => 'application/json'])
-                    ->post("https://generativelanguage.googleapis.com/v1beta/models/{$this->modelName}:generateContent?key={$this->apiKey}", [
-                        'contents' => [
-                            ['parts' => [['text' => $prompt]]]
-                        ]
-                    ]);
+        $geminiResult = $this->callGemini([
+            ['role' => 'user', 'parts' => [['text' => $prompt]]]
+        ]);
 
-                if ($response->successful()) {
-                    $body = $response->json();
-                    $text = $body['candidates'][0]['content']['parts'][0]['text'] ?? null;
-                    if ($text) return $this->cleanMathDuplicates(trim($text));
-                }
-            } catch (\Exception $e) {
-                // Fallback to local explanation
-            }
+        if ($geminiResult) {
+            return $geminiResult;
         }
 
         // Local Heuristic Tutor Explanation (Offline Fallback)
@@ -79,11 +121,144 @@ Instructions:
     }
 
     /**
-     * Generate chatbot response for learning helper chatbot.
+     * Role-aware entry point for AI chat.
      */
     public function generateChatResponse(User $user, string $message, array $history): string
     {
-                // Gather user mastery stats to personalize chatbot context
+        if ($user->isAdmin()) {
+            return $this->generateAdminChatResponse($user, $message, $history);
+        }
+
+        return $this->generateLearnerChatResponse($user, $message, $history);
+    }
+
+    /**
+     * Generate AI response tailored for School Admins & Platform Admins.
+     */
+    public function generateAdminChatResponse(User $user, string $message, array $history): string
+    {
+        $isSuperAdmin = $user->isPlatformAdmin();
+        $school = $user->administeredSchool()->first() ?? ($isSuperAdmin ? School::first() : null);
+        $schoolName = $school ? $school->name : ($isSuperAdmin ? 'All Schools (Platform-wide)' : 'School');
+        $schoolCategory = $school ? ucfirst($school->category ?? 'secondary') : 'Secondary';
+        $locationStr = $school ? implode(', ', array_filter([$school->city, $school->state])) : 'Nigeria';
+
+        // 1. Enrolled learners count
+        $learnersCountQuery = User::where('role', 'learner');
+        if (!$isSuperAdmin && $school) {
+            $learnersCountQuery->whereHas('learnerProfile', fn($q) => $q->where('school_id', $school->id));
+        }
+        $totalLearners = $learnersCountQuery->count();
+
+        // 2. Active Classes
+        $classesQuery = ClassModel::where('is_active', true);
+        if (!$isSuperAdmin && $school) {
+            $classesQuery->where('school_id', $school->id);
+        }
+        $classes = $classesQuery->pluck('name')->toArray();
+        $classesStr = !empty($classes) ? implode(', ', $classes) : 'SS1, SS2, SS3';
+
+        // 3. Active Subjects
+        $subjectsQuery = Subject::where('status', 'active');
+        if (!$isSuperAdmin && $school) {
+            $subjectsQuery->where(function ($q) use ($school) {
+                $q->where('school_id', $school->id)->orWhereNull('school_id');
+            });
+        }
+        $subjects = $subjectsQuery->withCount('topics')->get();
+        $subjectsSummary = $subjects->map(fn($s) => "  - {$s->name} ({$s->topics_count} topics)")->implode("\n");
+
+        // 4. Real-time school mastery aggregates
+        $strugglingCount = DB::table('users as u')
+            ->join('learner_progress as lp', 'lp.user_id', '=', 'u.id')
+            ->leftJoin('learner_profiles as lprof', 'lprof.user_id', '=', 'u.id')
+            ->when(!$isSuperAdmin && $school, fn($q) => $q->where('lprof.school_id', $school->id))
+            ->select('u.id')
+            ->groupBy('u.id')
+            ->havingRaw('AVG(lp.mastery_score) < 40')
+            ->get()
+            ->count();
+
+        $progressAggregates = DB::table('learner_progress as lp')
+            ->join('users as u', 'u.id', '=', 'lp.user_id')
+            ->leftJoin('learner_profiles as lprof', 'lprof.user_id', '=', 'u.id')
+            ->when(!$isSuperAdmin && $school, fn($q) => $q->where('lprof.school_id', $school->id))
+            ->selectRaw('AVG(lp.mastery_score) as avg_mastery, SUM(lp.questions_attempted) as total_attempted')
+            ->first();
+        $avgMastery = (int) round($progressAggregates?->avg_mastery ?? 0);
+        $totalQuestionsAttempted = (int) ($progressAggregates?->total_attempted ?? 0);
+
+        // 5. Lowest-scoring topics across school
+        $weakestTopics = DB::table('learner_progress as lp')
+            ->join('topics as t', 't.id', '=', 'lp.topic_id')
+            ->join('subjects as s', 's.id', '=', 't.subject_id')
+            ->join('users as u', 'u.id', '=', 'lp.user_id')
+            ->leftJoin('learner_profiles as lprof', 'lprof.user_id', '=', 'u.id')
+            ->when(!$isSuperAdmin && $school, fn($q) => $q->where('lprof.school_id', $school->id))
+            ->groupBy('t.id', 't.name', 's.name')
+            ->selectRaw('t.name as topic_name, s.name as subject_name, ROUND(AVG(lp.mastery_score)) as avg_topic_mastery')
+            ->orderBy('avg_topic_mastery', 'asc')
+            ->take(5)
+            ->get();
+
+        $weakestTopicsStr = $weakestTopics->isNotEmpty()
+            ? $weakestTopics->map(fn($w) => "  - {$w->subject_name} -> {$w->topic_name}: {$w->avg_topic_mastery}% avg mastery")->implode("\n")
+            : "  - All active topics maintaining baseline standard.";
+
+        $systemInstruction = "You are the AILEARN School Administrator Copilot & Academic Advisor.
+You are assisting an academic school administrator: {$user->name} at {$schoolName} ({$schoolCategory} Category, {$locationStr}).
+
+School Data & Academic Context:
+- Enrolled Learners: {$totalLearners}
+- Active Classes: {$classesStr}
+- Average Student Mastery: {$avgMastery}%
+- Total Questions Solved by Students: {$totalQuestionsAttempted}
+- Struggling Learners (Mastery < 40%): {$strugglingCount}
+- Lowest-Scoring Curriculum Topics Needing Attention:
+{$weakestTopicsStr}
+- Active Curriculum Subjects:
+{$subjectsSummary}
+
+Your Core Capabilities for the School Administrator:
+1. School Diagnostic & Academic Performance Analytics: Summarize class and subject performance, highlight learning gaps and mastery trends.
+2. Remedial & Intervention Strategies: Propose pedagogical strategies, remedial lesson plans, and classroom drill ideas to help struggling learners in specific subjects/topics.
+3. Curriculum & Scheme of Work Planning: Generate structured lesson outlines, learning objectives, and curriculum breakdown aligned with Nigerian (WAEC/NECO/NERDC) secondary education standards.
+4. Assessment & Question Bank Generation: Draft high-standard multiple choice questions with four options (A, B, C, D), marking the correct answer and providing step-by-step educational explanations so the admin can import them into the school question bank.
+5. School Operations & Roster Insights: Answer questions about classes, student distribution, and subject management.
+
+Guidelines:
+1. Maintain an authoritative, professional, and supportive tone suitable for school principals and academic directors.
+2. Keep responses structured, concise, and actionable using clear markdown headings and bullet points. Keep answers under 250 words unless generating full questions/lesson plans.
+3. When drafting exam questions, provide the question, options A-D, clearly indicate the correct option, and include a full step-by-step solution.
+4. CRITICAL: When writing math, use ONLY LaTeX with dollar signs ($...$ for inline, $$...$$ for display). NEVER write the same expression in both LaTeX AND plain text. Use ONLY the LaTeX version, not both.";
+
+        $contents = [];
+        foreach ($history as $msg) {
+            $role = ($msg['role'] === 'user') ? 'user' : 'model';
+            $contents[] = [
+                'role' => $role,
+                'parts' => [['text' => $msg['content']]]
+            ];
+        }
+        $contents[] = [
+            'role' => 'user',
+            'parts' => [['text' => $message]]
+        ];
+
+        $geminiResult = $this->callGemini($contents, $systemInstruction);
+        if ($geminiResult) {
+            return $geminiResult;
+        }
+
+        return $this->generateHeuristicAdminChatResponse($user, $message, $schoolName, $totalLearners, $classesStr, $avgMastery, $strugglingCount, $weakestTopics);
+    }
+
+    /**
+     * Generate chatbot response for secondary school learners (100% preserving learner study companion flow).
+     */
+    public function generateLearnerChatResponse(User $user, string $message, array $history): string
+    {
+        // Gather user mastery stats to personalize chatbot context
         $masterySummary = LearnerProgress::where('user_id', $user->id)
             ->with('topic.subject')
             ->get()
@@ -111,40 +286,22 @@ Guidelines:
 5. Use markdown formatting. Keep answers under 150 words.
 6. CRITICAL: When writing math, use ONLY LaTeX with dollar signs ($...$ for inline, $$...$$ for display). NEVER write the same expression in both LaTeX AND plain text. Use ONLY the LaTeX version, not both.";
 
-        if ($this->apiKey && ($this->provider === 'gemini')) {
-            try {
-                // Convert simple history to Gemini chat contents format
-                $contents = [];
-                foreach ($history as $msg) {
-                    $role = ($msg['role'] === 'user') ? 'user' : 'model';
-                    $contents[] = [
-                        'role' => $role,
-                        'parts' => [['text' => $msg['content']]]
-                    ];
-                }
-                // Prepend system prompt
-                array_unshift($contents, [
-                    'role' => 'user',
-                    'parts' => [['text' => "SYSTEM INSTRUCTION:\n{$systemInstruction}"]]
-                ]);
-                $contents[] = [
-                    'role' => 'user',
-                    'parts' => [['text' => $message]]
-                ];
+        $contents = [];
+        foreach ($history as $msg) {
+            $role = ($msg['role'] === 'user') ? 'user' : 'model';
+            $contents[] = [
+                'role' => $role,
+                'parts' => [['text' => $msg['content']]]
+            ];
+        }
+        $contents[] = [
+            'role' => 'user',
+            'parts' => [['text' => $message]]
+        ];
 
-                $response = Http::withHeaders(['Content-Type' => 'application/json'])
-                    ->post("https://generativelanguage.googleapis.com/v1beta/models/{$this->modelName}:generateContent?key={$this->apiKey}", [
-                        'contents' => $contents
-                    ]);
-
-                if ($response->successful()) {
-                    $body = $response->json();
-                    $text = $body['candidates'][0]['content']['parts'][0]['text'] ?? null;
-                    if ($text) return $this->cleanMathDuplicates(trim($text));
-                }
-            } catch (\Exception $e) {
-                // Fallback to local chatbot simulator
-            }
+        $geminiResult = $this->callGemini($contents, $systemInstruction);
+        if ($geminiResult) {
+            return $geminiResult;
         }
 
         return $this->generateHeuristicChatResponse($user, $message);
@@ -566,6 +723,133 @@ Guidelines:
     }
 
     /**
+     * Offline heuristic response generator for School Admins & Platform Admins.
+     */
+    private function generateHeuristicAdminChatResponse(
+        User $user,
+        string $message,
+        string $schoolName,
+        int $totalLearners,
+        string $classesStr,
+        int $avgMastery,
+        int $strugglingCount,
+        $weakestTopics
+    ): string {
+        $query = strtolower(trim($message));
+
+        // 1. Performance Summary / Health Overview / Diagnostics / Struggling Learners
+        if (
+            str_contains($query, 'summary') ||
+            str_contains($query, 'performance') ||
+            str_contains($query, 'overview') ||
+            str_contains($query, 'stats') ||
+            str_contains($query, 'health') ||
+            str_contains($query, 'mastery') ||
+            str_contains($query, 'report') ||
+            str_contains($query, 'struggling') ||
+            str_contains($query, 'analytics')
+        ) {
+            $weakestList = $weakestTopics->isNotEmpty()
+                ? $weakestTopics->map(fn($w) => "* **{$w->subject_name}** - {$w->topic_name} (Average Mastery: **{$w->avg_topic_mastery}%**)")->implode("\n")
+                : "* All syllabus topics currently performing at standard threshold.";
+
+            return "### Executive Academic Diagnostic Summary\n\n"
+                . "**Institution:** {$schoolName}\n"
+                . "**Administrator:** {$user->name}\n\n"
+                . "#### Key Metrics Overview\n"
+                . "* **Total Enrolled Learners:** {$totalLearners} students\n"
+                . "* **Active Classes:** {$classesStr}\n"
+                . "* **School-wide Average Mastery:** **{$avgMastery}%**\n"
+                . "* **Learners Needing Academic Support (<40% Mastery):** **{$strugglingCount}** students\n\n"
+                . "#### Priority Focus Topics (Lowest School Mastery)\n"
+                . "{$weakestList}\n\n"
+                . "#### Recommended Admin Actions\n"
+                . "1. **Intervention Scheduling:** Direct subject teachers to conduct formative review sessions on the low-mastery topics above.\n"
+                . "2. **Targeted Quizzes:** Generate standard diagnostic practice tests in the Question Bank.\n"
+                . "3. **Roster Review:** Inspect the Learners Directory for individual learner breakdown.";
+        }
+
+        // 2. Remedial & Intervention Strategies
+        if (
+            str_contains($query, 'intervention') ||
+            str_contains($query, 'remedial') ||
+            str_contains($query, 'help student') ||
+            str_contains($query, 'weak') ||
+            str_contains($query, 'strategy') ||
+            (str_contains($query, 'plan') && str_contains($query, 'struggle'))
+        ) {
+            $targetTopic = $weakestTopics->first();
+            $topicName = $targetTopic ? "{$targetTopic->subject_name} ({$targetTopic->topic_name})" : "High Priority Curriculum Topics";
+
+            return "### Targeted Academic Intervention & Remediation Strategy\n\n"
+                . "**Target Area:** {$topicName}\n"
+                . "**Goal:** Elevate struggling student comprehension from <40% to >=75% baseline mastery.\n\n"
+                . "#### 3-Phase Action Plan for Teachers\n"
+                . "1. **Phase 1: Diagnostic Assessment (Day 1)**\n"
+                . "   * Deploy a 10-question formative diagnostic test under **Question Bank**.\n"
+                . "   * Identify specific error patterns (calculation errors vs conceptual misunderstandings).\n\n"
+                . "2. **Phase 2: Micro-Lesson & Active Recall Drills (Days 2-4)**\n"
+                . "   * Break concepts into bite-sized 15-minute instructional modules.\n"
+                . "   * Have learners practice with flashcards and adaptive quizzes in the app.\n\n"
+                . "3. **Phase 3: Mastery Verification (Day 5)**\n"
+                . "   * Re-test cohort. Require students to score >=80% before advancing in the scheme of work.\n\n"
+                . "*Would you like me to draft 5 practice questions for this intervention?*";
+        }
+
+        // 3. Question Generation / Exam Drafting / Assessment Creation (5 WAEC Standard Questions)
+        if (
+            str_contains($query, 'question') ||
+            str_contains($query, 'quiz') ||
+            str_contains($query, 'test') ||
+            str_contains($query, 'exam') ||
+            str_contains($query, 'draft') ||
+            str_contains($query, 'generate') ||
+            str_contains($query, 'waec') ||
+            str_contains($query, 'neco')
+        ) {
+            $detectedSubject = $this->detectSubjectFromQuery($query);
+            return $this->generateSubjectSpecificQuestions($detectedSubject);
+        }
+
+        // 4. Lesson Plan / Scheme of Work / Curriculum Outline
+        if (
+            str_contains($query, 'lesson') ||
+            str_contains($query, 'scheme') ||
+            str_contains($query, 'syllabus') ||
+            str_contains($query, 'curriculum') ||
+            str_contains($query, 'outline') ||
+            str_contains($query, 'teach')
+        ) {
+            return "### Standard Secondary Curriculum Lesson Outline\n\n"
+                . "**Subject:** Senior Secondary Science / Mathematics\n"
+                . "**Duration:** 40 Minutes | **Alignment:** NERDC / WAEC Syllabus\n\n"
+                . "#### 1. Performance Objectives\n"
+                . "By the end of the lesson, learners should be able to:\n"
+                . "* Define the core scientific/mathematical principle accurately.\n"
+                . "* Apply relevant formula/rules to solve standard practice problems.\n"
+                . "* Correctly explain why common distractor options are incorrect.\n\n"
+                . "#### 2. Instructional Steps\n"
+                . "* **Introduction (5 min):** Review prerequisite knowledge and real-world application.\n"
+                . "* **Core Delivery (20 min):** Direct instruction with step-by-step worked examples on the board.\n"
+                . "* **Guided Practice (10 min):** Students solve 2 practice problems on the digital platform.\n"
+                . "* **Evaluation & Wrap-up (5 min):** Quick 2-question exit ticket test.\n\n"
+                . "*Would you like me to generate specific exam questions or homework tasks for this outline?*";
+        }
+
+        // 5. Default General Admin Copilot Greeting
+        $availableSubjects = Subject::where('status', 'active')->pluck('name')->implode(', ');
+
+        return "Hello **{$user->name}**! I am your **AI School Administrator Copilot** for **{$schoolName}**.\n\n"
+            . "I am equipped to assist you and your faculty with:\n\n"
+            . "1. **School Mastery Diagnostics:** Say *\"Summarize student performance\"* to view school averages and struggling learners.\n"
+            . "2. **Targeted Interventions:** Ask *\"How can we improve low scores in Mathematics?\"* for step-by-step remedial plans.\n"
+            . "3. **Assessment Generation:** Say *\"Draft 5 WAEC questions for Physics\"* to create questions with solutions for the Question Bank.\n"
+            . "4. **Curriculum & Lesson Outlines:** Request structured schemes of work aligned with secondary school guidelines.\n\n"
+            . "Active school subjects: *{$availableSubjects}*.\n\n"
+            . "How can I assist your administration today?";
+    }
+
+    /**
      * Parse raw text, extract questions, options, difficulty, determine/solve the correct answer, and generate explanations.
      */
     public function extractAndSolveQuestions(string $rawText, ?string $subjectName = null, ?string $topicName = null): array
@@ -977,5 +1261,322 @@ You MUST return ONLY a valid JSON array matching this exact schema:
         }
 
         return $results;
+    }
+
+    /**
+     * Intelligent subject detector from natural language queries.
+     */
+    protected function detectSubjectFromQuery(string $query): string
+    {
+        $q = strtolower($query);
+        if (preg_match('/\b(math|maths|mathematics|algebra|geometry|calculus|arithmetic|trig|trigonometry|quadratic|linear equation)\b/i', $q)) {
+            return 'Mathematics';
+        }
+        if (preg_match('/\b(bio|biology|botany|zoology|cell|physiology|genetics|ecology|organism)\b/i', $q)) {
+            return 'Biology';
+        }
+        if (preg_match('/\b(chem|chemistry|organic|inorganic|stoichiometry|acid|atom|chemical|periodic table)\b/i', $q)) {
+            return 'Chemistry';
+        }
+        if (preg_match('/\b(phy|physics|kinematics|optics|electricity|magnetism|mechanics|motion|force|velocity|gravity)\b/i', $q)) {
+            return 'Physics';
+        }
+        if (preg_match('/\b(eng|english|grammar|lexis|idiom|literature|poetry|prose|comprehension|synonym|antonym)\b/i', $q)) {
+            return 'English Language';
+        }
+        if (preg_match('/\b(econ|economics|demand|supply|inflation|fiscal|market)\b/i', $q)) {
+            return 'Economics';
+        }
+        if (preg_match('/\b(acct|account|accounting|ledger|balance sheet|trial balance)\b/i', $q)) {
+            return 'Financial Accounting';
+        }
+        if (preg_match('/\b(govt|government|constitution|democracy|civic|legislature)\b/i', $q)) {
+            return 'Government';
+        }
+        return 'General Curriculum';
+    }
+
+    /**
+     * Generate 5 rich, high-standard WAEC multiple choice questions tailored to a specific subject.
+     */
+    protected function generateSubjectSpecificQuestions(string $subject): string
+    {
+        switch ($subject) {
+            case 'Mathematics':
+                return "### WAEC Practice Assessment: Mathematics (5 Questions)\n\n"
+                    . "**Standard:** WAEC / NECO Senior Secondary Standard\n\n"
+                    . "**Question 1 (Algebra - Linear Equations):**\n"
+                    . "Solve for \$x\$ in the equation: \$3(x - 2) = 2x + 4\$\n"
+                    . "* A) \$x = 2\$\n"
+                    . "* B) \$x = 6\$\n"
+                    . "* C) \$x = 10\$ *(Correct)*\n"
+                    . "* D) \$x = 14\$\n\n"
+                    . "**Step-by-Step Solution:**\n"
+                    . "1. Expand brackets: \$3x - 6 = 2x + 4\$\n"
+                    . "2. Collect like terms: \$3x - 2x = 4 + 6\$\n"
+                    . "3. Therefore: \$x = 10\$\n\n"
+                    . "---\n\n"
+                    . "**Question 2 (Algebra - Quadratic Equations):**\n"
+                    . "Find the roots of the quadratic equation: \$x^2 - 5x + 6 = 0\$\n"
+                    . "* A) \$x = -2\\text{ or }-3\$\n"
+                    . "* B) \$x = 2\\text{ or } 3\$ *(Correct)*\n"
+                    . "* C) \$x = 1\\text{ or } 6\$\n"
+                    . "* D) \$x = -1\\text{ or }-6\$\n\n"
+                    . "**Step-by-Step Solution:**\n"
+                    . "1. Factor the quadratic: \$(x - 2)(x - 3) = 0\$\n"
+                    . "2. Solve for \$x\$: \$x = 2\\text{ or } x = 3\$\n\n"
+                    . "---\n\n"
+                    . "**Question 3 (Indices & Logarithms):**\n"
+                    . "Solve for \$x\$ if \$2^{x+1} = 16\$\n"
+                    . "* A) \$x = 2\$\n"
+                    . "* B) \$x = 3\$ *(Correct)*\n"
+                    . "* C) \$x = 4\$\n"
+                    . "* D) \$x = 5\$\n\n"
+                    . "**Step-by-Step Solution:**\n"
+                    . "1. Express 16 in base 2: \$16 = 2^4\$\n"
+                    . "2. Equate exponents: \$x + 1 = 4 \\implies x = 3\$\n\n"
+                    . "---\n\n"
+                    . "**Question 4 (Simultaneous Equations):**\n"
+                    . "If \$2x + y = 7\$ and \$x - y = 2\$, find the value of \$x\$.\n"
+                    . "* A) \$x = 1\$\n"
+                    . "* B) \$x = 2\$\n"
+                    . "* C) \$x = 3\$ *(Correct)*\n"
+                    . "* D) \$x = 4\$\n\n"
+                    . "**Step-by-Step Solution:**\n"
+                    . "1. Add the two equations: \$(2x + y) + (x - y) = 7 + 2 \\implies 3x = 9\$\n"
+                    . "2. Divide by 3: \$x = 3\$\n\n"
+                    . "---\n\n"
+                    . "**Question 5 (Geometry & Trigonometry):**\n"
+                    . "In a right-angled triangle, the base is \$6\\text{ cm}\$ and the height is \$8\\text{ cm}\$. Calculate the length of the hypotenuse.\n"
+                    . "* A) \$10\\text{ cm}\$ *(Correct)*\n"
+                    . "* B) \$12\\text{ cm}\$\n"
+                    . "* C) \$14\\text{ cm}\$\n"
+                    . "* D) \$16\\text{ cm}\$\n\n"
+                    . "**Step-by-Step Solution:**\n"
+                    . "1. By Pythagoras theorem: \$c^2 = a^2 + b^2 = 6^2 + 8^2 = 36 + 64 = 100\$\n"
+                    . "2. Therefore: \$c = \\sqrt{100} = 10\\text{ cm}\$\n\n"
+                    . "*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*";
+
+            case 'Biology':
+                return "### WAEC Practice Assessment: Biology (5 Questions)\n\n"
+                    . "**Standard:** WAEC / NECO Senior Secondary Standard\n\n"
+                    . "**Question 1 (Cellular Physiology):**\n"
+                    . "Which organelle is primarily responsible for synthesizing adenosine triphosphate (ATP) in eukaryotic cells?\n"
+                    . "* A) Ribosome\n"
+                    . "* B) Mitochondrion *(Correct)*\n"
+                    . "* C) Nucleus\n"
+                    . "* D) Golgi apparatus\n\n"
+                    . "**Explanation:** Mitochondria generate cellular energy via oxidative phosphorylation during aerobic cellular respiration.\n\n"
+                    . "---\n\n"
+                    . "**Question 2 (Photosynthesis):**\n"
+                    . "What is the primary light-absorbing pigment in green plants?\n"
+                    . "* A) Carotenoid\n"
+                    . "* B) Xanthophyll\n"
+                    . "* C) Chlorophyll a *(Correct)*\n"
+                    . "* D) Anthocyanin\n\n"
+                    . "**Explanation:** Chlorophyll a absorbs blue and red wavelengths of light for light-dependent photosynthetic reactions.\n\n"
+                    . "---\n\n"
+                    . "**Question 3 (Genetics):**\n"
+                    . "What is the expected genotypic ratio in a monohybrid cross between two heterozygous (Tt) pea plants?\n"
+                    . "* A) 3:1\n"
+                    . "* B) 1:2:1 *(Correct)*\n"
+                    . "* C) 1:1\n"
+                    . "* D) 9:3:3:1\n\n"
+                    . "**Explanation:** The cross \$Tt \\times Tt\$ yields \$1\\text{ TT} : 2\\text{ Tt} : 1\\text{ tt}\$.\n\n"
+                    . "---\n\n"
+                    . "**Question 4 (Circulatory System):**\n"
+                    . "Which blood vessel carries oxygenated blood from the lungs back to the left atrium of the heart?\n"
+                    . "* A) Pulmonary artery\n"
+                    . "* B) Pulmonary vein *(Correct)*\n"
+                    . "* C) Vena cava\n"
+                    . "* D) Aorta\n\n"
+                    . "**Explanation:** Pulmonary veins are unique veins that transport oxygen-rich blood from lungs into the heart.\n\n"
+                    . "---\n\n"
+                    . "**Question 5 (Ecology):**\n"
+                    . "In any terrestrial ecosystem, which trophic level contains the largest total amount of available energy?\n"
+                    . "* A) Primary producers *(Correct)*\n"
+                    . "* B) Primary consumers\n"
+                    . "* C) Secondary consumers\n"
+                    . "* D) Apex predators\n\n"
+                    . "**Explanation:** Due to the 10% ecological energy transfer rule, primary producers hold the maximum stored energy.\n\n"
+                    . "*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*";
+
+            case 'Chemistry':
+                return "### WAEC Practice Assessment: Chemistry (5 Questions)\n\n"
+                    . "**Standard:** WAEC / NECO Senior Secondary Standard\n\n"
+                    . "**Question 1 (Atomic Structure):**\n"
+                    . "An atom of sodium has atomic number 11 and mass number 23. What is the number of neutrons in its nucleus?\n"
+                    . "* A) 11\n"
+                    . "* B) 12 *(Correct)*\n"
+                    . "* C) 23\n"
+                    . "* D) 34\n\n"
+                    . "**Step-by-Step Solution:**\n"
+                    . "Number of neutrons = \$\\text{Mass Number} - \\text{Atomic Number} = 23 - 11 = 12\$.\n\n"
+                    . "---\n\n"
+                    . "**Question 2 (Periodic Table):**\n"
+                    . "Group 1 elements in the periodic table are collectively referred to as:\n"
+                    . "* A) Alkaline earth metals\n"
+                    . "* B) Halogens\n"
+                    . "* C) Alkali metals *(Correct)*\n"
+                    . "* D) Noble gases\n\n"
+                    . "**Explanation:** Group 1 elements (Li, Na, K, etc.) react with water to form alkaline hydroxides.\n\n"
+                    . "---\n\n"
+                    . "**Question 3 (Acids, Bases & Salts):**\n"
+                    . "What is the pH of a neutral aqueous solution at \$25^\\circ\\text{C}\$?\n"
+                    . "* A) 0\n"
+                    . "* B) 7.0 *(Correct)*\n"
+                    . "* C) 14.0\n"
+                    . "* D) 1.0\n\n"
+                    . "**Explanation:** At neutrality, \$[\\text{H}^+] = [\\text{OH}^-] = 10^{-7}\\text{ mol/dm}^3\$, giving \$\\text{pH} = -\\log(10^{-7}) = 7\$.\n\n"
+                    . "---\n\n"
+                    . "**Question 4 (Chemical Bonding):**\n"
+                    . "What type of chemical bond is formed by the complete transfer of electrons from a metal to a non-metal?\n"
+                    . "* A) Covalent bond\n"
+                    . "* B) Ionic / Electrovalent bond *(Correct)*\n"
+                    . "* C) Metallic bond\n"
+                    . "* D) Hydrogen bond\n\n"
+                    . "**Explanation:** Electrovalent bonding occurs via electron donation from metals to non-metals.\n\n"
+                    . "---\n\n"
+                    . "**Question 5 (Gas Laws):**\n"
+                    . "Which gas law states that the volume of a fixed mass of gas is directly proportional to absolute temperature at constant pressure?\n"
+                    . "* A) Boyle's Law\n"
+                    . "* B) Charles's Law *(Correct)*\n"
+                    . "* C) Gay-Lussac's Law\n"
+                    . "* D) Graham's Law\n\n"
+                    . "**Explanation:** Charles's law establishes \$V \\propto T\$ when pressure is kept constant.\n\n"
+                    . "*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*";
+
+            case 'Physics':
+                return "### WAEC Practice Assessment: Physics (5 Questions)\n\n"
+                    . "**Standard:** WAEC / NECO Senior Secondary Standard\n\n"
+                    . "**Question 1 (Kinematics):**\n"
+                    . "A car accelerates uniformly from rest to a speed of \$20\\text{ m/s}\$ in \$5\\text{ s}\$. Calculate its acceleration.\n"
+                    . "* A) \$2\\text{ m/s}^2\$\n"
+                    . "* B) \$4\\text{ m/s}^2\$ *(Correct)*\n"
+                    . "* C) \$5\\text{ m/s}^2\$\n"
+                    . "* D) \$100\\text{ m/s}^2\$\n\n"
+                    . "**Step-by-Step Solution:**\n"
+                    . "Using \$v = u + at \\implies 20 = 0 + 5a \\implies a = 4\\text{ m/s}^2\$.\n\n"
+                    . "---\n\n"
+                    . "**Question 2 (Work, Energy & Power):**\n"
+                    . "Calculate the kinetic energy of a body of mass \$2\\text{ kg}\$ moving at a velocity of \$3\\text{ m/s}\$.\n"
+                    . "* A) \$3\\text{ J}\$\n"
+                    . "* B) \$6\\text{ J}\$\n"
+                    . "* C) \$9\\text{ J}\$ *(Correct)*\n"
+                    . "* D) \$18\\text{ J}\$\n\n"
+                    . "**Step-by-Step Solution:**\n"
+                    . "\$\\text{KE} = \\frac{1}{2}mv^2 = \\frac{1}{2}(2)(3^2) = 1 \\times 9 = 9\\text{ J}\$.\n\n"
+                    . "---\n\n"
+                    . "**Question 3 (Current Electricity):**\n"
+                    . "A resistor is connected across a \$12\\text{ V}\$ battery, drawing a current of \$3\\text{ A}\$. What is its electrical resistance?\n"
+                    . "* A) \$2\\,\\Omega\$\n"
+                    . "* B) \$4\\,\\Omega\$ *(Correct)*\n"
+                    . "* C) \$36\\,\\Omega\$\n"
+                    . "* D) \$0.25\\,\\Omega\$\n\n"
+                    . "**Step-by-Step Solution:**\n"
+                    . "By Ohm's Law: \$R = \\frac{V}{I} = \\frac{12}{3} = 4\\,\\Omega\$.\n\n"
+                    . "---\n\n"
+                    . "**Question 4 (Wave Optics):**\n"
+                    . "What optical phenomenon causes the separation of white light into its component colors through a triangular glass prism?\n"
+                    . "* A) Total internal reflection\n"
+                    . "* B) Dispersion *(Correct)*\n"
+                    . "* C) Diffraction\n"
+                    . "* D) Polarization\n\n"
+                    . "**Explanation:** Dispersion occurs because different wavelengths of light refract at varying angles in glass.\n\n"
+                    . "---\n\n"
+                    . "**Question 5 (Newtonian Mechanics):**\n"
+                    . "What resultant force is required to give a \$5\\text{ kg}\$ mass an acceleration of \$2\\text{ m/s}^2\$?\n"
+                    . "* A) \$2.5\\text{ N}\$\n"
+                    . "* B) \$7\\text{ N}\$\n"
+                    . "* C) \$10\\text{ N}\$ *(Correct)*\n"
+                    . "* D) \$25\\text{ N}\$\n\n"
+                    . "**Step-by-Step Solution:**\n"
+                    . "By Newton's Second Law: \$F = ma = 5 \\times 2 = 10\\text{ N}\$.\n\n"
+                    . "*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*";
+
+            case 'English Language':
+                return "### WAEC Practice Assessment: English Language (5 Questions)\n\n"
+                    . "**Standard:** WAEC / NECO Senior Secondary Standard\n\n"
+                    . "**Question 1 (Lexis & Vocabulary):**\n"
+                    . "Choose the option nearest in meaning to the word in bold: *The principal delivered an **ephemeral** address.*\n"
+                    . "* A) Lengthy\n"
+                    . "* B) Inspiring\n"
+                    . "* C) Short-lived *(Correct)*\n"
+                    . "* D) Aggressive\n\n"
+                    . "**Explanation:** Ephemeral means transitory or existing for a very brief period.\n\n"
+                    . "---\n\n"
+                    . "**Question 2 (Subject-Verb Concord):**\n"
+                    . "Neither the teacher nor the students _____ present at the assembly yesterday.\n"
+                    . "* A) was\n"
+                    . "* B) were *(Correct)*\n"
+                    . "* C) is\n"
+                    . "* D) are\n\n"
+                    . "**Explanation:** In 'neither...nor', the verb agrees with the closer subject ('students' $\\implies$ plural 'were').\n\n"
+                    . "---\n\n"
+                    . "**Question 3 (Antonyms):**\n"
+                    . "Choose the word most opposite in meaning to **lucid**:\n"
+                    . "* A) Clear\n"
+                    . "* B) Bright\n"
+                    . "* C) Confusing *(Correct)*\n"
+                    . "* D) Rational\n\n"
+                    . "**Explanation:** Lucid means easily understood; its opposite is confusing or opaque.\n\n"
+                    . "---\n\n"
+                    . "**Question 4 (Idiomatic Expressions):**\n"
+                    . "What is the meaning of the idiom: *To burn the midnight oil*?\n"
+                    . "* A) To waste resources\n"
+                    . "* B) To study or work late into the night *(Correct)*\n"
+                    . "* C) To cause a household fire\n"
+                    . "* D) To wake up very early\n\n"
+                    . "**Explanation:** 'Burning the midnight oil' signifies working or revising diligently late at night.\n\n"
+                    . "---\n\n"
+                    . "**Question 5 (Prepositional Usage):**\n"
+                    . "The prefect congratulated the class _____ their exemplary performance.\n"
+                    . "* A) for\n"
+                    . "* B) on *(Correct)*\n"
+                    . "* C) with\n"
+                    . "* D) in\n\n"
+                    . "**Explanation:** The verb 'congratulate' takes the preposition 'on'.\n\n"
+                    . "*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*";
+
+            default:
+                return "### WAEC Practice Assessment: General Curriculum (5 Questions)\n\n"
+                    . "**Standard:** WAEC / NECO Senior Secondary Standard\n\n"
+                    . "**Question 1 (Mathematics - Algebra):**\n"
+                    . "Solve for \$x\$ in: \$3(x - 2) = 2x + 4\$\n"
+                    . "* A) \$x = 2\$\n"
+                    . "* B) \$x = 6\$\n"
+                    . "* C) \$x = 10\$ *(Correct)*\n"
+                    . "* D) \$x = 14\$\n\n"
+                    . "**Solution:** \$3x - 6 = 2x + 4 \\implies x = 10\$.\n\n"
+                    . "---\n\n"
+                    . "**Question 2 (Biology - Cell Physiology):**\n"
+                    . "Which organelle generates ATP energy in eukaryotic cells?\n"
+                    . "* A) Ribosome\n"
+                    . "* B) Mitochondrion *(Correct)*\n"
+                    . "* C) Nucleus\n"
+                    . "* D) Golgi body\n\n"
+                    . "---\n\n"
+                    . "**Question 3 (Chemistry - Atomic Structure):**\n"
+                    . "What is the neutron count in \$^{23}_{11}\\text{Na}\$?\n"
+                    . "* A) 11\n"
+                    . "* B) 12 *(Correct)*\n"
+                    . "* C) 23\n"
+                    . "* D) 34\n\n"
+                    . "---\n\n"
+                    . "**Question 4 (Physics - Kinematics):**\n"
+                    . "A car accelerates from rest to \$20\\text{ m/s}\$ in \$5\\text{ s}\$. What is its acceleration?\n"
+                    . "* A) \$2\\text{ m/s}^2\$\n"
+                    . "* B) \$4\\text{ m/s}^2\$ *(Correct)*\n"
+                    . "* C) \$5\\text{ m/s}^2\$\n"
+                    . "* D) \$100\\text{ m/s}^2\$\n\n"
+                    . "---\n\n"
+                    . "**Question 5 (English - Lexis):**\n"
+                    . "Nearest in meaning to **ephemeral**:\n"
+                    . "* A) Lengthy\n"
+                    . "* B) Inspiring\n"
+                    . "* C) Short-lived *(Correct)*\n"
+                    . "* D) Harsh\n\n"
+                    . "*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*";
+        }
     }
 }
