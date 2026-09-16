@@ -219,4 +219,47 @@ TEXT;
             $this->assertGreaterThanOrEqual(2, $quiz->questions()->count());
         }
     }
+
+    public function test_ai_service_dynamically_learns_and_drafts_from_uploaded_questions(): void
+    {
+        // 1. Create custom uploaded questions in General Knowledge / Subject
+        $mathSubject = Subject::factory()->create(['name' => 'Mathematics', 'slug' => 'mathematics']);
+        $mathTopic = Topic::factory()->create([
+            'subject_id' => $mathSubject->id,
+            'name' => 'Polynomials & Factoring',
+            'slug' => 'polynomials',
+        ]);
+
+        $customQuestion = Question::factory()->create([
+            'topic_id' => $mathTopic->id,
+            'question_text' => 'Custom Uploaded: What is the factored form of 2x^2 + 4x?',
+            'explanation' => 'Factor out 2x to get 2x(x + 2).',
+            'status' => 'active',
+            'school_id' => null, // General Knowledge
+        ]);
+
+        QuestionOption::factory()->create([
+            'question_id' => $customQuestion->id,
+            'option_text' => '2x(x + 2)',
+            'is_correct' => true,
+        ]);
+        QuestionOption::factory()->create([
+            'question_id' => $customQuestion->id,
+            'option_text' => '2(x + 4)',
+            'is_correct' => false,
+        ]);
+
+        config(['services.gemini.api_key' => null]);
+        $aiService = new AIService();
+        $response = $aiService->generateChatResponse(
+            $this->adminUser,
+            'Draft 5 WAEC exam questions for Mathematics',
+            []
+        );
+
+        // Verify that the custom uploaded question is dynamically included in the response
+        $this->assertStringContainsString('Custom Uploaded: What is the factored form of 2x^2 + 4x?', $response);
+        $this->assertStringContainsString('2x(x + 2)', $response);
+        $this->assertStringContainsString('Factor out 2x to get 2x(x + 2)', $response);
+    }
 }

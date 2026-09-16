@@ -34,295 +34,19 @@ function detectSubjectFromQuery(query: string): string {
     return 'General Curriculum';
 }
 
-function generateSubjectQuestions(subject: string): string {
-    switch (subject) {
-        case 'Mathematics':
-            return `### WAEC Practice Assessment: Mathematics (5 Questions)\n\n`
-                + `**Standard:** WAEC / NECO Senior Secondary Standard\n\n`
-                + `**Question 1 (Algebra - Linear Equations):**\n`
-                + `Solve for $x$ in the equation: $3(x - 2) = 2x + 4$\n`
-                + `* A) $x = 2$\n`
-                + `* B) $x = 6$\n`
-                + `* C) $x = 10$ *(Correct)*\n`
-                + `* D) $x = 14$\n\n`
-                + `**Step-by-Step Solution:**\n`
-                + `1. Expand brackets: $3x - 6 = 2x + 4$\n`
-                + `2. Collect like terms: $3x - 2x = 4 + 6$\n`
-                + `3. Therefore: $x = 10$\n\n`
-                + `---\n\n`
-                + `**Question 2 (Algebra - Quadratic Equations):**\n`
-                + `Find the roots of the quadratic equation: $x^2 - 5x + 6 = 0$\n`
-                + `* A) $x = -2\\text{ or }-3$\n`
-                + `* B) $x = 2\\text{ or } 3$ *(Correct)*\n`
-                + `* C) $x = 1\\text{ or } 6$\n`
-                + `* D) $x = -1\\text{ or }-6$\n\n`
-                + `**Step-by-Step Solution:**\n`
-                + `1. Factor the quadratic: $(x - 2)(x - 3) = 0$\n`
-                + `2. Solve for $x$: $x = 2\\text{ or } x = 3$\n\n`
-                + `---\n\n`
-                + `**Question 3 (Indices & Logarithms):**\n`
-                + `Solve for $x$ if $2^{x+1} = 16$\n`
-                + `* A) $x = 2$\n`
-                + `* B) $x = 3$ *(Correct)*\n`
-                + `* C) $x = 4$\n`
-                + `* D) $x = 5$\n\n`
-                + `**Step-by-Step Solution:**\n`
-                + `1. Express 16 in base 2: $16 = 2^4$\n`
-                + `2. Equate exponents: $x + 1 = 4 \\implies x = 3$\n\n`
-                + `---\n\n`
-                + `**Question 4 (Simultaneous Equations):**\n`
-                + `If $2x + y = 7$ and $x - y = 2$, find the value of $x$.\n`
-                + `* A) $x = 1$\n`
-                + `* B) $x = 2$\n`
-                + `* C) $x = 3$ *(Correct)*\n`
-                + `* D) $x = 4$\n\n`
-                + `**Step-by-Step Solution:**\n`
-                + `1. Add the two equations: $(2x + y) + (x - y) = 7 + 2 \\implies 3x = 9$\n`
-                + `2. Divide by 3: $x = 3$\n\n`
-                + `---\n\n`
-                + `**Question 5 (Geometry & Trigonometry):**\n`
-                + `In a right-angled triangle, the base is $6\\text{ cm}$ and the height is $8\\text{ cm}$. Calculate the length of the hypotenuse.\n`
-                + `* A) $10\\text{ cm}$ *(Correct)*\n`
-                + `* B) $12\\text{ cm}$\n`
-                + `* C) $14\\text{ cm}$\n`
-                + `* D) $16\\text{ cm}$\n\n`
-                + `**Step-by-Step Solution:**\n`
-                + `1. By Pythagoras theorem: $c^2 = a^2 + b^2 = 6^2 + 8^2 = 36 + 64 = 100$\n`
-                + `2. Therefore: $c = \\sqrt{100} = 10\\text{ cm}$\n\n`
-                + `*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*`;
-
-        case 'Biology':
-            return `### WAEC Practice Assessment: Biology (5 Questions)\n\n`
-                + `**Standard:** WAEC / NECO Senior Secondary Standard\n\n`
-                + `**Question 1 (Cellular Physiology):**\n`
-                + `Which organelle is primarily responsible for synthesizing adenosine triphosphate (ATP) in eukaryotic cells?\n`
-                + `* A) Ribosome\n`
-                + `* B) Mitochondrion *(Correct)*\n`
-                + `* C) Nucleus\n`
-                + `* D) Golgi apparatus\n\n`
-                + `**Explanation:** Mitochondria generate cellular energy via oxidative phosphorylation during aerobic cellular respiration.\n\n`
-                + `---\n\n`
-                + `**Question 2 (Photosynthesis):**\n`
-                + `What is the primary light-absorbing pigment in green plants?\n`
-                + `* A) Carotenoid\n`
-                + `* B) Xanthophyll\n`
-                + `* C) Chlorophyll a *(Correct)*\n`
-                + `* D) Anthocyanin\n\n`
-                + `**Explanation:** Chlorophyll a absorbs blue and red wavelengths of light for light-dependent photosynthetic reactions.\n\n`
-                + `---\n\n`
-                + `**Question 3 (Genetics):**\n`
-                + `What is the expected genotypic ratio in a monohybrid cross between two heterozygous (Tt) pea plants?\n`
-                + `* A) 3:1\n`
-                + `* B) 1:2:1 *(Correct)*\n`
-                + `* C) 1:1\n`
-                + `* D) 9:3:3:1\n\n`
-                + `**Explanation:** The cross $Tt \\times Tt$ yields $1\\text{ TT} : 2\\text{ Tt} : 1\\text{ tt}$.\n\n`
-                + `---\n\n`
-                + `**Question 4 (Circulatory System):**\n`
-                + `Which blood vessel carries oxygenated blood from the lungs back to the left atrium of the heart?\n`
-                + `* A) Pulmonary artery\n`
-                + `* B) Pulmonary vein *(Correct)*\n`
-                + `* C) Vena cava\n`
-                + `* D) Aorta\n\n`
-                + `**Explanation:** Pulmonary veins are unique veins that transport oxygen-rich blood from lungs into the heart.\n\n`
-                + `---\n\n`
-                + `**Question 5 (Ecology):**\n`
-                + `In any terrestrial ecosystem, which trophic level contains the largest total amount of available energy?\n`
-                + `* A) Primary producers *(Correct)*\n`
-                + `* B) Primary consumers\n`
-                + `* C) Secondary consumers\n`
-                + `* D) Apex predators\n\n`
-                + `**Explanation:** Due to the 10% ecological energy transfer rule, primary producers hold the maximum stored energy.\n\n`
-                + `*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*`;
-
-        case 'Chemistry':
-            return `### WAEC Practice Assessment: Chemistry (5 Questions)\n\n`
-                + `**Standard:** WAEC / NECO Senior Secondary Standard\n\n`
-                + `**Question 1 (Atomic Structure):**\n`
-                + `An atom of sodium has atomic number 11 and mass number 23. What is the number of neutrons in its nucleus?\n`
-                + `* A) 11\n`
-                + `* B) 12 *(Correct)*\n`
-                + `* C) 23\n`
-                + `* D) 34\n\n`
-                + `**Step-by-Step Solution:**\n`
-                + `Number of neutrons = $\\text{Mass Number} - \\text{Atomic Number} = 23 - 11 = 12$.\n\n`
-                + `---\n\n`
-                + `**Question 2 (Periodic Table):**\n`
-                + `Group 1 elements in the periodic table are collectively referred to as:\n`
-                + `* A) Alkaline earth metals\n`
-                + `* B) Halogens\n`
-                + `* C) Alkali metals *(Correct)*\n`
-                + `* D) Noble gases\n\n`
-                + `**Explanation:** Group 1 elements (Li, Na, K, etc.) react with water to form alkaline hydroxides.\n\n`
-                + `---\n\n`
-                + `**Question 3 (Acids, Bases & Salts):**\n`
-                + `What is the pH of a neutral aqueous solution at $25^\\circ\\text{C}$?\n`
-                + `* A) 0\n`
-                + `* B) 7.0 *(Correct)*\n`
-                + `* C) 14.0\n`
-                + `* D) 1.0\n\n`
-                + `**Explanation:** At neutrality, $[\\text{H}^+] = [\\text{OH}^-] = 10^{-7}\\text{ mol/dm}^3$, giving $\\text{pH} = -\\log(10^{-7}) = 7$.\n\n`
-                + `---\n\n`
-                + `**Question 4 (Stoichiometry & Gas Laws):**\n`
-                + `What is the volume occupied by 1 mole of any ideal gas at standard temperature and pressure (STP)?\n`
-                + `* A) $11.2\\text{ dm}^3$\n`
-                + `* B) $22.4\\text{ dm}^3$ *(Correct)*\n`
-                + `* C) $24.0\\text{ dm}^3$\n`
-                + `* D) $44.8\\text{ dm}^3$\n\n`
-                + `**Explanation:** Avogadro's law states that 1 mole of an ideal gas occupies $22.4\\text{ dm}^3$ at STP.\n\n`
-                + `---\n\n`
-                + `**Question 5 (Chemical Bonding):**\n`
-                + `Which type of bonding involves the complete transfer of electrons from a metal to a non-metal atom?\n`
-                + `* A)标识 Electrovalent (Ionic) bonding *(Correct)*\n`
-                + `* B) Covalent bonding\n`
-                + `* C) Metallic bonding\n`
-                + `* D) Hydrogen bonding\n\n`
-                + `**Explanation:** Ionic bonding occurs through electrostatic attraction between oppositely charged ions formed by electron transfer.\n\n`
-                + `*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*`;
-
-        case 'Physics':
-            return `### WAEC Practice Assessment: Physics (5 Questions)\n\n`
-                + `**Standard:** WAEC / NECO Senior Secondary Standard\n\n`
-                + `**Question 1 (Kinematics & Motion):**\n`
-                + `A vehicle accelerates uniformly from rest to a velocity of $20\\text{ m/s}$ in $5\\text{ seconds}$. Calculate its acceleration.\n`
-                + `* A) $2\\text{ m/s}^2$\n`
-                + `* B) $4\\text{ m/s}^2$ *(Correct)*\n`
-                + `* C) $5\\text{ m/s}^2$\n`
-                + `* D) $100\\text{ m/s}^2$\n\n`
-                + `**Step-by-Step Solution:**\n`
-                + `Using the equation $v = u + at$:\n`
-                + `$20 = 0 + a(5) \\implies a = \\frac{20}{5} = 4\\text{ m/s}^2$.\n\n`
-                + `---\n\n`
-                + `**Question 2 (Work, Energy & Power):**\n`
-                + `Calculate the kinetic energy of an object of mass $4\\text{ kg}$ moving with a speed of $3\\text{ m/s}$.\n`
-                + `* A) $6\\text{ J}$\n`
-                + `* B) $12\\text{ J}$\n`
-                + `* C) $18\\text{ J}$ *(Correct)*\n`
-                + `* D) $36\\text{ J}$\n\n`
-                + `**Step-by-Step Solution:**\n`
-                + `$\\text{K.E.} = \\frac{1}{2}mv^2 = \\frac{1}{2}(4)(3^2) = 2 \\times 9 = 18\\text{ J}$.\n\n`
-                + `---\n\n`
-                + `**Question 3 (Current Electricity):**\n`
-                + `A resistor of $10\\,\\Omega$ is connected across a $12\\text{ V}$ battery. What is the electric current flowing through it?\n`
-                + `* A) $0.83\\text{ A}$\n`
-                + `* B) $1.2\\text{ A}$ *(Correct)*\n`
-                + `* C) $120\\text{ A}$\n`
-                + `* D) $22\\text{ A}$\n\n`
-                + `**Step-by-Step Solution:**\n`
-                + `By Ohm's law: $I = \\frac{V}{R} = \\frac{12}{10} = 1.2\\text{ A}$.\n\n`
-                + `---\n\n`
-                + `**Question 4 (Wave Optics):**\n`
-                + `What phenomenon describes the bending of light waves as they pass from air into glass?\n`
-                + `* A) Reflection\n`
-                + `* B) Refraction *(Correct)*\n`
-                + `* C) Diffraction\n`
-                + `* D) Polarization\n\n`
-                + `**Explanation:** Refraction occurs due to the change in the speed of light when traveling across media of different optical densities.\n\n`
-                + `---\n\n`
-                + `**Question 5 (Thermal Physics):**\n`
-                + `What is the SI unit of specific heat capacity?\n`
-                + `* A) $\\text{J}/\\text{kg}$\n`
-                + `* B) $\\text{J}/(\\text{kg}\\cdot\\text{K})$ *(Correct)*\n`
-                + `* C) $\\text{W}/\\text{K}$\n`
-                + `* D) $\\text{N}\\cdot\\text{m}$\n\n`
-                + `**Explanation:** Specific heat capacity $c = \\frac{Q}{m\\Delta T}$, measured in $\\text{Joules per kilogram Kelvin } (\\text{J}\\cdot\\text{kg}^{-1}\\cdot\\text{K}^{-1})$.\n\n`
-                + `*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*`;
-
-        case 'English':
-            return `### WAEC Practice Assessment: English Language (5 Questions)\n\n`
-                + `**Standard:** WAEC / NECO Senior Secondary Standard\n\n`
-                + `**Question 1 (Lexis - Synonyms):**\n`
-                + `Choose the option nearest in meaning to the highlighted word: *The principal delivered an **ephemeral** opening address.*\n`
-                + `* A) Lengthy\n`
-                + `* B) Inspiring\n`
-                + `* C) Short-lived *(Correct)*\n`
-                + `* D) Aggressive\n\n`
-                + `**Explanation:** *Ephemeral* means lasting for a very brief period of time.\n\n`
-                + `---\n\n`
-                + `**Question 2 (Lexis - Antonyms):**\n`
-                + `Choose the option opposite in meaning to the word in italics: *The new manager adopted a **stringent** policy on punctuality.*\n`
-                + `* A) Severe\n`
-                + `* B) Lenient *(Correct)*\n`
-                + `* C) Rigid\n`
-                + `* D) Efficient\n\n`
-                + `**Explanation:** *Stringent* means strict and precise; its antonym is *lenient* (tolerant/flexible).\n\n`
-                + `---\n\n`
-                + `**Question 3 (Grammar - Subject-Verb Agreement):**\n`
-                + `Select the correct word to complete the sentence: *Neither the teacher nor the students ______ present at the assembly.*\n`
-                + `* A) was\n`
-                + `* B) were *(Correct)*\n`
-                + `* C) is\n`
-                + `* D) has been\n\n`
-                + `**Explanation:** In *neither...nor* constructions, the verb agrees with the closer subject (*students* is plural $\\implies$ *were*).\n\n`
-                + `---\n\n`
-                + `**Question 4 (Structure - Prepositions):**\n`
-                + `Choose the correct preposition: *The committee congratulated him ______ his academic achievement.*\n`
-                + `* A) for\n`
-                + `* B) on *(Correct)*\n`
-                + `* C) at\n`
-                + `* D) with\n\n`
-                + `**Explanation:** The verb *congratulate* correctly collocates with the preposition *on*.\n\n`
-                + `---\n\n`
-                + `**Question 5 (Oral English - Stress Pattern):**\n`
-                + `Identify the syllable that carries the primary stress in the word: **PHO-TO-GRAPH-IC**\n`
-                + `* A) First syllable (PHO-)\n`
-                + `* B) Second syllable (-to-)\n`
-                + `* C) Third syllable (-GRAPH-) *(Correct)*\n`
-                + `* D) Fourth syllable (-ic)\n\n`
-                + `**Explanation:** Words ending in *-ic* normally carry primary stress on the penultimate (second to last) syllable: photoGRAPHic.\n\n`
-                + `*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*`;
-
-        default:
-            return `### WAEC Practice Assessment: General Curriculum (5 Questions)\n\n`
-                + `**Standard:** WAEC / NECO Senior Secondary Standard\n\n`
-                + `**Question 1 (Mathematics - Linear Equations):**\n`
-                + `Solve for $x$ in the equation: $3(x - 2) = 2x + 4$\n`
-                + `* A) $x = 2$\n`
-                + `* B) $x = 6$\n`
-                + `* C) $x = 10$ *(Correct)*\n`
-                + `* D) $x = 14$\n\n`
-                + `**Step-by-Step Solution:**\n`
-                + `Expand brackets: $3x - 6 = 2x + 4 \\implies 3x - 2x = 4 + 6 \\implies x = 10$.\n\n`
-                + `---\n\n`
-                + `**Question 2 (Biology - Cellular Physiology):**\n`
-                + `Which organelle is primarily responsible for synthesizing adenosine triphosphate (ATP) in eukaryotic cells?\n`
-                + `* A) Ribosome\n`
-                + `* B) Mitochondrion *(Correct)*\n`
-                + `* C) Nucleus\n`
-                + `* D) Golgi apparatus\n\n`
-                + `**Explanation:** Mitochondria generate cellular chemical energy through oxidative phosphorylation and aerobic respiration.\n\n`
-                + `---\n\n`
-                + `**Question 3 (Chemistry - Atomic Structure):**\n`
-                + `An atom of sodium has an atomic number of $11$ and a mass number of $23$. What is the total number of neutrons in its nucleus?\n`
-                + `* A) $11$\n`
-                + `* B) $12$ *(Correct)*\n`
-                + `* C) $23$\n`
-                + `* D) $34$\n\n`
-                + `**Step-by-Step Solution:**\n`
-                + `$\\text{Neutrons} = \\text{Mass Number} - \\text{Atomic Number} = 23 - 11 = 12$.\n\n`
-                + `---\n\n`
-                + `**Question 4 (Physics - Kinematics):**\n`
-                + `A vehicle accelerates uniformly from rest to a velocity of $20\\text{ m/s}$ in $5\\text{ seconds}$. Calculate its acceleration.\n`
-                + `* A) $2\\text{ m/s}^2$\n`
-                + `* B) $4\\text{ m/s}^2$ *(Correct)*\n`
-                + `* C) $5\\text{ m/s}^2$\n`
-                + `* D) $100\\text{ m/s}^2$\n\n`
-                + `**Step-by-Step Solution:**\n`
-                + `Using first equation of motion: $v = u + at \\implies 20 = 0 + a(5) \\implies a = \\frac{20}{5} = 4\\text{ m/s}^2$.\n\n`
-                + `---\n\n`
-                + `**Question 5 (English Language - Lexis & Structure):**\n`
-                + `Choose the option nearest in meaning to the highlighted word: *The principal delivered an **ephemeral** opening address.*\n`
-                + `* A) Lengthy\n`
-                + `* B) Inspiring\n`
-                + `* C) Short-lived *(Correct)*\n`
-                + `* D) Aggressive\n\n`
-                + `**Explanation:** *Ephemeral* denotes transitory or lasting for a very brief period of time.\n\n`
-                + `*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*`;
-    }
-}
-
-async function generateOfflineResponse(message: string, isAdmin: boolean = false): Promise<string> {
+async function generateOfflineResponse(message: string, isAdmin: boolean = false, history: Message[] = []): Promise<string> {
     const query = message.toLowerCase();
+
+    // Find last model message in conversation history
+    let lastModelMessage = '';
+    if (history && history.length > 0) {
+        for (let i = history.length - 1; i >= 0; i--) {
+            if (history[i].role === 'model') {
+                lastModelMessage = history[i].content;
+                break;
+            }
+        }
+    }
 
     try {
         // ADMIN OFFLINE CAPABILITIES
@@ -373,7 +97,7 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
                     + `*Ask me to draft exam questions for any specific subject or topic.*`;
             }
 
-            // 3. Question Generation / Drafting (5 WAEC Standard Questions tailored to subject)
+            // 3. Question Retrieval / Exam Practice from Question Bank
             if (
                 query.includes('question') ||
                 query.includes('quiz') ||
@@ -385,7 +109,99 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
                 query.includes('neco')
             ) {
                 const detectedSubject = detectSubjectFromQuery(query);
-                return generateSubjectQuestions(detectedSubject);
+
+                // Fetch dynamic questions from Dexie (adminQuestions & quizzes)
+                const adminQList = await db.adminQuestions.toArray().catch(() => []);
+                const quizzes = await db.quizzes.toArray().catch(() => []);
+
+                // Collect all questions with subject metadata
+                const allOfflineQuestions: Array<{
+                    topic_id: number;
+                    subject_name: string;
+                    topic_name: string;
+                    question_text: string;
+                    options: Array<{ option_text: string; is_correct: boolean }>;
+                    explanation: string | null;
+                }> = [];
+
+                for (const q of adminQList) {
+                    const top = topics.find(t => t.id === q.topic_id);
+                    const sub = subjects.find(s => s.id === top?.subject_id);
+                    const subName = sub?.name || q.topic?.subject?.name || 'General Knowledge';
+                    allOfflineQuestions.push({
+                        topic_id: q.topic_id,
+                        subject_name: subName,
+                        topic_name: top?.name || q.topic?.name || 'Curriculum Topic',
+                        question_text: q.question_text,
+                        options: (q.options || []).map(o => ({ option_text: o.option_text, is_correct: Boolean(o.is_correct) })),
+                        explanation: q.explanation || null
+                    });
+                }
+
+                for (const qz of quizzes) {
+                    const sub = subjects.find(s => s.id === (qz as any).subject_id);
+                    const subName = sub?.name || 'General Knowledge';
+                    for (const q of (qz.questions || [])) {
+                        const top = topics.find(t => t.id === q.topic_id);
+                        if (!allOfflineQuestions.some(item => item.question_text === q.question_text)) {
+                            allOfflineQuestions.push({
+                                topic_id: q.topic_id,
+                                subject_name: subName,
+                                topic_name: top?.name || 'Curriculum Concept',
+                                question_text: q.question_text,
+                                options: (q.options || []).map(o => ({ option_text: o.option_text, is_correct: Boolean(o.is_correct) })),
+                                explanation: q.explanation || null
+                            });
+                        }
+                    }
+                }
+
+                // Filter by detectedSubject unless General Curriculum
+                const filtered = detectedSubject === 'General Curriculum'
+                    ? allOfflineQuestions
+                    : allOfflineQuestions.filter(q => q.subject_name.toLowerCase().includes(detectedSubject.toLowerCase()) || detectedSubject.toLowerCase().includes(q.subject_name.toLowerCase()));
+
+                if (filtered.length > 0) {
+                    const count = Math.min(filtered.length, 5);
+                    let out = `### Question Bank Practice: ${detectedSubject} (${count} Question${count > 1 ? 's' : ''})\n\n`
+                        + `**Standard:** Senior Secondary Curriculum (Question Bank)\n\n`;
+
+                    const selected = filtered.slice(0, 5);
+                    selected.forEach((q, idx) => {
+                        const qNum = idx + 1;
+                        out += `**Question ${qNum} (${q.subject_name} - ${q.topic_name}):**\n`
+                            + `${q.question_text}\n\n`;
+
+                        const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
+                        let correctText = '';
+                        q.options.forEach((opt, oIdx) => {
+                            const l = letters[oIdx] || String(oIdx + 1);
+                            if (opt.is_correct) {
+                                correctText = opt.option_text;
+                                out += `* ${l}) ${opt.option_text} *(Correct)*\n`;
+                            } else {
+                                out += `* ${l}) ${opt.option_text}\n`;
+                            }
+                        });
+
+                        out += `\n**Step-by-Step Solution:**\n`;
+                        if (q.explanation) {
+                            out += `${q.explanation}\n\n`;
+                        } else {
+                            out += `The correct answer is **${correctText}**. This follows standard rules of ${q.topic_name}.\n\n`;
+                        }
+                        out += `---\n\n`;
+                    });
+
+                    out += `> **Offline Mode Notice:** These practice questions were retrieved from your Question Bank. To generate brand-new, customized exam questions with AI, please connect to an active internet connection.`;
+                    return out;
+                }
+
+                return `### Offline Notice: Dynamic Question Generation\n\n`
+                    + `No active questions were found in your Question Bank for **${detectedSubject}**.\n\n`
+                    + `**To draft or practice questions:**\n`
+                    + `1. **Connect to the Internet:** When online, the AI will dynamically generate brand-new, customized questions with full solutions.\n`
+                    + `2. **Add to Question Bank:** You can upload or create questions under **Question Bank -> Bulk Add** to make them accessible offline.`;
             }
 
             // 4. Lesson Plan Outline
@@ -419,7 +235,96 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
                 + `4. **"Performance summary"**: Review school subjects and student mastery trends.`;
         }
 
-        // LEARNER OFFLINE CAPABILITIES (100% Preserved)
+        // LEARNER OFFLINE CAPABILITIES
+
+        // 0. CONVERSATIONAL ANSWER EVALUATION (If replying to a practice problem or question)
+        if (lastModelMessage && (
+            lastModelMessage.includes('Practice Problem') ||
+            lastModelMessage.includes('Question') ||
+            lastModelMessage.includes('Factorize') ||
+            lastModelMessage.includes('Solve') ||
+            lastModelMessage.includes('Calculate') ||
+            lastModelMessage.includes('Simplify') ||
+            lastModelMessage.includes('Try this out') ||
+            lastModelMessage.includes('test your knowledge')
+        )) {
+            // A. Check if learner selected an option letter
+            const letterMatch = query.match(/^\s*(?:option|answer|choice)?\s*[:=\-]?\s*([a-e])\b/i) || (['a', 'b', 'c', 'd', 'e'].includes(query) ? [null, query] : null);
+            if (letterMatch) {
+                const chosenLetter = letterMatch[1].toUpperCase();
+                const quizzes = await db.quizzes.toArray().catch(() => []);
+                const adminQList = await db.adminQuestions.toArray().catch(() => []);
+                const allQ = [...adminQList, ...quizzes.flatMap(q => q.questions || [])];
+                const matchedQ = allQ.find(q => q && lastModelMessage.includes(q.question_text));
+
+                if (matchedQ && matchedQ.options) {
+                    const letters = ['A', 'B', 'C', 'D', 'E'];
+                    const correctIdx = matchedQ.options.findIndex((o: any) => o.is_correct);
+                    const correctLetter = correctIdx >= 0 ? letters[correctIdx] : 'A';
+                    const correctText = correctIdx >= 0 ? matchedQ.options[correctIdx].option_text : '';
+
+                    if (chosenLetter === correctLetter) {
+                        return `🎉 **Outstanding!** Option **${chosenLetter}** is completely correct!\n\n`
+                            + (matchedQ.explanation ? `**Solution:**\n${matchedQ.explanation}\n\n` : '')
+                            + `Would you like to try another practice problem?`;
+                    } else {
+                        return `Good effort! Option **${chosenLetter}** is not quite right.\n\n`
+                            + `The correct answer is **Option ${correctLetter}** (${correctText}).\n\n`
+                            + (matchedQ.explanation ? `**Solution:**\n${matchedQ.explanation}\n\n` : '')
+                            + `Would you like to try another practice problem?`;
+                    }
+                }
+            }
+
+            // B. Direct Answer Matching or Question Bank Lookup
+            const quizzes = await db.quizzes.toArray().catch(() => []);
+            const adminQList = await db.adminQuestions.toArray().catch(() => []);
+            const allQ = [...adminQList, ...quizzes.flatMap(q => q.questions || [])];
+            const matchedQ = allQ.find(q => q && (lastModelMessage.includes(q.question_text) || (q.explanation && lastModelMessage.includes(q.explanation))));
+
+            if (matchedQ) {
+                const correctOption = (matchedQ.options || []).find((o: any) => o.is_correct);
+                const correctText = (correctOption?.option_text || '').toLowerCase().trim();
+                const cleanUserMsg = message.toLowerCase().trim();
+
+                if (correctText && (cleanUserMsg.includes(correctText) || correctText.includes(cleanUserMsg))) {
+                    return `🎉 **Spot on!** That is the correct answer!\n\n`
+                        + (matchedQ.explanation ? `**Solution:**\n${matchedQ.explanation}\n\n` : '')
+                        + `Would you like to try another practice question?`;
+                }
+
+                if (
+                    query.includes('solution') ||
+                    query.includes('answer') ||
+                    query.includes('explain') ||
+                    query.includes('hint') ||
+                    query.includes('how to solve') ||
+                    query.includes('show me')
+                ) {
+                    return `Here is the step-by-step solution from your Question Bank:\n\n`
+                        + (correctOption ? `* **Correct Answer:** ${correctOption.option_text}\n\n` : '')
+                        + (matchedQ.explanation ? `**Explanation:**\n${matchedQ.explanation}\n\n` : '')
+                        + `Would you like to try another practice problem?`;
+                }
+
+                return `Good attempt! You answered: \`${message}\`.\n\n`
+                    + (correctOption ? `* **Correct Answer in Question Bank:** ${correctOption.option_text}\n\n` : '')
+                    + (matchedQ.explanation ? `**Step-by-Step Solution:**\n${matchedQ.explanation}\n\n` : '')
+                    + `Would you like to try another practice problem?`;
+            }
+
+            // C. Fallback for math / answer attempts when question was generated online
+            if (
+                /[xX0-9\(\)\+\-\*\/\^=]/.test(message) ||
+                query.includes('solution') ||
+                query.includes('answer') ||
+                query.includes('is it')
+            ) {
+                return `Good attempt! You submitted: \`${message}\`.\n\n`
+                    .concat("Connect to an active internet connection to have AI dynamically verify and grade complex math steps in real time, or ask me for a practice problem from your offline Question Bank!");
+            }
+        }
+
         // 1. Suggest recommendations
         if (query.includes('recommend') || query.includes('what should i study') || query.includes('suggest') || query.includes('study next') || query.includes('todo')) {
             const progress = await db.learnerProgress.toArray();
@@ -456,7 +361,8 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
             if (subjects.length === 0) {
                 return "No subjects are cached locally yet. Log in while online to preload your curriculum!";
             }
-            const list = subjects.map(s => `- **${s.name}**: ${s.description || 'No description available.'}`).join('\n');
+            const uniqueSubjects = Array.from(new Map(subjects.map(s => [s.name, s])).values());
+            const list = uniqueSubjects.map(s => `- **${s.name}**: ${s.description || 'No description available.'}`).join('\n');
             return `Here are the subjects available in your offline study library:\n\n${list}\n\nSelect a subject from the menu to start studying!`;
         }
 
@@ -495,7 +401,115 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
             return `Here are the topics available in **${matchedSubject.name}**:\n\n${topicList || 'No topics cached yet.'}\n\nAsk me about any of these topics or practice them in the Subjects menu!`;
         }
 
-        // 5. Concept & Question Bank Search across cached quizzes
+        // 5. Practice Question or Quiz Request for Learners
+        if (
+            query.includes('practice') ||
+            query.includes('question') ||
+            query.includes('problem') ||
+            query.includes('quiz') ||
+            query.includes('exam') ||
+            query.includes('test me')
+        ) {
+            const detectedSubject = detectSubjectFromQuery(query);
+            const quizzes = await db.quizzes.toArray().catch(() => []);
+            const adminQList = await db.adminQuestions.toArray().catch(() => []);
+            const subjects = await db.subjects.toArray().catch(() => []);
+            const topics = await db.topics.toArray().catch(() => []);
+
+            const allQuestions: Array<{
+                subject_name: string;
+                topic_name: string;
+                question_text: string;
+                options: Array<{ option_text: string; is_correct: boolean }>;
+                explanation: string | null;
+            }> = [];
+
+            for (const qz of quizzes) {
+                const sub = subjects.find(s => s.id === (qz as any).subject_id);
+                for (const q of (qz.questions || [])) {
+                    const top = topics.find(t => t.id === q.topic_id);
+                    allQuestions.push({
+                        subject_name: sub?.name || 'General Curriculum',
+                        topic_name: top?.name || 'Practice Topic',
+                        question_text: q.question_text,
+                        options: (q.options || []).map((o: any) => ({ option_text: o.option_text, is_correct: Boolean(o.is_correct) })),
+                        explanation: q.explanation || null
+                    });
+                }
+            }
+
+            for (const q of adminQList) {
+                const top = topics.find(t => t.id === q.topic_id);
+                const sub = subjects.find(s => s.id === top?.subject_id);
+                if (!allQuestions.some(item => item.question_text === q.question_text)) {
+                    allQuestions.push({
+                        subject_name: sub?.name || 'General Curriculum',
+                        topic_name: top?.name || 'Practice Topic',
+                        question_text: q.question_text,
+                        options: (q.options || []).map(o => ({ option_text: o.option_text, is_correct: Boolean(o.is_correct) })),
+                        explanation: q.explanation || null
+                    });
+                }
+            }
+
+            // Filter by subject if specified
+            const filtered = detectedSubject === 'General Curriculum'
+                ? allQuestions
+                : allQuestions.filter(q => q.subject_name.toLowerCase().includes(detectedSubject.toLowerCase()) || detectedSubject.toLowerCase().includes(q.subject_name.toLowerCase()));
+
+            const pool = filtered.length > 0 ? filtered : allQuestions;
+
+            // Detect requested count (default to 1)
+            let count = 1;
+            const countMatch = query.match(/\b(\d+)\s*(?:questions?|problems?|quizzes?|items?)\b/i);
+            if (countMatch) {
+                count = Math.max(1, Math.min(parseInt(countMatch[1], 10), 10));
+            }
+
+            if (pool.length > 0) {
+                const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+                if (count === 1) {
+                    const randomQ = pool[Math.floor(Math.random() * pool.length)];
+                    let out = `### Practice Problem: ${randomQ.subject_name} (${randomQ.topic_name})\n\n`
+                        + `${randomQ.question_text}\n\n`;
+
+                    randomQ.options.forEach((opt, idx) => {
+                        const l = letters[idx] || String(idx + 1);
+                        out += `* ${l}) ${opt.option_text}\n`;
+                    });
+
+                    out += `\nCan you solve this? Reply with your chosen option (**A**, **B**, **C**, or **D**) to check if you're right, or ask me for the step-by-step explanation!\n\n`;
+                    out += `> **Offline Practice Notice:** Retrieved from your Question Bank. Connect to the internet to generate brand-new AI practice questions.`;
+                    return out;
+                } else {
+                    const selected = pool.slice(0, count);
+                    let out = `### Practice Questions: ${detectedSubject} (${selected.length} Questions)\n\n`;
+
+                    selected.forEach((q, idx) => {
+                        out += `**Question ${idx + 1} (${q.subject_name} - ${q.topic_name}):**\n`
+                            + `${q.question_text}\n\n`;
+
+                        q.options.forEach((opt, optIdx) => {
+                            const l = letters[optIdx] || String(optIdx + 1);
+                            out += `* ${l}) ${opt.option_text}\n`;
+                        });
+                        out += `\n---\n\n`;
+                    });
+
+                    out += `Try answering these questions! Reply with your chosen answers when you're ready.\n\n`;
+                    out += `> **Offline Practice Notice:** Retrieved from your Question Bank. Connect to the internet to generate brand-new AI practice questions.`;
+                    return out;
+                }
+            }
+
+            return `### Offline Practice Notice\n\n`
+                + `No practice questions were found in your Question Bank for **${detectedSubject}**.\n\n`
+                + `1. **Connect to the Internet:** When online, the AI will dynamically generate customized practice problems with hints and solutions.\n`
+                + `2. **Explore Topics:** You can review available study materials from the Subjects menu!`;
+        }
+
+        // 6. Concept & Question Bank Search across cached quizzes
         const cleanWords = query.replace(/[^\w\s]/g, '').split(' ').filter(w => w.length >= 4);
         if (cleanWords.length > 0) {
             const quizzes = await db.quizzes.toArray();
@@ -514,10 +528,11 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
         console.warn('AILEARN helper error:', e);
     }
 
-    // 6. Default Dynamic Offline fallback message for learners
+    // 7. Default Dynamic Offline fallback message for learners (deduplicated)
     const cachedSubjects = await db.subjects.toArray().catch(() => []);
     const cachedTopics = await db.topics.toArray().catch(() => []);
-    const subjectList = cachedSubjects.length > 0 ? cachedSubjects.map(s => s.name).join(', ') : 'all enrolled subjects';
+    const uniqueSubjectNames = Array.from(new Set(cachedSubjects.map(s => s.name)));
+    const subjectList = uniqueSubjectNames.length > 0 ? uniqueSubjectNames.join(', ') : 'all enrolled subjects';
     const sampleTopics = cachedTopics.slice(0, 3).map(t => `**${t.name}**`).join(', ');
 
     return `**AILEARN Tutor Mode**\n\nI am operating in offline mode using your local curriculum library for **${subjectList}**.\n\nWhile offline, I can help you with:\n1. **"Recommend what to study"**: I will analyze your local mastery and suggest topics.\n2. **"List subjects"**: View your offline curriculum and descriptions.\n3. Ask about any topic in your library (e.g. ${sampleTopics || 'your topics'}) to see concept notes.`;
@@ -569,7 +584,7 @@ export default function ChatWidget() {
         // If offline, use the local AI response generator
         if (!navigator.onLine) {
             setTimeout(async () => {
-                const response = await generateOfflineResponse(textToSend, isAdmin);
+                const response = await generateOfflineResponse(textToSend, isAdmin, messages);
                 setMessages((prev) => [...prev, { role: 'model', content: response }]);
                 setChatLoading(false);
             }, 600);
@@ -598,7 +613,7 @@ export default function ChatWidget() {
         } catch (error) {
             console.error('AI chat online request failed, falling back to local heuristic:', error);
             // Fallback to local response generator if network fails
-            const response = await generateOfflineResponse(textToSend, isAdmin);
+            const response = await generateOfflineResponse(textToSend, isAdmin, messages);
             setMessages((prev) => [...prev, { role: 'model', content: response }]);
         } finally {
             setChatLoading(false);

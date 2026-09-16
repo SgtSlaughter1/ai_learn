@@ -205,6 +205,27 @@ Instructions:
             ? $weakestTopics->map(fn($w) => "  - {$w->subject_name} -> {$w->topic_name}: {$w->avg_topic_mastery}% avg mastery")->implode("\n")
             : "  - All active topics maintaining baseline standard.";
 
+        // Dynamic Question Bank RAG Grounding (School-specific + General Knowledge)
+        $sampleQuestions = Question::where('status', 'active')
+            ->when(!$isSuperAdmin && $school, function ($q) use ($school) {
+                $q->where(function ($sq) use ($school) {
+                    $sq->where('school_id', $school->id)->orWhereNull('school_id');
+                });
+            })
+            ->with(['topic.subject', 'options' => fn($o) => $o->where('is_correct', true)])
+            ->inRandomOrder()
+            ->take(5)
+            ->get();
+
+        $sampleQuestionsStr = $sampleQuestions->isNotEmpty()
+            ? $sampleQuestions->map(function ($q, $i) {
+                $subj = $q->topic?->subject?->name ?? 'General Knowledge';
+                $top = $q->topic?->name ?? 'Core';
+                $ans = $q->options->first()?->option_text ?? 'Verified';
+                return "  - Sample " . ($i + 1) . " [{$subj} -> {$top}]: {$q->question_text} | Correct Answer: {$ans} | Solution/Explanation: {$q->explanation}";
+            })->implode("\n")
+            : "  - No custom questions logged yet. Standard curriculum active.";
+
         $systemInstruction = "You are the AILEARN School Administrator Copilot & Academic Advisor.
 You are assisting an academic school administrator: {$user->name} at {$schoolName} ({$schoolCategory} Category, {$locationStr}).
 
@@ -219,11 +240,14 @@ School Data & Academic Context:
 - Active Curriculum Subjects:
 {$subjectsSummary}
 
+School & General Knowledge Question Bank (Curriculum Reference Knowledge):
+{$sampleQuestionsStr}
+
 Your Core Capabilities for the School Administrator:
 1. School Diagnostic & Academic Performance Analytics: Summarize class and subject performance, highlight learning gaps and mastery trends.
 2. Remedial & Intervention Strategies: Propose pedagogical strategies, remedial lesson plans, and classroom drill ideas to help struggling learners in specific subjects/topics.
 3. Curriculum & Scheme of Work Planning: Generate structured lesson outlines, learning objectives, and curriculum breakdown aligned with Nigerian (WAEC/NECO/NERDC) secondary education standards.
-4. Assessment & Question Bank Generation: Draft high-standard multiple choice questions with four options (A, B, C, D), marking the correct answer and providing step-by-step educational explanations so the admin can import them into the school question bank.
+4. Assessment & Question Bank Generation: Draft high-standard multiple choice questions with four options (A, B, C, D), marking the correct answer and providing step-by-step educational explanations so the admin can import them into the school question bank. Leverage the style and concepts from the school's question bank where appropriate.
 5. School Operations & Roster Insights: Answer questions about classes, student distribution, and subject management.
 
 Guidelines:
@@ -269,22 +293,39 @@ Guidelines:
             ->map(fn($str, $subj) => "* {$subj}:\n{$str}")
             ->implode("\n");
 
-        if (empty($masterySummary)) {
-            $masterySummary = "No diagnostic test records logged yet. Recommend they take a quiz under 'Subjects' to calculate their initial mastery.";
-        }
+        // Dynamic Question Bank Concept Grounding (School + General Knowledge)
+        $learnerSchoolId = $user->learnerProfile?->school_id;
+        $learnerSampleQuestions = Question::where('status', 'active')
+            ->when($learnerSchoolId, function ($q) use ($learnerSchoolId) {
+                $q->where(function ($sq) use ($learnerSchoolId) {
+                    $sq->where('school_id', $learnerSchoolId)->orWhereNull('school_id');
+                });
+            })
+            ->with(['topic.subject', 'options' => fn($o) => $o->where('is_correct', true)])
+            ->inRandomOrder()
+            ->take(5)
+            ->get();
+
+        $sampleCurriculumStr = $learnerSampleQuestions->isNotEmpty()
+            ? $learnerSampleQuestions->map(fn($q) => "  - [{$q->topic?->subject?->name} -> {$q->topic?->name}]: {$q->question_text} | Key Concept: {$q->explanation}")->implode("\n")
+            : "  - Standard curriculum active.";
 
         $systemInstruction = "You are the AILEARN Learning Companion, a friendly, encouraging personal study assistant for secondary school students. 
 You know the student's name is: {$user->name}.
 Here is their current subject mastery progress:
 {$masterySummary}
 
+Curriculum & Question Bank Knowledge Base (School & General Curriculum):
+{$sampleCurriculumStr}
+
 Guidelines:
-1. Help them understand curriculum concepts, plan what to study, or explain hard questions.
+1. Help them understand curriculum concepts, plan what to study, or explain hard questions. Use the uploaded curriculum concepts as reference.
 2. Keep your answers brief, engaging, highly structured (using bullet points and bold text), and easy to read.
 3. Recommend taking diagnostic quizzes for subjects where their mastery is low (below 80%).
 4. If they ask about offline access, explain that the app calculates progress, scores, and adapts difficulty fully offline!
 5. Use markdown formatting. Keep answers under 150 words.
-6. CRITICAL: When writing math, use ONLY LaTeX with dollar signs ($...$ for inline, $$...$$ for display). NEVER write the same expression in both LaTeX AND plain text. Use ONLY the LaTeX version, not both.";
+6. CRITICAL: When writing math, use ONLY LaTeX with dollar signs ($...$ for inline, $$...$$ for display). NEVER write the same expression in both LaTeX AND plain text. Use ONLY the LaTeX version, not both.
+7. CONVERSATIONAL CONTINUITY: When a student replies to a practice question with their answer attempt (e.g. an algebraic expression like (x-5x)(x-2x), an option letter like A/B/C/D, or an equation), ALWAYS directly evaluate their response. Point out what they got right, gently explain any mistake, show the step-by-step solution, and offer another challenge. NEVER respond with a generic greeting or reset the conversation.";
 
         $contents = [];
         foreach ($history as $msg) {
@@ -304,7 +345,7 @@ Guidelines:
             return $geminiResult;
         }
 
-        return $this->generateHeuristicChatResponse($user, $message);
+        return $this->generateHeuristicChatResponse($user, $message, $history);
     }
 
     /**
@@ -577,276 +618,6 @@ Guidelines:
         }
 
         return "Always read the question carefully and identify the key terms. Practice similar problems to build confidence. Focus on understanding the **why** behind each step, not just memorizing the answer!";
-    }
-
-    private function generateHeuristicChatResponse(User $user, string $message): string
-    {
-        $query = strtolower(trim($message));
-        $cleanQuery = preg_replace('/[^\w\s]/', '', $query);
-        $stopWords = ['what', 'when', 'where', 'which', 'explain', 'tell', 'about', 'study', 'help', 'with', 'know', 'learn', 'please', 'can', 'you', 'does', 'work', 'some', 'give', 'need', 'show', 'like'];
-        $words = array_values(array_filter(explode(' ', $cleanQuery), fn($w) => strlen($w) >= 4 && !in_array($w, $stopWords)));
-
-        // 1. Dynamic Topic Search: Match against any topic in the active curriculum
-        $topics = Topic::where('status', 'active')->with('subject')->get();
-        $matchedTopic = $topics->first(function ($topic) use ($query) {
-            $name = strtolower($topic->name);
-            $slugWords = str_replace('-', ' ', strtolower($topic->slug));
-            return str_contains($query, $name) || str_contains($query, $slugWords);
-        });
-
-        // If no direct topic match, check keywords against topic names
-        if (!$matchedTopic && !empty($words)) {
-            foreach ($words as $word) {
-                $matchedTopic = $topics->first(function ($topic) use ($word) {
-                    return str_contains(strtolower($topic->name), $word);
-                });
-                if ($matchedTopic) break;
-            }
-        }
-
-        if ($matchedTopic) {
-            $subjName = $matchedTopic->subject->name ?? 'Curriculum';
-            $level = strtoupper($matchedTopic->level);
-
-            $progress = LearnerProgress::where('user_id', $user->id)
-                ->where('topic_id', $matchedTopic->id)
-                ->first();
-            $masteryText = $progress ? "Current Mastery: **{$progress->mastery_score}%**" : "Not yet attempted";
-
-            // Pull real explanation from the question bank for this topic
-            $sampleQuestion = Question::where('topic_id', $matchedTopic->id)
-                ->where('status', 'active')
-                ->whereNotNull('explanation')
-                ->where('explanation', '!=', '')
-                ->inRandomOrder()
-                ->first();
-
-            $output = "Hello **{$user->name}**! Here is an overview of **{$matchedTopic->name}**:\n\n"
-                . "* **Subject:** {$subjName} (Level: {$level})\n"
-                . "* **Your Status:** {$masteryText}\n\n";
-
-            if (!empty($matchedTopic->description)) {
-                $output .= "**Overview:**\n{$matchedTopic->description}\n\n";
-            }
-
-            if ($sampleQuestion && !empty($sampleQuestion->explanation)) {
-                $output .= "**Key Study Concept:**\n{$sampleQuestion->explanation}\n\n";
-            }
-
-            $output .= "*Tip: Practice this topic under **{$subjName}** in the Subjects menu to build mastery!*";
-            return $output;
-        }
-
-        // 2. Dynamic Question/Concept Search: Search question bank for matching concepts (e.g., photosynthesis, equations)
-        if (!empty($words)) {
-            $questionMatch = null;
-            foreach ($words as $word) {
-                $questionMatch = Question::where('status', 'active')
-                    ->where(function ($q) use ($word) {
-                        $q->where('question_text', 'like', "%{$word}%")
-                          ->orWhere('explanation', 'like', "%{$word}%");
-                    })
-                    ->with(['topic.subject', 'options' => fn($o) => $o->where('is_correct', true)])
-                    ->first();
-                if ($questionMatch) break;
-            }
-
-            if ($questionMatch) {
-                $topicName = $questionMatch->topic->name ?? 'General Concept';
-                $subjName = $questionMatch->topic->subject->name ?? 'Curriculum';
-                $correctOpt = $questionMatch->options->first();
-                $ansText = $correctOpt ? " (Key concept: **{$correctOpt->option_text}**)" : "";
-
-                return "Great question, **{$user->name}**! Here is what our curriculum notes say about that:\n\n"
-                    . "* **Subject:** {$subjName} -> **{$topicName}**\n\n"
-                    . "**Explanation:**\n{$questionMatch->explanation}{$ansText}\n\n"
-                    . "Would you like to practice more questions on **{$topicName}**?";
-            }
-        }
-
-        // 3. Dynamic Subject Search: Match against any subject in the curriculum
-        $subjects = Subject::where('status', 'active')->with('topics')->get();
-        $matchedSubject = $subjects->first(function ($subject) use ($query) {
-            $name = strtolower($subject->name);
-            $slug = strtolower($subject->slug);
-            return str_contains($query, $name) || str_contains($query, $slug);
-        });
-
-        if ($matchedSubject) {
-            $topicList = $matchedSubject->topics->take(5)->map(fn($t) => "* **{$t->name}** (Level: " . strtoupper($t->level) . ")")->implode("\n");
-
-            return "Hi **{$user->name}**! In **{$matchedSubject->name}**, here are key topics available in your syllabus:\n\n"
-                . "{$topicList}\n\n"
-                . (!empty($matchedSubject->description) ? "{$matchedSubject->description}\n\n" : "")
-                . "Which topic would you like to dive into today?";
-        }
-
-        // 4. Dynamic Personalized Study Recommendations
-        try {
-            $progressRecords = LearnerProgress::where('user_id', $user->id)
-                ->with('topic.subject')
-                ->orderBy('mastery_score', 'asc')
-                ->get();
-
-            if ($progressRecords->isNotEmpty()) {
-                $lowTopics = $progressRecords->filter(fn($p) => $p->mastery_score < 80)->take(3);
-                if ($lowTopics->isNotEmpty()) {
-                    $recommendations = $lowTopics->map(function ($p) {
-                        $subj = $p->topic->subject->name ?? 'Curriculum';
-                        return "* **{$p->topic->name}** (*{$subj}*) — {$p->mastery_score}% mastery";
-                    })->implode("\n");
-
-                    return "Welcome, **{$user->name}**! Based on your latest quiz attempts across all subjects, here are your top recommended focus areas:\n\n"
-                        . "{$recommendations}\n\n"
-                        . "Reviewing these will boost your overall grade fastest! Which one shall we start with?";
-                }
-            }
-        } catch (\Exception $e) {
-            // Fall through to general response
-        }
-
-        // 5. Dynamic General Helper: Lists all available active subjects in the database
-        $availableSubjects = Subject::where('status', 'active')->pluck('name');
-        $subjectStr = $availableSubjects->isNotEmpty() ? $availableSubjects->implode(', ') : 'all subjects';
-
-        $sampleTopics = Topic::where('status', 'active')->inRandomOrder()->take(3)->pluck('name');
-        $samplePrompt = $sampleTopics->isNotEmpty()
-            ? "Ask me about topics like *" . $sampleTopics->implode('*, *') . "*."
-            : "Ask me to explain any topic or recommend what to study next.";
-
-        return "Hi **{$user->name}**! I'm your AI Study Companion for **{$subjectStr}**.\n\n"
-            . "I can help you with:\n"
-            . "1. **Topic Explanations:** {$samplePrompt}\n"
-            . "2. **Study Recommendations:** Say *\"What should I study next?\"* to review your weakest areas.\n"
-            . "3. **Subject Overviews:** Ask about any subject to see all its syllabus topics.\n\n"
-            . "What would you like to explore?";
-    }
-
-    /**
-     * Offline heuristic response generator for School Admins & Platform Admins.
-     */
-    private function generateHeuristicAdminChatResponse(
-        User $user,
-        string $message,
-        string $schoolName,
-        int $totalLearners,
-        string $classesStr,
-        int $avgMastery,
-        int $strugglingCount,
-        $weakestTopics
-    ): string {
-        $query = strtolower(trim($message));
-
-        // 1. Performance Summary / Health Overview / Diagnostics / Struggling Learners
-        if (
-            str_contains($query, 'summary') ||
-            str_contains($query, 'performance') ||
-            str_contains($query, 'overview') ||
-            str_contains($query, 'stats') ||
-            str_contains($query, 'health') ||
-            str_contains($query, 'mastery') ||
-            str_contains($query, 'report') ||
-            str_contains($query, 'struggling') ||
-            str_contains($query, 'analytics')
-        ) {
-            $weakestList = $weakestTopics->isNotEmpty()
-                ? $weakestTopics->map(fn($w) => "* **{$w->subject_name}** - {$w->topic_name} (Average Mastery: **{$w->avg_topic_mastery}%**)")->implode("\n")
-                : "* All syllabus topics currently performing at standard threshold.";
-
-            return "### Executive Academic Diagnostic Summary\n\n"
-                . "**Institution:** {$schoolName}\n"
-                . "**Administrator:** {$user->name}\n\n"
-                . "#### Key Metrics Overview\n"
-                . "* **Total Enrolled Learners:** {$totalLearners} students\n"
-                . "* **Active Classes:** {$classesStr}\n"
-                . "* **School-wide Average Mastery:** **{$avgMastery}%**\n"
-                . "* **Learners Needing Academic Support (<40% Mastery):** **{$strugglingCount}** students\n\n"
-                . "#### Priority Focus Topics (Lowest School Mastery)\n"
-                . "{$weakestList}\n\n"
-                . "#### Recommended Admin Actions\n"
-                . "1. **Intervention Scheduling:** Direct subject teachers to conduct formative review sessions on the low-mastery topics above.\n"
-                . "2. **Targeted Quizzes:** Generate standard diagnostic practice tests in the Question Bank.\n"
-                . "3. **Roster Review:** Inspect the Learners Directory for individual learner breakdown.";
-        }
-
-        // 2. Remedial & Intervention Strategies
-        if (
-            str_contains($query, 'intervention') ||
-            str_contains($query, 'remedial') ||
-            str_contains($query, 'help student') ||
-            str_contains($query, 'weak') ||
-            str_contains($query, 'strategy') ||
-            (str_contains($query, 'plan') && str_contains($query, 'struggle'))
-        ) {
-            $targetTopic = $weakestTopics->first();
-            $topicName = $targetTopic ? "{$targetTopic->subject_name} ({$targetTopic->topic_name})" : "High Priority Curriculum Topics";
-
-            return "### Targeted Academic Intervention & Remediation Strategy\n\n"
-                . "**Target Area:** {$topicName}\n"
-                . "**Goal:** Elevate struggling student comprehension from <40% to >=75% baseline mastery.\n\n"
-                . "#### 3-Phase Action Plan for Teachers\n"
-                . "1. **Phase 1: Diagnostic Assessment (Day 1)**\n"
-                . "   * Deploy a 10-question formative diagnostic test under **Question Bank**.\n"
-                . "   * Identify specific error patterns (calculation errors vs conceptual misunderstandings).\n\n"
-                . "2. **Phase 2: Micro-Lesson & Active Recall Drills (Days 2-4)**\n"
-                . "   * Break concepts into bite-sized 15-minute instructional modules.\n"
-                . "   * Have learners practice with flashcards and adaptive quizzes in the app.\n\n"
-                . "3. **Phase 3: Mastery Verification (Day 5)**\n"
-                . "   * Re-test cohort. Require students to score >=80% before advancing in the scheme of work.\n\n"
-                . "*Would you like me to draft 5 practice questions for this intervention?*";
-        }
-
-        // 3. Question Generation / Exam Drafting / Assessment Creation (5 WAEC Standard Questions)
-        if (
-            str_contains($query, 'question') ||
-            str_contains($query, 'quiz') ||
-            str_contains($query, 'test') ||
-            str_contains($query, 'exam') ||
-            str_contains($query, 'draft') ||
-            str_contains($query, 'generate') ||
-            str_contains($query, 'waec') ||
-            str_contains($query, 'neco')
-        ) {
-            $detectedSubject = $this->detectSubjectFromQuery($query);
-            return $this->generateSubjectSpecificQuestions($detectedSubject);
-        }
-
-        // 4. Lesson Plan / Scheme of Work / Curriculum Outline
-        if (
-            str_contains($query, 'lesson') ||
-            str_contains($query, 'scheme') ||
-            str_contains($query, 'syllabus') ||
-            str_contains($query, 'curriculum') ||
-            str_contains($query, 'outline') ||
-            str_contains($query, 'teach')
-        ) {
-            return "### Standard Secondary Curriculum Lesson Outline\n\n"
-                . "**Subject:** Senior Secondary Science / Mathematics\n"
-                . "**Duration:** 40 Minutes | **Alignment:** NERDC / WAEC Syllabus\n\n"
-                . "#### 1. Performance Objectives\n"
-                . "By the end of the lesson, learners should be able to:\n"
-                . "* Define the core scientific/mathematical principle accurately.\n"
-                . "* Apply relevant formula/rules to solve standard practice problems.\n"
-                . "* Correctly explain why common distractor options are incorrect.\n\n"
-                . "#### 2. Instructional Steps\n"
-                . "* **Introduction (5 min):** Review prerequisite knowledge and real-world application.\n"
-                . "* **Core Delivery (20 min):** Direct instruction with step-by-step worked examples on the board.\n"
-                . "* **Guided Practice (10 min):** Students solve 2 practice problems on the digital platform.\n"
-                . "* **Evaluation & Wrap-up (5 min):** Quick 2-question exit ticket test.\n\n"
-                . "*Would you like me to generate specific exam questions or homework tasks for this outline?*";
-        }
-
-        // 5. Default General Admin Copilot Greeting
-        $availableSubjects = Subject::where('status', 'active')->pluck('name')->implode(', ');
-
-        return "Hello **{$user->name}**! I am your **AI School Administrator Copilot** for **{$schoolName}**.\n\n"
-            . "I am equipped to assist you and your faculty with:\n\n"
-            . "1. **School Mastery Diagnostics:** Say *\"Summarize student performance\"* to view school averages and struggling learners.\n"
-            . "2. **Targeted Interventions:** Ask *\"How can we improve low scores in Mathematics?\"* for step-by-step remedial plans.\n"
-            . "3. **Assessment Generation:** Say *\"Draft 5 WAEC questions for Physics\"* to create questions with solutions for the Question Bank.\n"
-            . "4. **Curriculum & Lesson Outlines:** Request structured schemes of work aligned with secondary school guidelines.\n\n"
-            . "Active school subjects: *{$availableSubjects}*.\n\n"
-            . "How can I assist your administration today?";
     }
 
     /**
@@ -1264,18 +1035,471 @@ You MUST return ONLY a valid JSON array matching this exact schema:
     }
 
     /**
-     * Intelligent subject detector from natural language queries.
+     * Offline heuristic response generator for Learners.
      */
-    protected function detectSubjectFromQuery(string $query): string
+    private function generateHeuristicChatResponse(User $user, string $message, array $history = []): string
+    {
+        $query = strtolower(trim($message));
+        $cleanQuery = preg_replace('/[^\w\s]/', '', $query);
+        $stopWords = ['what', 'when', 'where', 'which', 'explain', 'tell', 'about', 'study', 'help', 'with', 'know', 'learn', 'please', 'can', 'you', 'does', 'work', 'some', 'give', 'need', 'show', 'like'];
+        $words = array_values(array_filter(explode(' ', $cleanQuery), fn($w) => strlen($w) >= 4 && !in_array($w, $stopWords)));
+
+        // Find last model message in conversation history
+        $lastModelMessage = null;
+        if (!empty($history)) {
+            for ($i = count($history) - 1; $i >= 0; $i--) {
+                $role = $history[$i]['role'] ?? '';
+                if ($role === 'model' || $role === 'assistant') {
+                    $lastModelMessage = $history[$i]['content'] ?? '';
+                    break;
+                }
+            }
+        }
+
+        // 0. CONVERSATIONAL ANSWER EVALUATION (If replying to a practice problem or question)
+        if ($lastModelMessage && (
+            str_contains($lastModelMessage, 'Practice Problem') ||
+            str_contains($lastModelMessage, 'Question') ||
+            str_contains($lastModelMessage, 'Factorize') ||
+            str_contains($lastModelMessage, 'Solve') ||
+            str_contains($lastModelMessage, 'Calculate') ||
+            str_contains($lastModelMessage, 'Simplify') ||
+            str_contains($lastModelMessage, 'Can you solve this') ||
+            str_contains($lastModelMessage, 'Try this out') ||
+            str_contains($lastModelMessage, 'test your knowledge')
+        )) {
+            // Check Question Bank dynamically for the question in lastModelMessage
+            $learnerSchoolId = $user->learnerProfile?->school_id;
+            $dbQ = null;
+            $wordsInQ = array_filter(explode(' ', preg_replace('/[^\w\s]/', '', strtolower($lastModelMessage))), fn($w) => strlen($w) >= 4);
+            foreach ($wordsInQ as $w) {
+                $dbQ = Question::where('status', 'active')
+                    ->where(function ($q) use ($learnerSchoolId) {
+                        if ($learnerSchoolId) {
+                            $q->where('school_id', $learnerSchoolId)->orWhereNull('school_id');
+                        } else {
+                            $q->whereNull('school_id');
+                        }
+                    })
+                    ->where(function ($q) use ($w) {
+                        $q->where('question_text', 'like', "%{$w}%")
+                          ->orWhere('explanation', 'like', "%{$w}%");
+                    })
+                    ->with(['options', 'topic.subject'])
+                    ->first();
+                if ($dbQ) break;
+            }
+
+            // A. Check if student submitted an option letter (A, B, C, D)
+            if (preg_match('/^\s*(?:option|answer|choice)?\s*[:=\-]?\s*([a-e])\b/i', $query, $letterMatch) || in_array($query, ['a', 'b', 'c', 'd', 'e'])) {
+                $chosenLetter = strtoupper($letterMatch[1] ?? $query);
+
+                if ($dbQ) {
+                    $correctOption = $dbQ->options->firstWhere('is_correct', true);
+                    $letters = ['A', 'B', 'C', 'D', 'E'];
+                    $correctLetter = 'A';
+                    foreach ($dbQ->options as $idx => $opt) {
+                        if ($opt->is_correct) {
+                            $correctLetter = $letters[$idx] ?? 'A';
+                            break;
+                        }
+                    }
+
+                    if ($chosenLetter === $correctLetter) {
+                        $out = "🎉 **Outstanding, {$user->name}!** Option **{$chosenLetter}** is completely correct!\n\n";
+                        if (!empty($dbQ->explanation)) {
+                            $out .= "**Step-by-Step Solution:**\n{$dbQ->explanation}\n\n";
+                        }
+                        $out .= "Would you like to try another practice problem?";
+                        return $out;
+                    } else {
+                        $out = "Good effort, **{$user->name}**! Option **{$chosenLetter}** is not quite right.\n\n"
+                            . "The correct answer is **Option {$correctLetter}** (" . ($correctOption?->option_text ?? '') . ").\n\n";
+                        if (!empty($dbQ->explanation)) {
+                            $out .= "**Step-by-Step Solution:**\n{$dbQ->explanation}\n\n";
+                        }
+                        $out .= "Would you like to try another practice problem?";
+                        return $out;
+                    }
+                }
+            }
+
+            // B. Direct Answer Matching or Algebraic Attempt against DB
+            if ($dbQ) {
+                $correctOption = $dbQ->options->firstWhere('is_correct', true);
+                $correctText = strtolower(trim($correctOption?->option_text ?? ''));
+                $cleanUserMsg = strtolower(trim($message));
+
+                if ($correctText && (str_contains($cleanUserMsg, $correctText) || str_contains($correctText, $cleanUserMsg))) {
+                    $out = "🎉 **Spot on, {$user->name}!** That is the correct answer!\n\n";
+                    if (!empty($dbQ->explanation)) {
+                        $out .= "**Step-by-Step Solution:**\n{$dbQ->explanation}\n\n";
+                    }
+                    $out .= "Would you like to try another practice question?";
+                    return $out;
+                }
+
+                // If asking for explanation or solution
+                if (
+                    str_contains($query, 'solution') ||
+                    str_contains($query, 'answer') ||
+                    str_contains($query, 'explain') ||
+                    str_contains($query, 'hint') ||
+                    str_contains($query, 'how to solve') ||
+                    str_contains($query, 'show me')
+                ) {
+                    $out = "Here is the step-by-step solution from your Question Bank, **{$user->name}**:\n\n";
+                    if ($correctOption) {
+                        $out .= "* **Correct Answer:** {$correctOption->option_text}\n\n";
+                    }
+                    if (!empty($dbQ->explanation)) {
+                        $out .= "**Explanation:**\n{$dbQ->explanation}\n\n";
+                    }
+                    $out .= "Would you like to try another practice problem?";
+                    return $out;
+                }
+
+                // Attempted answer evaluation
+                $out = "Good attempt, **{$user->name}**! You answered: `{$message}`.\n\n";
+                if ($correctOption) {
+                    $out .= "* **Correct Answer in Question Bank:** {$correctOption->option_text}\n\n";
+                }
+                if (!empty($dbQ->explanation)) {
+                    $out .= "**Step-by-Step Solution:**\n{$dbQ->explanation}\n\n";
+                }
+                $out .= "Would you like to try another practice problem?";
+                return $out;
+            }
+
+            // C. Fallback for math / answer attempts when question was generated online
+            if (
+                preg_match('/[xX0-9\(\)\+\-\*\/\^=]/', $message) ||
+                str_contains($query, 'solution') ||
+                str_contains($query, 'answer') ||
+                str_contains($query, 'is it')
+            ) {
+                return "Good attempt, **{$user->name}**! You submitted: `{$message}`.\n\n"
+                    . "Connect to an active internet connection to have AI dynamically verify and grade complex math steps in real time, or ask me for a practice problem from your offline Question Bank!";
+            }
+        }
+
+        // 1. Question / Quiz / Practice request from learner
+        if (
+            str_contains($query, 'question') ||
+            str_contains($query, 'quiz') ||
+            str_contains($query, 'test') ||
+            str_contains($query, 'practice') ||
+            str_contains($query, 'problem') ||
+            str_contains($query, 'exam')
+        ) {
+            $detectedSubject = $this->detectSubjectFromQuery($query);
+            $learnerSchoolId = $user->learnerProfile?->school_id;
+            return $this->generateLearnerPracticeQuestions($detectedSubject, $learnerSchoolId, $query, $user->name);
+        }
+
+        // 2. Dynamic Topic Search: Match against any topic in the active curriculum
+        $topics = Topic::where('status', 'active')->with('subject')->get();
+        $matchedTopic = $topics->first(function ($topic) use ($query) {
+            $name = strtolower($topic->name);
+            $slugWords = str_replace('-', ' ', strtolower($topic->slug));
+            return str_contains($query, $name) || str_contains($query, $slugWords);
+        });
+
+        // If no direct topic match, check keywords against topic names
+        if (!$matchedTopic && !empty($words)) {
+            foreach ($words as $word) {
+                $matchedTopic = $topics->first(function ($topic) use ($word) {
+                    return str_contains(strtolower($topic->name), $word);
+                });
+                if ($matchedTopic) break;
+            }
+        }
+
+        if ($matchedTopic) {
+            $subjName = $matchedTopic->subject->name ?? 'Curriculum';
+            $level = strtoupper($matchedTopic->level);
+
+            $progress = LearnerProgress::where('user_id', $user->id)
+                ->where('topic_id', $matchedTopic->id)
+                ->first();
+            $masteryText = $progress ? "Current Mastery: **{$progress->mastery_score}%**" : "Not yet attempted";
+
+            // Pull real explanation from the question bank for this topic (strictly isolated to learner's school or global)
+            $learnerSchoolId = $user->learnerProfile?->school_id;
+            $sampleQuestion = Question::where('topic_id', $matchedTopic->id)
+                ->where('status', 'active')
+                ->where(function ($q) use ($learnerSchoolId) {
+                    if ($learnerSchoolId) {
+                        $q->where('school_id', $learnerSchoolId)->orWhereNull('school_id');
+                    } else {
+                        $q->whereNull('school_id');
+                    }
+                })
+                ->whereNotNull('explanation')
+                ->where('explanation', '!=', '')
+                ->inRandomOrder()
+                ->first();
+
+            $output = "Hello **{$user->name}**! Here is an overview of **{$matchedTopic->name}**:\n\n"
+                . "* **Subject:** {$subjName} (Level: {$level})\n"
+                . "* **Your Status:** {$masteryText}\n\n";
+
+            if (!empty($matchedTopic->description)) {
+                $output .= "**Overview:**\n{$matchedTopic->description}\n\n";
+            }
+
+            if ($sampleQuestion && !empty($sampleQuestion->explanation)) {
+                $output .= "**Key Study Concept:**\n{$sampleQuestion->explanation}\n\n";
+            }
+
+            $output .= "*Tip: Practice this topic under **{$subjName}** in the Subjects menu to build mastery!*";
+            return $output;
+        }
+
+        // 3. Dynamic Question/Concept Search: Search question bank for matching concepts (strictly isolated)
+        if (!empty($words)) {
+            $learnerSchoolId = $user->learnerProfile?->school_id;
+            $questionMatch = null;
+            foreach ($words as $word) {
+                $questionMatch = Question::where('status', 'active')
+                    ->where(function ($q) use ($learnerSchoolId) {
+                        if ($learnerSchoolId) {
+                            $q->where('school_id', $learnerSchoolId)->orWhereNull('school_id');
+                        } else {
+                            $q->whereNull('school_id');
+                        }
+                    })
+                    ->where(function ($q) use ($word) {
+                        $q->where('question_text', 'like', "%{$word}%")
+                          ->orWhere('explanation', 'like', "%{$word}%");
+                    })
+                    ->with(['topic.subject', 'options' => fn($o) => $o->where('is_correct', true)])
+                    ->first();
+                if ($questionMatch) break;
+            }
+
+            if ($questionMatch) {
+                $topicName = $questionMatch->topic->name ?? 'General Concept';
+                $subjName = $questionMatch->topic->subject->name ?? 'Curriculum';
+                $correctOpt = $questionMatch->options->first();
+                $ansText = $correctOpt ? " (Key concept: **{$correctOpt->option_text}**)" : "";
+
+                return "Great question, **{$user->name}**! Here is what our curriculum notes say about that:\n\n"
+                    . "* **Subject:** {$subjName} -> **{$topicName}**\n\n"
+                    . "**Explanation:**\n{$questionMatch->explanation}{$ansText}\n\n"
+                    . "Would you like to practice more questions on **{$topicName}**?";
+            }
+        }
+
+        // 4. Dynamic Subject Search: Match against any subject in the curriculum
+        $subjects = Subject::where('status', 'active')->with('topics')->get();
+        $matchedSubject = $subjects->first(function ($subject) use ($query) {
+            $name = strtolower($subject->name);
+            $slug = strtolower($subject->slug);
+            return str_contains($query, $name) || str_contains($query, $slug);
+        });
+
+        if ($matchedSubject) {
+            $topicList = $matchedSubject->topics->take(5)->map(fn($t) => "* **{$t->name}** (Level: " . strtoupper($t->level) . ")")->implode("\n");
+
+            return "Hi **{$user->name}**! In **{$matchedSubject->name}**, here are key topics available in your syllabus:\n\n"
+                . "{$topicList}\n\n"
+                . (!empty($matchedSubject->description) ? "{$matchedSubject->description}\n\n" : "")
+                . "Which topic would you like to dive into today?";
+        }
+
+        // 5. Dynamic Personalized Study Recommendations
+        try {
+            $progressRecords = LearnerProgress::where('user_id', $user->id)
+                ->with('topic.subject')
+                ->orderBy('mastery_score', 'asc')
+                ->get();
+
+            if ($progressRecords->isNotEmpty()) {
+                $lowTopics = $progressRecords->filter(fn($p) => $p->mastery_score < 80)->take(3);
+                if ($lowTopics->isNotEmpty()) {
+                    $recommendations = $lowTopics->map(function ($p) {
+                        $subj = $p->topic->subject->name ?? 'Curriculum';
+                        return "* **{$p->topic->name}** (*{$subj}*) — {$p->mastery_score}% mastery";
+                    })->implode("\n");
+
+                    return "Welcome, **{$user->name}**! Based on your latest quiz attempts across all subjects, here are your top recommended focus areas:\n\n"
+                        . "{$recommendations}\n\n"
+                        . "Reviewing these will boost your overall grade fastest! Which one shall we start with?";
+                }
+            }
+        } catch (\Exception $e) {
+            // Fall through to general response
+        }
+
+        // 6. Dynamic General Helper: Lists all available active subjects in the database (deduplicated)
+        $availableSubjects = Subject::where('status', 'active')->pluck('name')->unique()->values();
+        $subjectStr = $availableSubjects->isNotEmpty() ? $availableSubjects->implode(', ') : 'all subjects';
+
+        $sampleTopics = Topic::where('status', 'active')->inRandomOrder()->take(3)->pluck('name');
+        $samplePrompt = $sampleTopics->isNotEmpty()
+            ? "Ask me about topics like *" . $sampleTopics->implode('*, *') . "*."
+            : "Ask me to explain any topic or recommend what to study next.";
+
+        return "Hi **{$user->name}**! I'm your AI Study Companion for **{$subjectStr}**.\n\n"
+            . "I can help you with:\n"
+            . "1. **Topic Explanations:** {$samplePrompt}\n"
+            . "2. **Study Recommendations:** Say *\"What should I study next?\"* to review your weakest areas.\n"
+            . "3. **Subject Overviews:** Ask about any subject to see all its syllabus topics.\n\n"
+            . "What would you like to explore?";
+    }
+
+    /**
+     * Offline heuristic response generator for School Admins & Platform Admins.
+     */
+    private function generateHeuristicAdminChatResponse(
+        User $user,
+        string $message,
+        string $schoolName,
+        int $totalLearners,
+        string $classesStr,
+        int $avgMastery,
+        int $strugglingCount,
+        $weakestTopics
+    ): string {
+        $query = strtolower(trim($message));
+        $isSuperAdmin = $user->isPlatformAdmin();
+
+        // 1. Performance Summary / Health Overview / Diagnostics / Struggling Learners
+        if (
+            str_contains($query, 'summary') ||
+            str_contains($query, 'performance') ||
+            str_contains($query, 'overview') ||
+            str_contains($query, 'stats') ||
+            str_contains($query, 'health') ||
+            str_contains($query, 'mastery') ||
+            str_contains($query, 'report') ||
+            str_contains($query, 'struggling') ||
+            str_contains($query, 'analytics')
+        ) {
+            $weakestList = $weakestTopics->isNotEmpty()
+                ? $weakestTopics->map(fn($w) => "* **{$w->subject_name}** - {$w->topic_name} (Average Mastery: **{$w->avg_topic_mastery}%**)")->implode("\n")
+                : "* All syllabus topics currently performing at standard threshold.";
+
+            return "### Executive Academic Diagnostic Summary\n\n"
+                . "**Institution:** {$schoolName}\n"
+                . "**Administrator:** {$user->name}\n\n"
+                . "#### Key Metrics Overview\n"
+                . "* **Total Enrolled Learners:** {$totalLearners} students\n"
+                . "* **Active Classes:** {$classesStr}\n"
+                . "* **School-wide Average Mastery:** **{$avgMastery}%**\n"
+                . "* **Learners Needing Academic Support (<40% Mastery):** **{$strugglingCount}** students\n\n"
+                . "#### Priority Focus Topics (Lowest School Mastery)\n"
+                . "{$weakestList}\n\n"
+                . "#### Recommended Admin Actions\n"
+                . "1. **Intervention Scheduling:** Direct subject teachers to conduct formative review sessions on the low-mastery topics above.\n"
+                . "2. **Targeted Quizzes:** Generate standard diagnostic practice tests in the Question Bank.\n"
+                . "3. **Roster Review:** Inspect the Learners Directory for individual learner breakdown.";
+        }
+
+        // 2. Remedial & Intervention Strategies
+        if (
+            str_contains($query, 'intervention') ||
+            str_contains($query, 'remedial') ||
+            str_contains($query, 'help student') ||
+            str_contains($query, 'weak') ||
+            str_contains($query, 'strategy') ||
+            (str_contains($query, 'plan') && str_contains($query, 'struggle'))
+        ) {
+            $targetTopic = $weakestTopics->first();
+            $topicName = $targetTopic ? "{$targetTopic->subject_name} ({$targetTopic->topic_name})" : "High Priority Curriculum Topics";
+
+            return "### Targeted Academic Intervention & Remediation Strategy\n\n"
+                . "**Target Area:** {$topicName}\n"
+                . "**Goal:** Elevate struggling student comprehension from <40% to >=75% baseline mastery.\n\n"
+                . "#### 3-Phase Action Plan for Teachers\n"
+                . "1. **Phase 1: Diagnostic Assessment (Day 1)**\n"
+                . "   * Deploy a 10-question formative diagnostic test under **Question Bank**.\n"
+                . "   * Identify specific error patterns (calculation errors vs conceptual misunderstandings).\n\n"
+                . "2. **Phase 2: Micro-Lesson & Active Recall Drills (Days 2-4)**\n"
+                . "   * Break concepts into bite-sized 15-minute instructional modules.\n"
+                . "   * Have learners practice with flashcards and adaptive quizzes in the app.\n\n"
+                . "3. **Phase 3: Mastery Verification (Day 5)**\n"
+                . "   * Re-test cohort. Require students to score >=80% before advancing in the scheme of work.\n\n"
+                . "*Would you like me to retrieve practice questions from your Question Bank for this intervention?*";
+        }
+
+        // 3. Question Retrieval / Exam Assessment Sourcing
+        if (
+            str_contains($query, 'question') ||
+            str_contains($query, 'quiz') ||
+            str_contains($query, 'test') ||
+            str_contains($query, 'exam') ||
+            str_contains($query, 'draft') ||
+            str_contains($query, 'generate') ||
+            str_contains($query, 'waec') ||
+            str_contains($query, 'neco')
+        ) {
+            $detectedSubject = $this->detectSubjectFromQuery($query);
+            $schoolId = $isSuperAdmin ? null : ($user->administeredSchool()->first()?->id ?? $user->primarySchool()?->id);
+            return $this->generateSubjectSpecificQuestions($detectedSubject, $schoolId, $isSuperAdmin);
+        }
+
+        // 4. Lesson Plan / Scheme of Work / Curriculum Outline
+        if (
+            str_contains($query, 'lesson') ||
+            str_contains($query, 'scheme') ||
+            str_contains($query, 'syllabus') ||
+            str_contains($query, 'curriculum') ||
+            str_contains($query, 'outline') ||
+            str_contains($query, 'teach')
+        ) {
+            return "### Standard Secondary Curriculum Lesson Outline\n\n"
+                . "**Subject:** Senior Secondary Science / Mathematics\n"
+                . "**Duration:** 40 Minutes | **Alignment:** NERDC / WAEC Syllabus\n\n"
+                . "#### 1. Performance Objectives\n"
+                . "By the end of the lesson, learners should be able to:\n"
+                . "* Define the core scientific/mathematical principle accurately.\n"
+                . "* Apply relevant formula/rules to solve standard practice problems.\n"
+                . "* Correctly explain why common distractor options are incorrect.\n\n"
+                . "#### 2. Instructional Steps\n"
+                . "* **Introduction (5 min):** Review prerequisite knowledge and real-world application.\n"
+                . "* **Core Delivery (20 min):** Direct instruction with step-by-step worked examples on the board.\n"
+                . "* **Guided Practice (10 min):** Students solve 2 practice problems on the digital platform.\n"
+                . "* **Evaluation & Wrap-up (5 min):** Quick 2-question exit ticket test.\n\n"
+                . "*Tip: Connect online to generate customized lesson outlines with AI, or retrieve local questions from your Question Bank.*";
+        }
+
+        // 5. Default General Admin Copilot Greeting
+        $subjectsQuery = Subject::where('status', 'active');
+        if (!$isSuperAdmin) {
+            $school = $user->administeredSchool()->first() ?? $user->primarySchool();
+            if ($school) {
+                $subjectsQuery->where(function ($q) use ($school) {
+                    $q->where('school_id', $school->id)->orWhereNull('school_id');
+                });
+            }
+        }
+        $availableSubjects = $subjectsQuery->pluck('name')->implode(', ');
+
+        return "Hello **{$user->name}**! I am your **AI School Administrator Copilot** for **{$schoolName}**.\n\n"
+            . "I am equipped to assist you and your faculty with:\n\n"
+            . "1. **School Mastery Diagnostics:** Say *\"Summarize student performance\"* to view school averages and struggling learners.\n"
+            . "2. **Targeted Interventions:** Ask *\"How can we improve low scores in Mathematics?\"* for step-by-step remedial plans.\n"
+            . "3. **Assessment Practice:** Say *\"Draft 5 WAEC questions for Physics\"* to retrieve questions from your Question Bank.\n"
+            . "4. **Curriculum & Lesson Outlines:** Request structured schemes of work aligned with secondary school guidelines.\n\n"
+            . "Active curriculum subjects: *{$availableSubjects}*.\n\n"
+            . "How can I assist your administration today?";
+    }
+
+    /**
+     * Dynamically detect subject from user query text.
+     */
+    public function detectSubjectFromQuery(string $query): string
     {
         $q = strtolower($query);
-        if (preg_match('/\b(math|maths|mathematics|algebra|geometry|calculus|arithmetic|trig|trigonometry|quadratic|linear equation)\b/i', $q)) {
+        if (preg_match('/\b(math|maths|mathematics|algebra|geometry|trig|calculus|arithmetic|fraction|equation)\b/i', $q)) {
             return 'Mathematics';
         }
-        if (preg_match('/\b(bio|biology|botany|zoology|cell|physiology|genetics|ecology|organism)\b/i', $q)) {
+        if (preg_match('/\b(bio|biology|cell|photosynthesis|ecology|genetics|circulatory|respiration|organism|plant|animal)\b/i', $q)) {
             return 'Biology';
         }
-        if (preg_match('/\b(chem|chemistry|organic|inorganic|stoichiometry|acid|atom|chemical|periodic table)\b/i', $q)) {
+        if (preg_match('/\b(chem|chemistry|periodic|acid|base|salt|bonding|electron|atom|reaction|mole|gas law)\b/i', $q)) {
             return 'Chemistry';
         }
         if (preg_match('/\b(phy|physics|kinematics|optics|electricity|magnetism|mechanics|motion|force|velocity|gravity)\b/i', $q)) {
@@ -1297,286 +1521,170 @@ You MUST return ONLY a valid JSON array matching this exact schema:
     }
 
     /**
-     * Generate 5 rich, high-standard WAEC multiple choice questions tailored to a specific subject.
+     * Query real questions dynamically from the database, strictly scoped to the tenant's school.
+     * In offline mode, does not fabricate hardcoded data; informs the user to connect online for new AI generation.
      */
-    protected function generateSubjectSpecificQuestions(string $subject): string
+    protected function generateSubjectSpecificQuestions(string $subject, ?int $schoolId = null, bool $isPlatformAdmin = false): string
     {
-        switch ($subject) {
-            case 'Mathematics':
-                return "### WAEC Practice Assessment: Mathematics (5 Questions)\n\n"
-                    . "**Standard:** WAEC / NECO Senior Secondary Standard\n\n"
-                    . "**Question 1 (Algebra - Linear Equations):**\n"
-                    . "Solve for \$x\$ in the equation: \$3(x - 2) = 2x + 4\$\n"
-                    . "* A) \$x = 2\$\n"
-                    . "* B) \$x = 6\$\n"
-                    . "* C) \$x = 10\$ *(Correct)*\n"
-                    . "* D) \$x = 14\$\n\n"
-                    . "**Step-by-Step Solution:**\n"
-                    . "1. Expand brackets: \$3x - 6 = 2x + 4\$\n"
-                    . "2. Collect like terms: \$3x - 2x = 4 + 6\$\n"
-                    . "3. Therefore: \$x = 10\$\n\n"
-                    . "---\n\n"
-                    . "**Question 2 (Algebra - Quadratic Equations):**\n"
-                    . "Find the roots of the quadratic equation: \$x^2 - 5x + 6 = 0\$\n"
-                    . "* A) \$x = -2\\text{ or }-3\$\n"
-                    . "* B) \$x = 2\\text{ or } 3\$ *(Correct)*\n"
-                    . "* C) \$x = 1\\text{ or } 6\$\n"
-                    . "* D) \$x = -1\\text{ or }-6\$\n\n"
-                    . "**Step-by-Step Solution:**\n"
-                    . "1. Factor the quadratic: \$(x - 2)(x - 3) = 0\$\n"
-                    . "2. Solve for \$x\$: \$x = 2\\text{ or } x = 3\$\n\n"
-                    . "---\n\n"
-                    . "**Question 3 (Indices & Logarithms):**\n"
-                    . "Solve for \$x\$ if \$2^{x+1} = 16\$\n"
-                    . "* A) \$x = 2\$\n"
-                    . "* B) \$x = 3\$ *(Correct)*\n"
-                    . "* C) \$x = 4\$\n"
-                    . "* D) \$x = 5\$\n\n"
-                    . "**Step-by-Step Solution:**\n"
-                    . "1. Express 16 in base 2: \$16 = 2^4\$\n"
-                    . "2. Equate exponents: \$x + 1 = 4 \\implies x = 3\$\n\n"
-                    . "---\n\n"
-                    . "**Question 4 (Simultaneous Equations):**\n"
-                    . "If \$2x + y = 7\$ and \$x - y = 2\$, find the value of \$x\$.\n"
-                    . "* A) \$x = 1\$\n"
-                    . "* B) \$x = 2\$\n"
-                    . "* C) \$x = 3\$ *(Correct)*\n"
-                    . "* D) \$x = 4\$\n\n"
-                    . "**Step-by-Step Solution:**\n"
-                    . "1. Add the two equations: \$(2x + y) + (x - y) = 7 + 2 \\implies 3x = 9\$\n"
-                    . "2. Divide by 3: \$x = 3\$\n\n"
-                    . "---\n\n"
-                    . "**Question 5 (Geometry & Trigonometry):**\n"
-                    . "In a right-angled triangle, the base is \$6\\text{ cm}\$ and the height is \$8\\text{ cm}\$. Calculate the length of the hypotenuse.\n"
-                    . "* A) \$10\\text{ cm}\$ *(Correct)*\n"
-                    . "* B) \$12\\text{ cm}\$\n"
-                    . "* C) \$14\\text{ cm}\$\n"
-                    . "* D) \$16\\text{ cm}\$\n\n"
-                    . "**Step-by-Step Solution:**\n"
-                    . "1. By Pythagoras theorem: \$c^2 = a^2 + b^2 = 6^2 + 8^2 = 36 + 64 = 100\$\n"
-                    . "2. Therefore: \$c = \\sqrt{100} = 10\\text{ cm}\$\n\n"
-                    . "*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*";
+        try {
+            // 1. Query uploaded questions from the database
+            $query = Question::where('status', 'active')
+                ->with(['options', 'topic.subject']);
 
-            case 'Biology':
-                return "### WAEC Practice Assessment: Biology (5 Questions)\n\n"
-                    . "**Standard:** WAEC / NECO Senior Secondary Standard\n\n"
-                    . "**Question 1 (Cellular Physiology):**\n"
-                    . "Which organelle is primarily responsible for synthesizing adenosine triphosphate (ATP) in eukaryotic cells?\n"
-                    . "* A) Ribosome\n"
-                    . "* B) Mitochondrion *(Correct)*\n"
-                    . "* C) Nucleus\n"
-                    . "* D) Golgi apparatus\n\n"
-                    . "**Explanation:** Mitochondria generate cellular energy via oxidative phosphorylation during aerobic cellular respiration.\n\n"
-                    . "---\n\n"
-                    . "**Question 2 (Photosynthesis):**\n"
-                    . "What is the primary light-absorbing pigment in green plants?\n"
-                    . "* A) Carotenoid\n"
-                    . "* B) Xanthophyll\n"
-                    . "* C) Chlorophyll a *(Correct)*\n"
-                    . "* D) Anthocyanin\n\n"
-                    . "**Explanation:** Chlorophyll a absorbs blue and red wavelengths of light for light-dependent photosynthetic reactions.\n\n"
-                    . "---\n\n"
-                    . "**Question 3 (Genetics):**\n"
-                    . "What is the expected genotypic ratio in a monohybrid cross between two heterozygous (Tt) pea plants?\n"
-                    . "* A) 3:1\n"
-                    . "* B) 1:2:1 *(Correct)*\n"
-                    . "* C) 1:1\n"
-                    . "* D) 9:3:3:1\n\n"
-                    . "**Explanation:** The cross \$Tt \\times Tt\$ yields \$1\\text{ TT} : 2\\text{ Tt} : 1\\text{ tt}\$.\n\n"
-                    . "---\n\n"
-                    . "**Question 4 (Circulatory System):**\n"
-                    . "Which blood vessel carries oxygenated blood from the lungs back to the left atrium of the heart?\n"
-                    . "* A) Pulmonary artery\n"
-                    . "* B) Pulmonary vein *(Correct)*\n"
-                    . "* C) Vena cava\n"
-                    . "* D) Aorta\n\n"
-                    . "**Explanation:** Pulmonary veins are unique veins that transport oxygen-rich blood from lungs into the heart.\n\n"
-                    . "---\n\n"
-                    . "**Question 5 (Ecology):**\n"
-                    . "In any terrestrial ecosystem, which trophic level contains the largest total amount of available energy?\n"
-                    . "* A) Primary producers *(Correct)*\n"
-                    . "* B) Primary consumers\n"
-                    . "* C) Secondary consumers\n"
-                    . "* D) Apex predators\n\n"
-                    . "**Explanation:** Due to the 10% ecological energy transfer rule, primary producers hold the maximum stored energy.\n\n"
-                    . "*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*";
+            if ($subject !== 'General Curriculum') {
+                $query->whereHas('topic.subject', function ($q) use ($subject) {
+                    $q->where('name', 'like', "%{$subject}%");
+                });
+            }
 
-            case 'Chemistry':
-                return "### WAEC Practice Assessment: Chemistry (5 Questions)\n\n"
-                    . "**Standard:** WAEC / NECO Senior Secondary Standard\n\n"
-                    . "**Question 1 (Atomic Structure):**\n"
-                    . "An atom of sodium has atomic number 11 and mass number 23. What is the number of neutrons in its nucleus?\n"
-                    . "* A) 11\n"
-                    . "* B) 12 *(Correct)*\n"
-                    . "* C) 23\n"
-                    . "* D) 34\n\n"
-                    . "**Step-by-Step Solution:**\n"
-                    . "Number of neutrons = \$\\text{Mass Number} - \\text{Atomic Number} = 23 - 11 = 12\$.\n\n"
-                    . "---\n\n"
-                    . "**Question 2 (Periodic Table):**\n"
-                    . "Group 1 elements in the periodic table are collectively referred to as:\n"
-                    . "* A) Alkaline earth metals\n"
-                    . "* B) Halogens\n"
-                    . "* C) Alkali metals *(Correct)*\n"
-                    . "* D) Noble gases\n\n"
-                    . "**Explanation:** Group 1 elements (Li, Na, K, etc.) react with water to form alkaline hydroxides.\n\n"
-                    . "---\n\n"
-                    . "**Question 3 (Acids, Bases & Salts):**\n"
-                    . "What is the pH of a neutral aqueous solution at \$25^\\circ\\text{C}\$?\n"
-                    . "* A) 0\n"
-                    . "* B) 7.0 *(Correct)*\n"
-                    . "* C) 14.0\n"
-                    . "* D) 1.0\n\n"
-                    . "**Explanation:** At neutrality, \$[\\text{H}^+] = [\\text{OH}^-] = 10^{-7}\\text{ mol/dm}^3\$, giving \$\\text{pH} = -\\log(10^{-7}) = 7\$.\n\n"
-                    . "---\n\n"
-                    . "**Question 4 (Chemical Bonding):**\n"
-                    . "What type of chemical bond is formed by the complete transfer of electrons from a metal to a non-metal?\n"
-                    . "* A) Covalent bond\n"
-                    . "* B) Ionic / Electrovalent bond *(Correct)*\n"
-                    . "* C) Metallic bond\n"
-                    . "* D) Hydrogen bond\n\n"
-                    . "**Explanation:** Electrovalent bonding occurs via electron donation from metals to non-metals.\n\n"
-                    . "---\n\n"
-                    . "**Question 5 (Gas Laws):**\n"
-                    . "Which gas law states that the volume of a fixed mass of gas is directly proportional to absolute temperature at constant pressure?\n"
-                    . "* A) Boyle's Law\n"
-                    . "* B) Charles's Law *(Correct)*\n"
-                    . "* C) Gay-Lussac's Law\n"
-                    . "* D) Graham's Law\n\n"
-                    . "**Explanation:** Charles's law establishes \$V \\propto T\$ when pressure is kept constant.\n\n"
-                    . "*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*";
+            // Strict School Isolation: Platform admin sees all; others only see their school or global (school_id is null)
+            if (!$isPlatformAdmin) {
+                if ($schoolId) {
+                    $query->where(function ($q) use ($schoolId) {
+                        $q->where('school_id', $schoolId)->orWhereNull('school_id');
+                    });
+                } else {
+                    $query->whereNull('school_id');
+                }
+            }
 
-            case 'Physics':
-                return "### WAEC Practice Assessment: Physics (5 Questions)\n\n"
-                    . "**Standard:** WAEC / NECO Senior Secondary Standard\n\n"
-                    . "**Question 1 (Kinematics):**\n"
-                    . "A car accelerates uniformly from rest to a speed of \$20\\text{ m/s}\$ in \$5\\text{ s}\$. Calculate its acceleration.\n"
-                    . "* A) \$2\\text{ m/s}^2\$\n"
-                    . "* B) \$4\\text{ m/s}^2\$ *(Correct)*\n"
-                    . "* C) \$5\\text{ m/s}^2\$\n"
-                    . "* D) \$100\\text{ m/s}^2\$\n\n"
-                    . "**Step-by-Step Solution:**\n"
-                    . "Using \$v = u + at \\implies 20 = 0 + 5a \\implies a = 4\\text{ m/s}^2\$.\n\n"
-                    . "---\n\n"
-                    . "**Question 2 (Work, Energy & Power):**\n"
-                    . "Calculate the kinetic energy of a body of mass \$2\\text{ kg}\$ moving at a velocity of \$3\\text{ m/s}\$.\n"
-                    . "* A) \$3\\text{ J}\$\n"
-                    . "* B) \$6\\text{ J}\$\n"
-                    . "* C) \$9\\text{ J}\$ *(Correct)*\n"
-                    . "* D) \$18\\text{ J}\$\n\n"
-                    . "**Step-by-Step Solution:**\n"
-                    . "\$\\text{KE} = \\frac{1}{2}mv^2 = \\frac{1}{2}(2)(3^2) = 1 \\times 9 = 9\\text{ J}\$.\n\n"
-                    . "---\n\n"
-                    . "**Question 3 (Current Electricity):**\n"
-                    . "A resistor is connected across a \$12\\text{ V}\$ battery, drawing a current of \$3\\text{ A}\$. What is its electrical resistance?\n"
-                    . "* A) \$2\\,\\Omega\$\n"
-                    . "* B) \$4\\,\\Omega\$ *(Correct)*\n"
-                    . "* C) \$36\\,\\Omega\$\n"
-                    . "* D) \$0.25\\,\\Omega\$\n\n"
-                    . "**Step-by-Step Solution:**\n"
-                    . "By Ohm's Law: \$R = \\frac{V}{I} = \\frac{12}{3} = 4\\,\\Omega\$.\n\n"
-                    . "---\n\n"
-                    . "**Question 4 (Wave Optics):**\n"
-                    . "What optical phenomenon causes the separation of white light into its component colors through a triangular glass prism?\n"
-                    . "* A) Total internal reflection\n"
-                    . "* B) Dispersion *(Correct)*\n"
-                    . "* C) Diffraction\n"
-                    . "* D) Polarization\n\n"
-                    . "**Explanation:** Dispersion occurs because different wavelengths of light refract at varying angles in glass.\n\n"
-                    . "---\n\n"
-                    . "**Question 5 (Newtonian Mechanics):**\n"
-                    . "What resultant force is required to give a \$5\\text{ kg}\$ mass an acceleration of \$2\\text{ m/s}^2\$?\n"
-                    . "* A) \$2.5\\text{ N}\$\n"
-                    . "* B) \$7\\text{ N}\$\n"
-                    . "* C) \$10\\text{ N}\$ *(Correct)*\n"
-                    . "* D) \$25\\text{ N}\$\n\n"
-                    . "**Step-by-Step Solution:**\n"
-                    . "By Newton's Second Law: \$F = ma = 5 \\times 2 = 10\\text{ N}\$.\n\n"
-                    . "*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*";
+            $uploadedQuestions = $query->inRandomOrder()->take(5)->get();
 
-            case 'English Language':
-                return "### WAEC Practice Assessment: English Language (5 Questions)\n\n"
-                    . "**Standard:** WAEC / NECO Senior Secondary Standard\n\n"
-                    . "**Question 1 (Lexis & Vocabulary):**\n"
-                    . "Choose the option nearest in meaning to the word in bold: *The principal delivered an **ephemeral** address.*\n"
-                    . "* A) Lengthy\n"
-                    . "* B) Inspiring\n"
-                    . "* C) Short-lived *(Correct)*\n"
-                    . "* D) Aggressive\n\n"
-                    . "**Explanation:** Ephemeral means transitory or existing for a very brief period.\n\n"
-                    . "---\n\n"
-                    . "**Question 2 (Subject-Verb Concord):**\n"
-                    . "Neither the teacher nor the students _____ present at the assembly yesterday.\n"
-                    . "* A) was\n"
-                    . "* B) were *(Correct)*\n"
-                    . "* C) is\n"
-                    . "* D) are\n\n"
-                    . "**Explanation:** In 'neither...nor', the verb agrees with the closer subject ('students' $\\implies$ plural 'were').\n\n"
-                    . "---\n\n"
-                    . "**Question 3 (Antonyms):**\n"
-                    . "Choose the word most opposite in meaning to **lucid**:\n"
-                    . "* A) Clear\n"
-                    . "* B) Bright\n"
-                    . "* C) Confusing *(Correct)*\n"
-                    . "* D) Rational\n\n"
-                    . "**Explanation:** Lucid means easily understood; its opposite is confusing or opaque.\n\n"
-                    . "---\n\n"
-                    . "**Question 4 (Idiomatic Expressions):**\n"
-                    . "What is the meaning of the idiom: *To burn the midnight oil*?\n"
-                    . "* A) To waste resources\n"
-                    . "* B) To study or work late into the night *(Correct)*\n"
-                    . "* C) To cause a household fire\n"
-                    . "* D) To wake up very early\n\n"
-                    . "**Explanation:** 'Burning the midnight oil' signifies working or revising diligently late at night.\n\n"
-                    . "---\n\n"
-                    . "**Question 5 (Prepositional Usage):**\n"
-                    . "The prefect congratulated the class _____ their exemplary performance.\n"
-                    . "* A) for\n"
-                    . "* B) on *(Correct)*\n"
-                    . "* C) with\n"
-                    . "* D) in\n\n"
-                    . "**Explanation:** The verb 'congratulate' takes the preposition 'on'.\n\n"
-                    . "*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*";
+            if ($uploadedQuestions->isNotEmpty()) {
+                $count = $uploadedQuestions->count();
+                $out = "### Question Bank Practice: {$subject} ({$count} Question" . ($count > 1 ? 's' : '') . ")\n\n"
+                    . "**Standard:** Senior Secondary Curriculum (Question Bank)\n\n";
 
-            default:
-                return "### WAEC Practice Assessment: General Curriculum (5 Questions)\n\n"
-                    . "**Standard:** WAEC / NECO Senior Secondary Standard\n\n"
-                    . "**Question 1 (Mathematics - Algebra):**\n"
-                    . "Solve for \$x\$ in: \$3(x - 2) = 2x + 4\$\n"
-                    . "* A) \$x = 2\$\n"
-                    . "* B) \$x = 6\$\n"
-                    . "* C) \$x = 10\$ *(Correct)*\n"
-                    . "* D) \$x = 14\$\n\n"
-                    . "**Solution:** \$3x - 6 = 2x + 4 \\implies x = 10\$.\n\n"
-                    . "---\n\n"
-                    . "**Question 2 (Biology - Cell Physiology):**\n"
-                    . "Which organelle generates ATP energy in eukaryotic cells?\n"
-                    . "* A) Ribosome\n"
-                    . "* B) Mitochondrion *(Correct)*\n"
-                    . "* C) Nucleus\n"
-                    . "* D) Golgi body\n\n"
-                    . "---\n\n"
-                    . "**Question 3 (Chemistry - Atomic Structure):**\n"
-                    . "What is the neutron count in \$^{23}_{11}\\text{Na}\$?\n"
-                    . "* A) 11\n"
-                    . "* B) 12 *(Correct)*\n"
-                    . "* C) 23\n"
-                    . "* D) 34\n\n"
-                    . "---\n\n"
-                    . "**Question 4 (Physics - Kinematics):**\n"
-                    . "A car accelerates from rest to \$20\\text{ m/s}\$ in \$5\\text{ s}\$. What is its acceleration?\n"
-                    . "* A) \$2\\text{ m/s}^2\$\n"
-                    . "* B) \$4\\text{ m/s}^2\$ *(Correct)*\n"
-                    . "* C) \$5\\text{ m/s}^2\$\n"
-                    . "* D) \$100\\text{ m/s}^2\$\n\n"
-                    . "---\n\n"
-                    . "**Question 5 (English - Lexis):**\n"
-                    . "Nearest in meaning to **ephemeral**:\n"
-                    . "* A) Lengthy\n"
-                    . "* B) Inspiring\n"
-                    . "* C) Short-lived *(Correct)*\n"
-                    . "* D) Harsh\n\n"
-                    . "*Tip: You can copy and paste these directly into the **Question Bank -> Bulk Add** modal!*";
+                $qIndex = 1;
+                foreach ($uploadedQuestions as $q) {
+                    $topicName = $q->topic?->name ?? 'Curriculum Concept';
+                    $subjectName = $q->topic?->subject?->name ?? $subject;
+                    $out .= "**Question {$qIndex} ({$subjectName} - {$topicName}):**\n";
+                    $out .= "{$q->question_text}\n\n";
+
+                    $letters = ['A', 'B', 'C', 'D', 'E', 'F'];
+                    $correctOptionText = null;
+                    foreach ($q->options as $optIdx => $opt) {
+                        $letter = $letters[$optIdx] ?? chr(65 + $optIdx);
+                        if ($opt->is_correct) {
+                            $correctOptionText = $opt->option_text;
+                            $out .= "* {$letter}) {$opt->option_text} *(Correct)*\n";
+                        } else {
+                            $out .= "* {$letter}) {$opt->option_text}\n";
+                        }
+                    }
+
+                    $out .= "\n**Step-by-Step Solution:**\n";
+                    if (!empty($q->explanation)) {
+                        $out .= "{$q->explanation}\n\n";
+                    } else {
+                        $out .= "The correct answer is **{$correctOptionText}**. This follows the core principles of {$topicName}.\n\n";
+                    }
+                    $out .= "---\n\n";
+                    $qIndex++;
+                }
+
+                $out .= "> **Offline Mode Notice:** These practice questions were retrieved from your Question Bank. To generate brand-new, customized exam questions with AI, please connect to an active internet connection.";
+                return $out;
+            }
+        } catch (\Exception $e) {
+            // Log or ignore DB query exceptions in fallback
         }
+
+        return "### Offline Notice: Dynamic Question Generation\n\n"
+            . "No active questions were found in your Question Bank for **{$subject}**.\n\n"
+            . "**To draft or practice questions:**\n"
+            . "1. **Connect to the Internet:** When online, the AI will dynamically generate brand-new, customized questions with full solutions.\n"
+            . "2. **Add to Question Bank:** You can upload or create questions under **Question Bank -> Bulk Add** to make them accessible offline.";
+    }
+
+    /**
+     * Generate practice questions for a learner.
+     * Default is 1 question unless a specific count is explicitly requested.
+     * Options are NOT marked with *(Correct)* and solutions are not given away up-front.
+     */
+    protected function generateLearnerPracticeQuestions(string $subject, ?int $schoolId, string $query, string $learnerName): string
+    {
+        // 1. Detect count requested by learner (default to 1)
+        $count = 1;
+        if (preg_match('/\b(\d+)\s*(?:questions?|problems?|quizzes?|items?)\b/i', $query, $m)) {
+            $count = max(1, min((int)$m[1], 10));
+        } elseif (preg_match('/\b(two|three|four|five|six|seven|eight|nine|ten)\s*(?:questions?|problems?|quizzes?|items?)\b/i', $query, $m)) {
+            $wordMap = ['two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10];
+            $count = $wordMap[strtolower($m[1])] ?? 1;
+        }
+
+        try {
+            $dbQuery = Question::where('status', 'active')
+                ->with(['options', 'topic.subject']);
+
+            if ($subject !== 'General Curriculum') {
+                $dbQuery->whereHas('topic.subject', function ($q) use ($subject) {
+                    $q->where('name', 'like', "%{$subject}%");
+                });
+            }
+
+            // Tenant isolation: learner can only see their school's questions or global questions
+            if ($schoolId) {
+                $dbQuery->where(function ($q) use ($schoolId) {
+                    $q->where('school_id', $schoolId)->orWhereNull('school_id');
+                });
+            } else {
+                $dbQuery->whereNull('school_id');
+            }
+
+            $questions = $dbQuery->inRandomOrder()->take($count)->get();
+
+            if ($questions->isNotEmpty()) {
+                $letters = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+                if ($count === 1) {
+                    $q = $questions->first();
+                    $topicName = $q->topic?->name ?? 'Curriculum Topic';
+                    $subjectName = $q->topic?->subject?->name ?? $subject;
+
+                    $out = "### Practice Problem: {$subjectName} ({$topicName})\n\n"
+                        . "{$q->question_text}\n\n";
+
+                    foreach ($q->options as $optIdx => $opt) {
+                        $letter = $letters[$optIdx] ?? chr(65 + $optIdx);
+                        $out .= "* {$letter}) {$opt->option_text}\n";
+                    }
+
+                    $out .= "\nCan you solve this? Reply with your chosen option (**A**, **B**, **C**, or **D**) to check if you're right, or ask me for the step-by-step explanation!\n\n";
+                    $out .= "> **Offline Practice Notice:** Retrieved from your Question Bank. Connect to the internet to generate brand-new AI practice problems.";
+                    return $out;
+                } else {
+                    $actualCount = $questions->count();
+                    $out = "### Practice Questions: {$subject} ({$actualCount} Questions)\n\n";
+
+                    $qIndex = 1;
+                    foreach ($questions as $q) {
+                        $topicName = $q->topic?->name ?? 'Curriculum Topic';
+                        $subjectName = $q->topic?->subject?->name ?? $subject;
+                        $out .= "**Question {$qIndex} ({$subjectName} - {$topicName}):**\n";
+                        $out .= "{$q->question_text}\n\n";
+
+                        foreach ($q->options as $optIdx => $opt) {
+                            $letter = $letters[$optIdx] ?? chr(65 + $optIdx);
+                            $out .= "* {$letter}) {$opt->option_text}\n";
+                        }
+                        $out .= "\n---\n\n";
+                        $qIndex++;
+                    }
+
+                    $out .= "Try answering these questions! Reply with your chosen answers when you're ready.\n\n";
+                    $out .= "> **Offline Practice Notice:** Retrieved from your Question Bank. Connect to the internet to generate brand-new AI practice problems.";
+                    return $out;
+                }
+            }
+        } catch (\Exception $e) {
+            // ignore
+        }
+
+        return "### Offline Practice Notice\n\n"
+            . "No practice questions were found in your Question Bank for **{$subject}**.\n\n"
+            . "1. **Connect to the Internet:** When online, the AI will dynamically generate customized practice problems with hints and solutions.\n"
+            . "2. **Explore Topics:** You can review available study materials from the Subjects menu!";
     }
 }
