@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\PasswordResetLinkController;
+use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\SubjectWebController;
 use App\Http\Controllers\Web\QuizWebController;
@@ -58,9 +60,15 @@ Route::get('/llms-full.txt', function () {
     abort(404);
 });
 
-// Authentication Routes
-Route::get('/login', [LoginController::class, 'show'])->name('login');
-Route::post('/login', [LoginController::class, 'store']);
+// Authentication & Password Reset Routes
+Route::middleware('guest')->group(function () {
+    Route::get('/login', [LoginController::class, 'show'])->name('login');
+    Route::post('/login', [LoginController::class, 'store']);
+    Route::get('/forgot-password', [PasswordResetLinkController::class, 'show'])->name('password.request');
+    Route::post('/forgot-password', [PasswordResetLinkController::class, 'store'])->name('password.email');
+    Route::get('/reset-password/{token}', [NewPasswordController::class, 'show'])->name('password.reset');
+    Route::post('/reset-password', [NewPasswordController::class, 'store'])->name('password.update');
+});
 Route::post('/logout', [LoginController::class, 'destroy']);
 
 // Standalone API Auth Endpoints

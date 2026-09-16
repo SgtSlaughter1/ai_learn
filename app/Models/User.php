@@ -38,6 +38,17 @@ class User extends Authenticatable
         ];
     }
 
+    /**
+     * Send the password reset notification.
+     *
+     * @param string $token
+     * @return void
+     */
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new \App\Notifications\ResetPasswordNotification($token));
+    }
+
     // --- School Relationships ---
 
     public function teacherProfile(): HasOne

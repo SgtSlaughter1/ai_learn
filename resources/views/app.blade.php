@@ -39,11 +39,11 @@
         <!-- Schema.org JSON-LD Structured Data (EducationalOrganization, WebSite & WebApplication) -->
         <script type="application/ld+json">
         {
-            "@context": "https://schema.org",
-            "@graph": [
+            "@@context": "https://schema.org",
+            "@@graph": [
                 {
-                    "@type": "EducationalOrganization",
-                    "@id": "{{ url('/') }}/#organization",
+                    "@@type": "EducationalOrganization",
+                    "@@id": "{{ url('/') }}/#organization",
                     "name": "AILEARN",
                     "url": "{{ url('/') }}",
                     "logo": "{{ asset('images/icon-512x512.png') }}",
@@ -51,28 +51,28 @@
                     "inLanguage": "en"
                 },
                 {
-                    "@type": "WebSite",
-                    "@id": "{{ url('/') }}/#website",
+                    "@@type": "WebSite",
+                    "@@id": "{{ url('/') }}/#website",
                     "url": "{{ url('/') }}",
                     "name": "AILEARN",
                     "publisher": {
-                        "@id": "{{ url('/') }}/#organization"
+                        "@@id": "{{ url('/') }}/#organization"
                     },
                     "potentialAction": {
-                        "@type": "SearchAction",
+                        "@@type": "SearchAction",
                         "target": "{{ url('/subjects') }}?search={search_term_string}",
                         "query-input": "required name=search_term_string"
                     }
                 },
                 {
-                    "@type": "WebApplication",
-                    "@id": "{{ url('/') }}/#webapp",
+                    "@@type": "WebApplication",
+                    "@@id": "{{ url('/') }}/#webapp",
                     "name": "AILEARN Web App",
                     "url": "{{ url('/') }}",
                     "applicationCategory": "EducationalApplication",
                     "operatingSystem": "All modern browsers (Chrome, Safari, Edge, Firefox), Android, iOS, Windows, macOS",
                     "offers": {
-                        "@type": "Offer",
+                        "@@type": "Offer",
                         "price": "0",
                         "priceCurrency": "USD"
                     },

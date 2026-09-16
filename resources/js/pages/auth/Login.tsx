@@ -2,7 +2,11 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import { useState, FormEvent } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 
-export default function Login() {
+interface LoginProps {
+    status?: string;
+}
+
+export default function Login({ status }: LoginProps) {
     const [showPassword, setShowPassword] = useState(false);
     const { data, setData, post, processing, errors, reset } = useForm({
         email: '',
@@ -58,6 +62,16 @@ export default function Login() {
                     </p>
                 </div>
 
+                {/* Status Message Banner */}
+                {status && (
+                    <div className="p-4 rounded-2xl bg-[var(--color-success)]/10 border border-[var(--color-success)]/20 text-[var(--color-success)] text-sm flex items-start gap-3">
+                        <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span>{status}</span>
+                    </div>
+                )}
+
                 {/* Login Card */}
                 <div className="bg-[var(--color-surface)] border border-[var(--color-border)] p-8 rounded-3xl shadow-xl shadow-[var(--color-primary)]/5">
                     <form onSubmit={handleSubmit} className="space-y-6">
@@ -84,9 +98,17 @@ export default function Login() {
 
                         {/* Password Input */}
                         <div className="space-y-2">
-                            <label htmlFor="password" className="block text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">
-                                Password
-                            </label>
+                            <div className="flex items-center justify-between">
+                                <label htmlFor="password" className="block text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">
+                                    Password
+                                </label>
+                                <Link
+                                    href="/forgot-password"
+                                    className="text-xs font-semibold text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] transition-colors"
+                                >
+                                    Forgot password?
+                                </Link>
+                            </div>
                             <div className="relative">
                                 <input
                                     id="password"
