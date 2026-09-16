@@ -1106,7 +1106,7 @@ You MUST return ONLY a valid JSON array matching this exact schema:
                     }
 
                     if ($chosenLetter === $correctLetter) {
-                        $out = "🎉 **Outstanding, {$user->name}!** Option **{$chosenLetter}** is completely correct!\n\n";
+                        $out = "**Outstanding, {$user->name}!** Option **{$chosenLetter}** is completely correct!\n\n";
                         if (!empty($dbQ->explanation)) {
                             $out .= "**Step-by-Step Solution:**\n{$dbQ->explanation}\n\n";
                         }
@@ -1131,7 +1131,7 @@ You MUST return ONLY a valid JSON array matching this exact schema:
                 $cleanUserMsg = strtolower(trim($message));
 
                 if ($correctText && (str_contains($cleanUserMsg, $correctText) || str_contains($correctText, $cleanUserMsg))) {
-                    $out = "🎉 **Spot on, {$user->name}!** That is the correct answer!\n\n";
+                    $out = "**Spot on, {$user->name}!** That is the correct answer!\n\n";
                     if (!empty($dbQ->explanation)) {
                         $out .= "**Step-by-Step Solution:**\n{$dbQ->explanation}\n\n";
                     }
@@ -1442,7 +1442,7 @@ You MUST return ONLY a valid JSON array matching this exact schema:
 
         // 4. Lesson Plan / Scheme of Work / Curriculum Outline
         if (
-            str_contains($query, 'lesson') ||
+             str_contains($query, 'lesson') ||
             str_contains($query, 'scheme') ||
             str_contains($query, 'syllabus') ||
             str_contains($query, 'curriculum') ||

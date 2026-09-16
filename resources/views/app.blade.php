@@ -40,20 +40,20 @@
                     // The /build/sw.js path requires that header which PHP dev server strips.
                     navigator.serviceWorker.register('/sw.js', { scope: '/' })
                         .then((reg) => {
-                            console.log('✅ ServiceWorker registered, scope:', reg.scope);
+                            console.log('[SW] ServiceWorker registered, scope:', reg.scope);
                             reg.addEventListener('updatefound', () => {
                                 const newWorker = reg.installing;
                                 if (newWorker) {
                                     newWorker.addEventListener('statechange', () => {
                                         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                            console.log('🔄 New SW installed, will activate on next load');
+                                            console.log('[SW] New SW installed, will activate on next load');
                                         }
                                     });
                                 }
                             });
                         })
                         .catch((err) => {
-                            console.error('❌ ServiceWorker registration failed:', err);
+                            console.error('[SW] ServiceWorker registration failed:', err);
                         });
 
                     // When a new SW activates and claims clients, reload once while online

@@ -69,11 +69,11 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
                 const subjectList = subjects.map(s => `* **${s.name}**`).join('\n');
 
                 return `### Executive Academic Summary\n\n`
-                    + `**System Status:** Operating on local cached database.\n\n`
+                    + `**Status:** Offline Study Library\n\n`
                     + `#### Curriculum Coverage\n`
                     + `* **Active Subjects:** ${totalSubjects}\n`
                     + `* **Total Syllabus Topics:** ${totalTopics}\n\n`
-                    + `#### Available Subjects\n${subjectList || '* No subjects cached yet.'}\n\n`
+                    + `#### Available Subjects\n${subjectList || '* No subjects available yet.'}\n\n`
                     + `*Connect online to synchronize live student quiz scores and mastery averages.*`;
             }
 
@@ -264,7 +264,7 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
                     const correctText = correctIdx >= 0 ? matchedQ.options[correctIdx].option_text : '';
 
                     if (chosenLetter === correctLetter) {
-                        return `🎉 **Outstanding!** Option **${chosenLetter}** is completely correct!\n\n`
+                        return `**Outstanding!** Option **${chosenLetter}** is completely correct!\n\n`
                             + (matchedQ.explanation ? `**Solution:**\n${matchedQ.explanation}\n\n` : '')
                             + `Would you like to try another practice problem?`;
                     } else {
@@ -288,7 +288,7 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
                 const cleanUserMsg = message.toLowerCase().trim();
 
                 if (correctText && (cleanUserMsg.includes(correctText) || correctText.includes(cleanUserMsg))) {
-                    return `🎉 **Spot on!** That is the correct answer!\n\n`
+                    return `**Spot on!** That is the correct answer!\n\n`
                         + (matchedQ.explanation ? `**Solution:**\n${matchedQ.explanation}\n\n` : '')
                         + `Would you like to try another practice question?`;
                 }
@@ -332,7 +332,7 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
             const topics = await db.topics.toArray();
 
             if (subjects.length === 0) {
-                return "I don't see any cached subjects in your database yet. Connect to the internet to download and suggest topics for you!";
+                return "I don't see any subjects loaded in your study library yet. Connect to the internet to download your subjects and get personalized recommendations!";
             }
 
             // Find topics with progress < 80% or unattempted
@@ -359,7 +359,7 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
         if (query.includes('subject') || query.includes('curriculum') || query.includes('list') || query.includes('course')) {
             const subjects = await db.subjects.toArray();
             if (subjects.length === 0) {
-                return "No subjects are cached locally yet. Log in while online to preload your curriculum!";
+                return "No subjects are currently available in your study library. Connect to the internet to load your curriculum!";
             }
             const uniqueSubjects = Array.from(new Map(subjects.map(s => [s.name, s])).values());
             const list = uniqueSubjects.map(s => `- **${s.name}**: ${s.description || 'No description available.'}`).join('\n');
@@ -373,7 +373,7 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
             const subjects = await db.subjects.toArray();
             const sub = subjects.find(s => s.id === matchedTopic.subject_id);
 
-            // Look for sample explanation in cached quizzes
+            // Look for sample explanation in quizzes
             const quizzes = await db.quizzes.toArray();
             let keyConcept = '';
             for (const q of quizzes) {
@@ -384,7 +384,7 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
                 }
             }
 
-            let response = `Here is what I found in your offline library about **${matchedTopic.name}** (Level: ${matchedTopic.level.toUpperCase()}):\n\n*${matchedTopic.description || 'No description cached.'}*\n\nThis topic is part of your **${sub?.name || 'Curriculum'}** course.`;
+            let response = `Here is what I found in your offline library about **${matchedTopic.name}** (Level: ${matchedTopic.level.toUpperCase()}):\n\n*${matchedTopic.description || 'No topic description available.'}*\n\nThis topic is part of your **${sub?.name || 'Curriculum'}** course.`;
             if (keyConcept) {
                 response += `\n\n**Key Concept:**\n${keyConcept}`;
             }
@@ -398,7 +398,7 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
         if (matchedSubject) {
             const subTopics = topics.filter(t => t.subject_id === matchedSubject.id);
             const topicList = subTopics.map(t => `- **${t.name}** (Level: ${t.level.toUpperCase()})`).join('\n');
-            return `Here are the topics available in **${matchedSubject.name}**:\n\n${topicList || 'No topics cached yet.'}\n\nAsk me about any of these topics or practice them in the Subjects menu!`;
+            return `Here are the topics available in **${matchedSubject.name}**:\n\n${topicList || 'No topics available yet.'}\n\nAsk me about any of these topics or practice them in the Subjects menu!`;
         }
 
         // 5. Practice Question or Quiz Request for Learners

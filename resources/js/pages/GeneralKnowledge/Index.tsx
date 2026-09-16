@@ -137,7 +137,7 @@ export default function Index() {
                         </div>
                         <div>
                             <strong className="font-bold text-[var(--color-primary)] block text-sm">Open Practice Bank</strong>
-                            <span className="text-[var(--color-muted)]">You have open access to all subjects, diagnostic tests, and topics in the database regardless of school enrollment.</span>
+                            <span className="text-[var(--color-muted)]">You have open access to all subjects, diagnostic tests, and curriculum topics regardless of school enrollment.</span>
                         </div>
                     </div>
                 </div>

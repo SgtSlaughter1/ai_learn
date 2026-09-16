@@ -34,7 +34,7 @@ class RunLearnerE2ETestCommand extends Command
         }
 
         Auth::login($learner);
-        $this->line("👤 Authenticated Learner: <fg=cyan;options=bold>{$learner->name}</> (<fg=yellow>{$learner->email}</>)");
+        $this->line("Authenticated Learner: <fg=cyan;options=bold>{$learner->name}</> (<fg=yellow>{$learner->email}</>)");
 
         $steps = [];
 
@@ -249,8 +249,8 @@ class RunLearnerE2ETestCommand extends Command
             ['Step', 'Endpoint', 'Status', 'Latency', 'Details'],
             array_map(function ($s) {
                 $statusFormatted = $s['status'] === 'PASS'
-                    ? '<fg=green;options=bold>✓ PASS</>'
-                    : '<fg=red;options=bold>✗ FAIL</>';
+                    ? '<fg=green;options=bold>PASS</>'
+                    : '<fg=red;options=bold>FAIL</>';
                 return [$s['step'], $s['endpoint'], $statusFormatted, $s['latency'], $s['details']];
             }, $steps)
         );
@@ -259,7 +259,7 @@ class RunLearnerE2ETestCommand extends Command
 
         if ($allPassed) {
             $this->newLine();
-            $this->info('✨ ALL 10 E2E LIFECYCLE STEPS PASSED WITH 100% SUCCESS!');
+            $this->info('[SUCCESS] ALL 10 E2E LIFECYCLE STEPS PASSED WITH 100% SUCCESS!');
             $this->line("• Authenticated User: {$learner->email}");
             $this->line("• Offline Quiz Attempt: {$attemptId} -> Synced & Awarded XP");
             $this->line("• Active Recall Session: 3 Flashcards -> +{$flashcardXp} XP");
@@ -268,7 +268,7 @@ class RunLearnerE2ETestCommand extends Command
             return 0;
         }
 
-        $this->error("\n❌ Some E2E steps failed.");
+        $this->error("\n[ERROR] Some E2E steps failed.");
         return 1;
     }
 }
