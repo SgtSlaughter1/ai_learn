@@ -421,7 +421,10 @@ export default function Show({ quizId }: Props) {
 
         return (
             <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex flex-col justify-between p-4 md:p-8">
-                <Head title={`${quiz?.title} — Adaptive`} />
+                <Head>
+                    <title>{`${quiz?.title || 'Assessment'} — Adaptive Quiz — AILEARN`}</title>
+                    <meta name="robots" content="noindex, nofollow" />
+                </Head>
 
                 <QuizHeader
                     title={quiz?.title || 'Quiz'}
@@ -474,7 +477,10 @@ export default function Show({ quizId }: Props) {
 
     return (
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex flex-col justify-between p-4 md:p-8">
-            <Head title={quiz?.title} />
+            <Head>
+                <title>{`${quiz?.title || 'Assessment'} — AILEARN`}</title>
+                <meta name="robots" content="noindex, nofollow" />
+            </Head>
 
             <QuizHeader
                 title={quiz?.title || 'Quiz'}

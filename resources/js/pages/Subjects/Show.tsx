@@ -175,7 +175,27 @@ export default function Show({ slug }: Props) {
                 </div>
             }
         >
-            <Head title={loading ? 'Loading Subject...' : subject?.name || 'Subject'} />
+            <Head>
+                <title>{loading ? 'Loading Subject...' : `${subject?.name || 'Subject'} Syllabus & Topics — AILEARN`}</title>
+                <meta name="description" content={subject?.description || `Study ${subject?.name || 'this subject'} syllabus, interactive topics, and quizzes on AILEARN.`} />
+                <meta property="og:title" content={`${subject?.name || 'Subject'} — AILEARN Curriculum`} />
+                <meta property="og:description" content={subject?.description || `Study ${subject?.name || 'this subject'} offline with AI tutoring.`} />
+                {subject && (
+                    <script type="application/ld+json">
+                        {JSON.stringify({
+                            "@context": "https://schema.org",
+                            "@type": "Course",
+                            "name": subject.name,
+                            "description": subject.description || `Secondary school course covering ${subject.name} curriculum topics.`,
+                            "provider": {
+                                "@type": "EducationalOrganization",
+                                "name": "AILEARN",
+                                "url": "https://ailearn.app"
+                            }
+                        })}
+                    </script>
+                )}
+            </Head>
 
             <div className="space-y-12">
                 {/* Level Filter Tabs */}

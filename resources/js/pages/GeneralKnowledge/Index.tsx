@@ -106,7 +106,12 @@ export default function Index() {
                 </div>
             }
         >
-            <Head title="General Knowledge" />
+            <Head>
+                <title>General Knowledge & Open Curriculum Library — AILEARN</title>
+                <meta name="description" content="Access open curriculum questions, verified educational answers, and general knowledge concepts on AILEARN." />
+                <meta property="og:title" content="General Knowledge & Open Curriculum Library — AILEARN" />
+                <meta property="og:description" content="Access open curriculum questions, verified educational answers, and general knowledge concepts on AILEARN." />
+            </Head>
 
             <div className="space-y-6">
                 {/* Search Bar */}

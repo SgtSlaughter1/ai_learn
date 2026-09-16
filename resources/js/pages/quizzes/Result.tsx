@@ -336,7 +336,10 @@ export default function Result({ attemptId }: Props) {
 
     return (
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] p-4 md:p-8 relative overflow-x-hidden">
-            <Head title="Assessment Results" />
+            <Head>
+                <title>{`${attempt.quiz_title || 'Assessment'} Results — AILEARN`}</title>
+                <meta name="robots" content="noindex, nofollow" />
+            </Head>
 
             <div className="max-w-4xl w-full mx-auto space-y-8">
                 {/* Score Summary Hero & Banner */}

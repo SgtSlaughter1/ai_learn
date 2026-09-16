@@ -194,7 +194,10 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                 </div>
             }
         >
-            <Head title="Teacher Dashboard" />
+            <Head>
+                <title>Teacher Dashboard — AILEARN</title>
+                <meta name="robots" content="noindex, nofollow" />
+            </Head>
 
             {/* Class Selector Tabs */}
             <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">

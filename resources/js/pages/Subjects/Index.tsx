@@ -180,7 +180,32 @@ export default function Index() {
                 </div>
             }
         >
-            <Head title="School Curriculum" />
+            <Head>
+                <title>School Curriculum & Subjects — AILEARN</title>
+                <meta name="description" content="Explore secondary school curriculum subjects on AILEARN. Access syllabus topics, interactive quizzes, and offline study materials." />
+                <meta property="og:title" content="School Curriculum & Subjects — AILEARN" />
+                <meta property="og:description" content="Explore secondary school curriculum subjects on AILEARN. Access syllabus topics, interactive quizzes, and offline study materials." />
+                <script type="application/ld+json">
+                    {JSON.stringify({
+                        "@context": "https://schema.org",
+                        "@type": "BreadcrumbList",
+                        "itemListElement": [
+                            {
+                                "@type": "ListItem",
+                                "position": 1,
+                                "name": "Home",
+                                "item": "https://ailearn.app/"
+                            },
+                            {
+                                "@type": "ListItem",
+                                "position": 2,
+                                "name": "Curriculum",
+                                "item": "https://ailearn.app/subjects"
+                            }
+                        ]
+                    })}
+                </script>
+            </Head>
 
             <div className="space-y-6">
                 {/* Search Bar & Class Filter */}

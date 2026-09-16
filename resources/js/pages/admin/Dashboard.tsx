@@ -351,7 +351,10 @@ export default function Dashboard() {
 
     return (
         <AuthenticatedLayout>
-            <Head title={isSuperAdmin ? "Super Admin Command Center" : `${stats?.school?.name || 'School'} Admin Portal`} />
+            <Head>
+                <title>{isSuperAdmin ? "Super Admin Command Center — AILEARN" : `${stats?.school?.name || 'School'} Admin Portal — AILEARN`}</title>
+                <meta name="robots" content="noindex, nofollow" />
+            </Head>
 
             <div className="w-full space-y-5 sm:space-y-6">
                 {/* Toast Notification */}

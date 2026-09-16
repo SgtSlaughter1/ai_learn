@@ -1,2 +1,43 @@
+# AILEARN - Robots.txt
+# Comprehensive Crawl Rules for Web Search & AI Engines
+
 User-agent: *
-Disallow:
+Allow: /
+Allow: /subjects
+Allow: /general-knowledge
+Allow: /login
+Allow: /manifest.webmanifest
+Allow: /offline.html
+Allow: /llms.txt
+Allow: /llms-full.txt
+
+# Disallow authenticated/administrative portals and internal APIs
+Disallow: /admin/
+Disallow: /teacher/
+Disallow: /api/
+Disallow: /quizzes/attempts/
+
+# AI Search & Answer Engine Crawlers (explicitly allowed)
+User-agent: GPTBot
+Allow: /
+Allow: /llms.txt
+Allow: /llms-full.txt
+
+User-agent: ClaudeBot
+Allow: /
+Allow: /llms.txt
+Allow: /llms-full.txt
+
+User-agent: PerplexityBot
+Allow: /
+Allow: /llms.txt
+Allow: /llms-full.txt
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# Sitemaps & LLM Context Discovery
+Sitemap: https://ailearn.app/sitemap.xml

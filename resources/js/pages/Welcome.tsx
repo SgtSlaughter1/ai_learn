@@ -90,9 +90,53 @@ export default function Welcome({ subjects = [] }: WelcomeProps) {
         { id: 7, name: 'Economics', topics_count: 5 },
         { id: 8, name: 'Literature', topics_count: 4 },
     ];
+    const faqData = [
+        {
+            question: "What is AILEARN?",
+            answer: "AILEARN is an offline-first adaptive learning platform designed for secondary school students. It provides curriculum-aligned study materials, interactive diagnostic quizzes, spaced-repetition flashcards, and an AI study companion that functions completely without an internet connection."
+        },
+        {
+            question: "How does offline learning work on AILEARN?",
+            answer: "AILEARN uses Progressive Web App (PWA) service workers to cache study modules, quizzes, and curriculum assets directly onto your device. All quiz scoring, mastery tracking, and answer explanations are calculated locally in your browser's offline storage."
+        },
+        {
+            question: "What curriculum and exams does AILEARN support?",
+            answer: "AILEARN is structured to support Junior and Senior Secondary school curricula aligned with WAEC, NECO, and NERDC standards across Mathematics, Physics, Chemistry, Biology, English Language, Economics, and Financial Accounting."
+        },
+        {
+            question: "How does student progress sync when back online?",
+            answer: "When an internet connection is detected, AILEARN automatically syncs your completed offline quiz attempts, XP points, and topic mastery scores to the cloud in the background without interrupting your study session."
+        }
+    ];
+
+    const structuredFaqSchema = {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": faqData.map(item => ({
+            "@type": "Question",
+            "name": item.question,
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": item.answer
+            }
+        }))
+    };
+
     return (
         <>
-            <Head title="AILEARN — Offline-First Adaptive Learning" />
+            <Head>
+                <title>AILEARN — Offline-First Adaptive AI Learning Platform</title>
+                <meta name="description" content="AILEARN is an offline-first adaptive learning platform for secondary school students. Master Mathematics, Sciences, and Humanities with offline AI tutoring, quizzes, and flashcards." />
+                <meta property="og:title" content="AILEARN — Offline-First Adaptive AI Learning Platform" />
+                <meta property="og:description" content="Study secondary school subjects offline with adaptive quizzes, smart flashcards, and an intelligent offline AI companion." />
+                <meta property="og:type" content="website" />
+                <meta name="twitter:card" content="summary_large_image" />
+                <meta name="twitter:title" content="AILEARN — Offline-First Adaptive AI Learning Platform" />
+                <meta name="twitter:description" content="Study secondary school subjects offline with adaptive quizzes, smart flashcards, and an intelligent offline AI companion." />
+                <script type="application/ld+json">
+                    {JSON.stringify(structuredFaqSchema)}
+                </script>
+            </Head>
 
             <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] font-sans">
                 {/* ── Navbar ─────────────────────────────────── */}
@@ -350,6 +394,44 @@ export default function Welcome({ subjects = [] }: WelcomeProps) {
                                         {subject.topics_count !== undefined ? `${subject.topics_count} Topics` : 'Interactive Modules'}
                                     </span>
                                 </Link>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+
+                {/* ── Frequently Asked Questions (AEO & AI Search Readiness) ── */}
+                <section className="py-20 bg-[var(--color-background)] border-b border-[var(--color-border)]" aria-labelledby="faq-heading">
+                    <div className="max-w-4xl mx-auto px-4 sm:px-6">
+                        <div className="text-center mb-12">
+                            <h2 id="faq-heading" className="text-3xl sm:text-4xl font-bold text-[var(--color-primary)]">
+                                Frequently Asked Questions
+                            </h2>
+                            <p className="mt-3 text-[var(--color-muted)] text-base">
+                                Everything you need to know about learning offline with AILEARN.
+                            </p>
+                        </div>
+
+                        <div className="space-y-4">
+                            {faqData.map((item, index) => (
+                                <details
+                                    key={index}
+                                    className="group bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 transition-all [&_summary::-webkit-details-marker]:hidden"
+                                    open={index === 0}
+                                >
+                                    <summary className="flex cursor-pointer items-center justify-between gap-1.5 text-[var(--color-text)] font-semibold text-lg hover:text-[var(--color-primary)] transition-colors">
+                                        <h3 className="text-lg font-bold text-[var(--color-primary)]">
+                                            {item.question}
+                                        </h3>
+                                        <span className="shrink-0 rounded-full bg-[var(--color-background)] p-1.5 text-[var(--color-primary)] group-open:-rotate-180 transition-transform duration-200">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                                            </svg>
+                                        </span>
+                                    </summary>
+                                    <p className="mt-4 text-sm sm:text-base text-[var(--color-muted)] leading-relaxed border-t border-[var(--color-border)] pt-4">
+                                        {item.answer}
+                                    </p>
+                                </details>
                             ))}
                         </div>
                     </div>

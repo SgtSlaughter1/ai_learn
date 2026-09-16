@@ -150,7 +150,10 @@ export default function Index() {
                 </div>
             }
         >
-            <Head title="Active Recall Flashcards" />
+            <Head>
+                <title>Active Recall Flashcards & Spaced Repetition — AILEARN</title>
+                <meta name="description" content="Practice curriculum concepts with spaced-repetition flashcards on AILEARN. Build long-term memory and topic mastery offline." />
+            </Head>
 
             <div className="max-w-2xl mx-auto py-4 space-y-8">
                 {loading ? (

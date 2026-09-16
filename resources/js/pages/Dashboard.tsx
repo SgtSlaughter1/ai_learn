@@ -286,7 +286,10 @@ export default function Dashboard() {
                 </div>
             }
         >
-            <Head title="Dashboard" />
+            <Head>
+                <title>Learner Dashboard — AILEARN</title>
+                <meta name="description" content="View your subject mastery progress, active study streaks, recommended practice topics, and offline quiz history on AILEARN." />
+            </Head>
 
             <div className="space-y-8 relative">
                 {/* 4 Summary Stats Cards */}
