@@ -22,6 +22,7 @@ export default function Login({ status }: LoginProps) {
         });
     };
 
+    /*
     const fillCredentials = (userEmail: string, userPass: string) => {
         setData((prev) => ({
             ...prev,
@@ -29,6 +30,7 @@ export default function Login({ status }: LoginProps) {
             password: userPass,
         }));
     };
+    */
 
     return (
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex flex-col items-center justify-center p-6 relative overflow-hidden">
@@ -175,7 +177,7 @@ export default function Login({ status }: LoginProps) {
                     </form>
                 </div>
 
-                {/* Helper Login Credentials Card with Click-to-Fill */}
+                {/* Demo Accounts (Commented out for production)
                 <div className="bg-[var(--color-surface)] border border-[var(--color-border)] p-5 rounded-3xl shadow-sm text-xs text-[var(--color-muted)] space-y-3">
                     <p className="font-bold text-[var(--color-text)] flex items-center justify-between">
                         <span>Demo Accounts (Tap to fill):</span>
@@ -242,6 +244,7 @@ export default function Login({ status }: LoginProps) {
                         </button>
                     </div>
                 </div>
+                */}
             </div>
         </div>
     );
