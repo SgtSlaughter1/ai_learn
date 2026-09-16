@@ -8,6 +8,7 @@
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
         <meta name="apple-mobile-web-app-title" content="AILEARN">
+        <meta name="description" content="AILEARN — Offline-First Adaptive AI Learning Platform for Learners.">
 
         <title inertia>{{ config('app.name', 'AILEARN') }}</title>
 
