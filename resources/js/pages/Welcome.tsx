@@ -1,5 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt';
+import { InteractiveBookAnimation } from '@/components/landing/InteractiveBookAnimation';
 
 interface SubjectItem {
     id: number;
@@ -202,6 +203,9 @@ export default function Welcome({ subjects = [] }: WelcomeProps) {
                                 See How It Works
                             </a>
                         </div>
+
+                        {/* Interactive Educational 3D Book Experience */}
+                        <InteractiveBookAnimation />
 
                         {/* Stats */}
                         <div className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-3xl mx-auto">

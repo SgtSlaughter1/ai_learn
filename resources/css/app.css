@@ -195,6 +195,16 @@ body {
     box-shadow: 0 0 0 3px var(--color-primary-10);
 }
 
+/* Seamless Autofill Styling */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0px 1000px var(--color-surface) inset !important;
+    -webkit-text-fill-color: var(--color-text) !important;
+    caret-color: var(--color-text);
+    transition: background-color 5000s ease-in-out 0s;
+}
+
 .badge-primary {
     display: inline-flex;
     align-items: center;

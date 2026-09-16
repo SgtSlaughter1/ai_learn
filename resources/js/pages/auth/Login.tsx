@@ -1,6 +1,6 @@
 import { Head, Link, useForm } from '@inertiajs/react';
 import { useState, FormEvent } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, CheckCircle2 } from 'lucide-react';
 
 interface LoginProps {
     status?: string;
@@ -22,64 +22,64 @@ export default function Login({ status }: LoginProps) {
         });
     };
 
-    /*
-    const fillCredentials = (userEmail: string, userPass: string) => {
-        setData((prev) => ({
-            ...prev,
-            email: userEmail,
-            password: userPass,
-        }));
-    };
-    */
-
     return (
-        <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex flex-col items-center justify-center p-6 relative overflow-hidden">
+        <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex flex-col items-center justify-center px-4 py-8 sm:p-6 relative overflow-hidden">
             {/* Background decorative shapes */}
-            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[var(--color-primary)]/5 rounded-full blur-3xl -z-10 pointer-events-none" />
-            <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[var(--color-accent)]/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+            <div className="absolute top-1/4 left-1/4 w-72 sm:w-96 h-72 sm:h-96 bg-[var(--color-primary)]/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+            <div className="absolute bottom-1/4 right-1/4 w-72 sm:w-96 h-72 sm:h-96 bg-[var(--color-accent)]/5 rounded-full blur-3xl -z-10 pointer-events-none" />
 
             <Head>
                 <title>Sign In — AILEARN Portal</title>
                 <meta name="description" content="Sign in to your AILEARN account to access your offline-first secondary curriculum, quizzes, and personalized AI tutor." />
             </Head>
 
-            <div className="w-full max-w-md space-y-8">
-                {/* Back to Home */}
-                <Link
-                    href="/"
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors"
-                >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-                    </svg>
-                    Back to Home
-                </Link>
+            <div className="w-full max-w-md space-y-6 sm:space-y-8">
+                {/* Back to Home Navigation */}
+                <div className="flex items-center justify-between">
+                    <Link
+                        href="/"
+                        className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors p-1 -ml-1 rounded-lg hover:bg-[var(--color-surface)]"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                        <span>Back to Home</span>
+                    </Link>
+                    {/* <span className="text-[11px] font-bold text-[var(--color-success)] bg-[var(--color-success)]/10 border border-[var(--color-success)]/20 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-success)] animate-pulse" />
+                        Offline Ready
+                    </span> */}
+                </div>
+
                 {/* Brand Header */}
-                <div className="text-center space-y-2">
-                    <h1 className="text-4xl font-extrabold tracking-tight text-[var(--color-primary)]">
-                        AILEARN
-                    </h1>
-                    <p className="text-sm text-[var(--color-muted)]">
-                        Sign in to access your offline-first curriculum.
-                    </p>
+                <div className="text-center space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-[var(--color-primary)] text-white mx-auto flex items-center justify-center shadow-lg shadow-[var(--color-primary)]/20">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--color-primary)]">
+                            Welcome Back
+                        </h1>
+                        <p className="text-xs sm:text-sm text-[var(--color-muted)] mt-1">
+                            Sign in to continue your adaptive learning journey.
+                        </p>
+                    </div>
                 </div>
 
                 {/* Status Message Banner */}
                 {status && (
-                    <div className="p-4 rounded-2xl bg-[var(--color-success)]/10 border border-[var(--color-success)]/20 text-[var(--color-success)] text-sm flex items-start gap-3">
-                        <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-                        </svg>
+                    <div className="p-3.5 sm:p-4 rounded-2xl bg-[var(--color-success)]/10 border border-[var(--color-success)]/20 text-[var(--color-success)] text-xs sm:text-sm flex items-start gap-3 shadow-xs">
+                        <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 mt-0.5" />
                         <span>{status}</span>
                     </div>
                 )}
 
                 {/* Login Card */}
-                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] p-8 rounded-3xl shadow-xl shadow-[var(--color-primary)]/5">
-                    <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] p-6 sm:p-8 rounded-2xl sm:rounded-3xl shadow-xl shadow-[var(--color-primary)]/5">
+                    <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
                         {/* Email Input */}
-                        <div className="space-y-2">
-                            <label htmlFor="email" className="block text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">
+                        <div className="space-y-1.5 sm:space-y-2">
+                            <label htmlFor="email" className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">
                                 Email Address
                             </label>
                             <input
@@ -88,7 +88,7 @@ export default function Login({ status }: LoginProps) {
                                 name="email"
                                 value={data.email}
                                 onChange={(e) => setData('email', e.target.value)}
-                                className="input-field"
+                                className="input-field text-xs sm:text-sm"
                                 placeholder="learner@example.com"
                                 required
                                 autoComplete="username"
@@ -99,9 +99,9 @@ export default function Login({ status }: LoginProps) {
                         </div>
 
                         {/* Password Input */}
-                        <div className="space-y-2">
+                        <div className="space-y-1.5 sm:space-y-2">
                             <div className="flex items-center justify-between">
-                                <label htmlFor="password" className="block text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">
+                                <label htmlFor="password" className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">
                                     Password
                                 </label>
                                 <Link
@@ -118,7 +118,7 @@ export default function Login({ status }: LoginProps) {
                                     name="password"
                                     value={data.password}
                                     onChange={(e) => setData('password', e.target.value)}
-                                    className="input-field pr-11"
+                                    className="input-field pr-12 text-xs sm:text-sm"
                                     placeholder="••••••••"
                                     required
                                     autoComplete="current-password"
@@ -142,17 +142,17 @@ export default function Login({ status }: LoginProps) {
                             )}
                         </div>
 
-                        {/* Remember Me checkbox */}
+                        {/* Remember Me Checkbox */}
                         <div className="flex items-center">
-                            <label className="flex items-center space-x-2.5 text-sm text-[var(--color-muted)] cursor-pointer select-none">
+                            <label className="flex items-center space-x-2.5 text-xs sm:text-sm text-[var(--color-muted)] cursor-pointer select-none">
                                 <input
                                     type="checkbox"
                                     name="remember"
                                     checked={data.remember}
                                     onChange={(e) => setData('remember', e.target.checked)}
-                                    className="h-4 w-4 rounded border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] focus:ring-[var(--color-primary)]/20 focus:ring-offset-0 focus:outline-none"
+                                    className="h-4 w-4 rounded border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] focus:ring-[var(--color-primary)]/20 focus:ring-offset-0 focus:outline-none cursor-pointer"
                                 />
-                                <span>Remember my login</span>
+                                <span>Remember my login on this device</span>
                             </label>
                         </div>
 
@@ -160,7 +160,7 @@ export default function Login({ status }: LoginProps) {
                         <button
                             type="submit"
                             disabled={processing}
-                            className="w-full btn-primary"
+                            className="w-full btn-primary py-3.5 text-sm sm:text-base font-bold shadow-md hover:shadow-lg active:scale-[0.99] transition-all cursor-pointer"
                         >
                             {processing ? (
                                 <div className="flex items-center justify-center space-x-2">
@@ -177,74 +177,10 @@ export default function Login({ status }: LoginProps) {
                     </form>
                 </div>
 
-                {/* Demo Accounts (Commented out for production)
-                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] p-5 rounded-3xl shadow-sm text-xs text-[var(--color-muted)] space-y-3">
-                    <p className="font-bold text-[var(--color-text)] flex items-center justify-between">
-                        <span>Demo Accounts (Tap to fill):</span>
-                        <span className="text-[10px] font-normal text-[var(--color-muted)]">pwd: password</span>
-                    </p>
-                    <div className="space-y-2">
-                        <button
-                            type="button"
-                            onClick={() => fillCredentials('platformadmin@example.com', 'password')}
-                            className="w-full text-left p-2.5 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-surface-hover)] active:scale-[0.98] transition-all duration-200 cursor-pointer flex items-center justify-between group"
-                        >
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-lg bg-[var(--color-primary-5)] border border-[var(--color-primary)]/20 flex items-center justify-center text-[var(--color-primary)] shrink-0">
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <p className="font-bold text-[var(--color-text)] leading-tight">Platform Admin</p>
-                                    <p className="text-[10px] text-[var(--color-muted)]">Global platform & schools</p>
-                                </div>
-                            </div>
-                            <span className="text-[11px] font-mono text-[var(--color-muted)] group-hover:text-[var(--color-primary)]">platformadmin@example.com</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => fillCredentials('schooladmin@example.com', 'password')}
-                            className="w-full text-left p-2.5 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-surface-hover)] active:scale-[0.98] transition-all duration-200 cursor-pointer flex items-center justify-between group"
-                        >
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-lg bg-[var(--color-surface-elevated)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-text)] shrink-0">
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <p className="font-bold text-[var(--color-text)] leading-tight">School Admin</p>
-                                    <p className="text-[10px] text-[var(--color-muted)]">AILEARN Academy activities</p>
-                                </div>
-                            </div>
-                            <span className="text-[11px] font-mono text-[var(--color-muted)] group-hover:text-[var(--color-primary)]">schooladmin@example.com</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => fillCredentials('learner@example.com', 'password')}
-                            className="w-full text-left p-2.5 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-surface-hover)] active:scale-[0.98] transition-all duration-200 cursor-pointer flex items-center justify-between group"
-                        >
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-lg bg-[var(--color-primary-5)] border border-[var(--color-primary)]/20 flex items-center justify-center text-[var(--color-primary)] shrink-0">
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path d="M12 14l9-5-9-5-9 5 9 5z" />
-                                        <path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-5.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-5.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <p className="font-bold text-[var(--color-text)] leading-tight">Learner</p>
-                                    <p className="text-[10px] text-[var(--color-muted)]">SS1 Student assessments</p>
-                                </div>
-                            </div>
-                            <span className="text-[11px] font-mono text-[var(--color-muted)] group-hover:text-[var(--color-primary)]">learner@example.com</span>
-                        </button>
-                    </div>
-                </div>
-                */}
+                {/* Footer Security Note */}
+                {/* <div className="text-center text-[11px] sm:text-xs text-[var(--color-muted)]">
+                    Protected by offline-first local encryption.
+                </div> */}
             </div>
         </div>
     );
