@@ -4,6 +4,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import type { ClassItem, QuestionItem, SubjectItem, TopicItem } from '@/types/admin';
+import { formatClassOptionLabel, ALL_GRADE_GROUPS } from '@/utils/format';
 
 export interface QuestionFormData {
     topic_id: string;
@@ -41,10 +42,11 @@ export default function QuestionFormModal({
     allTopics,
     onSubmit,
 }: QuestionFormModalProps) {
+    const [selectedGradeLevel, setSelectedGradeLevel] = useState<string>('');
     const [selectedClassId, setSelectedClassId] = useState<string>('');
     const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
 
-    // Sync selected class and subject when modal opens or when editing a question / topic
+    // Sync selected grade, class, and subject when modal opens or when editing a question / topic
     useEffect(() => {
         if (!isOpen) return;
 
@@ -54,27 +56,49 @@ export default function QuestionFormModal({
                 const subId = currentTopic.subject_id ? String(currentTopic.subject_id) : '';
                 setSelectedSubjectId(subId);
 
+                if (currentTopic.level) {
+                    setSelectedGradeLevel(currentTopic.level);
+                }
+
                 if (subId) {
                     const currentSubject = subjects.find((s) => String(s.id) === subId);
                     if (currentSubject && currentSubject.class_id) {
                         setSelectedClassId(String(currentSubject.class_id));
+                        const currentCls = classes.find((c) => String(c.id) === String(currentSubject.class_id));
+                        if (currentCls?.grade_level) {
+                            setSelectedGradeLevel(currentCls.grade_level);
+                        }
                     }
                 }
             }
         }
-    }, [isOpen, form.topic_id, allTopics, subjects]);
+    }, [isOpen, form.topic_id, allTopics, subjects, classes]);
 
     if (!isOpen) return null;
 
-    // Filtered subjects based on selected class
+    // Filtered classes based on selected grade level
+    const availableClasses = classes.filter(
+        (c) => !selectedGradeLevel || c.grade_level === selectedGradeLevel
+    );
+
+    // Filtered subjects based on selected class and/or grade
     const availableSubjects = subjects.filter((s) => {
-        if (!selectedClassId) return true;
-        return !s.class_id || String(s.class_id) === String(selectedClassId);
+        if (selectedClassId) {
+            return !s.class_id || String(s.class_id) === String(selectedClassId);
+        }
+        if (selectedGradeLevel) {
+            const cls = classes.find((c) => c.id === s.class_id);
+            if (cls && cls.grade_level !== selectedGradeLevel) return false;
+        }
+        return true;
     });
 
-    // Filtered topics based on selected subject and class
+    // Filtered topics based on selected subject, class, and grade
     const availableTopics = allTopics.filter((t) => {
         if (selectedSubjectId && String(t.subject_id) !== String(selectedSubjectId)) {
+            return false;
+        }
+        if (selectedGradeLevel && t.level && t.level !== selectedGradeLevel) {
             return false;
         }
         if (selectedClassId && !selectedSubjectId) {
@@ -86,8 +110,24 @@ export default function QuestionFormModal({
         return true;
     });
 
+    const handleGradeLevelChange = (newGrade: string) => {
+        setSelectedGradeLevel(newGrade);
+        if (newGrade && selectedClassId) {
+            const currentCls = classes.find((c) => String(c.id) === selectedClassId);
+            if (currentCls && currentCls.grade_level !== newGrade) {
+                setSelectedClassId('');
+            }
+        }
+    };
+
     const handleClassChange = (newClassId: string) => {
         setSelectedClassId(newClassId);
+        if (newClassId) {
+            const matched = classes.find((c) => String(c.id) === newClassId);
+            if (matched?.grade_level) {
+                setSelectedGradeLevel(matched.grade_level);
+            }
+        }
         // If current subject doesn't belong to newly selected class, reset subject
         if (newClassId && selectedSubjectId) {
             const currentSub = subjects.find((s) => String(s.id) === String(selectedSubjectId));
@@ -118,7 +158,7 @@ export default function QuestionFormModal({
                             {editingQuestion ? 'Edit Question' : 'Add New Question'}
                         </h3>
                         <p className="text-xs text-[var(--color-muted)] mt-0.5">
-                            Assign questions to a specific class cohort, subject curriculum, and learning topic.
+                            Assign questions to a specific grade, class, subject curriculum, and learning topic.
                         </p>
                     </div>
                     <button
@@ -133,31 +173,51 @@ export default function QuestionFormModal({
                 </div>
 
                 <form onSubmit={onSubmit} className="space-y-5 text-xs">
-                    {/* Cascading Class -> Subject -> Topic Selection */}
+                    {/* Cascading Grade -> Class -> Subject -> Topic Selection */}
                     <div className="p-4 rounded-2xl bg-[var(--color-background)] border border-[var(--color-border)] space-y-3">
                         <span className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--color-primary)] block">
                             Target Curriculum & Placement
                         </span>
 
-                        <div className="grid md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                             <div>
-                                <label className="block font-bold text-[var(--color-text)] mb-1">1. Target Class</label>
+                                <label className="block font-bold text-[var(--color-text)] mb-1">1. Grade Level</label>
+                                <select
+                                    value={selectedGradeLevel}
+                                    onChange={(e) => handleGradeLevelChange(e.target.value)}
+                                    className="w-full px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none focus:border-[var(--color-primary)]"
+                                >
+                                    <option value="">All Grade Levels</option>
+                                    {ALL_GRADE_GROUPS.map((grp) => (
+                                        <optgroup key={grp.group} label={grp.group}>
+                                            {grp.options.map((opt) => (
+                                                <option key={opt.value} value={opt.value}>
+                                                    {opt.label}
+                                                </option>
+                                            ))}
+                                        </optgroup>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block font-bold text-[var(--color-text)] mb-1">2. Target Class</label>
                                 <select
                                     value={selectedClassId}
                                     onChange={(e) => handleClassChange(e.target.value)}
                                     className="w-full px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none focus:border-[var(--color-primary)]"
                                 >
                                     <option value="">All Classes / School-wide</option>
-                                    {classes.map((cls) => (
+                                    {availableClasses.map((cls) => (
                                         <option key={cls.id} value={cls.id}>
-                                            {cls.name} ({cls.grade_level})
+                                            {formatClassOptionLabel(cls)}
                                         </option>
                                     ))}
                                 </select>
                             </div>
 
                             <div>
-                                <label className="block font-bold text-[var(--color-text)] mb-1">2. Target Subject</label>
+                                <label className="block font-bold text-[var(--color-text)] mb-1">3. Target Subject</label>
                                 <select
                                     value={selectedSubjectId}
                                     onChange={(e) => handleSubjectChange(e.target.value)}
@@ -173,7 +233,7 @@ export default function QuestionFormModal({
                             </div>
 
                             <div>
-                                <label className="block font-bold text-[var(--color-text)] mb-1">3. Target Topic *</label>
+                                <label className="block font-bold text-[var(--color-text)] mb-1">4. Target Topic *</label>
                                 <select
                                     required
                                     value={form.topic_id}
@@ -212,110 +272,58 @@ export default function QuestionFormModal({
                                 onChange={(e) => setForm({ ...form, status: e.target.value })}
                                 className="w-full px-3 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none focus:border-[var(--color-primary)]"
                             >
-                                <option value="active">Active (Visible in Assessments)</option>
-                                <option value="inactive">Inactive (Draft)</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
                             </select>
                         </div>
                     </div>
 
                     <div>
-                        <label className="block font-bold text-[var(--color-text)] mb-1">Question Type</label>
-                        <div className="flex items-center gap-4">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="qtype"
-                                    value="multiple_choice"
-                                    checked={form.type === 'multiple_choice'}
-                                    onChange={() => {
-                                        setForm({
-                                            ...form,
-                                            type: 'multiple_choice',
-                                            options: [
-                                                { option_text: '', is_correct: true },
-                                                { option_text: '', is_correct: false },
-                                                { option_text: '', is_correct: false },
-                                                { option_text: '', is_correct: false },
-                                            ],
-                                        });
-                                    }}
-                                    className="text-[var(--color-primary)] cursor-pointer"
-                                />
-                                <span className="font-semibold text-[var(--color-text)]">Multiple Choice (4 Options)</span>
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="qtype"
-                                    value="true_false"
-                                    checked={form.type === 'true_false'}
-                                    onChange={() => {
-                                        setForm({
-                                            ...form,
-                                            type: 'true_false',
-                                            options: [
-                                                { option_text: 'True', is_correct: true },
-                                                { option_text: 'False', is_correct: false },
-                                            ],
-                                        });
-                                    }}
-                                    className="text-[var(--color-primary)] cursor-pointer"
-                                />
-                                <span className="font-semibold text-[var(--color-text)]">True / False</span>
-                            </label>
+                        <div className="flex items-center justify-between mb-1">
+                            <label className="font-bold text-[var(--color-text)]">Question Prompt *</label>
+                            <span className="text-[10px] text-[var(--color-muted)]">Supports LaTeX $x^2$ and Markdown</span>
                         </div>
-                    </div>
-
-                    <div>
-                        <label className="block font-bold text-[var(--color-text)] mb-1">Question Prompt *</label>
                         <textarea
                             required
                             rows={3}
                             value={form.question_text}
                             onChange={(e) => setForm({ ...form, question_text: e.target.value })}
-                            className="w-full px-4 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] outline-none resize-none font-medium text-sm focus:border-[var(--color-primary)]"
-                            placeholder="Write your question prompt here... (supports LaTeX math e.g. $x^2 + y^2 = r^2$)"
+                            className="w-full px-4 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] outline-none resize-none focus:border-[var(--color-primary)] font-mono text-xs"
+                            placeholder="Enter the question text here (e.g., What is the derivative of $f(x) = x^2$?)."
                         />
-                        {form.question_text &&
-                            (form.question_text.includes('$') ||
-                                form.question_text.includes('\\') ||
-                                form.question_text.includes('^')) && (
-                                <div className="mt-2 p-3 bg-[var(--color-primary-5)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] [&_p]:inline">
-                                    <span className="text-[10px] font-bold text-[var(--color-primary)] uppercase tracking-wider block mb-1">
-                                        Live Math Preview:
-                                    </span>
-                                    <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                        {form.question_text}
-                                    </Markdown>
-                                </div>
-                            )}
+                        {form.question_text && (
+                            <div className="mt-2 p-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] prose prose-sm max-w-none text-[var(--color-text)]">
+                                <p className="text-[10px] uppercase tracking-wider font-bold text-[var(--color-muted)] mb-1">Live Preview</p>
+                                <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                                    {form.question_text}
+                                </Markdown>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Options Configuration */}
+                    {/* Multiple Choice Options */}
                     <div className="space-y-3">
-                        <label className="block font-bold text-[var(--color-text)]">
-                            Answer Options & Correct Answer Designation *
-                        </label>
+                        <div className="flex items-center justify-between">
+                            <label className="font-bold text-[var(--color-text)]">Answer Choices * (Select the correct option)</label>
+                            <span className="text-[10px] text-[var(--color-muted)]">At least 2 options required</span>
+                        </div>
+
                         {form.options.map((opt, idx) => (
-                            <div
-                                key={idx}
-                                className="flex items-center gap-3 p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)]"
-                            >
+                            <div key={idx} className="flex items-center gap-3 p-2 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)]">
                                 <input
                                     type="radio"
                                     name="correct_option"
                                     checked={opt.is_correct}
                                     onChange={() => {
-                                        const updated = form.options.map((o, i) => ({
+                                        const nextOptions = form.options.map((o, i) => ({
                                             ...o,
                                             is_correct: i === idx,
                                         }));
-                                        setForm({ ...form, options: updated });
+                                        setForm({ ...form, options: nextOptions });
                                     }}
-                                    className="h-4 w-4 text-[var(--color-success)] cursor-pointer"
-                                    title="Mark as correct answer"
+                                    className="w-4 h-4 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
                                 />
-                                <span className="font-bold text-[var(--color-muted)] w-6 text-center">
+                                <span className="font-bold text-[var(--color-muted)] w-4 text-center">
                                     {String.fromCharCode(65 + idx)}
                                 </span>
                                 <input
@@ -323,30 +331,61 @@ export default function QuestionFormModal({
                                     required
                                     value={opt.option_text}
                                     onChange={(e) => {
-                                        const updated = [...form.options];
-                                        updated[idx].option_text = e.target.value;
-                                        setForm({ ...form, options: updated });
+                                        const nextOptions = [...form.options];
+                                        nextOptions[idx].option_text = e.target.value;
+                                        setForm({ ...form, options: nextOptions });
                                     }}
-                                    className="flex-1 px-3 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
-                                    placeholder={`Option ${String.fromCharCode(65 + idx)} text...`}
+                                    className="flex-1 px-3 py-1.5 bg-transparent border-0 text-[var(--color-text)] outline-none text-xs font-mono"
+                                    placeholder={`Option ${String.fromCharCode(65 + idx)} text (Supports $math$)`}
                                 />
-                                {opt.is_correct && (
-                                    <span className="text-[10px] font-bold text-[var(--color-success)] bg-[var(--color-success-10)] border border-[var(--color-success)]/20 px-2 py-0.5 rounded">
-                                        Correct
-                                    </span>
+                                {form.options.length > 2 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const nextOptions = form.options.filter((_, i) => i !== idx);
+                                            // If removed was correct, set first as correct
+                                            if (opt.is_correct && nextOptions.length > 0) {
+                                                nextOptions[0].is_correct = true;
+                                            }
+                                            setForm({ ...form, options: nextOptions });
+                                        }}
+                                        className="p-1 rounded text-[var(--color-error)] hover:bg-[var(--color-error-5)]"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
                                 )}
                             </div>
                         ))}
+
+                        {form.options.length < 5 && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setForm({
+                                        ...form,
+                                        options: [...form.options, { option_text: '', is_correct: false }],
+                                    });
+                                }}
+                                className="text-xs font-bold text-[var(--color-primary)] hover:underline flex items-center gap-1 cursor-pointer"
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                                Add Option
+                            </button>
+                        )}
                     </div>
 
                     <div>
-                        <label className="block font-bold text-[var(--color-text)] mb-1">Answer Explanation</label>
+                        <label className="block font-bold text-[var(--color-text)] mb-1">Explanation / Solution Notes (Optional)</label>
                         <textarea
                             rows={2}
                             value={form.explanation}
                             onChange={(e) => setForm({ ...form, explanation: e.target.value })}
-                            className="w-full px-4 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] outline-none resize-none focus:border-[var(--color-primary)]"
-                            placeholder="Explain why the selected answer is correct..."
+                            className="w-full px-4 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] outline-none resize-none focus:border-[var(--color-primary)] font-mono text-xs"
+                            placeholder="Explanation shown after user attempts question..."
                         />
                     </div>
 

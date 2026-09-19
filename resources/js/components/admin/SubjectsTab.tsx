@@ -18,6 +18,7 @@ interface Props {
 export default function SubjectsTab({ subjects, classes = [], loading, onRefresh, showToast }: Props) {
     const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
     const [editingSubject, setEditingSubject] = useState<SubjectItem | null>(null);
+    const [gradeFilter, setGradeFilter] = useState('');
     const [selectedClassFilter, setSelectedClassFilter] = useState<string | number>('all');
     const [subjectSearch, setSubjectSearch] = useState('');
     const [subjectForm, setSubjectForm] = useState<SubjectFormData>({
@@ -209,6 +210,11 @@ export default function SubjectsTab({ subjects, classes = [], loading, onRefresh
     };
 
     const filteredSubjects = subjects.filter((subj) => {
+        if (gradeFilter) {
+            const cls = classes.find((c) => c.id === subj.class_id);
+            const subjGrade = cls?.grade_level || subj.class_grade_level;
+            if (subjGrade && subjGrade !== gradeFilter) return false;
+        }
         if (selectedClassFilter !== 'all') {
             if (selectedClassFilter === 'unassigned') {
                 if (subj.class_id) return false;
@@ -231,6 +237,8 @@ export default function SubjectsTab({ subjects, classes = [], loading, onRefresh
             <SubjectFilterBar
                 subjectSearch={subjectSearch}
                 setSubjectSearch={setSubjectSearch}
+                gradeFilter={gradeFilter}
+                setGradeFilter={setGradeFilter}
                 selectedClassFilter={selectedClassFilter}
                 setSelectedClassFilter={setSelectedClassFilter}
                 classes={classes}

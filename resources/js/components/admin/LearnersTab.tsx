@@ -1,19 +1,22 @@
 import { useState } from 'react';
-import type { Learner, SchoolItem } from '@/types/admin';
+import type { Learner, SchoolItem, ClassItem } from '@/types/admin';
 import { executeAdminAction } from '@/services/AdminOfflineService';
+import { getGradeLevelsForSchool, formatClassOptionLabel } from '@/utils/format';
 
 interface Props {
     learners: Learner[];
     schools: SchoolItem[];
+    classes?: ClassItem[];
     loading: boolean;
     onRefresh: () => void;
     showToast: (text: string, type?: 'success' | 'error') => void;
 }
 
-export default function LearnersTab({ learners, schools, loading, onRefresh, showToast }: Props) {
+export default function LearnersTab({ learners, schools, classes = [], loading, onRefresh, showToast }: Props) {
     const [learnerSearch, setLearnerSearch] = useState('');
     const [learnerGradeFilter, setLearnerGradeFilter] = useState('');
     const [learnerSchoolFilter, setLearnerSchoolFilter] = useState('');
+    const [learnerClassFilter, setLearnerClassFilter] = useState('');
     const [isLearnerModalOpen, setIsLearnerModalOpen] = useState(false);
     const [editingLearner, setEditingLearner] = useState<Learner | null>(null);
     const [learnerForm, setLearnerForm] = useState({
@@ -33,6 +36,8 @@ export default function LearnersTab({ learners, schools, loading, onRefresh, sho
         const tempId = editingLearner ? editingLearner.id : `temp_lrn_${Date.now()}`;
 
         const selectedSchool = schools.find((s) => String(s.id) === String(learnerForm.school_id));
+        const selectedClass = classes.find((c) => String(c.id) === String(learnerForm.class_id));
+
         const optimisticLearner: Learner = {
             id: tempId,
             name: learnerForm.name,
@@ -41,10 +46,11 @@ export default function LearnersTab({ learners, schools, loading, onRefresh, sho
                 id: Date.now(),
                 school_id: learnerForm.school_id ? Number(learnerForm.school_id) : null,
                 student_id: learnerForm.student_id || null,
-                grade_level: learnerForm.grade_level || 'SS1',
+                grade_level: learnerForm.grade_level || selectedClass?.grade_level || 'SS1',
                 is_active: true,
                 school: selectedSchool ? { id: selectedSchool.id, name: selectedSchool.name } : undefined,
             },
+            classes: selectedClass ? [{ id: selectedClass.id, name: selectedClass.name }] : [],
             gamification: {
                 total_xp: 0,
                 level: 1,
@@ -92,16 +98,32 @@ export default function LearnersTab({ learners, schools, loading, onRefresh, sho
         }
     };
 
+    // Filter available classes for the filter dropdown based on school and/or grade
+    const availableFilterClasses = classes.filter((c) => {
+        if (learnerSchoolFilter && String(c.school_id) !== learnerSchoolFilter) return false;
+        if (learnerGradeFilter && c.grade_level !== learnerGradeFilter) return false;
+        return true;
+    });
+
     const filteredLearners = learners.filter((lrn) => {
         if (learnerSchoolFilter && String(lrn.learner_profile?.school_id) !== learnerSchoolFilter) return false;
         if (learnerGradeFilter && lrn.learner_profile?.grade_level !== learnerGradeFilter) return false;
+        if (learnerClassFilter && !lrn.classes?.some((c) => String(c.id) === learnerClassFilter)) return false;
         if (learnerSearch) {
             const q = learnerSearch.toLowerCase();
             const nameMatch = lrn.name.toLowerCase().includes(q);
             const emailMatch = lrn.email.toLowerCase().includes(q);
             const studentIdMatch = lrn.learner_profile?.student_id?.toLowerCase().includes(q);
-            if (!nameMatch && !emailMatch && !studentIdMatch) return false;
+            const classMatch = lrn.classes?.some((c) => c.name.toLowerCase().includes(q));
+            if (!nameMatch && !emailMatch && !studentIdMatch && !classMatch) return false;
         }
+        return true;
+    });
+
+    // Available classes in modal based on selected school and selected grade
+    const modalAvailableClasses = classes.filter((c) => {
+        if (learnerForm.school_id && String(c.school_id) !== String(learnerForm.school_id)) return false;
+        if (learnerForm.grade_level && c.grade_level && c.grade_level !== learnerForm.grade_level) return false;
         return true;
     });
 
@@ -111,16 +133,19 @@ export default function LearnersTab({ learners, schools, loading, onRefresh, sho
                 <div className="flex flex-wrap items-center gap-3">
                     <input
                         type="text"
-                        placeholder="Search by name or email..."
+                        placeholder="Search by name, email, ID..."
                         value={learnerSearch}
                         onChange={(e) => setLearnerSearch(e.target.value)}
-                        className="px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] outline-none w-64"
+                        className="px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] outline-none w-56"
                     />
                     {schools.length > 1 && (
                         <select
                             value={learnerSchoolFilter}
-                            onChange={(e) => setLearnerSchoolFilter(e.target.value)}
-                            className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)]"
+                            onChange={(e) => {
+                                setLearnerSchoolFilter(e.target.value);
+                                setLearnerClassFilter('');
+                            }}
+                            className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
                         >
                             <option value="">All Schools</option>
                             {schools.map((s) => (
@@ -130,17 +155,41 @@ export default function LearnersTab({ learners, schools, loading, onRefresh, sho
                     )}
                     <select
                         value={learnerGradeFilter}
-                        onChange={(e) => setLearnerGradeFilter(e.target.value)}
-                        className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)]"
+                        onChange={(e) => {
+                            setLearnerGradeFilter(e.target.value);
+                            setLearnerClassFilter('');
+                        }}
+                        className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
                     >
                         <option value="">All Grade Levels</option>
-                        <option value="JSS1">JSS1</option>
-                        <option value="JSS2">JSS2</option>
-                        <option value="JSS3">JSS3</option>
-                        <option value="SS1">SS1</option>
-                        <option value="SS2">SS2</option>
-                        <option value="SS3">SS3</option>
+                        {(() => {
+                            const selectedFilterSchool = schools.find((s) => String(s.id) === learnerSchoolFilter) || (schools.length === 1 ? schools[0] : null);
+                            const filterGradeGroups = getGradeLevelsForSchool(selectedFilterSchool?.category);
+                            return filterGradeGroups.map((grp) => (
+                                <optgroup key={grp.group} label={grp.group}>
+                                    {grp.options.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </option>
+                                    ))}
+                                </optgroup>
+                            ));
+                        })()}
                     </select>
+                    {availableFilterClasses.length > 0 && (
+                        <select
+                            value={learnerClassFilter}
+                            onChange={(e) => setLearnerClassFilter(e.target.value)}
+                            className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
+                        >
+                            <option value="">All Classes</option>
+                            {availableFilterClasses.map((cls) => (
+                                <option key={cls.id} value={cls.id}>
+                                    {formatClassOptionLabel(cls)}
+                                </option>
+                            ))}
+                        </select>
+                    )}
                 </div>
 
                 <button
@@ -173,7 +222,7 @@ export default function LearnersTab({ learners, schools, loading, onRefresh, sho
                         <thead>
                             <tr className="border-b border-[var(--color-border)] bg-[var(--color-primary-5)]/20 text-[var(--color-muted)] uppercase tracking-wider font-bold">
                                 <th className="py-3.5 px-4">Learner</th>
-                                <th className="py-3.5 px-4">Grade & ID</th>
+                                <th className="py-3.5 px-4">Grade & Class</th>
                                 <th className="py-3.5 px-4">School</th>
                                 <th className="py-3.5 px-4">XP & Level</th>
                                 <th className="py-3.5 px-4 text-right">Actions</th>
@@ -210,9 +259,18 @@ export default function LearnersTab({ learners, schools, loading, onRefresh, sho
                                             <p className="text-[11px] text-[var(--color-muted)]">{learner.email}</p>
                                         </td>
                                         <td className="py-3.5 px-4">
-                                            <span className="px-2 py-0.5 rounded bg-[var(--color-primary-5)] text-[var(--color-primary)] font-bold">
-                                                {learner.learner_profile?.grade_level || 'SS1'}
-                                            </span>
+                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                <span className="px-2 py-0.5 rounded-md bg-[var(--color-primary-5)] text-[var(--color-primary)] font-bold text-xs">
+                                                    {learner.learner_profile?.grade_level || 'General'}
+                                                </span>
+                                                {learner.classes && learner.classes.length > 0 && (
+                                                    learner.classes.map((c) => (
+                                                        <span key={c.id} className="px-2 py-0.5 rounded-md bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-text)] font-semibold text-xs">
+                                                            {c.name}
+                                                        </span>
+                                                    ))
+                                                )}
+                                            </div>
                                             {learner.learner_profile?.student_id && (
                                                 <p className="text-[10px] text-[var(--color-muted)] mt-0.5">ID: {learner.learner_profile.student_id}</p>
                                             )}
@@ -334,7 +392,7 @@ export default function LearnersTab({ learners, schools, loading, onRefresh, sho
                                             defaultGrade = 'PRI1';
                                         }
 
-                                        setLearnerForm({ ...learnerForm, school_id: newSchoolId, grade_level: defaultGrade });
+                                        setLearnerForm({ ...learnerForm, school_id: newSchoolId, grade_level: defaultGrade, class_id: '' });
                                     }}
                                     className="w-full px-3 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none cursor-pointer"
                                 >
@@ -345,73 +403,69 @@ export default function LearnersTab({ learners, schools, loading, onRefresh, sho
                                 </select>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div>
                                     <label className="block font-bold text-[var(--color-muted)] mb-1">Grade Level *</label>
                                     <select
                                         value={learnerForm.grade_level}
-                                        onChange={(e) => setLearnerForm({ ...learnerForm, grade_level: e.target.value })}
+                                        onChange={(e) => {
+                                            const newGrade = e.target.value;
+                                            const currentCls = classes.find((c) => String(c.id) === learnerForm.class_id);
+                                            const classId = currentCls && currentCls.grade_level !== newGrade ? '' : learnerForm.class_id;
+                                            setLearnerForm({ ...learnerForm, grade_level: newGrade, class_id: classId });
+                                        }}
                                         className="w-full px-3 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none cursor-pointer"
                                     >
                                         {(() => {
                                             const sel = schools.find((s) => String(s.id) === String(learnerForm.school_id)) || schools[0];
-                                            const cat = sel?.category || 'combined';
-                                            const showEarly = cat === 'combined' || cat === 'primary';
-                                            const showPrimary = cat === 'combined' || cat === 'primary';
-                                            const showJunior = cat === 'combined' || cat === 'junior';
-                                            const showSenior = cat === 'combined' || cat === 'senior';
-
-                                            return (
-                                                <>
-                                                    {showEarly && (
-                                                        <optgroup label="Early Childhood">
-                                                            <option value="CRECHE">Creche</option>
-                                                            <option value="KG1">KG 1</option>
-                                                            <option value="KG2">KG 2</option>
-                                                            <option value="NUR1">Nursery 1</option>
-                                                            <option value="NUR2">Nursery 2</option>
-                                                        </optgroup>
-                                                    )}
-                                                    {showPrimary && (
-                                                        <optgroup label="Primary School">
-                                                            <option value="PRI1">Primary 1</option>
-                                                            <option value="PRI2">Primary 2</option>
-                                                            <option value="PRI3">Primary 3</option>
-                                                            <option value="PRI4">Primary 4</option>
-                                                            <option value="PRI5">Primary 5</option>
-                                                            <option value="PRI6">Primary 6</option>
-                                                        </optgroup>
-                                                    )}
-                                                    {showJunior && (
-                                                        <optgroup label="Junior Secondary">
-                                                            <option value="JSS1">JSS 1</option>
-                                                            <option value="JSS2">JSS 2</option>
-                                                            <option value="JSS3">JSS 3</option>
-                                                        </optgroup>
-                                                    )}
-                                                    {showSenior && (
-                                                        <optgroup label="Senior Secondary">
-                                                            <option value="SS1">SS 1</option>
-                                                            <option value="SS2">SS 2</option>
-                                                            <option value="SS3">SS 3</option>
-                                                        </optgroup>
-                                                    )}
-                                                </>
-                                            );
+                                            const groups = getGradeLevelsForSchool(sel?.category);
+                                            return groups.map((grp) => (
+                                                <optgroup key={grp.group} label={grp.group}>
+                                                    {grp.options.map((opt) => (
+                                                        <option key={opt.value} value={opt.value}>
+                                                            {opt.label}
+                                                        </option>
+                                                    ))}
+                                                </optgroup>
+                                            ));
                                         })()}
                                     </select>
                                 </div>
 
                                 <div>
-                                    <label className="block font-bold text-[var(--color-muted)] mb-1">Student ID</label>
-                                    <input
-                                        type="text"
-                                        value={learnerForm.student_id}
-                                        onChange={(e) => setLearnerForm({ ...learnerForm, student_id: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] outline-none"
-                                        placeholder="e.g. STU-001"
-                                    />
+                                    <label className="block font-bold text-[var(--color-muted)] mb-1">Assigned Class</label>
+                                    <select
+                                        value={learnerForm.class_id}
+                                        onChange={(e) => {
+                                            const selectedClsId = e.target.value;
+                                            const matchedCls = classes.find((c) => String(c.id) === selectedClsId);
+                                            setLearnerForm({
+                                                ...learnerForm,
+                                                class_id: selectedClsId,
+                                                grade_level: matchedCls?.grade_level || learnerForm.grade_level,
+                                            });
+                                        }}
+                                        className="w-full px-3 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none cursor-pointer"
+                                    >
+                                        <option value="">No Class (General)</option>
+                                        {modalAvailableClasses.map((cls) => (
+                                            <option key={cls.id} value={cls.id}>
+                                                {formatClassOptionLabel(cls)}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
+                            </div>
+
+                            <div>
+                                <label className="block font-bold text-[var(--color-muted)] mb-1">Student ID</label>
+                                <input
+                                    type="text"
+                                    value={learnerForm.student_id}
+                                    onChange={(e) => setLearnerForm({ ...learnerForm, student_id: e.target.value })}
+                                    className="w-full px-4 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] outline-none"
+                                    placeholder="e.g. STU-001"
+                                />
                             </div>
 
                             <div className="pt-4 flex items-center justify-end gap-3 border-t border-[var(--color-border)]">

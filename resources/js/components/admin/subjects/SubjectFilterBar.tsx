@@ -1,8 +1,11 @@
 import type { ClassItem } from '@/types/admin';
+import { formatClassOptionLabel, ALL_GRADE_GROUPS } from '@/utils/format';
 
 interface SubjectFilterBarProps {
     subjectSearch: string;
     setSubjectSearch: (v: string) => void;
+    gradeFilter: string;
+    setGradeFilter: (v: string) => void;
     selectedClassFilter: string | number;
     setSelectedClassFilter: (v: string | number) => void;
     classes: ClassItem[];
@@ -12,11 +15,17 @@ interface SubjectFilterBarProps {
 export default function SubjectFilterBar({
     subjectSearch,
     setSubjectSearch,
+    gradeFilter,
+    setGradeFilter,
     selectedClassFilter,
     setSelectedClassFilter,
     classes,
     onOpenAddSubjectModal,
 }: SubjectFilterBarProps) {
+    const filteredClasses = classes.filter(
+        (c) => !gradeFilter || c.grade_level === gradeFilter
+    );
+
     return (
         <div className="space-y-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -30,7 +39,7 @@ export default function SubjectFilterBar({
                     className="px-5 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2"
                 >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
                     <span>Add Subject</span>
                 </button>
@@ -43,18 +52,37 @@ export default function SubjectFilterBar({
                     placeholder="Search subjects..."
                     value={subjectSearch}
                     onChange={(e) => setSubjectSearch(e.target.value)}
-                    className="px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] outline-none w-56 focus:border-[var(--color-primary)]"
+                    className="px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] outline-none w-52 focus:border-[var(--color-primary)]"
                 />
+                <select
+                    value={gradeFilter}
+                    onChange={(e) => {
+                        setGradeFilter(e.target.value);
+                        setSelectedClassFilter('all');
+                    }}
+                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
+                >
+                    <option value="">All Grade Levels</option>
+                    {ALL_GRADE_GROUPS.map((grp) => (
+                        <optgroup key={grp.group} label={grp.group}>
+                            {grp.options.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                </option>
+                            ))}
+                        </optgroup>
+                    ))}
+                </select>
                 <select
                     value={selectedClassFilter}
                     onChange={(e) => setSelectedClassFilter(e.target.value)}
-                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none"
+                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
                 >
-                    <option value="all">All Classes & General</option>
+                    <option value="all">{gradeFilter ? 'All Classes in Grade' : 'All Classes & General'}</option>
                     <option value="unassigned">School-wide / Unassigned</option>
-                    {classes.map((cls) => (
+                    {filteredClasses.map((cls) => (
                         <option key={cls.id} value={cls.id}>
-                            {cls.name} ({cls.grade_level})
+                            {formatClassOptionLabel(cls)}
                         </option>
                     ))}
                 </select>

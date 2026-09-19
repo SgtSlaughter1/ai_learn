@@ -34,6 +34,8 @@ export interface SchoolItem {
     classes_count?: number;
     learners_count?: number;
     classes?: { id: number; name: string; grade_level?: string }[];
+    allowed_grade_levels?: string[];
+    grade_options?: Array<{ value: string; label: string; group: string }>;
     _pendingSync?: boolean;
     _offlineDeleted?: boolean;
 }

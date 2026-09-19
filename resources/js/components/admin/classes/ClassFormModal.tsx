@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ClassItem, SchoolItem } from '@/types/admin';
+import { getGradeLevelsForSchool } from '@/utils/format';
 
 export interface ClassFormData {
     school_id: string;
@@ -35,11 +36,6 @@ export default function ClassFormModal({
     const selectedSchool = schools.find((s) => String(s.id) === String(form.school_id)) || schools[0];
     const category = selectedSchool?.category || 'combined';
 
-    const showEarly = category === 'combined' || category === 'primary';
-    const showPrimary = category === 'combined' || category === 'primary';
-    const showJunior = category === 'combined' || category === 'junior';
-    const showSenior = category === 'combined' || category === 'senior';
-
     const isSeniorSecondary = ['SS1', 'SS2', 'SS3'].includes(form.grade_level);
 
     const handleSchoolChange = (newSchoolId: string) => {
@@ -63,7 +59,7 @@ export default function ClassFormModal({
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-6">
                 <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-4">
                     <h3 className="text-lg font-bold text-[var(--color-text)]">
-                        {editingClass ? 'Edit Class Cohort' : 'Create New Class Cohort'}
+                        {editingClass ? 'Edit Class' : 'Create New Class'}
                     </h3>
                     <button
                         type="button"
@@ -97,39 +93,15 @@ export default function ClassFormModal({
                                 onChange={(e) => setForm({ ...form, grade_level: e.target.value })}
                                 className="w-full px-3 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none focus:border-[var(--color-primary)] cursor-pointer"
                             >
-                                {showEarly && (
-                                    <optgroup label="Early Childhood">
-                                        <option value="CRECHE">Creche</option>
-                                        <option value="KG1">KG 1</option>
-                                        <option value="KG2">KG 2</option>
-                                        <option value="NUR1">Nursery 1</option>
-                                        <option value="NUR2">Nursery 2</option>
+                                {getGradeLevelsForSchool(category).map((grp) => (
+                                    <optgroup key={grp.group} label={grp.group}>
+                                        {grp.options.map((opt) => (
+                                            <option key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </option>
+                                        ))}
                                     </optgroup>
-                                )}
-                                {showPrimary && (
-                                    <optgroup label="Primary School">
-                                        <option value="PRI1">Primary 1</option>
-                                        <option value="PRI2">Primary 2</option>
-                                        <option value="PRI3">Primary 3</option>
-                                        <option value="PRI4">Primary 4</option>
-                                        <option value="PRI5">Primary 5</option>
-                                        <option value="PRI6">Primary 6</option>
-                                    </optgroup>
-                                )}
-                                {showJunior && (
-                                    <optgroup label="Junior Secondary">
-                                        <option value="JSS1">JSS 1</option>
-                                        <option value="JSS2">JSS 2</option>
-                                        <option value="JSS3">JSS 3</option>
-                                    </optgroup>
-                                )}
-                                {showSenior && (
-                                    <optgroup label="Senior Secondary">
-                                        <option value="SS1">SS 1</option>
-                                        <option value="SS2">SS 2</option>
-                                        <option value="SS3">SS 3</option>
-                                    </optgroup>
-                                )}
+                                ))}
                             </select>
                         </div>
                         <div>
@@ -183,7 +155,7 @@ export default function ClassFormModal({
                             value={form.description}
                             onChange={(e) => setForm({ ...form, description: e.target.value })}
                             className="w-full px-4 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] outline-none resize-none focus:border-[var(--color-primary)]"
-                            placeholder="Optional description of this cohort..."
+                            placeholder="Optional description of this class..."
                         />
                     </div>
 

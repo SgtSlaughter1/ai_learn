@@ -102,7 +102,7 @@ export default function ClassRosterModal({
                             ) : classLearners.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="py-10 text-center text-[var(--color-muted)] text-sm">
-                                        No learners currently enrolled in this class cohort.
+                                        No learners currently enrolled in this class.
                                     </td>
                                 </tr>
                             ) : (

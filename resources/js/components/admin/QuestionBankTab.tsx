@@ -27,6 +27,7 @@ export default function QuestionBankTab({
     showToast,
 }: Props) {
     // ── Filter State ──
+    const [questionGradeFilter, setQuestionGradeFilter] = useState('');
     const [questionClassFilter, setQuestionClassFilter] = useState('');
     const [questionSubjectFilter, setQuestionSubjectFilter] = useState('');
     const [questionTopicFilter, setQuestionTopicFilter] = useState('');
@@ -327,9 +328,19 @@ export default function QuestionBankTab({
         }
     };
 
-    const availableSubjectsForFilter = questionClassFilter
-        ? subjects.filter((s) => String(s.class_id) === questionClassFilter)
-        : subjects;
+    const gradeClassIds = questionGradeFilter
+        ? new Set(classes.filter((c) => c.grade_level === questionGradeFilter).map((c) => c.id))
+        : null;
+
+    const availableSubjectsForFilter = subjects.filter((s) => {
+        if (questionClassFilter) {
+            return String(s.class_id) === questionClassFilter;
+        }
+        if (gradeClassIds) {
+            return s.class_id && gradeClassIds.has(s.class_id);
+        }
+        return true;
+    });
 
     const availableTopicsForFilter = questionSubjectFilter
         ? allTopics.filter((t) => String(t.subject_id) === questionSubjectFilter)
@@ -338,14 +349,23 @@ export default function QuestionBankTab({
               const matchingSubj = subjects.find((s) => s.id === t.subject_id);
               return matchingSubj && String(matchingSubj.class_id) === questionClassFilter;
           })
+        : gradeClassIds
+        ? allTopics.filter((t) => {
+              const matchingSubj = subjects.find((s) => s.id === t.subject_id);
+              return matchingSubj && matchingSubj.class_id && gradeClassIds.has(matchingSubj.class_id);
+          })
         : allTopics;
 
     const filteredQuestions = questions.filter((q) => {
+        const matchingSubj = subjects.find((s) => s.id === q.topic?.subject?.id);
+        const subjClassId = q.topic?.subject?.class_id ?? matchingSubj?.class_id;
+
         if (questionClassFilter) {
-            const matchingSubj = subjects.find((s) => s.id === q.topic?.subject?.id);
-            const subjClassId = q.topic?.subject?.class_id ?? matchingSubj?.class_id;
             if (!subjClassId || String(subjClassId) !== questionClassFilter) return false;
+        } else if (gradeClassIds) {
+            if (!subjClassId || !gradeClassIds.has(subjClassId)) return false;
         }
+
         if (questionSubjectFilter && String(q.topic?.subject?.id || '') !== questionSubjectFilter) return false;
         if (questionTopicFilter && String(q.topic_id) !== questionTopicFilter) return false;
         if (questionDifficultyFilter && q.difficulty !== questionDifficultyFilter) return false;
@@ -358,6 +378,8 @@ export default function QuestionBankTab({
             <QuestionFilterBar
                 questionSearch={questionSearch}
                 setQuestionSearch={setQuestionSearch}
+                questionGradeFilter={questionGradeFilter}
+                setQuestionGradeFilter={setQuestionGradeFilter}
                 questionClassFilter={questionClassFilter}
                 setQuestionClassFilter={setQuestionClassFilter}
                 questionSubjectFilter={questionSubjectFilter}

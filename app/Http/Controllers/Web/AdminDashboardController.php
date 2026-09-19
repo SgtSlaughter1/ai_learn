@@ -487,6 +487,10 @@ class AdminDashboardController extends Controller
             $query->whereHas('learnerProfile', fn ($q) => $q->where('grade_level', $request->grade_level));
         }
 
+        if ($request->filled('class_id')) {
+            $query->whereHas('classes', fn ($q) => $q->where('classes.id', $request->class_id));
+        }
+
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -1330,7 +1334,14 @@ class AdminDashboardController extends Controller
             ->sortBy(fn ($c) => $gradeOrder[strtoupper($c->grade_level ?? '')] ?? 99)
             ->values();
 
-        return response()->json(['classes' => $classes]);
+        $targetSchool = $schoolId ? School::find($schoolId) : null;
+        $gradeOptions = $targetSchool ? $targetSchool->grade_options : School::gradeOptionsForCategory($request->category);
+
+        return response()->json([
+            'classes' => $classes,
+            'grade_options' => $gradeOptions,
+            'allowed_grade_levels' => $targetSchool ? $targetSchool->allowed_grade_levels : School::allowedGradeLevelsForCategory($request->category),
+        ]);
     }
 
     public function getPrograms(Request $request): JsonResponse

@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { ClassItem, SubjectItem } from '@/types/admin';
+import { formatClassOptionLabel, ALL_GRADE_GROUPS } from '@/utils/format';
 
 export interface SubjectFormData {
     name: string;
@@ -29,7 +30,25 @@ export default function SubjectFormModal({
     classes,
     onSubmit,
 }: SubjectFormModalProps) {
+    const [selectedGradeLevel, setSelectedGradeLevel] = useState<string>('');
+
+    // Sync initial grade level when editing
+    useEffect(() => {
+        if (form.class_id) {
+            const matched = classes.find((c) => String(c.id) === String(form.class_id));
+            if (matched?.grade_level) {
+                setSelectedGradeLevel(matched.grade_level);
+            }
+        } else {
+            setSelectedGradeLevel('');
+        }
+    }, [form.class_id, classes, isOpen]);
+
     if (!isOpen) return null;
+
+    const filteredClasses = classes.filter(
+        (c) => !selectedGradeLevel || c.grade_level === selectedGradeLevel
+    );
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -62,25 +81,56 @@ export default function SubjectFormModal({
                         />
                     </div>
 
-                    <div>
-                        <label className="block font-bold text-[var(--color-text)] mb-1">Target Class (Optional)</label>
-                        <select
-                            value={form.class_id}
-                            onChange={(e) =>
-                                setForm({ ...form, class_id: e.target.value ? Number(e.target.value) : '' })
-                            }
-                            className="w-full px-3 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none focus:border-[var(--color-primary)]"
-                        >
-                            <option value="">All Classes / School-wide</option>
-                            {classes.map((cls) => (
-                                <option key={cls.id} value={cls.id}>
-                                    {cls.name} ({cls.grade_level})
-                                </option>
-                            ))}
-                        </select>
-                        <p className="text-[10px] text-[var(--color-muted)] mt-1">
-                            Assign specifically to a class cohort or leave open for the entire school.
-                        </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label className="block font-bold text-[var(--color-text)] mb-1">Grade Level (Optional)</label>
+                            <select
+                                value={selectedGradeLevel}
+                                onChange={(e) => {
+                                    const newGrade = e.target.value;
+                                    setSelectedGradeLevel(newGrade);
+                                    const currentCls = classes.find((c) => String(c.id) === String(form.class_id));
+                                    if (currentCls && currentCls.grade_level !== newGrade) {
+                                        setForm((f) => ({ ...f, class_id: '' }));
+                                    }
+                                }}
+                                className="w-full px-3 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none focus:border-[var(--color-primary)]"
+                            >
+                                <option value="">All Grade Levels</option>
+                                {ALL_GRADE_GROUPS.map((grp) => (
+                                    <optgroup key={grp.group} label={grp.group}>
+                                        {grp.options.map((opt) => (
+                                            <option key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block font-bold text-[var(--color-text)] mb-1">Target Class (Optional)</label>
+                            <select
+                                value={form.class_id}
+                                onChange={(e) => {
+                                    const cId = e.target.value;
+                                    const matched = classes.find((c) => String(c.id) === cId);
+                                    if (matched?.grade_level) {
+                                        setSelectedGradeLevel(matched.grade_level);
+                                    }
+                                    setForm((f) => ({ ...f, class_id: cId ? Number(cId) : '' }));
+                                }}
+                                className="w-full px-3 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none focus:border-[var(--color-primary)]"
+                            >
+                                <option value="">All Classes / School-wide</option>
+                                {filteredClasses.map((cls) => (
+                                    <option key={cls.id} value={cls.id}>
+                                        {formatClassOptionLabel(cls)}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
                     <div>
@@ -94,30 +144,16 @@ export default function SubjectFormModal({
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block font-bold text-[var(--color-text)] mb-1">Status</label>
-                            <select
-                                value={form.status}
-                                onChange={(e) => setForm({ ...form, status: e.target.value })}
-                                className="w-full px-3 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none focus:border-[var(--color-primary)]"
-                            >
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="block font-bold text-[var(--color-text)] mb-1">Sort Order</label>
-                            <input
-                                type="number"
-                                value={form.sort_order}
-                                onChange={(e) =>
-                                    setForm({ ...form, sort_order: parseInt(e.target.value) || 0 })
-                                }
-                                className="w-full px-4 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
-                            />
-                        </div>
+                    <div>
+                        <label className="block font-bold text-[var(--color-text)] mb-1">Status</label>
+                        <select
+                            value={form.status}
+                            onChange={(e) => setForm({ ...form, status: e.target.value })}
+                            className="w-full px-3 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none focus:border-[var(--color-primary)]"
+                        >
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
                     </div>
 
                     <div className="pt-4 flex items-center justify-end gap-3 border-t border-[var(--color-border)]">

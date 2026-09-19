@@ -1,6 +1,7 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import type { ClassItem, SubjectItem, TopicItem } from '@/types/admin';
 import type { ExtractedQuestion } from '@/utils/questionParser';
+import { formatClassOptionLabel, ALL_GRADE_GROUPS } from '@/utils/format';
 import ExtractedQuestionCard from './ExtractedQuestionCard';
 
 interface AIBulkImportModalProps {
@@ -52,6 +53,7 @@ export default function AIBulkImportModal({
     onSave,
     showToast,
 }: AIBulkImportModalProps) {
+    const [bulkGradeLevel, setBulkGradeLevel] = useState<string>('');
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     if (!isOpen) return null;
@@ -223,8 +225,36 @@ D) 8`);
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
                     {step === 'input' ? (
                         <div className="space-y-5">
-                            {/* Class & Subject & Topic Selection */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            {/* Grade & Class & Subject & Topic Selection */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-[var(--color-text)] mb-1.5">
+                                        Grade Level (Optional)
+                                    </label>
+                                    <select
+                                        value={bulkGradeLevel}
+                                        onChange={(e) => {
+                                            const g = e.target.value;
+                                            setBulkGradeLevel(g);
+                                            if (g && bulkClassId) {
+                                                const c = classes.find((cls) => String(cls.id) === bulkClassId);
+                                                if (c && c.grade_level !== g) setBulkClassId('');
+                                            }
+                                        }}
+                                        className="w-full px-3 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+                                    >
+                                        <option value="">All Grade Levels</option>
+                                        {ALL_GRADE_GROUPS.map((grp) => (
+                                            <optgroup key={grp.group} label={grp.group}>
+                                                {grp.options.map((opt) => (
+                                                    <option key={opt.value} value={opt.value}>
+                                                        {opt.label}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        ))}
+                                    </select>
+                                </div>
                                 <div>
                                     <label className="block text-xs font-bold text-[var(--color-text)] mb-1.5">
                                         Target Class (Optional)
@@ -234,17 +264,23 @@ D) 8`);
                                         onChange={(e) => {
                                             const cId = e.target.value;
                                             setBulkClassId(cId);
+                                            if (cId) {
+                                                const matched = classes.find((c) => String(c.id) === cId);
+                                                if (matched?.grade_level) setBulkGradeLevel(matched.grade_level);
+                                            }
                                             setBulkSubjectId('');
                                             setBulkTopicId('');
                                         }}
                                         className="w-full px-3 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
                                     >
                                         <option value="">All Classes / General</option>
-                                        {classes.map((cls) => (
-                                            <option key={cls.id} value={cls.id}>
-                                                {cls.name} ({cls.grade_level})
-                                            </option>
-                                        ))}
+                                        {classes
+                                            .filter((c) => !bulkGradeLevel || c.grade_level === bulkGradeLevel)
+                                            .map((cls) => (
+                                                <option key={cls.id} value={cls.id}>
+                                                    {formatClassOptionLabel(cls)}
+                                                </option>
+                                            ))}
                                     </select>
                                 </div>
                                 <div>
@@ -265,7 +301,14 @@ D) 8`);
                                     >
                                         <option value="">Select Subject (Optional)</option>
                                         {subjects
-                                            .filter((s) => !bulkClassId || !s.class_id || String(s.class_id) === bulkClassId)
+                                            .filter((s) => {
+                                                if (bulkClassId) return !s.class_id || String(s.class_id) === bulkClassId;
+                                                if (bulkGradeLevel) {
+                                                    const cls = classes.find((c) => c.id === s.class_id);
+                                                    if (cls && cls.grade_level !== bulkGradeLevel) return false;
+                                                }
+                                                return true;
+                                            })
                                             .map((s) => (
                                                 <option key={s.id} value={s.id}>
                                                     {s.name}
@@ -285,7 +328,11 @@ D) 8`);
                                     >
                                         <option value="">Select Topic</option>
                                         {allTopics
-                                            .filter((t) => !bulkSubjectId || String(t.subject_id) === bulkSubjectId)
+                                            .filter((t) => {
+                                                if (bulkSubjectId) return String(t.subject_id) === bulkSubjectId;
+                                                if (bulkGradeLevel && t.level && t.level !== bulkGradeLevel) return false;
+                                                return true;
+                                            })
                                             .map((t) => (
                                                 <option key={t.id} value={t.id}>
                                                     {t.name} ({t.level})

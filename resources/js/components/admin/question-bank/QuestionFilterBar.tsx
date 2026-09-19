@@ -1,8 +1,11 @@
 import type { ClassItem, SubjectItem, TopicItem } from '@/types/admin';
+import { formatClassOptionLabel, ALL_GRADE_GROUPS } from '@/utils/format';
 
 interface QuestionFilterBarProps {
     questionSearch: string;
     setQuestionSearch: (v: string) => void;
+    questionGradeFilter: string;
+    setQuestionGradeFilter: (v: string) => void;
     questionClassFilter: string;
     setQuestionClassFilter: (v: string) => void;
     questionSubjectFilter: string;
@@ -21,6 +24,8 @@ interface QuestionFilterBarProps {
 export default function QuestionFilterBar({
     questionSearch,
     setQuestionSearch,
+    questionGradeFilter,
+    setQuestionGradeFilter,
     questionClassFilter,
     setQuestionClassFilter,
     questionSubjectFilter,
@@ -35,16 +40,41 @@ export default function QuestionFilterBar({
     onOpenBulkModal,
     onOpenAddModal,
 }: QuestionFilterBarProps) {
+    const filteredClasses = classes.filter(
+        (c) => !questionGradeFilter || c.grade_level === questionGradeFilter
+    );
+
     return (
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3">
                 <input
                     type="text"
-                    placeholder="Search question text..."
+                    placeholder="Search questions..."
                     value={questionSearch}
                     onChange={(e) => setQuestionSearch(e.target.value)}
-                    className="px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] outline-none w-52 focus:border-[var(--color-primary)]"
+                    className="px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] outline-none w-48 focus:border-[var(--color-primary)]"
                 />
+                <select
+                    value={questionGradeFilter}
+                    onChange={(e) => {
+                        setQuestionGradeFilter(e.target.value);
+                        setQuestionClassFilter('');
+                        setQuestionSubjectFilter('');
+                        setQuestionTopicFilter('');
+                    }}
+                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
+                >
+                    <option value="">All Grade Levels</option>
+                    {ALL_GRADE_GROUPS.map((grp) => (
+                        <optgroup key={grp.group} label={grp.group}>
+                            {grp.options.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                </option>
+                            ))}
+                        </optgroup>
+                    ))}
+                </select>
                 <select
                     value={questionClassFilter}
                     onChange={(e) => {
@@ -52,12 +82,12 @@ export default function QuestionFilterBar({
                         setQuestionSubjectFilter('');
                         setQuestionTopicFilter('');
                     }}
-                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] max-w-[160px] outline-none"
+                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] max-w-[160px] outline-none cursor-pointer"
                 >
-                    <option value="">All Classes</option>
-                    {classes.map((cls) => (
+                    <option value="">{questionGradeFilter ? 'All Classes in Grade' : 'All Classes'}</option>
+                    {filteredClasses.map((cls) => (
                         <option key={cls.id} value={cls.id}>
-                            {cls.name} ({cls.grade_level})
+                            {formatClassOptionLabel(cls)}
                         </option>
                     ))}
                 </select>
@@ -67,7 +97,7 @@ export default function QuestionFilterBar({
                         setQuestionSubjectFilter(e.target.value);
                         setQuestionTopicFilter('');
                     }}
-                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] min-w-[170px] outline-none"
+                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] min-w-[150px] outline-none cursor-pointer"
                 >
                     <option value="">{questionClassFilter ? 'All Class Subjects' : 'All Subjects'}</option>
                     {availableSubjects.map((s) => {
@@ -83,7 +113,7 @@ export default function QuestionFilterBar({
                 <select
                     value={questionTopicFilter}
                     onChange={(e) => setQuestionTopicFilter(e.target.value)}
-                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] min-w-[190px] outline-none"
+                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] min-w-[160px] outline-none cursor-pointer"
                 >
                     <option value="">{questionSubjectFilter ? 'All Subject Topics' : 'All Topics'}</option>
                     {availableTopics.map((t) => (
@@ -95,7 +125,7 @@ export default function QuestionFilterBar({
                 <select
                     value={questionDifficultyFilter}
                     onChange={(e) => setQuestionDifficultyFilter(e.target.value)}
-                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none"
+                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
                 >
                     <option value="">All Difficulties</option>
                     <option value="easy">Easy / Beginner</option>

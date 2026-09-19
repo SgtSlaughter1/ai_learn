@@ -67,7 +67,7 @@ export default function OverviewTab({ stats, loading }: Props) {
                         }
                     />
                     <AdminStatCard
-                        label="Classes & Cohorts"
+                        label="Classes"
                         value={loading ? '...' : stats?.overview.total_classes}
                         loading={loading}
                         icon={
@@ -130,7 +130,7 @@ export default function OverviewTab({ stats, loading }: Props) {
                         }
                     />
                     <AdminStatCard
-                        label="Classes & Cohorts"
+                        label="Classes"
                         value={loading ? '...' : stats?.overview.total_classes}
                         loading={loading}
                         icon={

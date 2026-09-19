@@ -257,7 +257,10 @@ export default function Dashboard() {
             if (schools.length === 0) fetchSchools();
         }
         if (activeTab === 'classes' && classes.length === 0) fetchClasses();
-        if (activeTab === 'learners' && learners.length === 0) fetchLearners();
+        if (activeTab === 'learners') {
+            if (learners.length === 0) fetchLearners();
+            if (classes.length === 0) fetchClasses();
+        }
         if (activeTab === 'subjects' && subjects.length === 0) fetchSubjects();
         if (activeTab === 'questions') {
             if (questions.length === 0) fetchQuestions();
@@ -303,7 +306,7 @@ export default function Dashboard() {
         },
         {
             id: 'classes' as const,
-            label: 'Classes & Cohorts',
+            label: 'Classes',
             icon: (
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
@@ -389,7 +392,7 @@ export default function Dashboard() {
                         <p className="text-[var(--color-muted)] text-sm mt-1">
                             {isSuperAdmin 
                                 ? 'Super admin platform oversight, school provisioning, admin assignment, and global curriculum management.'
-                                : `School administration for ${stats?.school?.name || 'your institution'} — manage cohorts, learners, and learning performance.`
+                                : `School administration for ${stats?.school?.name || 'your institution'} — manage classes, learners, and learning performance.`
                             }
                         </p>
                     </div>
@@ -458,8 +461,9 @@ export default function Dashboard() {
                     <LearnersTab
                         learners={learners}
                         schools={schools}
+                        classes={classes}
                         loading={loadingLearners}
-                        onRefresh={() => { fetchLearners(); fetchStats(); }}
+                        onRefresh={() => { fetchLearners(); fetchClasses(); fetchStats(); }}
                         showToast={showToast}
                     />
                 )}
