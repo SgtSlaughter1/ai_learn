@@ -13,10 +13,20 @@ export interface Overview {
     struggling_learners: number;
 }
 
+export interface CategoryItem {
+    id: number;
+    name: string;
+    code: string;
+    description?: string | null;
+}
+
 export interface SchoolItem {
     id: number;
     name: string;
     category?: 'primary' | 'junior' | 'senior' | 'combined' | string;
+    category_ids?: number[];
+    category_names?: string[];
+    category_type_label?: string;
     slug?: string;
     address?: string | null;
     city: string | null;

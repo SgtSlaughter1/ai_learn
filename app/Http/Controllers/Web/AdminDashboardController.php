@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\ClassMembership;
 use App\Models\ClassModel;
 use App\Models\LearnerProfile;
@@ -198,7 +199,22 @@ class AdminDashboardController extends Controller
         }
 
         if ($request->filled('category')) {
-            $query->where('category', $request->category);
+            $cat = strtolower($request->category);
+            $catIdMap = ['primary' => 1, 'junior' => 2, 'senior' => 3];
+            if (isset($catIdMap[$cat])) {
+                $targetId = $catIdMap[$cat];
+                $query->where(function ($q) use ($cat, $targetId) {
+                    $q->where('category', $cat)
+                      ->orWhereJsonContains('category_ids', $targetId);
+                });
+            } elseif ($cat === 'combined') {
+                $query->where(function ($q) {
+                    $q->where('category', 'combined')
+                      ->orWhereRaw('JSON_LENGTH(category_ids) > 1');
+                });
+            } else {
+                $query->where('category', $cat);
+            }
         }
 
         if ($request->has('search')) {
@@ -238,6 +254,16 @@ class AdminDashboardController extends Controller
         ]);
     }
 
+    public function getCategories(Request $request): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+
+        $categories = Category::orderBy('id')->get();
+        return response()->json([
+            'categories' => $categories,
+        ]);
+    }
+
     public function saveSchool(Request $request): JsonResponse
     {
         $this->authorizeSuperAdmin($request);
@@ -245,6 +271,8 @@ class AdminDashboardController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category' => 'nullable|string|in:primary,junior,senior,combined',
+            'category_ids' => 'nullable|array',
+            'category_ids.*' => 'integer|in:1,2,3',
             'slug' => 'nullable|string|max:255|unique:schools,slug',
             'address' => 'nullable|string|max:255',
             'city' => 'nullable|string|max:100',
@@ -256,6 +284,36 @@ class AdminDashboardController extends Controller
             'admin_user_id' => 'nullable|exists:users,id',
         ]);
 
+        $categoryIds = $validated['category_ids'] ?? null;
+        $categoryStr = $validated['category'] ?? null;
+
+        if (!empty($categoryIds)) {
+            $sortedIds = array_values(array_unique(array_map('intval', $categoryIds)));
+            sort($sortedIds);
+            $categoryIds = $sortedIds;
+            if (count($categoryIds) === 1) {
+                $categoryStr = match ($categoryIds[0]) {
+                    1 => 'primary',
+                    2 => 'junior',
+                    3 => 'senior',
+                    default => 'senior',
+                };
+            } else {
+                $categoryStr = 'combined';
+            }
+        } elseif ($categoryStr) {
+            $categoryIds = match (strtolower($categoryStr)) {
+                'primary' => [1],
+                'junior'  => [2],
+                'senior'  => [3],
+                'combined'=> [1, 2, 3],
+                default   => [3],
+            };
+        } else {
+            $categoryIds = [3];
+            $categoryStr = 'senior';
+        }
+
         $slug = !empty($validated['slug']) ? Str::slug($validated['slug']) : Str::slug($validated['name']);
         $originalSlug = $slug;
         $count = 1;
@@ -266,7 +324,8 @@ class AdminDashboardController extends Controller
 
         $school = School::create([
             'name' => $validated['name'],
-            'category' => $validated['category'] ?? 'senior',
+            'category' => $categoryStr,
+            'category_ids' => $categoryIds,
             'slug' => $slug,
             'address' => $validated['address'] ?? null,
             'city' => $validated['city'] ?? null,
@@ -293,6 +352,8 @@ class AdminDashboardController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category' => 'nullable|string|in:primary,junior,senior,combined',
+            'category_ids' => 'nullable|array',
+            'category_ids.*' => 'integer|in:1,2,3',
             'slug' => 'nullable|string|max:255|unique:schools,slug,' . $id,
             'address' => 'nullable|string|max:255',
             'city' => 'nullable|string|max:100',
@@ -303,6 +364,36 @@ class AdminDashboardController extends Controller
             'is_active' => 'nullable|boolean',
             'admin_user_id' => 'nullable|exists:users,id',
         ]);
+
+        if (array_key_exists('category_ids', $validated)) {
+            $categoryIds = $validated['category_ids'];
+            if (!empty($categoryIds)) {
+                $sortedIds = array_values(array_unique(array_map('intval', $categoryIds)));
+                sort($sortedIds);
+                $validated['category_ids'] = $sortedIds;
+                if (count($sortedIds) === 1) {
+                    $validated['category'] = match ($sortedIds[0]) {
+                        1 => 'primary',
+                        2 => 'junior',
+                        3 => 'senior',
+                        default => 'senior',
+                    };
+                } else {
+                    $validated['category'] = 'combined';
+                }
+            } else {
+                $validated['category_ids'] = [3];
+                $validated['category'] = 'senior';
+            }
+        } elseif (!empty($validated['category'])) {
+            $validated['category_ids'] = match (strtolower($validated['category'])) {
+                'primary' => [1],
+                'junior'  => [2],
+                'senior'  => [3],
+                'combined'=> [1, 2, 3],
+                default   => [3],
+            };
+        }
 
         if (!empty($validated['slug'])) {
             $validated['slug'] = Str::slug($validated['slug']);

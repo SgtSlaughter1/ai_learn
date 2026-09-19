@@ -4,6 +4,7 @@ import type { SchoolItem } from '@/types/admin';
 export interface SchoolFormData {
     name: string;
     category: string;
+    category_ids: number[];
     slug: string;
     address: string;
     city: string;
@@ -34,6 +35,45 @@ export default function SchoolFormModal({
     onSubmit,
 }: SchoolFormModalProps) {
     if (!isOpen) return null;
+
+    const isCombined = form.category === 'combined';
+
+    const handleCategoryChange = (cat: string) => {
+        let ids: number[] = form.category_ids || [];
+        if (cat === 'primary') {
+            ids = [1];
+        } else if (cat === 'junior') {
+            ids = [2];
+        } else if (cat === 'senior') {
+            ids = [3];
+        } else if (cat === 'combined') {
+            if (ids.length <= 1) {
+                ids = [1, 2];
+            }
+        }
+        setForm({ ...form, category: cat, category_ids: ids });
+    };
+
+    const toggleCategoryId = (id: number) => {
+        let current = [...(form.category_ids || [])];
+        if (current.includes(id)) {
+            current = current.filter((c) => c !== id);
+        } else {
+            current.push(id);
+        }
+        current.sort((a, b) => a - b);
+
+        let derivedCat = form.category;
+        if (current.length === 1) {
+            if (current[0] === 1) derivedCat = 'primary';
+            else if (current[0] === 2) derivedCat = 'junior';
+            else if (current[0] === 3) derivedCat = 'senior';
+        } else if (current.length > 1) {
+            derivedCat = 'combined';
+        }
+
+        setForm({ ...form, category_ids: current, category: derivedCat });
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in">
@@ -84,16 +124,70 @@ export default function SchoolFormModal({
                             <select
                                 required
                                 value={form.category || 'senior'}
-                                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                                onChange={(e) => handleCategoryChange(e.target.value)}
                                 className="w-full px-3.5 py-2.5 text-sm bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl focus:outline-none focus:border-[var(--color-primary)] font-semibold text-[var(--color-text)] transition-colors"
                             >
-                                <option value="senior">Senior Secondary (SS1 - SS3)</option>
-                                <option value="junior">Junior Secondary (JSS1 - JSS3)</option>
-                                <option value="primary">Primary School (Primary 1 - 6)</option>
-                                <option value="combined">Combined</option>
+                                <option value="senior">Senior Secondary Only (SS1 - SS3)</option>
+                                <option value="junior">Junior Secondary Only (JSS1 - JSS3)</option>
+                                <option value="primary">Primary School Only (Primary 1 - 6)</option>
+                                <option value="combined">Combined / Multi-Category</option>
                             </select>
                         </div>
                     </div>
+
+                    {isCombined && (
+                        <div className="p-3.5 bg-[var(--color-background)] border border-[var(--color-primary)]/30 rounded-xl space-y-2.5">
+                            <div className="flex items-center justify-between">
+                                <label className="block text-xs font-bold text-[var(--color-primary)] uppercase tracking-wider">
+                                    Select Active Categories * (Pick 2 or more)
+                                </label>
+                                <span className="text-[11px] text-[var(--color-muted)] font-medium">
+                                    {(form.category_ids || []).length} selected
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                {[
+                                    { id: 1, label: 'Primary School', sub: 'Creche – Pri 6' },
+                                    { id: 2, label: 'Junior Secondary', sub: 'JSS 1 – 3' },
+                                    { id: 3, label: 'Senior Secondary', sub: 'SS 1 – 3' },
+                                ].map((cat) => {
+                                    const isChecked = (form.category_ids || []).includes(cat.id);
+                                    return (
+                                        <label
+                                            key={cat.id}
+                                            onClick={() => toggleCategoryId(cat.id)}
+                                            className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer select-none transition-all ${
+                                                isChecked
+                                                    ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 shadow-xs'
+                                                    : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-muted)] opacity-70'
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={isChecked}
+                                                onChange={() => {}} // Handled by label onClick
+                                                className="mt-0.5 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)] pointer-events-none"
+                                            />
+                                            <div className="text-xs">
+                                                <div className="font-bold text-[var(--color-text)] leading-tight">{cat.label}</div>
+                                                <div className="text-[10px] text-[var(--color-muted)] mt-0.5">{cat.sub}</div>
+                                            </div>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+
+                            {(form.category_ids || []).length < 2 && (
+                                <p className="text-[11px] text-amber-500 font-semibold flex items-center gap-1">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <span>Please select at least 2 categories for a combined school.</span>
+                                </p>
+                            )}
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>

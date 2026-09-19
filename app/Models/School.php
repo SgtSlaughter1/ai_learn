@@ -15,21 +15,51 @@ class School extends Model
     {
         return [
             'is_active' => 'boolean',
+            'category_ids' => 'array',
         ];
     }
 
     protected $appends = [
         'allowed_grade_levels',
         'grade_options',
+        'category_names',
+        'category_type_label',
     ];
 
-    public static function allowedGradeLevelsForCategory(?string $category): array
+    /**
+     * Resolve allowed grade levels from array of category IDs or legacy string.
+     */
+    public static function allowedGradeLevelsForCategoryIds(?array $categoryIds): array
     {
-        return match ($category) {
-            'primary' => ['CRECHE', 'KG1', 'KG2', 'NUR1', 'NUR2', 'PRI1', 'PRI2', 'PRI3', 'PRI4', 'PRI5', 'PRI6'],
-            'junior' => ['JSS1', 'JSS2', 'JSS3'],
-            'senior' => ['SS1', 'SS2', 'SS3'],
-            default => [
+        if (empty($categoryIds)) {
+            return [
+                'CRECHE', 'KG1', 'KG2', 'NUR1', 'NUR2',
+                'PRI1', 'PRI2', 'PRI3', 'PRI4', 'PRI5', 'PRI6',
+                'JSS1', 'JSS2', 'JSS3',
+                'SS1', 'SS2', 'SS3',
+            ];
+        }
+
+        $grades = [];
+        foreach ($categoryIds as $catId) {
+            $catGrades = Category::gradeLevelsForId($catId);
+            $grades = array_merge($grades, $catGrades);
+        }
+
+        return array_values(array_unique($grades));
+    }
+
+    public static function allowedGradeLevelsForCategory(?string $category = null, ?array $categoryIds = null): array
+    {
+        if (!empty($categoryIds)) {
+            return self::allowedGradeLevelsForCategoryIds($categoryIds);
+        }
+
+        return match (strtolower($category ?? '')) {
+            'primary' => Category::gradeLevelsForCode('primary'),
+            'junior'  => Category::gradeLevelsForCode('junior'),
+            'senior'  => Category::gradeLevelsForCode('senior'),
+            default   => [
                 'CRECHE', 'KG1', 'KG2', 'NUR1', 'NUR2',
                 'PRI1', 'PRI2', 'PRI3', 'PRI4', 'PRI5', 'PRI6',
                 'JSS1', 'JSS2', 'JSS3',
@@ -38,7 +68,7 @@ class School extends Model
         };
     }
 
-    public static function gradeOptionsForCategory(?string $category): array
+    public static function gradeOptionsForCategory(?string $category = null, ?array $categoryIds = null): array
     {
         $all = [
             'CRECHE' => ['value' => 'CRECHE', 'label' => 'Creche', 'group' => 'Early Childhood'],
@@ -60,7 +90,10 @@ class School extends Model
             'SS3'    => ['value' => 'SS3', 'label' => 'SS 3', 'group' => 'Senior Secondary'],
         ];
 
-        $allowedKeys = self::allowedGradeLevelsForCategory($category);
+        $allowedKeys = !empty($categoryIds)
+            ? self::allowedGradeLevelsForCategoryIds($categoryIds)
+            : self::allowedGradeLevelsForCategory($category);
+
         $result = [];
         foreach ($allowedKeys as $key) {
             if (isset($all[$key])) {
@@ -77,17 +110,96 @@ class School extends Model
 
     public function getGradeOptionsAttribute(): array
     {
-        return self::gradeOptionsForCategory($this->category);
+        return self::gradeOptionsForCategory($this->category, $this->category_ids);
     }
 
     public function allowedGradeLevels(): array
     {
+        if (!empty($this->category_ids) && is_array($this->category_ids)) {
+            return self::allowedGradeLevelsForCategoryIds($this->category_ids);
+        }
+
         return self::allowedGradeLevelsForCategory($this->category);
     }
 
     public function supportsGradeLevel(string $gradeLevel): bool
     {
         return in_array(strtoupper($gradeLevel), $this->allowedGradeLevels(), true);
+    }
+
+    /**
+     * Computed names of assigned categories.
+     */
+    public function getCategoryNamesAttribute(): array
+    {
+        $ids = $this->category_ids;
+        if (empty($ids) || !is_array($ids)) {
+            $cat = $this->category;
+            return match (strtolower($cat ?? '')) {
+                'primary' => ['Primary School'],
+                'junior'  => ['Junior Secondary'],
+                'senior'  => ['Senior Secondary'],
+                'combined'=> ['Combined'],
+                default   => ['Senior Secondary'],
+            };
+        }
+
+        $map = [
+            1 => 'Primary School',
+            2 => 'Junior Secondary',
+            3 => 'Senior Secondary',
+        ];
+
+        $names = [];
+        foreach ($ids as $id) {
+            if (isset($map[(int)$id])) {
+                $names[] = $map[(int)$id];
+            }
+        }
+        return $names;
+    }
+
+    /**
+     * User-friendly badge label.
+     */
+    public function getCategoryTypeLabelAttribute(): string
+    {
+        $ids = array_map('intval', $this->category_ids ?? []);
+        sort($ids);
+
+        if (empty($ids)) {
+            return match (strtolower($this->category ?? 'senior')) {
+                'primary' => 'Primary School',
+                'junior'  => 'Junior Secondary',
+                'senior'  => 'Senior Secondary',
+                'combined'=> 'Combined',
+                default   => 'Senior Secondary',
+            };
+        }
+
+        if (count($ids) === 1) {
+            return match ($ids[0]) {
+                1 => 'Primary School',
+                2 => 'Junior Secondary',
+                3 => 'Senior Secondary',
+                default => 'Secondary',
+            };
+        }
+
+        if ($ids === [1, 2]) {
+            return 'Combined (Primary & Junior)';
+        }
+        if ($ids === [2, 3]) {
+            return 'Combined (Junior & Senior)';
+        }
+        if ($ids === [1, 3]) {
+            return 'Combined (Primary & Senior)';
+        }
+        if ($ids === [1, 2, 3]) {
+            return 'Combined (All-Through)';
+        }
+
+        return 'Combined';
     }
 
     public function admin(): BelongsTo
@@ -107,7 +219,12 @@ class School extends Model
 
     public function classes(): HasMany
     {
-        return $this->hasMany(ClassModel::class);
+        return $this->hasMany(ClassModel::class, 'school_id');
+    }
+
+    public function subjects(): HasMany
+    {
+        return $this->hasMany(Subject::class, 'school_id');
     }
 
     public function teachers(): HasManyThrough

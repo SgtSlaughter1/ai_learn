@@ -137,7 +137,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/teacher/classes/{classId}/enroll', [TeacherDashboardController::class, 'enrollLearner']);
         Route::delete('/teacher/classes/{classId}/learners/{learnerId}', [TeacherDashboardController::class, 'removeLearner']);
 
-        // Admin Management: Schools, School Admins, Classes, Learners, Subjects, Topics, Questions
+        // Admin Management: Categories, Schools, School Admins, Classes, Learners, Subjects, Topics, Questions
+        Route::get('/admin/categories', [AdminDashboardController::class, 'getCategories']);
         Route::get('/admin/schools', [AdminDashboardController::class, 'getSchools']);
         Route::post('/admin/schools', [AdminDashboardController::class, 'saveSchool']);
         Route::put('/admin/schools/{id}', [AdminDashboardController::class, 'updateSchool']);

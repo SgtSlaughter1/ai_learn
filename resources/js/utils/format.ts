@@ -49,15 +49,44 @@ export const ALL_GRADE_GROUPS: GradeGroup[] = [
 ];
 
 /**
- * Returns the relevant grade levels based on school category.
- * If school category is senior, only returns Senior Secondary grades.
- * If junior, only returns Junior Secondary.
- * If primary, only returns Primary.
- * If early_childhood, only returns Early Childhood.
- * Otherwise (combined / all), returns all grade groups.
+ * Returns the relevant grade levels based on school category or category_ids.
+ * If school has category_ids array, resolves grade levels for all assigned categories.
+ * Otherwise falls back to category string.
  */
-export function getGradeLevelsForSchool(category?: string | null): GradeGroup[] {
-    const cat = category?.toLowerCase();
+export function getGradeLevelsForSchool(
+    categoryOrSchool?: string | null | { category?: string | null; category_ids?: number[] | null },
+    categoryIdsParam?: number[] | null
+): GradeGroup[] {
+    let cat: string | undefined;
+    let ids: number[] | undefined;
+
+    if (typeof categoryOrSchool === 'object' && categoryOrSchool !== null) {
+        cat = categoryOrSchool.category?.toLowerCase();
+        ids = categoryOrSchool.category_ids || undefined;
+    } else {
+        cat = categoryOrSchool?.toLowerCase();
+        ids = categoryIdsParam || undefined;
+    }
+
+    if (ids && ids.length > 0) {
+        const groups: GradeGroup[] = [];
+        if (ids.includes(1)) {
+            const earlyChildhood = ALL_GRADE_GROUPS.find((g) => g.group === 'Early Childhood');
+            const primary = ALL_GRADE_GROUPS.find((g) => g.group === 'Primary School');
+            if (earlyChildhood) groups.push(earlyChildhood);
+            if (primary) groups.push(primary);
+        }
+        if (ids.includes(2)) {
+            const junior = ALL_GRADE_GROUPS.find((g) => g.group === 'Junior Secondary');
+            if (junior) groups.push(junior);
+        }
+        if (ids.includes(3)) {
+            const senior = ALL_GRADE_GROUPS.find((g) => g.group === 'Senior Secondary');
+            if (senior) groups.push(senior);
+        }
+        return groups.length > 0 ? groups : ALL_GRADE_GROUPS;
+    }
+
     if (cat === 'senior') {
         return ALL_GRADE_GROUPS.filter((g) => g.group === 'Senior Secondary');
     }
@@ -65,12 +94,46 @@ export function getGradeLevelsForSchool(category?: string | null): GradeGroup[] 
         return ALL_GRADE_GROUPS.filter((g) => g.group === 'Junior Secondary');
     }
     if (cat === 'primary') {
-        return ALL_GRADE_GROUPS.filter((g) => g.group === 'Primary School');
+        return ALL_GRADE_GROUPS.filter((g) => g.group === 'Primary School' || g.group === 'Early Childhood');
     }
     if (cat === 'early_childhood') {
         return ALL_GRADE_GROUPS.filter((g) => g.group === 'Early Childhood');
     }
     return ALL_GRADE_GROUPS;
+}
+
+/**
+ * Returns formatted human readable badge/label for school category or category_ids.
+ */
+export function formatSchoolCategoryLabel(school?: { category?: string | null; category_ids?: number[] | null; category_type_label?: string } | null): string {
+    if (!school) return 'Secondary';
+    if (school.category_type_label) return school.category_type_label;
+
+    const ids = (school.category_ids || []).map(Number).sort((a, b) => a - b);
+    if (ids.length === 1) {
+        if (ids[0] === 1) return 'Primary School';
+        if (ids[0] === 2) return 'Junior Secondary';
+        if (ids[0] === 3) return 'Senior Secondary';
+    } else if (ids.length > 1) {
+        if (ids.length === 2 && ids[0] === 1 && ids[1] === 2) return 'Combined (Primary & Junior)';
+        if (ids.length === 2 && ids[0] === 2 && ids[1] === 3) return 'Combined (Junior & Senior)';
+        if (ids.length === 2 && ids[0] === 1 && ids[1] === 3) return 'Combined (Primary & Senior)';
+        if (ids.length === 3) return 'Combined (All-Through)';
+        return 'Combined';
+    }
+
+    switch (school.category?.toLowerCase()) {
+        case 'primary':
+            return 'Primary School';
+        case 'junior':
+            return 'Junior Secondary';
+        case 'senior':
+            return 'Senior Secondary';
+        case 'combined':
+            return 'Combined';
+        default:
+            return 'Secondary';
+    }
 }
 
 /**

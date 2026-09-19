@@ -27,6 +27,7 @@ class SchoolSeeder extends Seeder
             [
                 'name' => 'AILEARN Academy',
                 'category' => 'senior',
+                'category_ids' => [3],
                 'admin_user_id' => $schoolAdmin1?->id,
                 'address' => '12 Innovation Drive, Tech City',
                 'city' => 'Lagos',
@@ -43,7 +44,8 @@ class SchoolSeeder extends Seeder
             ['slug' => 'greenwood-high-school'],
             [
                 'name' => 'Greenwood High School',
-                'category' => 'senior',
+                'category' => 'combined',
+                'category_ids' => [2, 3],
                 'admin_user_id' => $schoolAdmin2?->id,
                 'address' => '45 Heritage Boulevard',
                 'city' => 'Abuja',

@@ -164,7 +164,7 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
                         <option value="">All Grade Levels</option>
                         {(() => {
                             const selectedFilterSchool = schools.find((s) => String(s.id) === learnerSchoolFilter) || (schools.length === 1 ? schools[0] : null);
-                            const filterGradeGroups = getGradeLevelsForSchool(selectedFilterSchool?.category);
+                            const filterGradeGroups = getGradeLevelsForSchool(selectedFilterSchool);
                             return filterGradeGroups.map((grp) => (
                                 <optgroup key={grp.group} label={grp.group}>
                                     {grp.options.map((opt) => (
@@ -381,15 +381,11 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
                                     onChange={(e) => {
                                         const newSchoolId = e.target.value;
                                         const target = schools.find((s) => String(s.id) === newSchoolId);
-                                        const cat = target?.category || 'combined';
+                                        const availableGrades = getGradeLevelsForSchool(target).flatMap((g) => g.options.map((o) => o.value));
                                         let defaultGrade = learnerForm.grade_level;
 
-                                        if (cat === 'senior' && !['SS1', 'SS2', 'SS3'].includes(learnerForm.grade_level)) {
-                                            defaultGrade = 'SS1';
-                                        } else if (cat === 'junior' && !['JSS1', 'JSS2', 'JSS3'].includes(learnerForm.grade_level)) {
-                                            defaultGrade = 'JSS1';
-                                        } else if (cat === 'primary' && ['JSS1', 'JSS2', 'JSS3', 'SS1', 'SS2', 'SS3'].includes(learnerForm.grade_level)) {
-                                            defaultGrade = 'PRI1';
+                                        if (!availableGrades.includes(learnerForm.grade_level) && availableGrades.length > 0) {
+                                            defaultGrade = availableGrades[0];
                                         }
 
                                         setLearnerForm({ ...learnerForm, school_id: newSchoolId, grade_level: defaultGrade, class_id: '' });
@@ -418,7 +414,7 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
                                     >
                                         {(() => {
                                             const sel = schools.find((s) => String(s.id) === String(learnerForm.school_id)) || schools[0];
-                                            const groups = getGradeLevelsForSchool(sel?.category);
+                                            const groups = getGradeLevelsForSchool(sel);
                                             return groups.map((grp) => (
                                                 <optgroup key={grp.group} label={grp.group}>
                                                     {grp.options.map((opt) => (

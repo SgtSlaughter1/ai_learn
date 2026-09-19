@@ -34,21 +34,16 @@ export default function ClassFormModal({
     if (!isOpen) return null;
 
     const selectedSchool = schools.find((s) => String(s.id) === String(form.school_id)) || schools[0];
-    const category = selectedSchool?.category || 'combined';
 
     const isSeniorSecondary = ['SS1', 'SS2', 'SS3'].includes(form.grade_level);
 
     const handleSchoolChange = (newSchoolId: string) => {
         const target = schools.find((s) => String(s.id) === newSchoolId);
-        const cat = target?.category || 'combined';
+        const availableGrades = getGradeLevelsForSchool(target).flatMap((g) => g.options.map((o) => o.value));
         let defaultGrade = form.grade_level;
 
-        if (cat === 'senior' && !['SS1', 'SS2', 'SS3'].includes(form.grade_level)) {
-            defaultGrade = 'SS1';
-        } else if (cat === 'junior' && !['JSS1', 'JSS2', 'JSS3'].includes(form.grade_level)) {
-            defaultGrade = 'JSS1';
-        } else if (cat === 'primary' && ['JSS1', 'JSS2', 'JSS3', 'SS1', 'SS2', 'SS3'].includes(form.grade_level)) {
-            defaultGrade = 'PRI1';
+        if (!availableGrades.includes(form.grade_level) && availableGrades.length > 0) {
+            defaultGrade = availableGrades[0];
         }
 
         setForm({ ...form, school_id: newSchoolId, grade_level: defaultGrade });
@@ -93,7 +88,7 @@ export default function ClassFormModal({
                                 onChange={(e) => setForm({ ...form, grade_level: e.target.value })}
                                 className="w-full px-3 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none focus:border-[var(--color-primary)] cursor-pointer"
                             >
-                                {getGradeLevelsForSchool(category).map((grp) => (
+                                {getGradeLevelsForSchool(selectedSchool).map((grp) => (
                                     <optgroup key={grp.group} label={grp.group}>
                                         {grp.options.map((opt) => (
                                             <option key={opt.value} value={opt.value}>

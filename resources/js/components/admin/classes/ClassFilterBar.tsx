@@ -19,7 +19,7 @@ export default function ClassFilterBar({
     onOpenCreateModal,
 }: ClassFilterBarProps) {
     const selectedSchool = schools.find((s) => String(s.id) === classSchoolFilter) || (schools.length === 1 ? schools[0] : null);
-    const gradeGroups = getGradeLevelsForSchool(selectedSchool?.category);
+    const gradeGroups = getGradeLevelsForSchool(selectedSchool);
 
     return (
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">

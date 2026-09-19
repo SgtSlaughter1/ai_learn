@@ -35,6 +35,7 @@ export default function SchoolsTab({
         name: '',
         slug: '',
         category: 'senior',
+        category_ids: [3],
         address: '',
         city: '',
         state: '',
@@ -58,6 +59,7 @@ export default function SchoolsTab({
             name: '',
             slug: '',
             category: 'senior',
+            category_ids: [3],
             address: '',
             city: '',
             state: '',
@@ -71,10 +73,18 @@ export default function SchoolsTab({
 
     const openEditModal = (school: SchoolItem) => {
         setEditingSchool(school);
+        const derivedIds = school.category_ids && school.category_ids.length > 0
+            ? school.category_ids
+            : school.category === 'primary' ? [1]
+            : school.category === 'junior' ? [2]
+            : school.category === 'combined' ? [1, 2]
+            : [3];
+
         setFormData({
             name: school.name,
             slug: school.slug || '',
-            category: school.category || 'senior',
+            category: school.category || (derivedIds.length > 1 ? 'combined' : 'senior'),
+            category_ids: derivedIds,
             address: school.address || '',
             city: school.city || '',
             state: school.state || '',
@@ -159,7 +169,13 @@ export default function SchoolsTab({
             (s.admin?.name && s.admin.name.toLowerCase().includes(search.toLowerCase()));
 
         const matchesCity = !cityFilter || s.city === cityFilter;
-        const matchesCategory = !categoryFilter || (s.category && s.category.toLowerCase() === categoryFilter.toLowerCase());
+        const matchesCategory =
+            !categoryFilter ||
+            (s.category && s.category.toLowerCase() === categoryFilter.toLowerCase()) ||
+            (categoryFilter === 'primary' && (s.category_ids || []).includes(1)) ||
+            (categoryFilter === 'junior' && (s.category_ids || []).includes(2)) ||
+            (categoryFilter === 'senior' && (s.category_ids || []).includes(3)) ||
+            (categoryFilter === 'combined' && (s.category_ids || []).length > 1);
         const matchesStatus =
             statusFilter === 'all'
                 ? true

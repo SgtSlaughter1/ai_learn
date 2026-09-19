@@ -1,4 +1,5 @@
 import type { SchoolItem } from '@/types/admin';
+import { formatSchoolCategoryLabel } from '@/utils/format';
 
 interface SchoolCardProps {
     school: SchoolItem;
@@ -7,20 +8,6 @@ interface SchoolCardProps {
 }
 
 export default function SchoolCard({ school, onEdit, onDelete }: SchoolCardProps) {
-    const getCategoryLabel = (category?: string) => {
-        switch (category?.toLowerCase()) {
-            case 'primary':
-                return 'Primary';
-            case 'junior':
-                return 'Junior Secondary';
-            case 'senior':
-                return 'Senior Secondary';
-            case 'combined':
-                return 'Combined';
-            default:
-                return 'Senior Secondary';
-        }
-    };
 
     return (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-[var(--color-primary-light)] rounded-2xl p-5 flex flex-col justify-between transition-all duration-200 hover:shadow-md group">
@@ -43,7 +30,7 @@ export default function SchoolCard({ school, onEdit, onDelete }: SchoolCardProps
                                     {school.name}
                                 </h3>
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[var(--color-primary-10)] text-[var(--color-primary)] border border-[var(--color-primary)]/20 uppercase tracking-wider">
-                                    {getCategoryLabel(school.category)}
+                                    {formatSchoolCategoryLabel(school)}
                                 </span>
                             </div>
                             <p className="text-xs text-[var(--color-muted)] mt-0.5">
