@@ -25,6 +25,7 @@ class DatabaseSeeder extends Seeder
             SubjectSeeder::class,
             QuizSeeder::class,
             AchievementSeeder::class,
+            PastQuestionSeeder::class,
         ]);
     }
 }
