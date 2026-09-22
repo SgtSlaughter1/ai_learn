@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'aloc' => [
+        'api_key' => env('ALOC_API_KEY'),
+        'api_url' => env('ALOC_API_URL', 'https://dev.aloc.com.ng/api/v1'),
+    ],
+
 ];

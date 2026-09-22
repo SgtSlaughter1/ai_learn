@@ -29,6 +29,11 @@ class Subject extends Model
         return $this->hasMany(Topic::class)->orderBy('sort_order');
     }
 
+    public function pastQuestions(): HasMany
+    {
+        return $this->hasMany(PastQuestion::class);
+    }
+
     public function isGeneralKnowledge(): bool
     {
         return $this->school_id === null;

@@ -181,6 +181,20 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                                 </Link>
 
                                 <Link
+                                    href="/past-questions"
+                                    className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/past-questions')}`}
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                >
+                                    <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                                    </svg>
+                                    <span className="flex-1">Past Questions</span>
+                                    <span className="ml-2 px-1.5 py-0.5 text-[9px] font-black uppercase bg-emerald-400/20 text-emerald-300 rounded border border-emerald-400/30">
+                                        CBT
+                                    </span>
+                                </Link>
+
+                                <Link
                                     href="/flashcards"
                                     className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/flashcards')}`}
                                     onClick={() => setIsMobileMenuOpen(false)}

@@ -13,6 +13,7 @@ use App\Http\Controllers\Web\GamificationController;
 use App\Http\Controllers\Web\SyncController;
 use App\Http\Controllers\Web\TeacherDashboardController;
 use App\Http\Controllers\Web\AdminDashboardController;
+use App\Http\Controllers\Api\PastQuestionController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -97,6 +98,9 @@ Route::middleware('auth')->group(function () {
     // Active Recall Flashcards
     Route::get('/flashcards', [FlashcardController::class, 'index']);
 
+    // Past Questions & CBT Exam Simulation Hub
+    Route::get('/past-questions', fn() => Inertia::render('ExamPrep/PastQuestionsIndex'));
+
     // Separate JSON Data Routes
     Route::prefix('api/v1')->group(function () {
         Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
@@ -177,9 +181,22 @@ Route::middleware('auth')->group(function () {
         Route::post('/admin/questions', [AdminDashboardController::class, 'saveQuestion']);
         Route::post('/admin/questions/ai-extract', [AdminDashboardController::class, 'aiExtractQuestions']);
         Route::post('/admin/questions/bulk', [AdminDashboardController::class, 'bulkSaveQuestions']);
-        Route::put('/admin/questions/{id}', [AdminDashboardController::class, 'updateQuestion']);
-        Route::delete('/admin/questions/{id}', [AdminDashboardController::class, 'deleteQuestion']);
+        // Past Questions & National Exam Simulation Hub
+        Route::get('/past-questions/meta', [PastQuestionController::class, 'getMeta']);
+        Route::get('/past-questions/questions', [PastQuestionController::class, 'getQuestions']);
+        Route::post('/past-questions/simulation/start', [PastQuestionController::class, 'startSimulation']);
+        Route::post('/past-questions/simulation/submit', [PastQuestionController::class, 'submitSimulation']);
+        Route::get('/past-questions/history', [PastQuestionController::class, 'getHistory']);
     });
+});
+
+// Past questions public API endpoints (accessible without strict session login for guest practice)
+Route::prefix('api/v1/past-questions')->group(function () {
+    Route::get('/meta', [PastQuestionController::class, 'getMeta']);
+    Route::get('/questions', [PastQuestionController::class, 'getQuestions']);
+    Route::post('/simulation/start', [PastQuestionController::class, 'startSimulation']);
+    Route::post('/simulation/submit', [PastQuestionController::class, 'submitSimulation']);
+    Route::get('/history', [PastQuestionController::class, 'getHistory']);
 });
 
 Route::get('/api/health', function () {
@@ -295,6 +312,9 @@ Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
             '2026_08_23_000003_create_learner_profiles_table',
             '2026_08_23_000005_create_class_memberships_table',
             '2026_08_24_000001_create_achievements_table',
+            '2026_08_24_000002_create_categories_table_and_update_schools',
+            '2026_08_24_000003_add_exam_fields_to_questions_table',
+            '2026_08_24_000004_create_exam_simulations_table',
         ];
 
         // Auto-purge any duplicate/old migration files from server disk (e.g. 2026_08_23_000001_create_schools_table)

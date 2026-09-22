@@ -1,0 +1,490 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\ExamSimulation;
+use App\Models\LearnerProgress;
+use App\Models\PastQuestion;
+use App\Models\PastQuestionOption;
+use App\Models\Subject;
+use App\Models\Topic;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+
+class PastQuestionController extends Controller
+{
+    /**
+     * Get metadata for past questions (available exams, subjects, years, and stats).
+     */
+    public function getMeta(Request $request): JsonResponse
+    {
+        $schoolId = $request->query('school_id');
+
+        // Available standard exams
+        $examsConfig = [
+            [
+                'code' => 'jamb',
+                'name' => 'JAMB (UTME)',
+                'fullName' => 'Joint Admissions and Matriculation Board - Unified Tertiary Matriculation Examination',
+                'description' => 'Computer-Based Test simulation for university, polytechnic, and college admissions across Nigeria.',
+                'badge' => 'Tertiary Entrance',
+                'color' => 'primary',
+                'defaultDurationMinutes' => 40,
+                'defaultQuestionCount' => 40,
+            ],
+            [
+                'code' => 'waec',
+                'name' => 'WAEC (WASSCE)',
+                'fullName' => 'West African Examinations Council - Senior School Certificate Examination',
+                'description' => 'Comprehensive Senior Secondary Certificate Examination past papers with step-by-step working.',
+                'badge' => 'Senior Secondary',
+                'color' => 'primary-light',
+                'defaultDurationMinutes' => 45,
+                'defaultQuestionCount' => 50,
+            ],
+            [
+                'code' => 'neco',
+                'name' => 'NECO (SSCE)',
+                'fullName' => 'National Examinations Council - Senior School Certificate Examination',
+                'description' => 'Authentic National Senior School Certificate Examination papers and theoretical reviews.',
+                'badge' => 'Senior Secondary',
+                'color' => 'accent',
+                'defaultDurationMinutes' => 45,
+                'defaultQuestionCount' => 40,
+            ],
+            [
+                'code' => 'post_utme',
+                'name' => 'Post-UTME',
+                'fullName' => 'Post-UTME University Screening Examinations',
+                'description' => 'University screening CBT questions for Nigerian federal and state universities.',
+                'badge' => 'Screening',
+                'color' => 'warning',
+                'defaultDurationMinutes' => 30,
+                'defaultQuestionCount' => 30,
+            ],
+            [
+                'code' => 'bece',
+                'name' => 'BECE (Junior WAEC)',
+                'fullName' => 'Basic Education Certificate Examination (JSS3 / Grade 9 Transition)',
+                'description' => 'Junior Secondary transitional exam questions for Junior WAEC and state-level exams.',
+                'badge' => 'Junior Secondary',
+                'color' => 'success',
+                'defaultDurationMinutes' => 30,
+                'defaultQuestionCount' => 30,
+            ],
+        ];
+
+        // Query counts per exam from dedicated past_questions table
+        $examCounts = PastQuestion::select('exam_code', DB::raw('count(*) as count'))
+            ->groupBy('exam_code')
+            ->pluck('count', 'exam_code')
+            ->all();
+
+        // Distinct years grouped by exam_code
+        $yearsByExam = PastQuestion::whereNotNull('exam_year')
+            ->select('exam_code', 'exam_year')
+            ->distinct()
+            ->orderBy('exam_year', 'desc')
+            ->get()
+            ->groupBy('exam_code')
+            ->map(fn ($rows) => $rows->pluck('exam_year')->values()->all());
+
+        $exams = array_map(function ($exam) use ($examCounts, $yearsByExam) {
+            $code = $exam['code'];
+            $exam['questionCount'] = $examCounts[$code] ?? 0;
+            $exam['available_years'] = $yearsByExam->get($code, []);
+            return $exam;
+        }, $examsConfig);
+
+        // Distinct years across all
+        $years = PastQuestion::whereNotNull('exam_year')
+            ->distinct()
+            ->orderBy('exam_year', 'desc')
+            ->pluck('exam_year');
+
+        // Available subjects with past questions & per-exam breakdown
+        $subjectsWithQuestions = Subject::whereHas('pastQuestions')
+            ->withCount('pastQuestions as questions_count')
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug']);
+
+        // Attach available exam codes and available years map for each subject
+        $subjectExamRows = PastQuestion::whereNotNull('exam_year')
+            ->select('subject_id', 'exam_code', 'exam_year')
+            ->distinct()
+            ->orderBy('exam_year', 'desc')
+            ->get();
+
+        $subjectExamMap = $subjectExamRows->groupBy('subject_id')
+            ->map(fn ($rows) => $rows->pluck('exam_code')->unique()->values()->all());
+
+        $subjectYearsByExamMap = $subjectExamRows->groupBy('subject_id')
+            ->map(function ($rows) {
+                return $rows->groupBy('exam_code')
+                    ->map(fn ($group) => $group->pluck('exam_year')->unique()->values()->all());
+            });
+
+        $subjectExamCounts = PastQuestion::select('subject_id', 'exam_code', DB::raw('count(*) as count'))
+            ->groupBy('subject_id', 'exam_code')
+            ->get()
+            ->groupBy('subject_id')
+            ->map(fn ($rows) => $rows->pluck('count', 'exam_code')->all());
+
+        $subjectsData = $subjectsWithQuestions->map(function ($s) use ($subjectExamMap, $subjectYearsByExamMap, $subjectExamCounts) {
+            $sArray = $s->toArray();
+            $sArray['available_exams'] = $subjectExamMap->get($s->id, []);
+            $sArray['available_years_by_exam'] = $subjectYearsByExamMap->get($s->id, []);
+            $sArray['counts_by_exam'] = $subjectExamCounts->get($s->id, []);
+            return $sArray;
+        });
+
+        $totalQuestions = PastQuestion::count();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'exams' => $exams,
+                'years' => $years,
+                'years_by_exam' => $yearsByExam,
+                'subjects' => $subjectsData,
+                'total_questions' => $totalQuestions,
+            ],
+        ]);
+    }
+
+    /**
+     * Get past questions filtered by exam, subject, year, or topic.
+     */
+    public function getQuestions(Request $request): JsonResponse
+    {
+        $examCode = $request->query('exam_code');
+        $examYear = $request->query('year');
+        $subjectSlug = $request->query('subject');
+        $subjectId = $request->query('subject_id');
+        $topicId = $request->query('topic_id');
+        $limit = min((int) ($request->query('limit', 40)), 100);
+        $random = $request->boolean('random', true);
+
+        $query = PastQuestion::with([
+            'options',
+            'topic.subject',
+            'subject',
+        ]);
+
+        if ($examCode && strtolower($examCode) !== 'all') {
+            $query->where('exam_code', strtolower($examCode));
+        }
+
+        if ($examYear && (int) $examYear > 0) {
+            $query->where('exam_year', (int) $examYear);
+        }
+
+        if ($topicId) {
+            $query->where('topic_id', $topicId);
+        } elseif ($subjectId) {
+            $query->where('subject_id', $subjectId);
+        } elseif ($subjectSlug && $subjectSlug !== 'all') {
+            $query->where(function ($q) use ($subjectSlug) {
+                $q->whereHas('subject', function ($sq) use ($subjectSlug) {
+                    $sq->where('slug', $subjectSlug)
+                       ->orWhere('name', 'LIKE', '%' . str_replace('-', ' ', $subjectSlug) . '%');
+                })->orWhereHas('topic.subject', function ($tq) use ($subjectSlug) {
+                    $tq->where('slug', $subjectSlug)
+                       ->orWhere('name', 'LIKE', '%' . str_replace('-', ' ', $subjectSlug) . '%');
+                });
+            });
+        }
+
+        if ($random) {
+            $query->inRandomOrder();
+        } else {
+            $query->orderBy('question_number', 'asc')->orderBy('id', 'asc');
+        }
+
+        $questions = $query->limit($limit)->get();
+
+        // Transform questions for front-end consumption
+        $formatted = $questions->map(function (PastQuestion $q) {
+            $subject = $q->subject ?? $q->topic?->subject;
+            return [
+                'id' => $q->id,
+                'exam_code' => $q->exam_code,
+                'exam_display_name' => $q->exam_display_name,
+                'exam_year' => $q->exam_year,
+                'paper_type' => $q->paper_type,
+                'question_number' => $q->question_number,
+                'question_text' => $q->question_text,
+                'passage_text' => $q->passage_text,
+                'image_url' => $q->image_url,
+                'difficulty' => $q->difficulty,
+                'explanation' => $q->explanation,
+                'topic' => [
+                    'id' => $q->topic?->id,
+                    'name' => $q->topic?->name,
+                    'level' => $q->topic?->level,
+                ],
+                'subject' => [
+                    'id' => $subject?->id,
+                    'name' => $subject?->name,
+                    'slug' => $subject?->slug,
+                ],
+                'options' => $q->options->map(function (PastQuestionOption $opt, $index) {
+                    $letter = $opt->option_key ?: chr(65 + $index); // A, B, C, D...
+                    return [
+                        'id' => $opt->id,
+                        'key' => strtolower($letter),
+                        'label' => $letter,
+                        'option_text' => $opt->option_text,
+                        'is_correct' => $opt->is_correct,
+                    ];
+                }),
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'count' => $formatted->count(),
+            'data' => $formatted,
+        ]);
+    }
+
+    /**
+     * Start an exam simulation session (or Practice session).
+     */
+    public function startSimulation(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'exam_code' => 'required|string|max:30',
+            'exam_year' => 'nullable|integer',
+            'subject_ids' => 'nullable|array',
+            'mode' => 'nullable|in:simulation,practice',
+            'duration_seconds' => 'nullable|integer',
+            'total_questions' => 'nullable|integer',
+        ]);
+
+        $user = Auth::user();
+        if (!$user) {
+            // For guest learners or quick practice
+            $user = \App\Models\User::first();
+        }
+
+        $simulation = ExamSimulation::create([
+            'user_id' => $user->id,
+            'school_id' => $user->school_id ?? null,
+            'exam_code' => strtolower($validated['exam_code']),
+            'exam_year' => $validated['exam_year'] ?? null,
+            'subject_ids' => $validated['subject_ids'] ?? [],
+            'mode' => $validated['mode'] ?? 'simulation',
+            'total_questions' => $validated['total_questions'] ?? 40,
+            'duration_seconds' => $validated['duration_seconds'] ?? 2400, // 40 mins default
+            'status' => 'in_progress',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'simulation_id' => $simulation->id,
+                'exam_code' => $simulation->exam_code,
+                'mode' => $simulation->mode,
+                'duration_seconds' => $simulation->duration_seconds,
+            ],
+        ]);
+    }
+
+    /**
+     * Submit an exam simulation, compute score, and update topic mastery.
+     */
+    public function submitSimulation(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'simulation_id' => 'nullable|integer',
+            'exam_code' => 'required|string',
+            'exam_year' => 'nullable|integer',
+            'time_spent_seconds' => 'nullable|integer',
+            'answers' => 'required|array', // [question_id => selected_option_id]
+        ]);
+
+        $user = Auth::user() ?? \App\Models\User::first();
+        $answers = $validated['answers'];
+        $timeSpent = $validated['time_spent_seconds'] ?? 0;
+
+        $questionIds = array_keys($answers);
+        $questions = PastQuestion::with(['options', 'topic.subject', 'subject'])
+            ->whereIn('id', $questionIds)
+            ->get()
+            ->keyBy('id');
+
+        $totalQuestions = count($questionIds);
+        $correctAnswers = 0;
+        $detailedResults = [];
+        $topicStats = []; // [topic_id => ['name' => ..., 'subject' => ..., 'total' => ..., 'correct' => ...]]
+
+        foreach ($answers as $qId => $selectedOptId) {
+            $question = $questions->get($qId);
+            if (!$question) continue;
+
+            $correctOption = $question->options->firstWhere('is_correct', true);
+            $selectedOption = $question->options->firstWhere('id', $selectedOptId);
+
+            $isCorrect = ($correctOption && $selectedOptId && (int)$correctOption->id === (int)$selectedOptId);
+            if ($isCorrect) {
+                $correctAnswers++;
+            }
+
+            // Topic aggregation
+            $topicId = $question->topic_id;
+            $topicName = $question->topic?->name ?? 'General Assessment';
+            $subjectName = $question->subject?->name ?? $question->topic?->subject?->name ?? 'General';
+
+            if ($topicId) {
+                if (!isset($topicStats[$topicId])) {
+                    $topicStats[$topicId] = [
+                        'topic_id' => $topicId,
+                        'topic_name' => $topicName,
+                        'subject_name' => $subjectName,
+                        'total' => 0,
+                        'correct' => 0,
+                    ];
+                }
+                $topicStats[$topicId]['total']++;
+                if ($isCorrect) {
+                    $topicStats[$topicId]['correct']++;
+                }
+            }
+
+            $detailedResults[] = [
+                'question_id' => $question->id,
+                'question_number' => $question->question_number,
+                'question_text' => $question->question_text,
+                'passage_text' => $question->passage_text,
+                'image_url' => $question->image_url,
+                'explanation' => $question->explanation,
+                'topic' => [
+                    'id' => $topicId,
+                    'name' => $topicName,
+                ],
+                'subject' => [
+                    'name' => $subjectName,
+                ],
+                'selected_option_id' => $selectedOptId,
+                'selected_option_text' => $selectedOption?->option_text,
+                'correct_option_id' => $correctOption?->id,
+                'correct_option_text' => $correctOption?->option_text,
+                'is_correct' => $isCorrect,
+                'options' => $question->options->map(function ($opt, $idx) use ($selectedOptId) {
+                    $letter = $opt->option_key ?: chr(65 + $idx);
+                    return [
+                        'id' => $opt->id,
+                        'key' => strtolower($letter),
+                        'label' => $letter,
+                        'option_text' => $opt->option_text,
+                        'is_correct' => $opt->is_correct,
+                        'is_selected' => ((int)$opt->id === (int)$selectedOptId),
+                    ];
+                }),
+            ];
+        }
+
+        $scorePercentage = $totalQuestions > 0
+            ? round(($correctAnswers / $totalQuestions) * 100, 2)
+            : 0;
+
+        // Process topic mastery and weakness recommendations
+        $topicBreakdown = [];
+        $weakTopics = [];
+
+        foreach ($topicStats as $tId => $stat) {
+            $accuracy = round(($stat['correct'] / $stat['total']) * 100, 1);
+            $breakdownItem = [
+                'topic_id' => $tId,
+                'topic_name' => $stat['topic_name'],
+                'subject_name' => $stat['subject_name'],
+                'total' => $stat['total'],
+                'correct' => $stat['correct'],
+                'accuracy' => $accuracy,
+                'status' => $accuracy >= 70 ? 'strong' : ($accuracy >= 40 ? 'moderate' : 'weak'),
+            ];
+            $topicBreakdown[] = $breakdownItem;
+
+            if ($accuracy < 60) {
+                $weakTopics[] = $breakdownItem;
+            }
+
+            // Update user learner_progress topic mastery if authenticated
+            if ($user && $tId) {
+                $progress = LearnerProgress::firstOrNew([
+                    'user_id' => $user->id,
+                    'topic_id' => $tId,
+                ]);
+
+                $prevAttempts = $progress->quiz_attempts_count ?? 0;
+                $progress->quiz_attempts_count = $prevAttempts + 1;
+                $progress->last_score_percent = $accuracy;
+                // Exponential moving average for mastery score
+                $oldMastery = $progress->mastery_score ?? 50.0;
+                $progress->mastery_score = round(($oldMastery * 0.6) + ($accuracy * 0.4), 2);
+                $progress->status = ($progress->mastery_score >= 70) ? 'mastered' : 'in_progress';
+                $progress->last_accessed_at = now();
+                $progress->save();
+            }
+        }
+
+        // Update or create simulation record
+        if (!empty($validated['simulation_id'])) {
+            $simulation = ExamSimulation::find($validated['simulation_id']);
+            if ($simulation) {
+                $simulation->update([
+                    'total_questions' => $totalQuestions,
+                    'correct_answers' => $correctAnswers,
+                    'score_percentage' => $scorePercentage,
+                    'time_spent_seconds' => $timeSpent,
+                    'status' => 'completed',
+                    'answers' => $answers,
+                    'topic_breakdown' => $topicBreakdown,
+                    'completed_at' => now(),
+                ]);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'exam_code' => $validated['exam_code'],
+                'exam_year' => $validated['exam_year'],
+                'total_questions' => $totalQuestions,
+                'correct_answers' => $correctAnswers,
+                'wrong_answers' => $totalQuestions - $correctAnswers,
+                'score_percentage' => $scorePercentage,
+                'time_spent_seconds' => $timeSpent,
+                'topic_breakdown' => $topicBreakdown,
+                'weak_topics' => $weakTopics,
+                'detailed_results' => $detailedResults,
+            ],
+        ]);
+    }
+
+    /**
+     * Get previous simulation attempts.
+     */
+    public function getHistory(Request $request): JsonResponse
+    {
+        $user = Auth::user() ?? \App\Models\User::first();
+        if (!$user) {
+            return response()->json(['success' => true, 'data' => []]);
+        }
+
+        $history = ExamSimulation::where('user_id', $user->id)
+            ->where('status', 'completed')
+            ->orderBy('completed_at', 'desc')
+            ->limit(20)
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $history,
+        ]);
+    }
+}

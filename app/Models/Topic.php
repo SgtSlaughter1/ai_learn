@@ -23,4 +23,9 @@ class Topic extends Model
     {
         return $this->hasMany(Question::class);
     }
+
+    public function pastQuestions(): HasMany
+    {
+        return $this->hasMany(PastQuestion::class);
+    }
 }
