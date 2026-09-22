@@ -9,6 +9,7 @@ use App\Models\PastQuestion;
 use App\Models\PastQuestionOption;
 use App\Models\Subject;
 use App\Models\Topic;
+use App\Services\AIService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,6 +17,10 @@ use Illuminate\Support\Facades\DB;
 
 class PastQuestionController extends Controller
 {
+    public function __construct(
+        protected AIService $aiService
+    ) {}
+
     /**
      * Get metadata for past questions (available exams, subjects, years, and stats).
      */
@@ -485,6 +490,27 @@ class PastQuestionController extends Controller
         return response()->json([
             'success' => true,
             'data' => $history,
+        ]);
+    }
+
+    /**
+     * Get an AI tutor explanation for a specific past question.
+     */
+    public function explain(Request $request): JsonResponse
+    {
+        $request->validate([
+            'past_question_id' => ['required', 'integer', 'exists:past_questions,id'],
+            'selected_option_id' => ['nullable', 'integer'],
+        ]);
+
+        $pastQuestion = PastQuestion::with(['options', 'subject', 'topic'])->findOrFail($request->input('past_question_id'));
+        $selectedOptionId = $request->input('selected_option_id');
+
+        $explanation = $this->aiService->explainPastQuestion($pastQuestion, $selectedOptionId);
+
+        return response()->json([
+            'success' => true,
+            'explanation' => $explanation,
         ]);
     }
 }

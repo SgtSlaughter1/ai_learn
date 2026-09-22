@@ -121,6 +121,62 @@ Instructions:
     }
 
     /**
+     * Explain a past examination question using Live AI Tutor or local step-by-step working.
+     */
+    public function explainPastQuestion(\App\Models\PastQuestion $question, ?int $selectedOptionId = null): string
+    {
+        $question->loadMissing(['options', 'subject', 'topic']);
+
+        $selectedOption = $question->options->firstWhere('id', $selectedOptionId);
+        $correctOption = $question->options->firstWhere('is_correct', true) ?? $question->options->first();
+
+        $subjectName = $question->subject?->name ?? 'General Science/Arts';
+        $topicName = $question->topic?->name ?? 'General Past Paper Mastery';
+        $examTitle = strtoupper($question->exam_code) . ($question->exam_year ? " {$question->exam_year}" : '');
+
+        $prompt = "You are an expert AI Tutor helping a Nigerian secondary school student prepare for the {$examTitle} national examination.
+Explain the following past examination question for Subject '{$subjectName}' (Topic: '{$topicName}').
+
+Question:
+\"{$question->question_text}\"" . ($question->passage_text ? "\n\nPassage:\n\"{$question->passage_text}\"" : "") . "
+
+Options:
+" . $question->options->map(fn($o) => "- " . ($o->option_key ? "{$o->option_key}. " : "") . $o->option_text . ($o->is_correct ? " (CORRECT)" : ""))->implode("\n") . "
+
+Student's Selected Answer: " . ($selectedOption ? ($selectedOption->option_key ? "{$selectedOption->option_key}. " : "") . "\"{$selectedOption->option_text}\"" : "None (Inquiring before answer)") . "
+Correct Answer: " . ($correctOption->option_key ? "{$correctOption->option_key}. " : "") . "\"{$correctOption->option_text}\"" . ($question->explanation ? "\n\nOfficial Solution Working:\n{$question->explanation}" : "") . "
+
+Instructions:
+1. Provide a crystal-clear, step-by-step mathematical/conceptual derivation and working.
+2. Explain why the correct option is right and why the other options are wrong (or common examiner traps).
+3. Connect the concept to the West African / JAMB curriculum syllabus.
+4. Keep it engaging, pedagogical, and encouraging.
+5. CRITICAL: When writing math, use ONLY LaTeX with dollar signs ($...$ for inline, $$...$$ for display). Keep formatting clean.";
+
+        $geminiResult = $this->callGemini([
+            ['role' => 'user', 'parts' => [['text' => $prompt]]]
+        ]);
+
+        if ($geminiResult) {
+            return $geminiResult;
+        }
+
+        // Offline Heuristic Fallback: Use built-in working + structured breakdown
+        $out = "### AI Tutor Analysis ({$examTitle})\n\n";
+        $out .= "**Subject:** {$subjectName} • **Topic:** {$topicName}\n\n";
+
+        if ($question->explanation) {
+            $out .= "#### Step-by-Step Working & Proof:\n" . $question->explanation . "\n\n";
+        }
+
+        $out .= "#### Key Exam Takeaway:\n";
+        $out .= "- The correct answer is **" . ($correctOption->option_key ? "{$correctOption->option_key}: " : "") . "{$correctOption->option_text}**.\n";
+        $out .= "- When approaching {$subjectName} questions on **{$topicName}**, always review standard formulas and eliminate distractors carefully.";
+
+        return $out;
+    }
+
+    /**
      * Role-aware entry point for AI chat.
      */
     public function generateChatResponse(User $user, string $message, array $history): string

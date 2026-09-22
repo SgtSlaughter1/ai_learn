@@ -28,6 +28,9 @@ Route::get('/', function () {
     ]);
 });
 
+// National Past Questions & Timed CBT Simulation Hub (Open to guests & learners)
+Route::get('/past-questions', fn() => Inertia::render('ExamPrep/PastQuestionsIndex'));
+
 // SEO & AEO Machine Discovery Routes
 Route::get('/sitemap.xml', function () {
     $path = public_path('sitemap.xml');
@@ -97,9 +100,6 @@ Route::middleware('auth')->group(function () {
 
     // Active Recall Flashcards
     Route::get('/flashcards', [FlashcardController::class, 'index']);
-
-    // Past Questions & CBT Exam Simulation Hub
-    Route::get('/past-questions', fn() => Inertia::render('ExamPrep/PastQuestionsIndex'));
 
     // Separate JSON Data Routes
     Route::prefix('api/v1')->group(function () {
@@ -187,6 +187,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/past-questions/simulation/start', [PastQuestionController::class, 'startSimulation']);
         Route::post('/past-questions/simulation/submit', [PastQuestionController::class, 'submitSimulation']);
         Route::get('/past-questions/history', [PastQuestionController::class, 'getHistory']);
+        Route::post('/past-questions/explain', [PastQuestionController::class, 'explain']);
     });
 });
 
@@ -197,6 +198,7 @@ Route::prefix('api/v1/past-questions')->group(function () {
     Route::post('/simulation/start', [PastQuestionController::class, 'startSimulation']);
     Route::post('/simulation/submit', [PastQuestionController::class, 'submitSimulation']);
     Route::get('/history', [PastQuestionController::class, 'getHistory']);
+    Route::post('/explain', [PastQuestionController::class, 'explain']);
 });
 
 Route::get('/api/health', function () {

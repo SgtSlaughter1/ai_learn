@@ -99,7 +99,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                                     : 'bg-[var(--color-error-5)] border-[var(--color-error)]/30'
                             }`}>
                                 <div className="inline-block px-3.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider mb-2 shadow-xs bg-[var(--color-surface)] border border-[var(--color-border)]">
-                                    {isExcellence ? '🌟 Outstanding Mastery' : isPass ? '👍 Passed - Good Attempt' : '⚠️ Needs Dedicated Review'}
+                                    {isExcellence ? 'Outstanding Mastery' : isPass ? 'Passed - Good Attempt' : 'Needs Dedicated Review'}
                                 </div>
                                 <div className="text-6xl md:text-7xl font-extrabold text-[var(--color-text)] my-2">
                                     {score}%

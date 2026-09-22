@@ -8,6 +8,7 @@ import {
 import { ExamPracticeModal } from './ExamPracticeModal';
 import { ExamSimulationModal } from './ExamSimulationModal';
 import { ExamResultModal } from './ExamResultModal';
+import { BookOpen, Timer } from 'lucide-react';
 
 export const PastQuestionsHub: React.FC = () => {
     const [exams, setExams] = useState<ExamMeta[]>([]);
@@ -286,7 +287,9 @@ export const PastQuestionsHub: React.FC = () => {
                     <div className="p-5 rounded-2xl bg-[var(--color-accent-5)] border border-[var(--color-accent-20)] flex flex-col justify-between space-y-4">
                         <div>
                             <div className="flex items-center gap-2">
-                                <span className="p-1.5 rounded-lg bg-[var(--color-accent-10)] text-[var(--color-accent)] font-bold text-sm">⚡</span>
+                                <div className="p-1.5 rounded-lg bg-[var(--color-accent-10)] text-[var(--color-accent)]">
+                                    <BookOpen className="w-4 h-4" />
+                                </div>
                                 <h3 className="font-bold text-sm text-[var(--color-text)]">
                                     Interactive Practice Mode
                                 </h3>
@@ -308,7 +311,9 @@ export const PastQuestionsHub: React.FC = () => {
                     <div className="p-5 rounded-2xl bg-[var(--color-primary-5)] border border-[var(--color-primary-20)] flex flex-col justify-between space-y-4">
                         <div>
                             <div className="flex items-center gap-2">
-                                <span className="p-1.5 rounded-lg bg-[var(--color-primary-10)] text-[var(--color-primary)] font-bold text-sm">⏱️</span>
+                                <div className="p-1.5 rounded-lg bg-[var(--color-primary-10)] text-[var(--color-primary)]">
+                                    <Timer className="w-4 h-4" />
+                                </div>
                                 <h3 className="font-bold text-sm text-[var(--color-text)]">
                                     Timed CBT Simulation
                                 </h3>
@@ -374,14 +379,14 @@ export const PastQuestionsHub: React.FC = () => {
                                             onClick={() => startSession('practice', sub.slug)}
                                             className="flex-1 py-2 rounded-xl bg-[var(--color-surface-hover)] hover:bg-[var(--color-border)] text-xs font-bold text-[var(--color-text)] transition-colors cursor-pointer text-center"
                                         >
-                                            Practice ⚡
+                                            Practice
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => startSession('simulation', sub.slug)}
                                             className="flex-1 py-2 rounded-xl bg-[var(--color-primary-10)] hover:bg-[var(--color-primary)] text-xs font-bold text-[var(--color-primary)] hover:text-white transition-all cursor-pointer text-center"
                                         >
-                                            CBT Test ⏱️
+                                            CBT Test
                                         </button>
                                     </div>
                                 </div>

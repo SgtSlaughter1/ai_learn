@@ -4,6 +4,8 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { PastQuestionItem } from '../../types/past-questions';
+import { AiExplanationDrawer } from '../quiz/AiExplanationDrawer';
+import { Sparkles } from 'lucide-react';
 
 interface Props {
     questions: PastQuestionItem[];
@@ -22,6 +24,11 @@ export const ExamPracticeModal: React.FC<Props> = ({
     const [currentIndex, setCurrentIndex] = useState<number>(0);
     const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
     const [bookmarked, setBookmarked] = useState<Record<number, boolean>>({});
+
+    // AI Tutor State
+    const [aiTutorOpen, setAiTutorOpen] = useState<boolean>(false);
+    const [aiTutorContent, setAiTutorContent] = useState<string>('');
+    const [aiTutorLoading, setAiTutorLoading] = useState<boolean>(false);
 
     if (!questions || questions.length === 0) {
         return (
@@ -54,6 +61,36 @@ export const ExamPracticeModal: React.FC<Props> = ({
         setBookmarked(prev => ({ ...prev, [currentQ.id]: !prev[currentQ.id] }));
     };
 
+    const handleAskAiTutor = async () => {
+        setAiTutorOpen(true);
+        setAiTutorLoading(true);
+
+        try {
+            const res = await fetch('/api/v1/past-questions/explain', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    past_question_id: currentQ.id,
+                    selected_option_id: selectedOptId,
+                }),
+            });
+            const data = await res.json();
+            if (data.success && data.explanation) {
+                setAiTutorContent(data.explanation);
+            } else {
+                setAiTutorContent(currentQ.explanation || `### AI Tutor Analysis\n\n**Subject:** ${currentQ.subject?.name || 'Subject'}\n\nReview your topic notes for this question.`);
+            }
+        } catch (e) {
+            // Offline fallback
+            setAiTutorContent(currentQ.explanation || `### AI Tutor (Offline Mode)\n\n**Subject:** ${currentQ.subject?.name || 'Subject'}\n\nOperating offline. Review your standard formula sheets and curriculum notes.`);
+        } finally {
+            setAiTutorLoading(false);
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)] backdrop-blur-xs p-3 md:p-6 overflow-y-auto animate-fade-in">
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
@@ -82,6 +119,15 @@ export const ExamPracticeModal: React.FC<Props> = ({
                     </div>
 
                     <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={handleAskAiTutor}
+                            className="px-3 py-1.5 rounded-xl border border-[var(--color-primary-20)] bg-[var(--color-primary-5)] hover:bg-[var(--color-primary-10)] text-[var(--color-primary)] text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                            title="Ask AI Tutor for guidance"
+                        >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Ask AI Tutor</span>
+                        </button>
                         <button
                             onClick={toggleBookmark}
                             className={`p-2 rounded-xl border transition-all cursor-pointer ${
@@ -255,6 +301,15 @@ export const ExamPracticeModal: React.FC<Props> = ({
                     </button>
                 </div>
             </div>
+
+            {/* AI Tutor Insights Drawer */}
+            <AiExplanationDrawer
+                isOpen={aiTutorOpen}
+                onClose={() => setAiTutorOpen(false)}
+                questionText={currentQ.question_text}
+                content={aiTutorContent}
+                loading={aiTutorLoading}
+            />
         </div>
     );
 };
