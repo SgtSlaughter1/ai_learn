@@ -10,13 +10,7 @@ class PastQuestionOption extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'past_question_id',
-        'option_key',
-        'option_text',
-        'is_correct',
-        'sort_order',
-    ];
+    protected $guarded = [];
 
     protected $casts = [
         'is_correct' => 'boolean',

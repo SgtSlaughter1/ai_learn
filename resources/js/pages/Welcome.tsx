@@ -11,8 +11,15 @@ interface SubjectItem {
     school_id?: number | null;
 }
 
+interface WelcomeStats {
+    total_subjects?: number;
+    total_past_questions?: number;
+    exam_counts?: Record<string, number>;
+}
+
 interface WelcomeProps {
     subjects?: SubjectItem[];
+    stats?: WelcomeStats;
 }
 
 function getSubjectIcon(name: string) {
@@ -80,7 +87,7 @@ function getSubjectIcon(name: string) {
     );
 }
 
-export default function Welcome({ subjects = [] }: WelcomeProps) {
+export default function Welcome({ subjects = [], stats }: WelcomeProps) {
     const displaySubjects = subjects.length > 0 ? subjects : [
         { id: 1, name: 'Mathematics', topics_count: 8 },
         { id: 2, name: 'Physics', topics_count: 6 },
@@ -92,12 +99,23 @@ export default function Welcome({ subjects = [] }: WelcomeProps) {
         { id: 8, name: 'Government', topics_count: 5 },
     ];
 
+    const examCounts = stats?.exam_counts || {};
+    const totalPastCount = stats?.total_past_questions ?? Object.values(examCounts).reduce((a, b) => a + b, 0);
+    const totalSubjectsCount = stats?.total_subjects ?? (subjects.length > 0 ? subjects.length : displaySubjects.length);
+
+    const formatQuestionCount = (count?: number, fallback = 'Questions') => {
+        if (count && count > 0) {
+            return `${count.toLocaleString()} Questions`;
+        }
+        return fallback;
+    };
+
     const examTypes = [
         {
             code: 'jamb',
             name: 'JAMB (UTME)',
             badge: 'Tertiary Entrance',
-            count: '2,300+ Questions',
+            count: formatQuestionCount(examCounts['jamb'], '2,300+ Questions'),
             desc: 'Real Computer-Based Test simulation with timer, calculator, question palette, and topic breakdown.',
             color: 'bg-[var(--color-primary-10)] text-[var(--color-primary)] border-[var(--color-primary-20)]',
         },
@@ -105,7 +123,7 @@ export default function Welcome({ subjects = [] }: WelcomeProps) {
             code: 'waec',
             name: 'WAEC (WASSCE)',
             badge: 'Senior Secondary',
-            count: '1,000+ Questions',
+            count: formatQuestionCount(examCounts['waec'], '1,000+ Questions'),
             desc: 'Authentic Senior School Certificate Examination papers with step-by-step mathematical working.',
             color: 'bg-[var(--color-success-10)] text-[var(--color-success)] border-[var(--color-success-20)]',
         },
@@ -113,7 +131,7 @@ export default function Welcome({ subjects = [] }: WelcomeProps) {
             code: 'neco',
             name: 'NECO (SSCE)',
             badge: 'National SSCE',
-            count: '150+ Questions',
+            count: formatQuestionCount(examCounts['neco'], '150+ Questions'),
             desc: 'National Senior Certificate past papers with syllabus topic alignment and error analysis.',
             color: 'bg-[var(--color-accent-10)] text-[var(--color-accent)] border-[var(--color-accent-20)]',
         },
@@ -121,7 +139,7 @@ export default function Welcome({ subjects = [] }: WelcomeProps) {
             code: 'post_utme',
             name: 'Post-UTME',
             badge: 'Screening Drills',
-            count: '470+ Questions',
+            count: formatQuestionCount(examCounts['post_utme'], '470+ Questions'),
             desc: 'Aptitude and subject screening papers for top Nigerian federal and state universities.',
             color: 'bg-[var(--color-primary-10)] text-[var(--color-primary)] border-[var(--color-primary-20)]',
         },
@@ -134,7 +152,7 @@ export default function Welcome({ subjects = [] }: WelcomeProps) {
         },
         {
             question: "Do past questions and CBT simulations work completely offline?",
-            answer: "Yes! All 4,000+ authentic questions, option choices, passages, and step-by-step mathematical solutions are cached directly on your device via our Progressive Web App (PWA). You can practice on your phone, tablet, or laptop anywhere with zero data or internet connection."
+            answer: `Yes! All ${totalPastCount > 0 ? totalPastCount.toLocaleString() + '+' : '4,000+'} authentic questions, option choices, passages, and step-by-step mathematical solutions are cached directly on your device via our Progressive Web App (PWA). You can practice on your phone, tablet, or laptop anywhere with zero data or internet connection.`
         },
         {
             question: "How does the AI Tutor work with past questions?",
@@ -142,7 +160,7 @@ export default function Welcome({ subjects = [] }: WelcomeProps) {
         },
         {
             question: "What curriculum and exams does AILEARN cover?",
-            answer: "AILEARN supports Junior & Senior Secondary school curricula aligned with WAEC, NECO, JAMB/UTME, and NERDC standards across 15 core subjects including Mathematics, English, Physics, Chemistry, Biology, Economics, Accounting, and Government."
+            answer: `AILEARN supports Junior & Senior Secondary school curricula aligned with WAEC, NECO, JAMB/UTME, and NERDC standards across ${totalSubjectsCount} core subjects including Mathematics, English, Physics, Chemistry, Biology, Economics, Accounting, and Government.`
         },
         {
             question: "How does student progress sync when back online?",
@@ -266,7 +284,7 @@ export default function Welcome({ subjects = [] }: WelcomeProps) {
                         {/* Stats */}
                         <div className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-3xl mx-auto">
                             <div className="text-center p-4 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xs">
-                                <div className="text-2xl font-extrabold text-[var(--color-primary)]">15+</div>
+                                <div className="text-2xl font-extrabold text-[var(--color-primary)]">{totalSubjectsCount}+</div>
                                 <div className="text-xs font-bold text-[var(--color-muted)] mt-1">Core Subjects</div>
                             </div>
                             <div className="text-center p-4 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xs">
@@ -278,7 +296,9 @@ export default function Welcome({ subjects = [] }: WelcomeProps) {
                                 <div className="text-xs font-bold text-[var(--color-muted)] mt-1">Powered Tutor</div>
                             </div>
                             <div className="text-center p-4 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xs">
-                                <div className="text-2xl font-extrabold text-[var(--color-primary)]">4,000+</div>
+                                <div className="text-2xl font-extrabold text-[var(--color-primary)]">
+                                    {totalPastCount > 0 ? totalPastCount.toLocaleString() + '+' : '4,000+'}
+                                </div>
                                 <div className="text-xs font-bold text-[var(--color-muted)] mt-1">Past Questions</div>
                             </div>
                         </div>

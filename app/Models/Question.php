@@ -14,11 +14,7 @@ class Question extends Model
 
     protected $guarded = [];
 
-    protected $casts = [
-        'metadata' => 'array',
-        'exam_year' => 'integer',
-        'question_number' => 'integer',
-    ];
+    protected $casts = [];
 
     public function topic(): BelongsTo
     {
@@ -40,39 +36,8 @@ class Question extends Model
         return is_null($this->school_id);
     }
 
-    public function getIsPastQuestionAttribute(): bool
-    {
-        return !empty($this->exam_code);
-    }
-
-    public function getExamDisplayNameAttribute(): ?string
-    {
-        return match (strtolower((string) $this->exam_code)) {
-            'jamb', 'utme' => 'JAMB (UTME)',
-            'waec', 'wassce' => 'WAEC (WASSCE)',
-            'neco' => 'NECO (SSCE)',
-            'bece', 'junior_waec' => 'BECE (Junior WAEC)',
-            'post_utme' => 'Post-UTME',
-            default => $this->exam_code ? strtoupper($this->exam_code) : null,
-        };
-    }
-
     public function getCorrectOptionAttribute(): ?QuestionOption
     {
         return $this->options->firstWhere('is_correct', true);
-    }
-
-    public function scopePastQuestions(Builder $query): Builder
-    {
-        return $query->whereNotNull('exam_code');
-    }
-
-    public function scopeForExam(Builder $query, string $examCode, ?int $year = null): Builder
-    {
-        $q = $query->where('exam_code', strtolower($examCode));
-        if ($year) {
-            $q->where('exam_year', $year);
-        }
-        return $q;
     }
 }

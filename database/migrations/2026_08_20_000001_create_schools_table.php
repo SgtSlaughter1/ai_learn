@@ -8,10 +8,21 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (!Schema::hasTable('categories')) {
+            Schema::create('categories', function (Blueprint $table) {
+                $table->id();
+                $table->string('name');
+                $table->string('code', 50)->unique(); // primary, junior, senior
+                $table->text('description')->nullable();
+                $table->timestamps();
+            });
+        }
+
         if (!Schema::hasTable('schools')) {
             Schema::create('schools', function (Blueprint $table) {
                 $table->id();
                 $table->string('name');
+                $table->json('category_ids')->nullable();
                 $table->string('category', 50)->default('senior')->index(); // primary, junior, senior, combined
                 $table->string('slug', 150)->unique();
                 $table->string('address')->nullable();
@@ -33,5 +44,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('schools');
+        Schema::dropIfExists('categories');
     }
 };

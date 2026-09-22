@@ -11,21 +11,7 @@ class PastQuestion extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'subject_id',
-        'topic_id',
-        'exam_code',
-        'exam_year',
-        'paper_type',
-        'question_number',
-        'question_text',
-        'passage_text',
-        'image_url',
-        'difficulty',
-        'explanation',
-        'status',
-        'metadata',
-    ];
+    protected $guarded = [];
 
     protected $casts = [
         'exam_year' => 'integer',

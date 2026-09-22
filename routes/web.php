@@ -23,8 +23,35 @@ Route::get('/', function () {
         ->orderBy('sort_order')
         ->get(['id', 'name', 'code', 'slug', 'description', 'icon', 'school_id']);
 
+    $totalSubjects = \App\Models\Subject::where('status', 'active')->count();
+    $totalPastQuestions = \App\Models\PastQuestion::count();
+    $examCounts = \App\Models\PastQuestion::select('exam_code', \Illuminate\Support\Facades\DB::raw('count(*) as count'))
+        ->groupBy('exam_code')
+        ->pluck('count', 'exam_code')
+        ->toArray();
+
     return Inertia::render('Welcome', [
         'subjects' => $subjects,
+        'stats' => [
+            'total_subjects' => $totalSubjects,
+            'total_past_questions' => $totalPastQuestions,
+            'exam_counts' => $examCounts,
+        ],
+    ]);
+});
+
+Route::get('/api/stats', function () {
+    $totalSubjects = \App\Models\Subject::where('status', 'active')->count();
+    $totalPastQuestions = \App\Models\PastQuestion::count();
+    $examCounts = \App\Models\PastQuestion::select('exam_code', \Illuminate\Support\Facades\DB::raw('count(*) as count'))
+        ->groupBy('exam_code')
+        ->pluck('count', 'exam_code')
+        ->toArray();
+
+    return response()->json([
+        'total_subjects' => $totalSubjects,
+        'total_past_questions' => $totalPastQuestions,
+        'exam_counts' => $examCounts,
     ]);
 });
 
@@ -314,30 +341,29 @@ Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
             '2026_08_23_000003_create_learner_profiles_table',
             '2026_08_23_000005_create_class_memberships_table',
             '2026_08_24_000001_create_achievements_table',
-            '2026_08_24_000002_create_categories_table_and_update_schools',
-            '2026_08_24_000003_add_exam_fields_to_questions_table',
             '2026_08_24_000004_create_exam_simulations_table',
+            '2026_08_24_000005_create_past_questions_tables',
         ];
 
-        // Auto-purge any duplicate/old migration files from server disk (e.g. 2026_08_23_000001_create_schools_table)
+        // Auto-purge only known old/stale merged migration files from server disk
+        $staleMergedFiles = [
+            '2026_08_23_000001_create_schools_table',
+            '2026_08_24_000002_create_categories_table_and_update_schools',
+            '2026_08_24_000003_add_exam_fields_to_questions_table',
+        ];
         $purgedExtraFiles = [];
-        foreach (glob(database_path('migrations/*.php')) ?: [] as $filePath) {
-            $base = basename($filePath, '.php');
-            if (!in_array($base, $canonicalMigrations, true)) {
-                @unlink($filePath);
-                $purgedExtraFiles[] = $base;
+        foreach ($staleMergedFiles as $staleBase) {
+            $stalePath = database_path("migrations/{$staleBase}.php");
+            if (file_exists($stalePath)) {
+                @unlink($stalePath);
+                $purgedExtraFiles[] = $staleBase;
             }
         }
-        $report['purged_duplicate_migration_files'] = $purgedExtraFiles;
+        $report['purged_stale_migration_files'] = $purgedExtraFiles;
 
         $migrationFilesOnDisk = glob(database_path('migrations/*.php')) ?: [];
         $filenamesOnDisk = array_map(fn ($p) => basename($p, '.php'), $migrationFilesOnDisk);
         $report['migration_files_on_disk'] = $filenamesOnDisk;
-
-        // committed deletions: the repo has removed a migration file that the tracked
-        // `migrations` table still records as run. The file is gone from disk (it was
-        // never part of this deployment), so it won't be re-run by `migrate`.
-        // (Note: `stale_tracked_migrations` above is the same set.)
 
         // 1. Every table that exists right now
         $tablesBefore = array_map(
@@ -348,8 +374,8 @@ Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
 
         // 2. Drop each table on its own, so one denied DROP can't abort the wipe
         $drop = ['dropped' => [], 'failed' => []];
-    \Illuminate\Support\Facades\Schema::disableForeignKeyConstraints();
-    foreach ($tablesBefore as $table) {
+        \Illuminate\Support\Facades\Schema::disableForeignKeyConstraints();
+        foreach ($tablesBefore as $table) {
             try {
                 \Illuminate\Support\Facades\DB::statement("DROP TABLE IF EXISTS `{$table}`");
                 $drop['dropped'][] = $table;
@@ -360,8 +386,7 @@ Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
         \Illuminate\Support\Facades\Schema::enableForeignKeyConstraints();
         $report['drop_results'] = $drop;
 
-        // 3. Verify the wipe actually happened. If tables remain here, the MySQL
-        //    user cannot DROP tables, so "fresh" can never work via SQL alone.
+        // 3. Verify the wipe actually happened.
         $report['tables_remaining_after_drop'] = array_map(
             fn ($table) => array_values((array) $table)[0],
             \Illuminate\Support\Facades\DB::select('SHOW FULL TABLES WHERE Table_type = ?', ['BASE TABLE'])
@@ -415,6 +440,9 @@ Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
 Route::get('/run-seed', function () use ($guardMaintenance) {
     $guardMaintenance();
 
+    @set_time_limit(300);
+    @ini_set('memory_limit', '256M');
+
     try {
         \Illuminate\Support\Facades\Artisan::call('db:seed', ['--force' => true]);
         $output = \Illuminate\Support\Facades\Artisan::output();
@@ -427,6 +455,30 @@ Route::get('/run-seed', function () use ($guardMaintenance) {
         return response()->json([
             'status' => 'error',
             'message' => 'Failed to run seeders: ' . $e->getMessage()
+        ], 500);
+    }
+});
+
+// Run past questions migration and seed only (convenient for incremental setup)
+Route::get('/run-past-questions-seed', function () use ($guardMaintenance) {
+    $guardMaintenance();
+
+    @set_time_limit(300);
+    @ini_set('memory_limit', '256M');
+
+    try {
+        \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+        \Illuminate\Support\Facades\Artisan::call('db:seed', ['--class' => 'PastQuestionSeeder', '--force' => true]);
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Past questions migrated and seeded successfully!',
+            'questions_count' => \App\Models\PastQuestion::count(),
+            'options_count' => \App\Models\PastQuestionOption::count(),
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Failed to seed past questions: ' . $e->getMessage(),
         ], 500);
     }
 });
