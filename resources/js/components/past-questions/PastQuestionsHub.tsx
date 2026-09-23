@@ -8,12 +8,13 @@ import {
 import { ExamPracticeModal } from './ExamPracticeModal';
 import { ExamSimulationModal } from './ExamSimulationModal';
 import { ExamResultModal } from './ExamResultModal';
-import { BookOpen, Timer } from 'lucide-react';
+import { BookOpen, Timer, Lock, ArrowRight } from 'lucide-react';
 
 export const PastQuestionsHub: React.FC = () => {
     const [exams, setExams] = useState<ExamMeta[]>([]);
     const [subjects, setSubjects] = useState<PastQuestionSubject[]>([]);
     const [totalQuestions, setTotalQuestions] = useState<number>(0);
+    const [isGuest, setIsGuest] = useState<boolean>(true);
 
     // Active Selection State
     const [selectedExam, setSelectedExam] = useState<string>('jamb');
@@ -39,6 +40,7 @@ export const PastQuestionsHub: React.FC = () => {
                 setExams(data.data.exams || []);
                 setSubjects(data.data.subjects || []);
                 setTotalQuestions(data.data.total_questions || 0);
+                setIsGuest(data.data.is_guest ?? data.is_guest ?? true);
 
                 if (data.data.exams?.length > 0) {
                     setSelectedExam(data.data.exams[0].code);
@@ -55,10 +57,11 @@ export const PastQuestionsHub: React.FC = () => {
         setErrorToast(null);
 
         try {
+            const questionLimit = isGuest ? '50' : (mode === 'simulation' ? '40' : '50');
             const params = new URLSearchParams({
                 exam_code: selectedExam,
                 mode: mode,
-                limit: mode === 'simulation' ? '40' : '50',
+                limit: questionLimit,
             });
             if (mode === 'practice') {
                 params.append('include_answers', '1');
@@ -155,6 +158,39 @@ export const PastQuestionsHub: React.FC = () => {
                     </button>
                 </div>
             )}
+
+            {/* Guest Preview Notice Bar (Non-Auth Users) */}
+            {isGuest && (
+                <div className="rounded-2xl bg-gradient-to-r from-[var(--color-primary-10)] via-[var(--color-accent-10)] to-[var(--color-primary-5)] border border-[var(--color-accent-20)] p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm animate-fade-in">
+                    <div className="flex items-start gap-3.5">
+                        <div className="w-9 h-9 rounded-xl bg-[var(--color-accent)] text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                            <Lock className="w-4 h-4" />
+                        </div>
+                        <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--color-accent)]">
+                                    Guest Preview Mode
+                                </span>
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[var(--color-accent-20)] text-[var(--color-accent)] border border-[var(--color-accent)]/30">
+                                    50 Free Questions
+                                </span>
+                            </div>
+                            <p className="text-xs text-[var(--color-text)] font-medium leading-relaxed">
+                                You are exploring a <strong>50-question free trial</strong>. Sign in for unrestricted access to all examination years, full-length timed CBT simulations, and AI diagnostic score tracking.
+                            </p>
+                        </div>
+                    </div>
+
+                    <a
+                        href="/login"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-bold text-xs shrink-0 transition-all shadow-sm hover:shadow-md cursor-pointer self-stretch sm:self-auto justify-center"
+                    >
+                        <span>Sign In for Full Access</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                    </a>
+                </div>
+            )}
+
             {/* Hero Header Banner */}
             <div className="relative rounded-3xl overflow-hidden bg-[var(--color-primary)] p-6 md:p-10 text-white shadow-xl">
                 <div className="relative z-10 max-w-3xl space-y-4">

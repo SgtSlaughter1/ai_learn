@@ -27,6 +27,8 @@ class PastQuestionController extends Controller
     public function getMeta(Request $request): JsonResponse
     {
         $schoolId = $request->query('school_id');
+        $user = Auth::user() ?? $request->user();
+        $isGuest = !$user;
 
         // Available standard exams
         $examsConfig = [
@@ -150,27 +152,38 @@ class PastQuestionController extends Controller
 
         return response()->json([
             'success' => true,
+            'is_guest' => $isGuest,
+            'guest_question_limit' => 50,
             'data' => [
                 'exams' => $exams,
                 'years' => $years,
                 'years_by_exam' => $yearsByExam,
                 'subjects' => $subjectsData,
                 'total_questions' => $totalQuestions,
+                'is_guest' => $isGuest,
+                'guest_question_limit' => 50,
             ],
         ]);
     }
 
     /**
      * Get past questions filtered by exam, subject, year, or topic.
+     * Unauthenticated (guest) users are strictly capped to 50 questions max.
      */
     public function getQuestions(Request $request): JsonResponse
     {
+        $user = Auth::user() ?? $request->user();
+        $isGuest = !$user;
+
         $examCode = $request->query('exam_code');
         $examYear = $request->query('year');
         $subjectSlug = $request->query('subject');
         $subjectId = $request->query('subject_id');
         $topicId = $request->query('topic_id');
-        $limit = min((int) ($request->query('limit', 40)), 100);
+
+        // Unauthenticated guests are capped to a maximum of 50 questions alone
+        $requestedLimit = (int) ($request->query('limit', 40));
+        $limit = $isGuest ? min($requestedLimit, 50) : min($requestedLimit, 100);
         $random = $request->boolean('random', true);
 
         $query = PastQuestion::with([
@@ -260,6 +273,8 @@ class PastQuestionController extends Controller
         return response()->json([
             'success' => true,
             'count' => $formatted->count(),
+            'is_guest' => $isGuest,
+            'guest_limit' => 50,
             'data' => $formatted,
         ]);
     }
@@ -278,31 +293,39 @@ class PastQuestionController extends Controller
             'total_questions' => 'nullable|integer',
         ]);
 
-        $user = Auth::user();
-        if (!$user) {
-            // For guest learners or quick practice
-            $user = \App\Models\User::first();
-        }
+        $user = Auth::user() ?? $request->user();
+        $isGuest = !$user;
 
-        $simulation = ExamSimulation::create([
-            'user_id' => $user->id,
-            'school_id' => $user->school_id ?? null,
-            'exam_code' => strtolower($validated['exam_code']),
-            'exam_year' => $validated['exam_year'] ?? null,
-            'subject_ids' => $validated['subject_ids'] ?? [],
-            'mode' => $validated['mode'] ?? 'simulation',
-            'total_questions' => $validated['total_questions'] ?? 40,
-            'duration_seconds' => $validated['duration_seconds'] ?? 2400, // 40 mins default
-            'status' => 'in_progress',
-        ]);
+        $totalQuestions = $isGuest
+            ? min((int) ($validated['total_questions'] ?? 40), 50)
+            : min((int) ($validated['total_questions'] ?? 40), 100);
+
+        $simulationId = null;
+
+        if ($user) {
+            $simulation = ExamSimulation::create([
+                'user_id' => $user->id,
+                'school_id' => $user->school_id ?? null,
+                'exam_code' => strtolower($validated['exam_code']),
+                'exam_year' => $validated['exam_year'] ?? null,
+                'subject_ids' => $validated['subject_ids'] ?? [],
+                'mode' => $validated['mode'] ?? 'simulation',
+                'total_questions' => $totalQuestions,
+                'duration_seconds' => $validated['duration_seconds'] ?? 2400, // 40 mins default
+                'status' => 'in_progress',
+            ]);
+            $simulationId = $simulation->id;
+        }
 
         return response()->json([
             'success' => true,
             'data' => [
-                'simulation_id' => $simulation->id,
-                'exam_code' => $simulation->exam_code,
-                'mode' => $simulation->mode,
-                'duration_seconds' => $simulation->duration_seconds,
+                'simulation_id' => $simulationId,
+                'exam_code' => strtolower($validated['exam_code']),
+                'mode' => $validated['mode'] ?? 'simulation',
+                'duration_seconds' => $validated['duration_seconds'] ?? 2400,
+                'is_guest' => $isGuest,
+                'total_questions' => $totalQuestions,
             ],
         ]);
     }
@@ -321,7 +344,7 @@ class PastQuestionController extends Controller
             'question_ids' => 'nullable|array', // all question IDs in the exam session
         ]);
 
-        $user = Auth::user() ?? \App\Models\User::first();
+        $user = Auth::user() ?? $request->user();
         $answers = $validated['answers'] ?? [];
         $timeSpent = $validated['time_spent_seconds'] ?? 0;
 
@@ -490,7 +513,7 @@ class PastQuestionController extends Controller
      */
     public function getHistory(Request $request): JsonResponse
     {
-        $user = Auth::user() ?? \App\Models\User::first();
+        $user = Auth::user() ?? $request->user();
         if (!$user) {
             return response()->json(['success' => true, 'data' => []]);
         }

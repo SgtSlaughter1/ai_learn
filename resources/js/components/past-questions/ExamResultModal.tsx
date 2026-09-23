@@ -152,6 +152,25 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                                     </div>
                                 </div>
                             )}
+
+                            {/* Guest Scorecard Saving Callout */}
+                            <div className="p-5 rounded-2xl bg-gradient-to-r from-[var(--color-primary-10)] to-[var(--color-accent-10)] border border-[var(--color-primary-20)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div className="space-y-1">
+                                    <h4 className="font-bold text-xs text-[var(--color-text)] flex items-center gap-1.5">
+                                        <span>📊</span>
+                                        <span>Save Your CBT Simulation Scorecard</span>
+                                    </h4>
+                                    <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+                                        Sign in to permanently save your exam score history, track progress across curriculum topics, and unlock unlimited questions.
+                                    </p>
+                                </div>
+                                <a
+                                    href="/login"
+                                    className="px-4 py-2 rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-bold text-xs shrink-0 text-center transition-all shadow-xs"
+                                >
+                                    Sign In / Register →
+                                </a>
+                            </div>
                         </div>
                     )}
 
