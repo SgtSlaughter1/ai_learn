@@ -296,7 +296,7 @@ input:-webkit-autofill:focus {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   KATEX MATH RENDERING SAFEGUARDS
+   KATEX MATH RENDERING SAFEGUARDS & FRACTION CLEARANCE
    ═══════════════════════════════════════════════════════════ */
 
 .katex-mathml {
@@ -330,4 +330,13 @@ input:-webkit-autofill:focus {
     overflow-y: hidden !important;
     vertical-align: middle !important;
 }
+
+/* Fraction vertical clearance: separates denominator and numerator from divider line */
+.katex .mfrac {
+    padding: 0 0.1em;
+}
+
+
+
+
 

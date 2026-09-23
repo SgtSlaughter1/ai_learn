@@ -211,8 +211,13 @@ class PastQuestionController extends Controller
 
         $questions = $query->limit($limit)->get();
 
+        $mode = $request->input('mode', 'simulation');
+        $hideAnswers = $request->has('include_answers')
+            ? !$request->boolean('include_answers')
+            : ($mode === 'simulation');
+
         // Transform questions for front-end consumption
-        $formatted = $questions->map(function (PastQuestion $q) {
+        $formatted = $questions->map(function (PastQuestion $q) use ($hideAnswers) {
             $subject = $q->subject ?? $q->topic?->subject;
             return [
                 'id' => $q->id,
@@ -225,7 +230,7 @@ class PastQuestionController extends Controller
                 'passage_text' => $q->passage_text,
                 'image_url' => $q->image_url,
                 'difficulty' => $q->difficulty,
-                'explanation' => $q->explanation,
+                'explanation' => $hideAnswers ? null : $q->explanation,
                 'topic' => [
                     'id' => $q->topic?->id,
                     'name' => $q->topic?->name,
@@ -236,15 +241,18 @@ class PastQuestionController extends Controller
                     'name' => $subject?->name,
                     'slug' => $subject?->slug,
                 ],
-                'options' => $q->options->map(function (PastQuestionOption $opt, $index) {
+                'options' => $q->options->map(function (PastQuestionOption $opt, $index) use ($hideAnswers) {
                     $letter = $opt->option_key ?: chr(65 + $index); // A, B, C, D...
-                    return [
+                    $optData = [
                         'id' => $opt->id,
                         'key' => strtolower($letter),
                         'label' => $letter,
                         'option_text' => $opt->option_text,
-                        'is_correct' => $opt->is_correct,
                     ];
+                    if (!$hideAnswers) {
+                        $optData['is_correct'] = (bool) $opt->is_correct;
+                    }
+                    return $optData;
                 }),
             ];
         });
@@ -309,14 +317,18 @@ class PastQuestionController extends Controller
             'exam_code' => 'required|string',
             'exam_year' => 'nullable|integer',
             'time_spent_seconds' => 'nullable|integer',
-            'answers' => 'required|array', // [question_id => selected_option_id]
+            'answers' => 'nullable|array', // [question_id => selected_option_id]
+            'question_ids' => 'nullable|array', // all question IDs in the exam session
         ]);
 
         $user = Auth::user() ?? \App\Models\User::first();
-        $answers = $validated['answers'];
+        $answers = $validated['answers'] ?? [];
         $timeSpent = $validated['time_spent_seconds'] ?? 0;
 
-        $questionIds = array_keys($answers);
+        $questionIds = !empty($validated['question_ids'])
+            ? $validated['question_ids']
+            : array_keys($answers);
+
         $questions = PastQuestion::with(['options', 'topic.subject', 'subject'])
             ->whereIn('id', $questionIds)
             ->get()
@@ -327,12 +339,13 @@ class PastQuestionController extends Controller
         $detailedResults = [];
         $topicStats = []; // [topic_id => ['name' => ..., 'subject' => ..., 'total' => ..., 'correct' => ...]]
 
-        foreach ($answers as $qId => $selectedOptId) {
+        foreach ($questionIds as $qId) {
             $question = $questions->get($qId);
             if (!$question) continue;
 
+            $selectedOptId = $answers[$qId] ?? null;
             $correctOption = $question->options->firstWhere('is_correct', true);
-            $selectedOption = $question->options->firstWhere('id', $selectedOptId);
+            $selectedOption = $selectedOptId ? $question->options->firstWhere('id', $selectedOptId) : null;
 
             $isCorrect = ($correctOption && $selectedOptId && (int)$correctOption->id === (int)$selectedOptId);
             if ($isCorrect) {
@@ -387,7 +400,7 @@ class PastQuestionController extends Controller
                         'label' => $letter,
                         'option_text' => $opt->option_text,
                         'is_correct' => $opt->is_correct,
-                        'is_selected' => ((int)$opt->id === (int)$selectedOptId),
+                        'is_selected' => ($selectedOptId && (int)$opt->id === (int)$selectedOptId),
                     ];
                 }),
             ];
@@ -418,21 +431,22 @@ class PastQuestionController extends Controller
                 $weakTopics[] = $breakdownItem;
             }
 
-            // Update user learner_progress topic mastery if authenticated
+            // Update user learner_progress topic mastery if user exists
             if ($user && $tId) {
                 $progress = LearnerProgress::firstOrNew([
                     'user_id' => $user->id,
                     'topic_id' => $tId,
                 ]);
 
-                $prevAttempts = $progress->quiz_attempts_count ?? 0;
-                $progress->quiz_attempts_count = $prevAttempts + 1;
-                $progress->last_score_percent = $accuracy;
-                // Exponential moving average for mastery score
-                $oldMastery = $progress->mastery_score ?? 50.0;
-                $progress->mastery_score = round(($oldMastery * 0.6) + ($accuracy * 0.4), 2);
-                $progress->status = ($progress->mastery_score >= 70) ? 'mastered' : 'in_progress';
-                $progress->last_accessed_at = now();
+                $prevAttempted = (int) ($progress->questions_attempted ?? 0);
+                $prevCorrect   = (int) ($progress->questions_correct ?? 0);
+                $newAttempted  = $prevAttempted + (int) ($stat['total'] ?? 0);
+                $newCorrect    = $prevCorrect + (int) ($stat['correct'] ?? 0);
+
+                $progress->questions_attempted = $newAttempted;
+                $progress->questions_correct   = $newCorrect;
+                $progress->mastery_score       = $newAttempted > 0 ? (int) round(($newCorrect / $newAttempted) * 100) : 0;
+                $progress->last_attempted_at   = now();
                 $progress->save();
             }
         }
@@ -458,7 +472,7 @@ class PastQuestionController extends Controller
             'success' => true,
             'data' => [
                 'exam_code' => $validated['exam_code'],
-                'exam_year' => $validated['exam_year'],
+                'exam_year' => $validated['exam_year'] ?? null,
                 'total_questions' => $totalQuestions,
                 'correct_answers' => $correctAnswers,
                 'wrong_answers' => $totalQuestions - $correctAnswers,

@@ -6,6 +6,7 @@ import 'katex/dist/katex.min.css';
 import { PastQuestionItem } from '../../types/past-questions';
 import { AiExplanationDrawer } from '../quiz/AiExplanationDrawer';
 import { Sparkles } from 'lucide-react';
+import { formatMathText } from '../../utils/mathFormatter';
 
 interface Props {
     questions: PastQuestionItem[];
@@ -164,12 +165,12 @@ export const ExamPracticeModal: React.FC<Props> = ({
 
                     {/* Comprehension Passage */}
                     {currentQ.passage_text && (
-                        <div className="p-5 rounded-2xl bg-[var(--color-background)] border border-[var(--color-border)] text-sm text-[var(--color-text)] leading-relaxed italic">
-                            <p className="font-bold not-italic text-[10px] uppercase tracking-wider text-[var(--color-primary)] mb-2">
+                        <div className="p-4 md:p-6 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] text-sm leading-relaxed text-[var(--color-text)] italic chat-markdown">
+                            <p className="not-italic text-[10px] font-extrabold text-[var(--color-primary)] uppercase tracking-wider mb-2">
                                 Reading Comprehension Passage:
                             </p>
                             <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                {currentQ.passage_text}
+                                {formatMathText(currentQ.passage_text)}
                             </Markdown>
                         </div>
                     )}
@@ -188,7 +189,7 @@ export const ExamPracticeModal: React.FC<Props> = ({
                     {/* Question Text with KaTeX LaTeX Rendering */}
                     <div className="text-lg md:text-xl font-bold text-[var(--color-text)] leading-relaxed chat-markdown">
                         <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                            {currentQ.question_text}
+                            {formatMathText(currentQ.question_text)}
                         </Markdown>
                     </div>
 
@@ -225,7 +226,7 @@ export const ExamPracticeModal: React.FC<Props> = ({
                                     </span>
                                     <div className="flex-1 pt-1 font-semibold text-sm text-[var(--color-text)] [&_p]:inline">
                                         <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                            {option.option_text}
+                                            {formatMathText(option.option_text)}
                                         </Markdown>
                                     </div>
                                     {isAnswered && isOptionCorrect && (
@@ -266,7 +267,7 @@ export const ExamPracticeModal: React.FC<Props> = ({
                                         Step-by-Step Solution & Working:
                                     </strong>
                                     <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                        {currentQ.explanation}
+                                        {formatMathText(currentQ.explanation)}
                                     </Markdown>
                                 </div>
                             ) : (

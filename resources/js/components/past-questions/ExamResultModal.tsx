@@ -4,6 +4,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { ExamSimulationResult } from '../../types/past-questions';
+import { formatMathText } from '../../utils/mathFormatter';
 
 interface Props {
     result: ExamSimulationResult;
@@ -230,7 +231,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                                                 <div>
                                                     <div className="font-bold text-sm text-[var(--color-text)] line-clamp-2 [&_p]:inline">
                                                         <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                            {q.question_text}
+                                                            {formatMathText(q.question_text)}
                                                         </Markdown>
                                                     </div>
                                                     <div className="text-xs text-[var(--color-muted)] mt-1">
@@ -249,7 +250,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                                                 {q.passage_text && (
                                                     <div className="p-3 rounded-xl bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-xs italic text-[var(--color-muted)] chat-markdown">
                                                         <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                            {q.passage_text}
+                                                            {formatMathText(q.passage_text)}
                                                         </Markdown>
                                                     </div>
                                                 )}
@@ -272,7 +273,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                                                                     <span className="font-extrabold uppercase w-5 text-center">{opt.label || chrFromIdx(optIdx)}.</span>
                                                                     <span className="[&_p]:inline">
                                                                         <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                                            {opt.option_text}
+                                                                            {formatMathText(opt.option_text)}
                                                                         </Markdown>
                                                                     </span>
                                                                 </div>
@@ -289,7 +290,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                                                             Solution & Step-by-Step Working:
                                                         </strong>
                                                         <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                            {q.explanation}
+                                                            {formatMathText(q.explanation)}
                                                         </Markdown>
                                                     </div>
                                                 )}

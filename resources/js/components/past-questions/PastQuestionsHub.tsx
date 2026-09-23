@@ -25,6 +25,7 @@ export const PastQuestionsHub: React.FC = () => {
     const [activeMode, setActiveMode] = useState<'practice' | 'simulation' | null>(null);
     const [simulationId, setSimulationId] = useState<number | undefined>();
     const [examResult, setExamResult] = useState<ExamSimulationResult | null>(null);
+    const [errorToast, setErrorToast] = useState<string | null>(null);
 
     // History
     const [history, setHistory] = useState<any[]>([]);
@@ -48,7 +49,7 @@ export const PastQuestionsHub: React.FC = () => {
                 }
             }
         } catch (err) {
-            console.error('Failed to fetch past questions metadata:', err);
+            console.error('Error fetching meta:', err);
         }
     };
 
@@ -60,28 +61,33 @@ export const PastQuestionsHub: React.FC = () => {
                 setHistory(data.data || []);
             }
         } catch (err) {
-            console.error('Failed to fetch past questions history:', err);
+            console.error('Error fetching history:', err);
         }
     };
 
     const startSession = async (mode: 'practice' | 'simulation', overrideSubject?: string) => {
         const subjectToUse = overrideSubject || selectedSubject;
         setIsLoadingQuestions(true);
+        setErrorToast(null);
 
         try {
             const params = new URLSearchParams({
                 exam_code: selectedExam,
+                mode: mode,
                 limit: mode === 'simulation' ? '40' : '50',
             });
+            if (mode === 'practice') {
+                params.append('include_answers', '1');
+            }
             if (subjectToUse !== 'all') {
                 params.append('subject', subjectToUse);
             }
 
             const res = await fetch(`/api/v1/past-questions/questions?${params.toString()}`);
-            const data = await res.json();
+            const data = await res.json().catch(() => null);
 
-            if (!data.success || !data.data || data.data.length === 0) {
-                alert(`No questions found for ${selectedExam.toUpperCase()} with the selected subject.`);
+            if (!res.ok || !data?.success || !data?.data || data.data.length === 0) {
+                setErrorToast(`No questions found for ${selectedExam.toUpperCase()} with the selected criteria.`);
                 setIsLoadingQuestions(false);
                 return;
             }
@@ -101,8 +107,8 @@ export const PastQuestionsHub: React.FC = () => {
                         total_questions: data.data.length,
                     }),
                 });
-                const simData = await simRes.json();
-                if (simData.success) {
+                const simData = await simRes.json().catch(() => null);
+                if (simData?.success) {
                     setSimulationId(simData.data.simulation_id);
                 }
             }
@@ -110,7 +116,7 @@ export const PastQuestionsHub: React.FC = () => {
             setActiveMode(mode);
         } catch (err) {
             console.error('Error starting session:', err);
-            alert('Failed to load exam questions.');
+            setErrorToast('Failed to load exam questions. Please verify your connection.');
         } finally {
             setIsLoadingQuestions(false);
         }
@@ -148,6 +154,23 @@ export const PastQuestionsHub: React.FC = () => {
 
     return (
         <div className="space-y-8 pb-12">
+            {/* In-app Error Toast Banner */}
+            {errorToast && (
+                <div className="fixed top-20 right-6 z-50 max-w-md bg-[var(--color-error)] text-white px-4 py-3 rounded-2xl shadow-2xl flex items-start gap-3 animate-fade-in border border-white/20">
+                    <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div className="flex-1 text-xs font-semibold leading-relaxed">
+                        {errorToast}
+                    </div>
+                    <button
+                        onClick={() => setErrorToast(null)}
+                        className="text-white/80 hover:text-white cursor-pointer ml-1 text-sm font-bold"
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
             {/* Hero Header Banner */}
             <div className="relative rounded-3xl overflow-hidden bg-[var(--color-primary)] p-6 md:p-10 text-white shadow-xl">
                 <div className="relative z-10 max-w-3xl space-y-4">
