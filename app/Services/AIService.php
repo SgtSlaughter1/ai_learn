@@ -11,6 +11,7 @@ use App\Models\School;
 use App\Models\Subject;
 use App\Models\Topic;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
@@ -78,18 +79,34 @@ class AIService
 
     /**
      * Generate an explanation for why an answer is correct or incorrect.
+     * Results are cached for 30 days by question ID and selected option to ensure instant re-checking.
      */
     public function explainAnswer(Question $question, ?int $selectedOptionId): string
     {
-        $question->load(['options', 'topic.subject']);
-        $correctOption = $question->options->firstWhere('is_correct', true);
-        $selectedOption = $selectedOptionId ? $question->options->firstWhere('id', $selectedOptionId) : null;
+        $cacheKey = 'ai_explain_q_' . $question->id . '_' . ($selectedOptionId ?? 0);
 
-        $subjectName = $question->topic->subject->name ?? 'Unknown Subject';
-        $topicName = $question->topic->name ?? 'Unknown Topic';
+        return Cache::remember($cacheKey, now()->addDays(30), function () use ($question, $selectedOptionId) {
+            $question->load(['options', 'topic.subject']);
+            $correctOption = $question->options->firstWhere('is_correct', true);
+            $selectedOption = $selectedOptionId ? $question->options->firstWhere('id', $selectedOptionId) : null;
 
-        $prompt = "You are an expert AI Tutor helping a secondary school student learn. 
-Explain the following question in the context of the subject '{$subjectName}' and topic '{$topicName}'.
+            $subjectName = $question->topic->subject->name ?? 'Unknown Subject';
+            $topicName = $question->topic->name ?? 'Unknown Topic';
+
+            $prompt = "You are an expert AI Tutor helping a secondary school student understand their mistake and master the concept in {$subjectName} (Topic: {$topicName}).
+Explain the student's mistake using the following EXACT 4-part structure with Markdown headers:
+
+### 1. What You Chose
+State clearly what option the student chose (" . ($selectedOption ? "\"{$selectedOption->option_text}\"" : "Skipped / No answer") . ") and what misconception or assumption commonly leads someone to pick this option.
+
+### 2. Why It Was Incorrect
+Explain precisely why this choice is incorrect, highlighting the specific calculation trap, false premise, or overlooked rule.
+
+### 3. What the Correct Reasoning Is
+Provide crystal-clear, step-by-step logic, formula, or mathematical proof demonstrating why the correct answer is \"{$correctOption->option_text}\".
+
+### 4. A Simple Example
+Provide a brief, concrete mini-example or easy-to-remember rule that reinforces how to solve similar problems.
 
 Question:
 \"{$question->question_text}\"
@@ -97,45 +114,57 @@ Question:
 Options:
 " . $question->options->map(fn($o) => "- " . $o->option_text . ($o->is_correct ? " (CORRECT)" : ""))->implode("\n") . "
 
-Student's Selected Answer: " . ($selectedOption ? "\"{$selectedOption->option_text}\"" : "None (Skipped)") . "
-Correct Answer: \"{$correctOption->option_text}\"
+Rules:
+- Strictly format output with the 4 exact Markdown headers (### 1. What You Chose, ### 2. Why It Was Incorrect, ### 3. What the Correct Reasoning Is, ### 4. A Simple Example).
+- Keep the tone encouraging, pedagogical, and secondary-school appropriate.
+- When writing mathematical expressions or variables, use ONLY LaTeX notation with dollar signs ($...$ for inline, $$...$$ for display).
+- Keep total response concise (under 280 words).";
 
-Instructions:
-1. Explain clearly why the correct answer is correct.
-2. If the student made an incorrect selection, gently explain why that choice is incorrect.
-3. Keep the explanation brief, encouraging, and easy to understand (secondary school level).
-4. Provide a key study tip or takeaway rule at the end.
-5. Use clean markdown formatting without mentioning internal IDs. Keep it under 250 words.
-6. CRITICAL: When writing math, use ONLY LaTeX with dollar signs ($...$ for inline, $$...$$ for display). NEVER write the same expression in both LaTeX AND plain text. Use ONLY the LaTeX version, not both.";
+            $geminiResult = $this->callGemini([
+                ['role' => 'user', 'parts' => [['text' => $prompt]]]
+            ]);
 
-        $geminiResult = $this->callGemini([
-            ['role' => 'user', 'parts' => [['text' => $prompt]]]
-        ]);
+            if ($geminiResult) {
+                return $geminiResult;
+            }
 
-        if ($geminiResult) {
-            return $geminiResult;
-        }
-
-        // Local Heuristic Tutor Explanation (Offline Fallback)
-        return $this->generateHeuristicExplanation($question, $selectedOption, $correctOption, $subjectName, $topicName);
+            // Local Heuristic Tutor Explanation (Offline Fallback)
+            return $this->generateHeuristicExplanation($question, $selectedOption, $correctOption, $subjectName, $topicName);
+        });
     }
 
     /**
      * Explain a past examination question using Live AI Tutor or local step-by-step working.
+     * Results are cached for 30 days by question ID and selected option to ensure instant re-checking.
      */
     public function explainPastQuestion(\App\Models\PastQuestion $question, ?int $selectedOptionId = null): string
     {
-        $question->loadMissing(['options', 'subject', 'topic']);
+        $cacheKey = 'ai_explain_pq_' . $question->id . '_' . ($selectedOptionId ?? 0);
 
-        $selectedOption = $question->options->firstWhere('id', $selectedOptionId);
-        $correctOption = $question->options->firstWhere('is_correct', true) ?? $question->options->first();
+        return Cache::remember($cacheKey, now()->addDays(30), function () use ($question, $selectedOptionId) {
+            $question->loadMissing(['options', 'subject', 'topic']);
 
-        $subjectName = $question->subject?->name ?? 'General Science/Arts';
-        $topicName = $question->topic?->name ?? 'General Past Paper Mastery';
-        $examTitle = strtoupper($question->exam_code) . ($question->exam_year ? " {$question->exam_year}" : '');
+            $selectedOption = $question->options->firstWhere('id', $selectedOptionId);
+            $correctOption = $question->options->firstWhere('is_correct', true) ?? $question->options->first();
 
-        $prompt = "You are an expert AI Tutor helping a Nigerian secondary school student prepare for the {$examTitle} national examination.
-Explain the following past examination question for Subject '{$subjectName}' (Topic: '{$topicName}').
+            $subjectName = $question->subject?->name ?? ($question->topic?->subject?->name ?? 'General Science/Arts');
+            $topicName = $question->topic?->name ?? 'Curriculum Mastery';
+            $examTitle = strtoupper($question->exam_code) . ($question->exam_year ? " {$question->exam_year}" : '');
+
+            $prompt = "You are an expert AI Tutor helping a Nigerian secondary school student prepare for the {$examTitle} examination in Subject '{$subjectName}' (Topic: '{$topicName}').
+Diagnose the student's mistake using the following EXACT 4-part structure with Markdown headers:
+
+### 1. What You Chose
+State what option was chosen (" . ($selectedOption ? ($selectedOption->option_key ? "Option {$selectedOption->option_key}: " : "") . "\"{$selectedOption->option_text}\"" : "Question inquiry without selection") . ") and identify what examiner distractor or misunderstanding it represents.
+
+### 2. Why It Was Incorrect
+Explain why that choice is incorrect according to the examination marking scheme.
+
+### 3. What the Correct Reasoning Is
+Provide the complete, step-by-step mathematical working or conceptual derivation proving why (" . ($correctOption->option_key ? "Option {$correctOption->option_key}: " : "") . "\"{$correctOption->option_text}\") is correct." . ($question->explanation ? "\nOfficial Reference Solution:\n{$question->explanation}" : "") . "
+
+### 4. A Simple Example
+Provide a brief, crystal-clear mini-example or core exam strategy rule for {$examTitle} questions on {$topicName}.
 
 Question:
 \"{$question->question_text}\"" . ($question->passage_text ? "\n\nPassage:\n\"{$question->passage_text}\"" : "") . "
@@ -143,37 +172,49 @@ Question:
 Options:
 " . $question->options->map(fn($o) => "- " . ($o->option_key ? "{$o->option_key}. " : "") . $o->option_text . ($o->is_correct ? " (CORRECT)" : ""))->implode("\n") . "
 
-Student's Selected Answer: " . ($selectedOption ? ($selectedOption->option_key ? "{$selectedOption->option_key}. " : "") . "\"{$selectedOption->option_text}\"" : "None (Inquiring before answer)") . "
-Correct Answer: " . ($correctOption->option_key ? "{$correctOption->option_key}. " : "") . "\"{$correctOption->option_text}\"" . ($question->explanation ? "\n\nOfficial Solution Working:\n{$question->explanation}" : "") . "
+Rules:
+- Strictly format output with the 4 exact headers (### 1. What You Chose, ### 2. Why It Was Incorrect, ### 3. What the Correct Reasoning Is, ### 4. A Simple Example).
+- Use ONLY LaTeX with dollar signs for mathematical expressions ($...$).
+- Keep total response concise, direct, and encouraging.";
 
-Instructions:
-1. Provide a crystal-clear, step-by-step mathematical/conceptual derivation and working.
-2. Explain why the correct option is right and why the other options are wrong (or common examiner traps).
-3. Connect the concept to the West African / JAMB curriculum syllabus.
-4. Keep it engaging, pedagogical, and encouraging.
-5. CRITICAL: When writing math, use ONLY LaTeX with dollar signs ($...$ for inline, $$...$$ for display). Keep formatting clean.";
+            $geminiResult = $this->callGemini([
+                ['role' => 'user', 'parts' => [['text' => $prompt]]]
+            ]);
 
-        $geminiResult = $this->callGemini([
-            ['role' => 'user', 'parts' => [['text' => $prompt]]]
-        ]);
+            if ($geminiResult) {
+                return $geminiResult;
+            }
 
-        if ($geminiResult) {
-            return $geminiResult;
-        }
+            // Offline Heuristic Fallback: 4-part structured breakdown
+            $out = "### 1. What You Chose\n\n";
+            if ($selectedOption) {
+                if ($selectedOption->id === $correctOption->id) {
+                    $out .= "You selected **" . ($selectedOption->option_key ? "Option {$selectedOption->option_key}: " : "") . "\"{$selectedOption->option_text}\"**, which is the **correct answer** for {$examTitle}!\n\n";
+                } else {
+                    $out .= "You selected **" . ($selectedOption->option_key ? "Option {$selectedOption->option_key}: " : "") . "\"{$selectedOption->option_text}\"**. This option is a common distractor in {$examTitle} papers.\n\n";
+                }
+            } else {
+                $out .= "You reviewed this question without selecting an option. Let's study the examination method together.\n\n";
+            }
 
-        // Offline Heuristic Fallback: Use built-in working + structured breakdown
-        $out = "### AI Tutor Analysis ({$examTitle})\n\n";
-        $out .= "**Subject:** {$subjectName} • **Topic:** {$topicName}\n\n";
+            $out .= "### 2. Why It Was Incorrect\n\n";
+            if ($selectedOption && $selectedOption->id !== $correctOption->id) {
+                $out .= "This choice does not satisfy the formula or rule tested in **{$topicName}**. Examination distractors often test incomplete steps or sign reversals.\n\n";
+            } else {
+                $out .= "Incorrect options in {$examTitle} often represent partial calculations or inverted ratios.\n\n";
+            }
 
-        if ($question->explanation) {
-            $out .= "#### Step-by-Step Working & Proof:\n" . $question->explanation . "\n\n";
-        }
+            $out .= "### 3. What the Correct Reasoning Is\n\n";
+            $out .= "The correct answer is **" . ($correctOption->option_key ? "Option {$correctOption->option_key}: " : "") . "\"{$correctOption->option_text}\"**.\n\n";
+            if ($question->explanation) {
+                $out .= "**Step-by-Step Working:**\n" . $question->explanation . "\n\n";
+            }
 
-        $out .= "#### Key Exam Takeaway:\n";
-        $out .= "- The correct answer is **" . ($correctOption->option_key ? "{$correctOption->option_key}: " : "") . "{$correctOption->option_text}**.\n";
-        $out .= "- When approaching {$subjectName} questions on **{$topicName}**, always review standard formulas and eliminate distractors carefully.";
+            $out .= "### 4. A Simple Example\n\n";
+            $out .= "- **Exam Strategy:** When approaching {$subjectName} questions on **{$topicName}**, always write out given variables and standard formulas before calculating.";
 
-        return $out;
+            return $out;
+        });
     }
 
     /**
@@ -476,39 +517,32 @@ Guidelines:
 
     private function generateHeuristicExplanation(Question $question, ?QuestionOption $selectedOption, QuestionOption $correctOption, string $subject, string $topic): string
     {
-        $out = "### AI Tutor Explanation\n\n";
-        $out .= "Let's review this concept under **{$subject} -> {$topic}**:\n\n";
-        
+        $out = "### 1. What You Chose\n\n";
         if ($selectedOption) {
             if ($selectedOption->id === $correctOption->id) {
-                $out .= "**Correct!** You selected **\"{$selectedOption->option_text}\"**, which is the correct answer.\n\n";
+                $out .= "You chose **\"{$selectedOption->option_text}\"**, which is the **correct answer**! Great job applying the principles of **{$topic}**.\n\n";
             } else {
-                $out .= "**Incorrect Choice:** You chose **\"{$selectedOption->option_text}\"**. Let's see why this isn't correct.\n\n";
+                $out .= "You chose **\"{$selectedOption->option_text}\"**. This option is a common trap when looking at initial numbers without applying the full formula.\n\n";
             }
         } else {
-            $out .= "**Skipped Question:** You didn't select an answer. Let's study the correct answer together.\n\n";
+            $out .= "You skipped this question without choosing an option. Let's break down the method so you can solve it with confidence.\n\n";
         }
 
-        // ── Step-by-Step Breakdown ──
-        $out .= "#### Why the correct answer is \"{$correctOption->option_text}\":\n\n";
+        $out .= "### 2. Why It Was Incorrect\n\n";
+        if ($selectedOption && $selectedOption->id !== $correctOption->id) {
+            $reason = $this->generateWrongAnswerReason($selectedOption, $correctOption, $question, $topic);
+            $out .= "Option **\"{$selectedOption->option_text}\"** is incorrect because {$reason}\n\n";
+        } else {
+            $out .= "Distractor options often use reversed signs, partial operations, or common calculation traps.\n\n";
+        }
 
+        $out .= "### 3. What the Correct Reasoning Is\n\n";
+        $out .= "The correct answer is **\"{$correctOption->option_text}\"**.\n\n";
         $steps = $this->generateStepByStep($question, $correctOption, $topic);
-        $out .= $steps;
+        $out .= $steps . "\n\n";
 
-        // ── Wrong Answer Analysis ──
-        $wrongOptions = $question->options->where('is_correct', false);
-        if ($wrongOptions->isNotEmpty()) {
-            $out .= "#### Why the other options are wrong:\n\n";
-            foreach ($wrongOptions as $wrong) {
-                $reason = $this->generateWrongAnswerReason($wrong, $correctOption, $question, $topic);
-                $out .= "* **\"{$wrong->option_text}\"** — {$reason}\n";
-            }
-            $out .= "\n";
-        }
-
-        // ── Key Takeaway ──
-        $out .= "---\n\n";
-        $out .= "**Study Tip:** {$this->generateStudyTip($topic, $question)}";
+        $out .= "### 4. A Simple Example\n\n";
+        $out .= $this->generateStudyTip($topic, $question);
 
         return $out;
     }

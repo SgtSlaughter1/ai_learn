@@ -56,10 +56,11 @@ export function formatMathText(text: string | null | undefined): string {
     formatted = formatted.replace(/∞/g, ' \\infty ');
 
     // 3. Normalize Degree & Temperature OCR artifacts: 1080o, 180o, 20oC, 100oC, 45°, 90º
-    formatted = formatted.replace(/(\b\d+(?:\.\d+)?)\s*o\s*C\b/gi, '$1^{\\circ}\\text{C}');
-    formatted = formatted.replace(/(\b\d+(?:\.\d+)?)\s*o\s*F\b/gi, '$1^{\\circ}\\text{F}');
-    formatted = formatted.replace(/(\b\d+(?:\.\d+)?)\s*(?:o|°|º)(?![a-zA-Z0-9])/g, '$1^{\\circ}');
+    formatted = formatted.replace(/(\b\d+(?:\.\d+)?)\s*(?:[°º]|o\s*)(?:C\b|deg\s*C\b)/g, '$1^{\\circ}\\text{C}');
+    formatted = formatted.replace(/(\b\d+(?:\.\d+)?)\s*(?:[°º]|o\s*)(?:F\b|deg\s*F\b)/g, '$1^{\\circ}\\text{F}');
+    formatted = formatted.replace(/(\b\d+(?:\.\d+)?)\s*[°º](?![a-zA-Z0-9])/g, '$1^{\\circ}');
     formatted = formatted.replace(/(\b\d+(?:\.\d+)?)\s*\\deg\b/g, '$1^{\\circ}');
+    formatted = formatted.replace(/(\b\d{2,})o(?![a-zA-Z0-9])/g, '$1^{\\circ}');
 
     // Normalize OCR artifacts & Units
     formatted = formatted.replace(/([\)a-zA-Z0-9\}])\s*<-\s*([0-9]+)/g, '$1^{-$2}');
@@ -106,38 +107,54 @@ export function formatMathText(text: string | null | undefined): string {
     const nestedBraces = '(?:[^{}]|\\{(?:[^{}]|\\{[^{}]*\\})*\\})*';
     const nestedParens = '(?:[^()]|\\([^()]*\\))*';
 
-    // 5. Bare exponents: 2^3 -> 2^{3}, 4^(1/3) -> 4^{\dfrac{1}{3}}, 2^-1 -> 2^{-1}, x^2 -> x^{2}
+    // 5. Bare exponents: 2^3 -> 2^{3}, 4^(1/3) -> 4^{\frac{1}{3}}, 2^-1 -> 2^{-1}, x^2 -> x^{2}
     formatted = formatted.replace(/(?<=[a-zA-Z0-9\)])\s*\^\s*(-?[a-zA-Z0-9]+)(?![a-zA-Z0-9\{])/g, '^{$1}');
     formatted = formatted.replace(/\^\s*\(\s*(-?[a-zA-Z0-9\/]+)\s*\)/g, '^{$1}');
-    // Exponents with fractions: ^{3/4} or ^{-1/4} or ^{(-1)/2} or ^{(1/4)} -> ^{\dfrac{3}{4}} or ^{-\dfrac{1}{4}}
+    // Exponents with fractions: use \frac (compact scriptstyle, avoids shifting KaTeX baseline)
     formatted = formatted.replace(/\^\{\s*\(?\s*(-?\d+)\s*\)?\s*\/\s*\(?\s*(\d+)\s*\)?\s*\}/g, (_m, num, den) => {
         const n = parseInt(num, 10);
-        if (n < 0) return `^{-\\dfrac{${Math.abs(n)}}{${den}}}`;
-        return `^{\\dfrac{${n}}{${den}}}`;
+        if (n < 0) return `^{-\\frac{${Math.abs(n)}}{${den}}}`;
+        return `^{\\frac{${n}}{${den}}}`;
     });
-    // Clean any negative numerators in exponents: ^{\frac{-1}{2}} -> ^{-\dfrac{1}{2}}
-    formatted = formatted.replace(/\^\{\s*\\(?:dfrac|frac)\{\s*-\s*(\d+)\s*\}\{\s*(\d+)\s*\}\s*\}/g, "^{-\\dfrac{$1}{$2}}");
+    // Subscripts with fractions: _{1/2} -> _{\frac{1}{2}}
+    formatted = formatted.replace(/_\{\s*\(?\s*(\d+)\s*\)?\s*\/\s*\(?\s*(\d+)\s*\)?\s*\}/g, (_m, num, den) => {
+        return `_{\\frac{${num}}{${den}}}`;
+    });
+    // Clean any negative numerators in exponents: ^{\frac{-1}{2}} -> ^{-\frac{1}{2}}
+    formatted = formatted.replace(/\^\{\s*\\(?:dfrac|frac)\{\s*-\s*(\d+)\s*\}\{\s*(\d+)\s*\}\s*\}/g, "^{-\\frac{$1}{$2}}");
 
     // 6. Logarithm normalization:
-    formatted = formatted.replace(new RegExp(`\\blog\\s*_\\{(${nestedBraces})\\}\\s*\\^\\{(${nestedBraces})\\}`, 'gi'), (_m, base, arg) => {
+    // log_{base}^{arg} -> \log_{base} arg (e.g. log_{(x^{1/2})}^{64} -> \log_{x^{\frac{1}{2}}} 64)
+    formatted = formatted.replace(new RegExp(`(?<!\\\\)\\blog\\s*_\\{(${nestedBraces})\}\\s*\\^\\{(${nestedBraces})\\}`, 'gi'), (_m, base, arg) => {
         let cleanBase = base.trim();
         while (cleanBase.startsWith('(') && cleanBase.endsWith(')')) {
             cleanBase = cleanBase.slice(1, -1).trim();
         }
         return `\\log_{${cleanBase}} ${arg} `;
     });
-    formatted = formatted.replace(new RegExp(`\\blog\\s*_\\{(${nestedBraces})\\}`, 'gi'), (_m, base) => {
+    // log_{base} -> \log_{base}
+    formatted = formatted.replace(new RegExp(`(?<!\\\\)\\blog\\s*_\\{(${nestedBraces})\\}`, 'gi'), (_m, base) => {
         let cleanBase = base.trim();
         while (cleanBase.startsWith('(') && cleanBase.endsWith(')')) {
             cleanBase = cleanBase.slice(1, -1).trim();
         }
         return `\\log_{${cleanBase}} `;
     });
-    formatted = formatted.replace(/\blog\s*_([a-zA-Z0-9]+)/gi, (_m, base) => `\\log_{${base}} `);
-    formatted = formatted.replace(/\blog\s*(\d+)\s*\/\s*(\d+)\b/gi, (_m, num, den) => `\\log_{\\dfrac{${num}}{${den}}} `);
-    formatted = formatted.replace(/\blog\s*(\d+)(?=\s+[a-zA-Z0-9\(\\\.\^]+|\([^\)\n]+\))/gi, (_m, base) => `\\log_{${base}} `);
-    formatted = formatted.replace(/(?<=\d|\b)(log|ln)\s*(\d+(?:\.\d+)?|[a-zA-Z])(?![a-zA-Z0-9_\{])/gi, (_match, fn, arg) => `\\${fn.toLowerCase()} ${arg}`);
-    formatted = formatted.replace(/\b(log|ln)\b(?!\s*[_\{])/gi, (match) => `\\${match.toLowerCase()} `);
+    formatted = formatted.replace(/(?<!\\)\blog\s*_([a-zA-Z0-9]+)/gi, (_m, base) => `\\log_{${base}} `);
+    // log \frac{1}{2} 16 or log1/2 16 or log 1/2 16 -> \log_{\frac{1}{2}} 16
+    formatted = formatted.replace(/(?<!\\)\blog\s*\\(?:dfrac|frac)\{([^{}]+)\}\{([^{}]+)\}/gi, (_m, num, den) => `\\log_{\\frac{${num}}{${den}}} `);
+    formatted = formatted.replace(/(?<!\\)\blog\s*(\d+)\s*\/\s*(\d+)\b/gi, (_m, num, den) => `\\log_{\\frac{${num}}{${den}}} `);
+    // log \sqrt{2} 4 or log √2 4 -> \log_{\sqrt{2}} 4
+    formatted = formatted.replace(/(?<!\\)\blog\s*\\sqrt\{([^{}]+)\}/gi, (_m, rad) => `\\log_{\\sqrt{${rad}}} `);
+    // log10 4 or log2 8 or log10(4) or log10 x -> \log_{10} 4
+    formatted = formatted.replace(/(?<!\\)\blog\s*(\d+)(?=\s+[a-zA-Z0-9\(\\\.\^]+|\([^\)\n]+\))/gi, (_m, base) => `\\log_{${base}} `);
+    // Standalone log or ln with argument (e.g. log x, ln y, 2 log75, 1.3logx)
+    formatted = formatted.replace(/(?<!\\)(?<=\d|\b)(log|ln)\s*(\d+(?:\.\d+)?|[a-zA-Z])(?![a-zA-Z0-9_\{])/gi, (_match, fn, arg) => `\\${fn.toLowerCase()} ${arg}`);
+    // Standalone log or ln without subscript
+    formatted = formatted.replace(/(?<!\\)\b(log|ln)\b(?!\s*[_\{])/gi, (match) => `\\${match.toLowerCase()} `);
+
+    // Clean any accidentally doubled backslashes (\\log -> \log)
+    formatted = formatted.replace(/\\\\(log|ln|dfrac|frac|sqrt|times|div|pm|le|ge|neq|alpha|beta|gamma|theta|pi|mu|lambda|circ)/g, '\\$1');
 
     // 7. Parenthesized fractions with exponents: (81/16)^{...} or (16/81 )^{...} -> \left(\dfrac{81}{16}\right)^{...}
     formatted = formatted.replace(/\(\s*(\d+)\s*\/\s*(\d+)\s*\)(?=\s*\^)/g, '\\left(\\dfrac{$1}{$2}\\right)');
@@ -150,16 +167,22 @@ export function formatMathText(text: string | null | undefined): string {
     formatted = formatted.replace(/\\sqrt\s*(\d+(?:\.\d+)?)/g, '\\sqrt{$1}');
     formatted = formatted.replace(/\\sqrt\s*([a-zA-Z])(?![a-zA-Z])/g, '\\sqrt{$1}');
 
-    // 10. Mixed numbers: e.g. 3 (2/3) or 3(2/3) or 5 2/3 or 2(2/3) -> 3\dfrac{2}{3}
-    formatted = formatted.replace(/(\b\d+)\s*\(\s*(\d+)\s*\/\s*(\d+)\s*\)/g, '$1\\dfrac{$2}{$3}');
-    formatted = formatted.replace(/(\b\d+)\s+(\d+)\s*\/\s*(\d+)\b/g, '$1\\dfrac{$2}{$3}');
+    // 10. Mixed numbers and mixed percentages: e.g. 22(1/2)%, 47{1/2)%, 3 (2/3), 3(2/3), 5 2/3 -> 3\frac{2}{3}
+    formatted = formatted.replace(/(\b\d+)\s*[\(\{]\s*(\d+)\s*\/\s*(\d+)\s*[\)\}](?:\s*(%))?/g, (_m, whole, num, den, pct) => {
+        if (pct) return `$${whole}\\frac{${num}}{${den}}\\%$`;
+        return `${whole}\\frac{${num}}{${den}}`;
+    });
+    formatted = formatted.replace(/(\b\d+)\s+(\d+)\s*\/\s*(\d+)\b(?:\s*(%))?/g, (_m, whole, num, den, pct) => {
+        if (pct) return `$${whole}\\frac{${num}}{${den}}\\%$`;
+        return `${whole}\\frac{${num}}{${den}}`;
+    });
 
     // 11. Simple numeric fractions in parentheses: (2/3) or (16/81 ) -> \left(\dfrac{16}{81}\right) or \dfrac{2}{3}
     formatted = formatted.replace(/\(\s*(\d+)\s*\/\s*(\d+)\s*\)(?=\s*\^)/g, '\\left(\\dfrac{$1}{$2}\\right)');
     formatted = formatted.replace(/\(\s*(\d+)\s*\/\s*(\d+)\s*\)/g, '\\dfrac{$1}{$2}');
 
     // 12. Standalone numeric/decimal fractions like 5/6, 11/15, 3/4, 0.025/0.05 (outside ^{...}) -> \dfrac
-    formatted = formatted.replace(/(?<!\^\{)(?<=\s|\\times|\\div|\\pm|\+|\-|\=|\<|\>|\(|^)(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)(?=\s|\\times|\\div|\\pm|\+|\-|\=|\<|\>|\)|$)/g, '\\dfrac{$1}{$2}');
+    formatted = formatted.replace(/(?<!\^\{)(?<!_\{)(?<=\s|\\times|\\div|\\pm|\+|\-|\=|\<|\>|\(|^)(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)(?=\s|\\times|\\div|\\pm|\+|\-|\=|\<|\>|\)|$)/g, '\\dfrac{$1}{$2}');
 
     // 13. Handle division of parenthesized expressions:
     formatted = formatted.replace(/\(([^()\n]*(?:\\(?:dfrac|frac)\b)[^()\n]*\\times[^()\n]*)\)\s*\/\s*\(([^()\n]*(?:\\(?:dfrac|frac)\b)[^()\n]*\\times[^()\n]*)\)/g, '($1) \\div ($2)');
@@ -199,7 +222,7 @@ export function formatMathText(text: string | null | undefined): string {
     formatted = formatted.replaceAll('$', '');
 
     // 15. Find and wrap all math equations and expressions in $...$
-    const englishWords = 'simplify|simply|evaluate|solve|calculate|express|determine|expand|factorise|factorize|find|given|sum|angles|angle|polygon|interior|exterior|sides|side|number|value|points|point|between|distance|correct|decimal|place|places|and|or|if|is|the|where|when|for|to|at|in|on|by|of|with|then|such|that|units|unit|from|sale|bags|corn|many|give|him|maximum|profit|realises|trader|equation|subject|formula|make|what|which|how|whose|above|below|table|shows|physics|test|mode|group|students|student|answer|questions|question|ways|done|bearing|girl|walks|kettle|electric|water|temperature|rise|rate|rated|mass|power|man|stairs|flight|height|density|gold|volume|probability|red|black|white|marbles|electrolysis|reaction|anode|platinum|electrodes|substance|resistors|connected|series|molar|nuclear|fission|ethyne|burning|carbon|oxide|produced';
+    const englishWords = 'simplify|simply|evaluate|solve|calculate|express|determine|expand|factorise|factorize|find|given|sum|angles|angle|polygon|interior|exterior|sides|side|number|value|points|point|between|distance|correct|decimal|place|places|and|or|if|is|the|where|when|for|to|at|in|on|by|of|with|then|such|that|units|unit|from|sale|bags|corn|many|give|him|maximum|profit|realises|trader|equation|subject|formula|make|what|which|how|whose|above|below|table|shows|physics|test|mode|group|students|student|answer|questions|question|ways|done|bearing|girl|walks|kettle|electric|water|temperature|rise|rate|rated|mass|power|man|stairs|flight|height|density|gold|volume|probability|red|black|white|marbles|electrolysis|reaction|anode|platinum|electrodes|substance|resistors|connected|series|molar|nuclear|fission|ethyne|burning|carbon|oxide|produced|cinema|hall|contains|certain|people|children|men|women';
 
     const singleAtom = `(?:` +
         `(?:\\{\\})?\\^\\{${nestedBraces}\\}[CPcp](?:_\\{${nestedBraces}\\}|_[0-9a-zA-Z]+)?|` +
@@ -217,12 +240,13 @@ export function formatMathText(text: string | null | undefined): string {
     const mathOp = `(?:[-+*/=<>]|\\\\times|\\\\div|\\\\pm|\\\\le|\\\\ge|\\\\neq|\\\\approx)`;
 
     const mathChainRegex = new RegExp(
+        `(?:\\{\\})?\\^\\{${nestedBraces}\\}[CPcp](?:_\\{${nestedBraces}\\}|_[0-9a-zA-Z]+)?|` +
         `\\(\\s*${singleAtom}\\s*,\\s*${singleAtom}\\s*\\)|` +
         `(?:${mathUnit}\\s*${mathOp}\\s*)+${mathUnit}|` +
         `\\\\left\\(\\s*\\d*\\\\(?:dfrac|frac)\\{${nestedBraces}\\}\\{${nestedBraces}\\}\\s*\\\\right\\)(?:[\\^_]\\{${nestedBraces}\\}|[\\^_][a-zA-Z0-9]+)*|` +
-        `\\(\\s*\\d*\\\\(?:dfrac|frac)\\{${nestedBraces}\\}\\{${nestedBraces}\\}\\s*\\)(?:[\\^_]\\{${nestedBraces}\\})*|` +
-        `\\d*\\\\(?:dfrac|frac)\\{${nestedBraces}\\}\\{${nestedBraces}\\}(?:[\\^_]\\{${nestedBraces}\\})*|` +
-        `\\\\sqrt\\{${nestedBraces}\\}(?:[\\^_]\\{${nestedBraces}\\})*|` +
+        `\\(\\s*\\d*\\\\(?:dfrac|frac)\\{${nestedBraces}\\}\\{${nestedBraces}\\}\\s*\\)(?:[\\^_]\\{${nestedBraces}\\}|[\\^_][a-zA-Z0-9]+)*|` +
+        `\\d*\\\\(?:dfrac|frac)\\{${nestedBraces}\\}\\{${nestedBraces}\\}(?:[\\^_]\\{${nestedBraces}\\}|[\\^_][a-zA-Z0-9]+)*|` +
+        `\\\\sqrt\\{${nestedBraces}\\}(?:[\\^_]\\{${nestedBraces}\\}|[\\^_][a-zA-Z0-9]+)*|` +
         `\\((?:[^()\\n]|\\([^()\\n]*\\))+\\)(?:[\\^_]\\{${nestedBraces}\\})+|` +
         `(?:[a-zA-Z0-9\\.]+)(?:[\\^_]\\{${nestedBraces}\\})+|` +
         `(?:\\d+(?:\\.\\d+)?\\s*)?(?:\\\\log|\\\\ln)(?:_\\{${nestedBraces}\\}|_[0-9a-zA-Z]+)?(?:\\s*${singleAtom})+|` +
@@ -237,15 +261,20 @@ export function formatMathText(text: string | null | undefined): string {
     });
 
     // 16. Clean any internal $ inside \dfrac{...}{...}, \frac{...}{...}, or \sqrt{...}
-    const cleanFracRegex = new RegExp(`\\\\(?:dfrac|frac)\\{(${nestedBraces})\\}\\{(${nestedBraces})\\}`, 'g');
     for (let i = 0; i < 3; i++) {
-        formatted = formatted.replace(cleanFracRegex, (_m, num, den) => {
+        formatted = formatted.replace(/\\dfrac\{([^{}]+)\}\{([^{}]+)\}/g, (_m, num, den) => {
             return `\\dfrac{${num.replaceAll('$', '')}}{${den.replaceAll('$', '')}}`;
+        });
+        formatted = formatted.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, (_m, num, den) => {
+            return `\\frac{${num.replaceAll('$', '')}}{${den.replaceAll('$', '')}}`;
         });
         formatted = formatted.replace(/\\sqrt\{([^{}]+)\}/g, (_m, inner) => {
             return `\\sqrt{${inner.replaceAll('$', '')}}`;
         });
     }
+
+    // Ensure any fractions inside superscripts ^{...} or subscripts _{...} use \frac (compact scriptstyle)
+    formatted = formatted.replace(/(\^|_)\\{([^{}]*)\\dfrac\{([^{}]+)\}\{([^{}]+)\}([^{}]*)\\}/g, '$1{$2\\frac{$3}{$4}$5}');
 
     // 17. Merge adjacent inline math blocks separated by math operators or spaces
     for (let i = 0; i < 5; i++) {
@@ -260,9 +289,10 @@ export function formatMathText(text: string | null | undefined): string {
     formatted = formatted.replace(/\$\s*\\times\s*(\d+)/g, ' \\times $1$');
     formatted = formatted.replace(/\$\s*\\times\s*\$/g, ' \\times ');
 
-    // 18. Normalize * to \times inside math blocks
+    // 18. Normalize * to \times inside math blocks and escape % to \%
     formatted = formatted.replace(/\$([^\$]+)\$/g, (_match, mathContent) => {
-        const cleaned = mathContent.replace(/(?<=[0-9a-zA-Z\)\}])\s*\*\s*(?=[0-9a-zA-Z\(\{])/g, ' \\times ');
+        let cleaned = mathContent.replace(/(?<=[0-9a-zA-Z\)\}])\s*\*\s*(?=[0-9a-zA-Z\(\{])/g, ' \\times ');
+        cleaned = cleaned.replace(/(?<!\\)%/g, '\\%');
         return `$${cleaned}$`;
     });
 
@@ -285,4 +315,32 @@ export function formatMathText(text: string | null | undefined): string {
     formatted = formatted.replace(/<\/?(span|div|p|strong|b|em|i|u|font|small|big)[^>]*>/gi, '');
 
     return formatted;
+}
+
+/**
+ * Detects if a question explanation contains a reference to a prescribed literature text or novel,
+ * so the learner is always provided with the exact book/novel context upfront.
+ */
+export function extractLiteratureContext(explanation?: string | null): string | null {
+    if (!explanation) return null;
+    const clean = explanation.replace(/<[^>]+>/g, '').trim();
+
+    // Match common literature attribution phrases
+    const patterns = [
+        /(?:This question is based on|These questions are based on|Questions? \d+(?:\s*(?:to|and|-)\s*\d+)? are based on|Based on)\s+([^.\n]+)/i,
+        /prescribed (?:text|novel|book|poem|play|drama)[\s:]+([^.\n]+)/i,
+    ];
+
+    for (const pattern of patterns) {
+        const match = clean.match(pattern);
+        if (match && match[1]) {
+            let extracted = match[1].trim();
+            // Remove trailing quotes, punctuation, or tabs
+            extracted = extracted.replace(/^["'“‘\s\t]+|["'”’\s\t]+$/g, '').trim();
+            if (extracted.length > 3 && extracted.length < 150) {
+                return extracted;
+            }
+        }
+    }
+    return null;
 }

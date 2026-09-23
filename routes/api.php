@@ -13,9 +13,16 @@ Route::get('/quizzes/{quiz}', [QuizController::class, 'show']);
 Route::prefix('v1/past-questions')->group(function () {
     Route::get('/meta', [PastQuestionController::class, 'getMeta']);
     Route::get('/questions', [PastQuestionController::class, 'getQuestions']);
+    Route::get('/similar', [PastQuestionController::class, 'getSimilar']);
     Route::post('/simulation/start', [PastQuestionController::class, 'startSimulation']);
     Route::post('/simulation/submit', [PastQuestionController::class, 'submitSimulation']);
     Route::get('/history', [PastQuestionController::class, 'getHistory']);
     Route::post('/explain', [PastQuestionController::class, 'explain']);
+});
+
+// LMS Questions API
+Route::prefix('v1/questions')->group(function () {
+    Route::get('/similar', [\App\Http\Controllers\Web\AIWebController::class, 'similarQuestion']);
+    Route::post('/explain', [\App\Http\Controllers\Web\AIWebController::class, 'explain']);
 });
 

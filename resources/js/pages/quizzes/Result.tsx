@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { db } from '@/db/database';
 import { ResultSummaryCard } from '@/components/quiz/ResultSummaryCard';
 import { ResultQuestionBreakdown, ResultAnswer } from '@/components/quiz/ResultQuestionBreakdown';
@@ -28,11 +28,16 @@ export default function Result({ attemptId }: Props) {
             ? window.location.pathname.split('/').filter(Boolean).pop() || ''
             : '');
 
-    // AI Explainer Sidebar States
+    // AI Explainer Sidebar States & Cache
     const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
     const [explainQuestionText, setExplainQuestionText] = useState<string>('');
     const [explainContent, setExplainContent] = useState<string>('');
     const [explainLoading, setExplainLoading] = useState<boolean>(false);
+    const [explainSelectedText, setExplainSelectedText] = useState<string | null>(null);
+    const [explainCorrectText, setExplainCorrectText] = useState<string | null>(null);
+    const [explainQuestionId, setExplainQuestionId] = useState<number | null>(null);
+    const [explainTopicId, setExplainTopicId] = useState<number | null>(null);
+    const explanationCacheRef = useRef<Record<string, string>>({});
 
     useEffect(() => {
         let isMounted = true;
@@ -115,14 +120,15 @@ export default function Result({ attemptId }: Props) {
         );
     };
 
-    // AILEARN Tutor Explanation Generator
+    // AILEARN Tutor Explanation Generator (4-Part Diagnostic Offline Fallback)
     const generateOfflineExplanation = async (
         questionId: number,
         questionText: string,
-        selectedOptionId: number | null
+        selectedOptionId: number | null,
+        answerObj?: ResultAnswer
     ): Promise<string> => {
         try {
-            const ans = attempt?.answers?.find((a) => a.question_id === questionId);
+            const ans = answerObj || attempt?.answers?.find((a) => a.question_id === questionId);
 
             let topicId: number | undefined;
             let cachedExplanation = ans?.explanation || '';
@@ -149,13 +155,12 @@ export default function Result({ attemptId }: Props) {
 
             let subjectName = '';
             let topicName = '';
-            let topicLevel = '';
 
             if (topicId) {
+                setExplainTopicId(topicId);
                 const topic = await db.topics.get(topicId);
                 if (topic) {
                     topicName = topic.name;
-                    topicLevel = topic.level;
                     const subject = await db.subjects.get(topic.subject_id);
                     if (subject) subjectName = subject.name;
                 }
@@ -164,67 +169,74 @@ export default function Result({ attemptId }: Props) {
             const selectedOption = selectedOptionId ? options.find((o) => o.id === selectedOptionId) : null;
             const correctOption = options.find((o) => o.is_correct);
 
-            let out = `### AILEARN Tutor Explanation\n\n`;
-
-            if (subjectName || topicName) {
-                out += `**Curriculum Topic:** ${subjectName ? subjectName + ' → ' : ''}**${topicName || 'General Practice'}** ${
-                    topicLevel ? `(Level: ${topicLevel.toUpperCase()})` : ''
-                }\n\n`;
-            }
-
+            let out = `### 1. What You Chose\n\n`;
             if (selectedOption) {
                 if (selectedOption.is_correct) {
-                    out += `**Correct!** You selected **"${selectedOption.option_text}"**, which is the right answer.\n\n`;
+                    out += `You chose **"${selectedOption.option_text}"**, which is the **correct answer**! Great work applying curriculum concepts in **${topicName || 'this topic'}**.\n\n`;
                 } else {
-                    out += `**Incorrect Choice:** You chose **"${selectedOption.option_text}"**. Let's review why this isn't correct and how to find the right answer.\n\n`;
+                    out += `You chose **"${selectedOption.option_text}"**. This option is a common trap when looking at initial numbers without applying the complete step formulas.\n\n`;
                 }
             } else {
-                out += `**Skipped Question:** You didn't select an answer. Let's study the correct answer together.\n\n`;
+                out += `You skipped this question without selecting an option. Let's study the method so you can solve it with confidence.\n\n`;
             }
 
+            out += `### 2. Why It Was Incorrect\n\n`;
+            if (selectedOption && !selectedOption.is_correct) {
+                out += `Option **"${selectedOption.option_text}"** is incorrect because it does not satisfy the rules or formulas tested in **${topicName || 'this problem'}**.\n\n`;
+            } else {
+                out += `Distractor options often use reversed signs, partial operations, or common calculation traps.\n\n`;
+            }
+
+            out += `### 3. What the Correct Reasoning Is\n\n`;
             if (correctOption) {
-                out += `#### Why the correct answer is "${correctOption.option_text}":\n\n`;
+                out += `The correct answer is **"${correctOption.option_text}"**.\n\n`;
             }
-
             if (cachedExplanation && cachedExplanation.trim().length > 0) {
-                out += `${cachedExplanation.trim()}\n\n`;
+                out += `**Step-by-Step Working:**\n${cachedExplanation.trim()}\n\n`;
             } else if (correctOption) {
-                out += `* The question asks: *"${questionText}"*\n* **"${correctOption.option_text}"** is the correct answer according to your curriculum standards.\n\n`;
+                out += `* The question asks: *"${questionText}"*\n* **"${correctOption.option_text}"** is the correct answer according to curriculum standards.\n\n`;
             }
 
-            const otherOptions = options.filter((o) => !o.is_correct);
-            if (otherOptions.length > 0) {
-                out += `#### Review of other choices:\n\n`;
-                otherOptions.forEach((opt) => {
-                    const isUserChoice = opt.id === selectedOptionId;
-                    if (isUserChoice) {
-                        out += `* **"${opt.option_text}"** *(Your choice)* — Does not satisfy the key requirement for this question.\n`;
-                    } else {
-                        out += `* **"${opt.option_text}"** — Incorrect choice for this question.\n`;
-                    }
-                });
-                out += `\n`;
-            }
-
-            out += `---\n\n`;
-            out += `**Study Tip:** Review the core notes on **${topicName || 'this subject'}**. Practicing similar questions will help reinforce this concept!`;
+            out += `### 4. A Simple Example\n\n`;
+            out += `* **Key Rule:** When solving questions on **${topicName || subjectName || 'this subject'}**, always write out given variables and standard formulas before calculating.`;
 
             return out;
         } catch (e) {
             console.error('Offline explanation generation error:', e);
-            return `### AILEARN Tutor\n\n**Question:** ${questionText}\n\nReview your answer and study notes for this question. Your offline progress has been saved.`;
+            return `### 1. What You Chose\n\nOption review.\n\n### 2. Why It Was Incorrect\n\nIncorrect calculation.\n\n### 3. What the Correct Reasoning Is\n\nReview curriculum notes for this question.\n\n### 4. A Simple Example\n\nPractice similar questions to master this topic.`;
         }
     };
 
-    const handleAskAI = async (questionId: number, questionText: string, selectedOptionId: number | null) => {
+    const handleAskAI = async (
+        questionId: number,
+        questionText: string,
+        selectedOptionId: number | null,
+        answerObj?: ResultAnswer
+    ) => {
         setExplainQuestionText(questionText);
+        setExplainQuestionId(questionId);
+
+        const selectedOpt = answerObj?.options.find(o => o.id === selectedOptionId);
+        const correctOpt = answerObj?.options.find(o => o.is_correct);
+        setExplainSelectedText(selectedOpt?.option_text || null);
+        setExplainCorrectText(correctOpt?.option_text || null);
+
+        const cacheKey = `${questionId}_${selectedOptionId ?? 'none'}`;
+        if (explanationCacheRef.current[cacheKey]) {
+            setExplainContent(explanationCacheRef.current[cacheKey]);
+            setExplainLoading(false);
+            setSidebarOpen(true);
+            return;
+        }
+
         setExplainContent('');
         setExplainLoading(true);
         setSidebarOpen(true);
 
         if (!navigator.onLine) {
             try {
-                const offlineExp = await generateOfflineExplanation(questionId, questionText, selectedOptionId);
+                const offlineExp = await generateOfflineExplanation(questionId, questionText, selectedOptionId, answerObj);
+                explanationCacheRef.current[cacheKey] = offlineExp;
                 setExplainContent(offlineExp);
             } catch {
                 setExplainContent('Could not generate offline explanation. Please try again.');
@@ -249,10 +261,13 @@ export default function Result({ attemptId }: Props) {
 
             if (!res.ok) throw new Error('Failed to fetch AI explanation');
             const data = await res.json();
-            setExplainContent(data.explanation);
+            const explanation = data.explanation || (await generateOfflineExplanation(questionId, questionText, selectedOptionId, answerObj));
+            explanationCacheRef.current[cacheKey] = explanation;
+            setExplainContent(explanation);
         } catch {
             try {
-                const fallbackExp = await generateOfflineExplanation(questionId, questionText, selectedOptionId);
+                const fallbackExp = await generateOfflineExplanation(questionId, questionText, selectedOptionId, answerObj);
+                explanationCacheRef.current[cacheKey] = fallbackExp;
                 setExplainContent(fallbackExp);
             } catch {
                 setExplainContent('Could not generate explanation. Please check your connection or study notes.');
@@ -365,6 +380,10 @@ export default function Result({ attemptId }: Props) {
                 questionText={explainQuestionText}
                 content={explainContent}
                 loading={explainLoading}
+                selectedOptionText={explainSelectedText}
+                correctOptionText={explainCorrectText}
+                questionId={explainQuestionId}
+                topicId={explainTopicId}
             />
         </div>
     );

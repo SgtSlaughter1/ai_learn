@@ -4,7 +4,8 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { ExamSimulationResult } from '../../types/past-questions';
-import { formatMathText } from '../../utils/mathFormatter';
+import { formatMathText, extractLiteratureContext } from '../../utils/mathFormatter';
+import { BookOpen } from 'lucide-react';
 
 interface Props {
     result: ExamSimulationResult;
@@ -252,6 +253,15 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                                                         <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                                                             {formatMathText(q.passage_text)}
                                                         </Markdown>
+                                                    </div>
+                                                )}
+
+                                                {!q.passage_text && extractLiteratureContext(q.explanation) && (
+                                                    <div className="p-3 rounded-xl bg-[var(--color-primary-5)] border border-[var(--color-primary-20)] flex items-center gap-2.5 text-xs">
+                                                        <BookOpen className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
+                                                        <span className="text-[var(--color-text)] font-semibold">
+                                                            Based on: <strong className="text-[var(--color-primary)]">{extractLiteratureContext(q.explanation)}</strong>
+                                                        </span>
                                                     </div>
                                                 )}
 

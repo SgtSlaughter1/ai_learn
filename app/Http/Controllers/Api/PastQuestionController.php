@@ -527,4 +527,103 @@ class PastQuestionController extends Controller
             'explanation' => $explanation,
         ]);
     }
+
+    /**
+     * Get a similar past examination question for practice.
+     */
+    public function getSimilar(Request $request): JsonResponse
+    {
+        $baseQuestionId = $request->input('past_question_id');
+        $topicId = $request->input('topic_id');
+        $subjectId = $request->input('subject_id');
+        $examCode = $request->input('exam_code');
+        $excludeIds = (array) $request->input('exclude_ids', []);
+
+        if ($baseQuestionId) {
+            $excludeIds[] = (int) $baseQuestionId;
+            $baseQuestion = PastQuestion::with(['subject', 'topic'])->find($baseQuestionId);
+            if ($baseQuestion) {
+                $topicId = $topicId ?: $baseQuestion->topic_id;
+                $subjectId = $subjectId ?: $baseQuestion->subject_id;
+                $examCode = $examCode ?: $baseQuestion->exam_code;
+            }
+        }
+
+        $query = PastQuestion::with(['options', 'subject', 'topic']);
+
+        if (!empty($excludeIds)) {
+            $query->whereNotIn('id', array_unique($excludeIds));
+        }
+
+        if ($topicId) {
+            $query->where('topic_id', $topicId);
+        } elseif ($subjectId) {
+            $query->where('subject_id', $subjectId);
+        }
+
+        if ($examCode) {
+            $query->where('exam_code', $examCode);
+        }
+
+        $question = (clone $query)->inRandomOrder()->first();
+
+        // Fallback: relax topic filter to subject
+        if (!$question && $topicId && $subjectId) {
+            $fallbackQuery = PastQuestion::with(['options', 'subject', 'topic'])
+                ->where('subject_id', $subjectId);
+            if ($examCode) {
+                $fallbackQuery->where('exam_code', $examCode);
+            }
+            if (!empty($excludeIds)) {
+                $fallbackQuery->whereNotIn('id', array_unique($excludeIds));
+            }
+            $question = $fallbackQuery->inRandomOrder()->first();
+        }
+
+        if (!$question) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No additional past questions found for this topic.',
+                'question' => null,
+            ]);
+        }
+
+        $subject = $question->subject ?? $question->topic?->subject;
+
+        return response()->json([
+            'success' => true,
+            'question' => [
+                'id' => $question->id,
+                'exam_code' => $question->exam_code,
+                'exam_display_name' => $question->exam_display_name,
+                'exam_year' => $question->exam_year,
+                'paper_type' => $question->paper_type,
+                'question_number' => $question->question_number,
+                'question_text' => $question->question_text,
+                'passage_text' => $question->passage_text,
+                'image_url' => $question->image_url,
+                'difficulty' => $question->difficulty,
+                'explanation' => $question->explanation,
+                'topic' => [
+                    'id' => $question->topic?->id,
+                    'name' => $question->topic?->name,
+                ],
+                'subject' => [
+                    'id' => $subject?->id,
+                    'name' => $subject?->name,
+                    'slug' => $subject?->slug,
+                ],
+                'options' => $question->options->map(function (PastQuestionOption $opt, $index) {
+                    $letter = $opt->option_key ?: chr(65 + $index);
+                    return [
+                        'id' => $opt->id,
+                        'key' => strtolower($letter),
+                        'label' => $letter,
+                        'option_text' => $opt->option_text,
+                        'is_correct' => (bool) $opt->is_correct,
+                    ];
+                }),
+            ],
+        ]);
+    }
 }

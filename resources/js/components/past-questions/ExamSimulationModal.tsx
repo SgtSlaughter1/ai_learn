@@ -4,7 +4,8 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { PastQuestionItem, ExamSimulationResult } from '../../types/past-questions';
-import { formatMathText } from '../../utils/mathFormatter';
+import { formatMathText, extractLiteratureContext } from '../../utils/mathFormatter';
+import { BookOpen } from 'lucide-react';
 
 interface Props {
     questions: PastQuestionItem[];
@@ -260,6 +261,23 @@ export const ExamSimulationModal: React.FC<Props> = ({
                                 <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                                     {formatMathText(currentQ.passage_text)}
                                 </Markdown>
+                            </div>
+                        )}
+
+                        {/* Prescribed Literature / Novel Context Banner */}
+                        {!currentQ.passage_text && extractLiteratureContext(currentQ.explanation) && (
+                            <div className="p-3.5 rounded-2xl bg-[var(--color-primary-5)] border border-[var(--color-primary-20)] flex items-center gap-3 text-xs shadow-xs">
+                                <span className="p-1.5 rounded-xl bg-[var(--color-primary)] text-[var(--color-accent)] shrink-0">
+                                    <BookOpen className="w-4 h-4 text-[var(--color-accent)]" />
+                                </span>
+                                <div className="space-y-0.5">
+                                    <span className="font-extrabold uppercase text-[9px] tracking-wider text-[var(--color-primary)] block">
+                                        Prescribed Literature Text
+                                    </span>
+                                    <span className="text-xs font-bold text-[var(--color-text)]">
+                                        Based on: <strong className="text-[var(--color-primary)]">{extractLiteratureContext(currentQ.explanation)}</strong>
+                                    </span>
+                                </div>
                             </div>
                         )}
 

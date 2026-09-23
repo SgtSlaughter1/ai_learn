@@ -27,12 +27,8 @@ export const PastQuestionsHub: React.FC = () => {
     const [examResult, setExamResult] = useState<ExamSimulationResult | null>(null);
     const [errorToast, setErrorToast] = useState<string | null>(null);
 
-    // History
-    const [history, setHistory] = useState<any[]>([]);
-
     useEffect(() => {
         fetchMeta();
-        fetchHistory();
     }, []);
 
     const fetchMeta = async () => {
@@ -50,18 +46,6 @@ export const PastQuestionsHub: React.FC = () => {
             }
         } catch (err) {
             console.error('Error fetching meta:', err);
-        }
-    };
-
-    const fetchHistory = async () => {
-        try {
-            const res = await fetch('/api/v1/past-questions/history');
-            const data = await res.json();
-            if (data.success) {
-                setHistory(data.data || []);
-            }
-        } catch (err) {
-            console.error('Error fetching history:', err);
         }
     };
 
@@ -419,58 +403,6 @@ export const PastQuestionsHub: React.FC = () => {
                 )}
             </div>
 
-            {/* Past Attempts History */}
-            {history.length > 0 && (
-                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 shadow-xs space-y-4">
-                    <h3 className="text-sm font-bold text-[var(--color-text)]">
-                        Recent Exam Simulation History
-                    </h3>
-
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs">
-                            <thead>
-                                <tr className="border-b border-[var(--color-border)] text-[10px] font-extrabold text-[var(--color-muted)] uppercase tracking-wider">
-                                    <th className="pb-3">Examination</th>
-                                    <th className="pb-3">Score</th>
-                                    <th className="pb-3">Questions</th>
-                                    <th className="pb-3">Time Taken</th>
-                                    <th className="pb-3">Date</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-[var(--color-border)]">
-                                {history.map((item) => (
-                                    <tr key={item.id} className="text-xs text-[var(--color-text)]">
-                                        <td className="py-3 font-bold uppercase text-[var(--color-primary)]">
-                                            {item.exam_code} {item.exam_year || ''}
-                                        </td>
-                                        <td className="py-3">
-                                            <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase border ${
-                                                item.score_percentage >= 70
-                                                    ? 'bg-[var(--color-success-10)] text-[var(--color-success)] border-[var(--color-success-20)]'
-                                                    : item.score_percentage >= 50
-                                                    ? 'bg-[var(--color-primary-10)] text-[var(--color-primary)] border-[var(--color-primary-20)]'
-                                                    : 'bg-[var(--color-error-10)] text-[var(--color-error)] border-[var(--color-error-20)]'
-                                            }`}>
-                                                {item.score_percentage}%
-                                            </span>
-                                        </td>
-                                        <td className="py-3 font-medium">
-                                            {item.correct_answers} / {item.total_questions}
-                                        </td>
-                                        <td className="py-3 text-[var(--color-muted)] font-mono">
-                                            {Math.floor((item.time_spent_seconds || 0) / 60)}m {(item.time_spent_seconds || 0) % 60}s
-                                        </td>
-                                        <td className="py-3 text-[var(--color-muted)]">
-                                            {item.completed_at ? new Date(item.completed_at).toLocaleDateString() : 'N/A'}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
             {/* Active Modals */}
             {activeMode === 'practice' && (
                 <ExamPracticeModal
@@ -494,7 +426,6 @@ export const PastQuestionsHub: React.FC = () => {
                     onFinish={(result) => {
                         setActiveMode(null);
                         setExamResult(result);
-                        fetchHistory();
                     }}
                     onCancel={() => setActiveMode(null)}
                 />

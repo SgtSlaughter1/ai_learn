@@ -148,6 +148,7 @@ Route::middleware('auth')->group(function () {
 
         // AI Tutoring & Assistance
         Route::post('/ai/explain', [AIWebController::class, 'explain']);
+        Route::get('/ai/similar-question', [AIWebController::class, 'similarQuestion']);
         Route::post('/ai/chat', [AIWebController::class, 'chat']);
 
         // Flashcards Deck API
