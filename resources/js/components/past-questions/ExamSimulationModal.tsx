@@ -158,25 +158,25 @@ export const ExamSimulationModal: React.FC<Props> = ({
                 </div>
             )}
             {/* Top Exam Header */}
-            <header className="h-16 bg-[var(--color-surface)] border-b border-[var(--color-border)] px-4 md:px-8 flex items-center justify-between shadow-xs shrink-0">
-                <div className="flex items-center gap-3">
-                    <span className="px-3 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-[var(--color-primary)] text-white shadow-xs">
+            <header className="min-h-14 sm:h-16 bg-[var(--color-surface)] border-b border-[var(--color-border)] px-3 sm:px-6 md:px-8 flex items-center justify-between gap-1.5 sm:gap-4 shadow-xs shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <span className="px-2.5 py-1 rounded-lg text-[9px] sm:text-[10px] font-extrabold uppercase tracking-wider bg-[var(--color-primary)] text-white shadow-xs shrink-0 max-w-[120px] sm:max-w-none truncate">
                         {examTitle}
                     </span>
-                    <div className="hidden sm:block">
+                    <div className="hidden sm:block truncate">
                         <span className="font-bold text-sm text-[var(--color-text)]">{subjectTitle}</span>
                         {yearTitle && <span className="text-xs text-[var(--color-muted)] ml-2">({yearTitle})</span>}
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3 md:gap-4">
+                <div className="flex items-center gap-1.5 sm:gap-3 md:gap-4 shrink-0">
                     {/* Timer */}
-                    <div className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl border font-mono font-bold text-sm md:text-base transition-colors ${
+                    <div className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl border font-mono font-bold text-xs sm:text-sm md:text-base transition-colors shrink-0 ${
                         isTimerCritical
                             ? 'bg-[var(--color-error-10)] border-[var(--color-error)] text-[var(--color-error)] animate-pulse'
                             : 'bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text)]'
                     }`}>
-                        <svg className="w-4 h-4 text-inherit" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-inherit shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <span>{formatTime(secondsRemaining)}</span>
@@ -185,7 +185,7 @@ export const ExamSimulationModal: React.FC<Props> = ({
                     {/* Calculator Toggle */}
                     <button
                         onClick={() => setShowCalculator(!showCalculator)}
-                        className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                        className={`p-1.5 sm:p-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
                             showCalculator
                                 ? 'bg-[var(--color-primary)] text-white border-transparent'
                                 : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] bg-[var(--color-surface)]'
@@ -201,7 +201,7 @@ export const ExamSimulationModal: React.FC<Props> = ({
                     {/* Submit Button */}
                     <button
                         onClick={() => setShowSubmitConfirm(true)}
-                        className="px-4 py-2 rounded-xl bg-[var(--color-success)] hover:opacity-90 text-white font-bold text-sm transition-opacity shadow-sm cursor-pointer"
+                        className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-[var(--color-success)] hover:opacity-90 text-white font-bold text-xs sm:text-sm transition-opacity shadow-sm cursor-pointer shrink-0 whitespace-nowrap"
                     >
                         Submit Test
                     </button>
@@ -209,7 +209,7 @@ export const ExamSimulationModal: React.FC<Props> = ({
                     {/* Exit Button */}
                     <button
                         onClick={onCancel}
-                        className="p-2 text-[var(--color-muted)] hover:text-[var(--color-error)] rounded-xl hover:bg-[var(--color-error-10)] transition-colors cursor-pointer"
+                        className="p-1.5 sm:p-2 text-[var(--color-muted)] hover:text-[var(--color-error)] rounded-xl hover:bg-[var(--color-error-10)] transition-colors cursor-pointer shrink-0"
                         title="Exit Exam"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -223,9 +223,9 @@ export const ExamSimulationModal: React.FC<Props> = ({
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
                 <main className="flex-1 flex flex-col p-4 md:p-8 overflow-y-auto">
                     <div className="max-w-3xl w-full mx-auto flex-1 flex flex-col justify-between space-y-6">
-                        <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-3">
-                            <div className="flex items-center gap-2">
-                                <span className="font-extrabold text-lg text-[var(--color-primary)]">
+                        <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-3 gap-2 flex-wrap sm:flex-nowrap">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-extrabold text-base sm:text-lg text-[var(--color-primary)]">
                                     Question {currentIndex + 1}
                                 </span>
                                 <span className="text-xs text-[var(--color-muted)] font-medium">
@@ -240,13 +240,13 @@ export const ExamSimulationModal: React.FC<Props> = ({
 
                             <button
                                 onClick={toggleFlag}
-                                className={`px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                className={`px-2.5 sm:px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
                                     flagged[currentQ.id]
                                         ? 'bg-[var(--color-accent-20)] border-[var(--color-accent)] text-[var(--color-accent)] font-bold'
                                         : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'
                                 }`}
                             >
-                                <svg className="w-4 h-4" fill={flagged[currentQ.id] ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill={flagged[currentQ.id] ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
                                 </svg>
                                 {flagged[currentQ.id] ? 'Flagged for Review' : 'Flag for Review'}
@@ -349,28 +349,28 @@ export const ExamSimulationModal: React.FC<Props> = ({
                     </div>
                 </main>
 
-                {/* Right Sidebar */}
-                <aside className="w-full md:w-80 bg-[var(--color-surface)] border-t md:border-t-0 md:border-l border-[var(--color-border)] p-5 flex flex-col shrink-0">
-                    <h3 className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-muted)] mb-3">
+                {/* Right Sidebar / Bottom Palette on Mobile */}
+                <aside className="w-full md:w-80 bg-[var(--color-surface)] border-t md:border-t-0 md:border-l border-[var(--color-border)] p-4 sm:p-5 flex flex-col shrink-0">
+                    <h3 className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-muted)] mb-2.5">
                         Question Status Palette
                     </h3>
 
-                    <div className="grid grid-cols-3 gap-2 mb-4 text-center">
-                        <div className="p-2 rounded-xl bg-[var(--color-success-10)] border border-[var(--color-success-20)]">
-                            <span className="block text-base font-black text-[var(--color-success)]">{answeredCount}</span>
-                            <span className="text-[9px] font-extrabold uppercase text-[var(--color-success)]">Answered</span>
+                    <div className="grid grid-cols-3 gap-2 mb-3 text-center">
+                        <div className="p-2 sm:p-2.5 rounded-xl bg-[var(--color-success-10)] border border-[var(--color-success-20)]">
+                            <span className="block text-sm sm:text-base font-black text-[var(--color-success)] leading-tight">{answeredCount}</span>
+                            <span className="text-[9px] font-extrabold uppercase text-[var(--color-success)] tracking-wider">Answered</span>
                         </div>
-                        <div className="p-2 rounded-xl bg-[var(--color-accent-10)] border border-[var(--color-accent-20)]">
-                            <span className="block text-base font-black text-[var(--color-accent)]">{flaggedCount}</span>
-                            <span className="text-[9px] font-extrabold uppercase text-[var(--color-accent)]">Flagged</span>
+                        <div className="p-2 sm:p-2.5 rounded-xl bg-[var(--color-accent-10)] border border-[var(--color-accent-20)]">
+                            <span className="block text-sm sm:text-base font-black text-[var(--color-accent)] leading-tight">{flaggedCount}</span>
+                            <span className="text-[9px] font-extrabold uppercase text-[var(--color-accent)] tracking-wider">Flagged</span>
                         </div>
-                        <div className="p-2 rounded-xl bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
-                            <span className="block text-base font-black text-[var(--color-muted)]">{unansweredCount}</span>
-                            <span className="text-[9px] font-extrabold uppercase text-[var(--color-muted)]">Left</span>
+                        <div className="p-2 sm:p-2.5 rounded-xl bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
+                            <span className="block text-sm sm:text-base font-black text-[var(--color-muted)] leading-tight">{unansweredCount}</span>
+                            <span className="text-[9px] font-extrabold uppercase text-[var(--color-muted)] tracking-wider">Left</span>
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto grid grid-cols-5 gap-2 content-start pr-1 max-h-60 md:max-h-none">
+                    <div className="flex-1 overflow-y-auto grid grid-cols-5 sm:grid-cols-8 md:grid-cols-5 gap-1.5 sm:gap-2 content-start p-1 max-h-56 md:max-h-none">
                         {questions.map((q, idx) => {
                             const isCurrent = currentIndex === idx;
                             const isAns = selectedAnswers[q.id] !== undefined;
@@ -386,7 +386,7 @@ export const ExamSimulationModal: React.FC<Props> = ({
                                 <button
                                     key={q.id || idx}
                                     onClick={() => setCurrentIndex(idx)}
-                                    className={`h-9 rounded-xl border text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${tileStyle}`}
+                                    className={`h-8 sm:h-9 rounded-xl border text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${tileStyle}`}
                                 >
                                     {idx + 1}
                                 </button>

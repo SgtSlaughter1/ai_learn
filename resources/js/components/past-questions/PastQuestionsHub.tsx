@@ -244,15 +244,15 @@ export const PastQuestionsHub: React.FC = () => {
                                     : 'bg-[var(--color-surface)] border-[var(--color-border)] hover:border-[var(--color-primary-light)] hover:bg-[var(--color-surface-hover)]'
                             }`}
                         >
-                            <div className="flex items-center justify-between mb-2">
-                                <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider border ${
+                            <div className="flex items-start justify-between gap-1.5 mb-2 min-w-0">
+                                <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider border shrink leading-tight truncate max-w-[65%] ${
                                     isSelected
                                         ? 'bg-[var(--color-primary)] text-white border-transparent'
                                         : 'bg-[var(--color-surface-hover)] text-[var(--color-muted)] border-[var(--color-border)]'
                                 }`}>
                                     {exam.badge}
                                 </span>
-                                <span className="text-xs font-bold text-[var(--color-muted)]">
+                                <span className="text-[11px] sm:text-xs font-bold text-[var(--color-muted)] shrink-0 whitespace-nowrap pt-0.5">
                                     {exam.questionCount.toLocaleString()} Qs
                                 </span>
                             </div>
@@ -269,10 +269,10 @@ export const PastQuestionsHub: React.FC = () => {
             </div>
 
             {/* Filters Bar: Subject & Unified Practice Mode Selection */}
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 shadow-xs space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-4 sm:p-6 shadow-xs space-y-4 sm:space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                     {/* Subject Filter */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-col xs:flex-row xs:items-center gap-2 sm:gap-3 w-full sm:w-auto">
                         <label className="text-[10px] font-extrabold uppercase text-[var(--color-muted)] tracking-wider shrink-0">
                             Select Subject:
                         </label>
@@ -280,7 +280,7 @@ export const PastQuestionsHub: React.FC = () => {
                             value={selectedSubject}
                             onChange={(e) => setSelectedSubject(e.target.value)}
                             aria-label="Filter past questions by subject"
-                            className="px-3.5 py-2.5 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] text-xs font-bold text-[var(--color-text)] focus:ring-2 focus:ring-[var(--color-primary-20)] focus:outline-none min-w-[200px]"
+                            className="px-3.5 py-2.5 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] text-xs font-bold text-[var(--color-text)] focus:ring-2 focus:ring-[var(--color-primary-20)] focus:outline-none w-full sm:w-auto sm:min-w-[220px]"
                         >
                             <option value="all">
                                 All Subjects ({activeExamTotalQuestions.toLocaleString()} Qs)
@@ -297,7 +297,7 @@ export const PastQuestionsHub: React.FC = () => {
                     </div>
 
                     {/* Unified Question Bank Indicator */}
-                    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[var(--color-primary-5)] border border-[var(--color-primary-20)] text-xs font-bold text-[var(--color-primary)]">
+                    <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[var(--color-primary-5)] border border-[var(--color-primary-20)] text-xs font-bold text-[var(--color-primary)] self-start sm:self-auto">
                         <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                         </svg>
@@ -306,20 +306,20 @@ export const PastQuestionsHub: React.FC = () => {
                 </div>
 
                 {/* Active Filter Summary Feedback Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] text-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-4 py-3 rounded-2xl bg-[var(--color-background)] border border-[var(--color-border)] text-xs leading-relaxed">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-extrabold uppercase text-[9px] tracking-wider text-[var(--color-muted)]">Active Exam:</span>
-                        <span className="font-bold text-[var(--color-primary)]">{currentExamMeta?.name}</span>
+                        <span className="font-extrabold uppercase text-[9px] tracking-wider text-[var(--color-muted)] shrink-0">Active Exam:</span>
+                        <span className="font-bold text-[var(--color-primary)] shrink-0">{currentExamMeta?.name}</span>
                         <span className="text-[var(--color-muted)]">•</span>
-                        <span className="font-bold text-[var(--color-text)]">
+                        <span className="font-bold text-[var(--color-text)] shrink-0">
                             {selectedSubject === 'all' ? 'All Core Subjects' : subjects.find(s => s.slug === selectedSubject)?.name}
                         </span>
-                        <span className="text-[var(--color-muted)]">•</span>
-                        <span className="font-medium text-[var(--color-muted)]">
+                        <span className="text-[var(--color-muted)] hidden sm:inline">•</span>
+                        <span className="font-medium text-[var(--color-muted)] text-[11px] sm:text-xs">
                             Continuous practice across all authentic past examination years
                         </span>
                     </div>
-                    <span className="font-bold text-[var(--color-muted)]">
+                    <span className="font-bold text-[var(--color-muted)] text-[11px] shrink-0">
                         {filteredSubjects.length} {filteredSubjects.length === 1 ? 'subject' : 'subjects'} available
                     </span>
                 </div>
