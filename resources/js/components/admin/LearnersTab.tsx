@@ -70,7 +70,7 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
         });
 
         if (res.success) {
-            showToast(res.message || 'Learner saved successfully', 'success');
+            showToast(res.message || (res.offline ? 'Saved offline. Changes will sync when online.' : 'Learner saved successfully'), 'success');
             setIsLearnerModalOpen(false);
             setEditingLearner(null);
             setLearnerForm({ name: '', email: '', password: '', school_id: '', grade_level: 'SS1', student_id: '', class_id: '' });
@@ -91,7 +91,7 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
         });
 
         if (res.success) {
-            showToast(res.message || 'Learner deleted');
+            showToast(res.message || (res.offline ? 'Learner deleted offline (pending sync)' : 'Learner deleted'), 'success');
             onRefresh();
         } else {
             showToast(res.error || 'Failed to delete learner', 'error');
@@ -322,7 +322,7 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
 
             {/* Modal: Learner Create / Edit */}
             {isLearnerModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
                     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-6">
                         <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-4">
                             <h3 className="text-lg font-bold text-[var(--color-text)]">

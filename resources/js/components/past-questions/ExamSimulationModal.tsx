@@ -433,7 +433,7 @@ export const ExamSimulationModal: React.FC<Props> = ({
 
             {/* Submit Confirmation Dialog */}
             {showSubmitConfirm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)] backdrop-blur-xs p-4 animate-fade-in">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)] backdrop-blur-md p-4 animate-fade-in">
                     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl text-center space-y-5">
                         <div className="w-14 h-14 rounded-2xl bg-[var(--color-accent-10)] text-[var(--color-accent)] border border-[var(--color-accent-20)] flex items-center justify-center mx-auto">
                             <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">

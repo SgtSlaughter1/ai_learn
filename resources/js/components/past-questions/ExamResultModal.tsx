@@ -28,7 +28,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
     const isExcellence = score >= 75;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)] backdrop-blur-xs p-3 md:p-6 overflow-y-auto animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)] backdrop-blur-md p-3 md:p-6 overflow-y-auto animate-fade-in">
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
                 {/* Header */}
                 <div className="p-6 border-b border-[var(--color-border)] bg-[var(--color-surface-hover)] flex items-center justify-between">

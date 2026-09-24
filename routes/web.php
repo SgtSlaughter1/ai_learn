@@ -218,6 +218,7 @@ Route::middleware('auth')->group(function () {
         // Past Questions & National Exam Simulation Hub
         Route::get('/past-questions/meta', [PastQuestionController::class, 'getMeta']);
         Route::get('/past-questions/questions', [PastQuestionController::class, 'getQuestions']);
+        Route::post('/past-questions/verify-answer', [PastQuestionController::class, 'verifyAnswer']);
         Route::post('/past-questions/simulation/start', [PastQuestionController::class, 'startSimulation']);
         Route::post('/past-questions/simulation/submit', [PastQuestionController::class, 'submitSimulation']);
         Route::get('/past-questions/history', [PastQuestionController::class, 'getHistory']);
@@ -229,6 +230,7 @@ Route::middleware('auth')->group(function () {
 Route::prefix('api/v1/past-questions')->group(function () {
     Route::get('/meta', [PastQuestionController::class, 'getMeta']);
     Route::get('/questions', [PastQuestionController::class, 'getQuestions']);
+    Route::post('/verify-answer', [PastQuestionController::class, 'verifyAnswer']);
     Route::post('/simulation/start', [PastQuestionController::class, 'startSimulation']);
     Route::post('/simulation/submit', [PastQuestionController::class, 'submitSimulation']);
     Route::get('/history', [PastQuestionController::class, 'getHistory']);

@@ -25,6 +25,11 @@ export const ExamPracticeModal: React.FC<Props> = ({
 }) => {
     const [currentIndex, setCurrentIndex] = useState<number>(0);
     const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
+    const [verifiedAnswers, setVerifiedAnswers] = useState<Record<number, {
+        isCorrect: boolean;
+        correctOptionId: number | null;
+        explanation?: string | null;
+    }>>({});
     const [bookmarked, setBookmarked] = useState<Record<number, boolean>>({});
 
     // AI Tutor State & In-Memory Cache
@@ -35,7 +40,7 @@ export const ExamPracticeModal: React.FC<Props> = ({
 
     if (!questions || questions.length === 0) {
         return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-fade-in">
                 <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-8 max-w-md w-full text-center shadow-2xl">
                     <p className="text-base font-bold text-[var(--color-text)]">No questions found for the selected criteria.</p>
                     <button
@@ -52,11 +57,57 @@ export const ExamPracticeModal: React.FC<Props> = ({
     const currentQ = questions[currentIndex];
     const selectedOptId = selectedAnswers[currentQ.id];
     const isAnswered = selectedOptId !== undefined;
-    const isCorrect = isAnswered && currentQ.options.find(o => o.id === selectedOptId)?.is_correct;
+    const verification = verifiedAnswers[currentQ.id];
+    const isCorrect = verification?.isCorrect ?? (currentQ.options.find(o => o.id === selectedOptId)?.is_correct ?? false);
+    const correctOptionId = verification?.correctOptionId ?? currentQ.options.find(o => o.is_correct)?.id;
 
-    const handleSelectOption = (optId: number) => {
-        if (!isAnswered) {
-            setSelectedAnswers(prev => ({ ...prev, [currentQ.id]: optId }));
+    const handleSelectOption = async (optId: number) => {
+        if (isAnswered) return;
+
+        setSelectedAnswers(prev => ({ ...prev, [currentQ.id]: optId }));
+
+        // If options already include is_correct (e.g. offline cache bundle)
+        const localCorrectOpt = currentQ.options.find(o => o.is_correct);
+        if (localCorrectOpt) {
+            setVerifiedAnswers(prev => ({
+                ...prev,
+                [currentQ.id]: {
+                    isCorrect: localCorrectOpt.id === optId,
+                    correctOptionId: localCorrectOpt.id,
+                    explanation: currentQ.explanation,
+                },
+            }));
+            return;
+        }
+
+        // Server-side secure verification without leaking answers in advance
+        if (navigator.onLine) {
+            try {
+                const res = await fetch('/api/v1/past-questions/verify-answer', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        question_id: currentQ.id,
+                        selected_option_id: optId,
+                    }),
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    setVerifiedAnswers(prev => ({
+                        ...prev,
+                        [currentQ.id]: {
+                            isCorrect: data.is_correct,
+                            correctOptionId: data.correct_option_id,
+                            explanation: data.explanation,
+                        },
+                    }));
+                }
+            } catch (err) {
+                console.error('Answer verification error:', err);
+            }
         }
     };
 
@@ -65,7 +116,7 @@ export const ExamPracticeModal: React.FC<Props> = ({
     };
 
     const selectedOpt = currentQ.options.find(o => o.id === selectedOptId);
-    const correctOpt = currentQ.options.find(o => o.is_correct);
+    const correctOpt = currentQ.options.find(o => o.id === correctOptionId) || currentQ.options.find(o => o.is_correct);
 
     const generateOfflineExplanation = () => {
         const topicName = currentQ.topic?.name || '';
@@ -153,7 +204,7 @@ export const ExamPracticeModal: React.FC<Props> = ({
 
     return (
         <>
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)] backdrop-blur-xs p-3 md:p-6 overflow-y-auto animate-fade-in">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)] backdrop-blur-md p-3 md:p-6 overflow-y-auto animate-fade-in">
                 <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
                 {/* Header Bar */}
                 <div className="px-6 py-4 border-b border-[var(--color-border)] bg-[var(--color-surface-hover)] flex items-center justify-between">
@@ -274,7 +325,7 @@ export const ExamPracticeModal: React.FC<Props> = ({
                     <div className="space-y-3 pt-2">
                         {currentQ.options.map((option, idx) => {
                             const isSelected = selectedOptId === option.id;
-                            const isOptionCorrect = option.is_correct;
+                            const isOptionCorrect = option.id === correctOptionId || Boolean(option.is_correct);
                             
                             let optionStyle = 'border-[var(--color-border)] bg-[var(--color-background)]/40 hover:bg-[var(--color-surface-hover)] hover:border-[var(--color-primary-light)]';
                             let badgeStyle = 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)]';

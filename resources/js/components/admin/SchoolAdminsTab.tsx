@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { SchoolAdminItem, SchoolItem } from '@/types/admin';
+import { executeAdminAction } from '@/services/AdminOfflineService';
 
 interface SchoolAdminsTabProps {
     admins: SchoolAdminItem[];
@@ -58,49 +59,49 @@ export default function SchoolAdminsTab({
         e.preventDefault();
         setSubmitting(true);
 
-        try {
-            const url = editingAdmin
-                ? `/api/v1/admin/school-admins/${editingAdmin.id}`
-                : '/api/v1/admin/school-admins';
-            const method = editingAdmin ? 'PUT' : 'POST';
+        const endpoint = editingAdmin
+            ? `/api/v1/admin/school-admins/${editingAdmin.id}`
+            : '/api/v1/admin/school-admins';
+        const method = editingAdmin ? 'PUT' : 'POST';
+        const tempId = editingAdmin ? String(editingAdmin.id) : `temp_admin_${Date.now()}`;
 
-            const payload: any = {
+        const selectedSchool = schools.find(s => String(s.id) === String(formData.school_id));
+        const optimisticAdmin: SchoolAdminItem = {
+            id: editingAdmin ? editingAdmin.id : `temp_${Date.now()}`,
+            name: formData.name,
+            email: formData.email,
+            role: 'school_admin',
+            school_id: formData.school_id ? Number(formData.school_id) : null,
+            administered_school: selectedSchool ? { id: selectedSchool.id, name: selectedSchool.name, city: selectedSchool.city } : null,
+            _pendingSync: true,
+        };
+
+        const res = await executeAdminAction({
+            table: 'adminSchoolAdmins',
+            action: editingAdmin ? 'update' : 'insert',
+            recordId: tempId,
+            endpoint,
+            method,
+            payload: {
                 name: formData.name,
                 email: formData.email,
                 school_id: formData.school_id ? Number(formData.school_id) : null,
-            };
+                ...(formData.password ? { password: formData.password } : {}),
+            },
+            optimisticRecord: optimisticAdmin,
+        });
 
-            if (formData.password) {
-                payload.password = formData.password;
-            }
-
-            const res = await fetch(url, {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
-                },
-                body: JSON.stringify(payload),
-            });
-
-            const data = await res.json();
-
-            if (res.ok) {
-                showToast(
-                    editingAdmin ? 'School admin updated successfully' : 'School admin created & assigned successfully',
-                    'success'
-                );
-                setIsCreateModalOpen(false);
-                resetForm();
-                onRefresh();
-            } else {
-                showToast(data.message || data.error || 'Failed to save school admin', 'error');
-            }
-        } catch (err) {
-            showToast('Network error while saving school admin', 'error');
-        } finally {
-            setSubmitting(false);
+        setSubmitting(false);
+        if (res.success) {
+            showToast(
+                res.message || (editingAdmin ? 'School admin updated successfully' : 'School admin created & assigned successfully'),
+                'success'
+            );
+            setIsCreateModalOpen(false);
+            resetForm();
+            onRefresh();
+        } else {
+            showToast(res.error || 'Failed to save school admin', 'error');
         }
     };
 
@@ -108,27 +109,21 @@ export default function SchoolAdminsTab({
         if (!deletingAdmin) return;
         setSubmitting(true);
 
-        try {
-            const res = await fetch(`/api/v1/admin/school-admins/${deletingAdmin.id}`, {
-                method: 'DELETE',
-                headers: {
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
-                },
-            });
+        const res = await executeAdminAction({
+            table: 'adminSchoolAdmins',
+            action: 'delete',
+            recordId: String(deletingAdmin.id),
+            endpoint: `/api/v1/admin/school-admins/${deletingAdmin.id}`,
+            method: 'DELETE',
+        });
 
-            if (res.ok) {
-                showToast('School admin removed successfully', 'success');
-                setDeletingAdmin(null);
-                onRefresh();
-            } else {
-                const data = await res.json();
-                showToast(data.message || 'Failed to delete school admin', 'error');
-            }
-        } catch (err) {
-            showToast('Network error while deleting school admin', 'error');
-        } finally {
-            setSubmitting(false);
+        setSubmitting(false);
+        if (res.success) {
+            showToast(res.message || 'School admin removed successfully', 'success');
+            setDeletingAdmin(null);
+            onRefresh();
+        } else {
+            showToast(res.error || 'Failed to delete school admin', 'error');
         }
     };
 
@@ -258,7 +253,15 @@ export default function SchoolAdminsTab({
                                                         {admin.name.slice(0, 2)}
                                                     </div>
                                                     <div>
-                                                        <div className="font-bold text-[var(--color-text)]">{admin.name}</div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-bold text-[var(--color-text)]">{admin.name}</span>
+                                                            {admin._pendingSync && (
+                                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                                                    Pending Sync
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                         <div className="text-xs text-[var(--color-muted)]">{admin.email}</div>
                                                     </div>
                                                 </div>
@@ -323,7 +326,7 @@ export default function SchoolAdminsTab({
 
             {/* Create / Edit School Admin Modal */}
             {isCreateModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
                     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-scale-up">
                         <div className="px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-background)]">
                             <h3 className="font-bold text-lg text-[var(--color-text)] flex items-center gap-2">
@@ -430,7 +433,7 @@ export default function SchoolAdminsTab({
 
             {/* Delete Confirmation Modal */}
             {deletingAdmin && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
                     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-scale-up p-6 space-y-4">
                         <div className="w-12 h-12 rounded-2xl bg-[var(--color-error-10)] text-[var(--color-error)] flex items-center justify-center mx-auto border border-[var(--color-error-20)]">
                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

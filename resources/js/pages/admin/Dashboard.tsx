@@ -91,19 +91,24 @@ export default function Dashboard() {
     const fetchSchools = async () => {
         setLoadingSchools(true);
         try {
+            if (!navigator.onLine) {
+                const cached = await getCachedAdminSchools();
+                setSchools(cached);
+                return;
+            }
             const res = await fetch('/api/v1/admin/schools');
             if (res.ok) {
                 const data = await res.json();
                 const items = data.data || data.schools || [];
-                setSchools(items);
-                cacheAdminSchools(items);
+                const merged = await cacheAdminSchools(items);
+                setSchools(merged);
             } else {
                 throw new Error('Server error');
             }
         } catch (err) {
             console.warn('Loading schools from offline storage:', err);
             const cached = await getCachedAdminSchools();
-            if (cached.length > 0) setSchools(cached);
+            setSchools(cached);
         } finally {
             setLoadingSchools(false);
         }
@@ -114,19 +119,24 @@ export default function Dashboard() {
         if (!isSuperAdmin) return;
         setLoadingSchoolAdmins(true);
         try {
+            if (!navigator.onLine) {
+                const cached = await getCachedAdminSchoolAdmins();
+                setSchoolAdmins(cached);
+                return;
+            }
             const res = await fetch('/api/v1/admin/school-admins');
             if (res.ok) {
                 const data = await res.json();
                 const items = data.data || data.school_admins || [];
-                setSchoolAdmins(items);
-                cacheAdminSchoolAdmins(items);
+                const merged = await cacheAdminSchoolAdmins(items);
+                setSchoolAdmins(merged);
             } else {
                 throw new Error('Server error');
             }
         } catch (err) {
             console.warn('Loading school admins from offline storage:', err);
             const cached = await getCachedAdminSchoolAdmins();
-            if (cached.length > 0) setSchoolAdmins(cached);
+            setSchoolAdmins(cached);
         } finally {
             setLoadingSchoolAdmins(false);
         }
@@ -136,19 +146,24 @@ export default function Dashboard() {
     const fetchClasses = async () => {
         setLoadingClasses(true);
         try {
+            if (!navigator.onLine) {
+                const cached = await getCachedAdminClasses();
+                setClasses(cached);
+                return;
+            }
             const res = await fetch('/api/v1/admin/classes');
             if (res.ok) {
                 const data = await res.json();
                 const items = data.data || data.classes || [];
-                setClasses(items);
-                cacheAdminClasses(items);
+                const merged = await cacheAdminClasses(items);
+                setClasses(merged);
             } else {
                 throw new Error('Server error');
             }
         } catch (err) {
             console.warn('Loading classes from offline storage:', err);
             const cached = await getCachedAdminClasses();
-            if (cached.length > 0) setClasses(cached);
+            setClasses(cached);
         } finally {
             setLoadingClasses(false);
         }
@@ -158,19 +173,24 @@ export default function Dashboard() {
     const fetchLearners = async () => {
         setLoadingLearners(true);
         try {
+            if (!navigator.onLine) {
+                const cached = await getCachedAdminLearners();
+                setLearners(cached);
+                return;
+            }
             const res = await fetch('/api/v1/admin/learners');
             if (res.ok) {
                 const data = await res.json();
                 const items = data.data || data.learners || [];
-                setLearners(items);
-                cacheAdminLearners(items);
+                const merged = await cacheAdminLearners(items);
+                setLearners(merged);
             } else {
                 throw new Error('Server error');
             }
         } catch (err) {
             console.warn('Loading learners from offline storage:', err);
             const cached = await getCachedAdminLearners();
-            if (cached.length > 0) setLearners(cached);
+            setLearners(cached);
         } finally {
             setLoadingLearners(false);
         }
@@ -180,19 +200,24 @@ export default function Dashboard() {
     const fetchSubjects = async () => {
         setLoadingSubjects(true);
         try {
+            if (!navigator.onLine) {
+                const cached = await getCachedAdminSubjects();
+                setSubjects(cached);
+                return;
+            }
             const res = await fetch('/api/v1/admin/subjects');
             if (res.ok) {
                 const data = await res.json();
                 const items = data.data || data.subjects || [];
-                setSubjects(items);
-                cacheAdminSubjects(items);
+                const merged = await cacheAdminSubjects(items);
+                setSubjects(merged);
             } else {
                 throw new Error('Server error');
             }
         } catch (err) {
             console.warn('Loading subjects from offline storage:', err);
             const cached = await getCachedAdminSubjects();
-            if (cached.length > 0) setSubjects(cached);
+            setSubjects(cached);
         } finally {
             setLoadingSubjects(false);
         }
@@ -202,19 +227,24 @@ export default function Dashboard() {
     const fetchQuestions = async () => {
         setLoadingQuestions(true);
         try {
+            if (!navigator.onLine) {
+                const cached = await getCachedAdminQuestions();
+                setQuestions(cached);
+                return;
+            }
             const res = await fetch('/api/v1/admin/questions');
             if (res.ok) {
                 const data = await res.json();
                 const items = data.data || data.questions || [];
-                setQuestions(items);
-                cacheAdminQuestions(items);
+                const merged = await cacheAdminQuestions(items);
+                setQuestions(merged);
             } else {
                 throw new Error('Server error');
             }
         } catch (err) {
             console.warn('Loading questions from offline storage:', err);
             const cached = await getCachedAdminQuestions();
-            if (cached.length > 0) setQuestions(cached);
+            setQuestions(cached);
         } finally {
             setLoadingQuestions(false);
         }

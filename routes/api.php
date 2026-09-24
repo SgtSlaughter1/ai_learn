@@ -13,6 +13,7 @@ Route::get('/quizzes/{quiz}', [QuizController::class, 'show']);
 Route::prefix('v1/past-questions')->group(function () {
     Route::get('/meta', [PastQuestionController::class, 'getMeta']);
     Route::get('/questions', [PastQuestionController::class, 'getQuestions']);
+    Route::post('/verify-answer', [PastQuestionController::class, 'verifyAnswer']);
     Route::get('/similar', [PastQuestionController::class, 'getSimilar']);
     Route::post('/simulation/start', [PastQuestionController::class, 'startSimulation']);
     Route::post('/simulation/submit', [PastQuestionController::class, 'submitSimulation']);

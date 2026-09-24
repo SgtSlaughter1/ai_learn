@@ -224,10 +224,12 @@ class PastQuestionController extends Controller
 
         $questions = $query->limit($limit)->get();
 
-        $mode = $request->input('mode', 'simulation');
-        $hideAnswers = $request->has('include_answers')
-            ? !$request->boolean('include_answers')
-            : ($mode === 'simulation');
+        $user = Auth::user() ?? $request->user();
+        $isGuest = !$user;
+        $isAdmin = $user && method_exists($user, 'isAdmin') && $user->isAdmin();
+
+        // Always hide answers by default so learners cannot inspect client-side state/HTML
+        $hideAnswers = !($isAdmin && $request->boolean('include_answers', false));
 
         // Transform questions for front-end consumption
         $formatted = $questions->map(function (PastQuestion $q) use ($hideAnswers) {
@@ -276,6 +278,31 @@ class PastQuestionController extends Controller
             'is_guest' => $isGuest,
             'guest_limit' => 50,
             'data' => $formatted,
+        ]);
+    }
+
+    /**
+     * Verify a learner's answer for a single past question during interactive practice.
+     * Evaluates securely server-side so answers are never sent with the question.
+     */
+    public function verifyAnswer(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'question_id' => 'required|integer|exists:past_questions,id',
+            'selected_option_id' => 'required|integer',
+        ]);
+
+        $question = PastQuestion::with('options')->findOrFail($validated['question_id']);
+        $correctOption = $question->options->firstWhere('is_correct', true);
+        $selectedOption = $question->options->firstWhere('id', $validated['selected_option_id']);
+        
+        $isCorrect = $selectedOption ? (bool) $selectedOption->is_correct : false;
+
+        return response()->json([
+            'success' => true,
+            'is_correct' => $isCorrect,
+            'correct_option_id' => $correctOption?->id,
+            'explanation' => $question->explanation,
         ]);
     }
 

@@ -29,6 +29,12 @@ export default function SchoolCard({ school, onEdit, onDelete }: SchoolCardProps
                                 <h3 className="font-bold text-[var(--color-text)] text-base group-hover:text-[var(--color-primary)] transition-colors">
                                     {school.name}
                                 </h3>
+                                {school._pendingSync && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                        Pending Sync
+                                    </span>
+                                )}
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[var(--color-primary-10)] text-[var(--color-primary)] border border-[var(--color-primary)]/20 uppercase tracking-wider">
                                     {formatSchoolCategoryLabel(school)}
                                 </span>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { SubjectItem, TopicItem, ClassItem } from '@/types/admin';
-import { executeAdminAction } from '@/services/AdminOfflineService';
+import { executeAdminAction, cacheAdminTopics, getCachedAdminTopics } from '@/services/AdminOfflineService';
 import SubjectFilterBar from './subjects/SubjectFilterBar';
 import SubjectCard from './subjects/SubjectCard';
 import SubjectFormModal, { type SubjectFormData } from './subjects/SubjectFormModal';
@@ -129,15 +129,27 @@ export default function SubjectsTab({ subjects, classes = [], loading, onRefresh
         setSelectedSubjectForTopics(subject);
         setLoadingTopics(true);
         try {
+            if (!navigator.onLine) {
+                const cached = await getCachedAdminTopics(subject.id);
+                setTopicsList(cached);
+                return;
+            }
             const res = await fetch(`/api/v1/admin/topics?subject_id=${subject.id}`, {
                 headers: getAuthHeaders(),
                 credentials: 'include',
             });
-            const data = await res.json();
-            setTopicsList(data.topics || []);
+            if (res.ok) {
+                const data = await res.json();
+                const items = data.topics || [];
+                const merged = await cacheAdminTopics(items);
+                setTopicsList(merged.filter(t => t.subject_id === subject.id));
+            } else {
+                throw new Error('Server error');
+            }
         } catch (err) {
-            console.error(err);
-            setTopicsList([]);
+            console.warn('Loading topics from offline storage:', err);
+            const cached = await getCachedAdminTopics(subject.id);
+            setTopicsList(cached);
         } finally {
             setLoadingTopics(false);
         }

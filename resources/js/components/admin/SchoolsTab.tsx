@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { SchoolItem } from '@/types/admin';
+import { executeAdminAction } from '@/services/AdminOfflineService';
 import SchoolMetrics from './schools/SchoolMetrics';
 import SchoolFilterBar from './schools/SchoolFilterBar';
 import SchoolCard from './schools/SchoolCard';
@@ -44,15 +45,6 @@ export default function SchoolsTab({
         description: '',
         is_active: true,
     });
-
-    const getAuthHeaders = () => {
-        const token = localStorage.getItem('token') || localStorage.getItem('auth_token');
-        return {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        };
-    };
 
     const resetForm = () => {
         setFormData({
@@ -100,36 +92,48 @@ export default function SchoolsTab({
         e.preventDefault();
         setSubmitting(true);
 
-        try {
-            const url = editingSchool
-                ? `/api/v1/admin/schools/${editingSchool.id}`
-                : '/api/v1/admin/schools';
-            const method = editingSchool ? 'PUT' : 'POST';
+        const endpoint = editingSchool
+            ? `/api/v1/admin/schools/${editingSchool.id}`
+            : '/api/v1/admin/schools';
+        const method = editingSchool ? 'PUT' : 'POST';
+        const tempId = editingSchool ? String(editingSchool.id) : `temp_school_${Date.now()}`;
 
-            const res = await fetch(url, {
-                method,
-                headers: getAuthHeaders(),
-                credentials: 'include',
-                body: JSON.stringify(formData),
-            });
+        const optimisticSchool: SchoolItem = {
+            id: editingSchool ? editingSchool.id : Date.now(),
+            name: formData.name,
+            slug: formData.slug || formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+            category: formData.category,
+            category_ids: formData.category_ids,
+            address: formData.address || null,
+            city: formData.city || null,
+            state: formData.state || null,
+            phone: formData.phone || null,
+            email: formData.email || null,
+            description: formData.description || null,
+            is_active: formData.is_active,
+            learners_count: editingSchool ? editingSchool.learners_count : 0,
+            classes_count: editingSchool ? editingSchool.classes_count : 0,
+            _pendingSync: true,
+        };
 
-            const data = await res.json();
+        const res = await executeAdminAction({
+            table: 'adminSchools',
+            action: editingSchool ? 'update' : 'insert',
+            recordId: tempId,
+            endpoint,
+            method,
+            payload: formData,
+            optimisticRecord: optimisticSchool,
+        });
 
-            if (res.ok) {
-                showToast(
-                    editingSchool ? 'School updated successfully' : 'School created successfully',
-                    'success'
-                );
-                setIsCreateModalOpen(false);
-                resetForm();
-                onRefresh();
-            } else {
-                showToast(data.message || data.error || 'Failed to save school', 'error');
-            }
-        } catch {
-            showToast('Network error while saving school', 'error');
-        } finally {
-            setSubmitting(false);
+        setSubmitting(false);
+        if (res.success) {
+            showToast(res.message || (editingSchool ? 'School updated successfully' : 'School created successfully'), 'success');
+            setIsCreateModalOpen(false);
+            resetForm();
+            onRefresh();
+        } else {
+            showToast(res.error || 'Failed to save school', 'error');
         }
     };
 
@@ -137,25 +141,21 @@ export default function SchoolsTab({
         if (!deletingSchool) return;
         setSubmitting(true);
 
-        try {
-            const res = await fetch(`/api/v1/admin/schools/${deletingSchool.id}`, {
-                method: 'DELETE',
-                headers: getAuthHeaders(),
-                credentials: 'include',
-            });
+        const res = await executeAdminAction({
+            table: 'adminSchools',
+            action: 'delete',
+            recordId: String(deletingSchool.id),
+            endpoint: `/api/v1/admin/schools/${deletingSchool.id}`,
+            method: 'DELETE',
+        });
 
-            if (res.ok) {
-                showToast('School removed successfully', 'success');
-                setDeletingSchool(null);
-                onRefresh();
-            } else {
-                const data = await res.json();
-                showToast(data.message || 'Failed to delete school', 'error');
-            }
-        } catch {
-            showToast('Network error while deleting school', 'error');
-        } finally {
-            setSubmitting(false);
+        setSubmitting(false);
+        if (res.success) {
+            showToast(res.message || 'School removed successfully', 'success');
+            setDeletingSchool(null);
+            onRefresh();
+        } else {
+            showToast(res.error || 'Failed to delete school', 'error');
         }
     };
 

@@ -222,7 +222,7 @@ export function AiExplanationDrawer({
 
     return (
         <div
-            className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-xs flex justify-end overflow-hidden animate-fade-in"
+            className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-md flex justify-end overflow-hidden animate-fade-in"
             onClick={onClose}
         >
             <div
