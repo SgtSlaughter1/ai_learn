@@ -252,8 +252,9 @@ class DomainModelTest extends TestCase
         // 2. Learner gets default /dashboard view (loads Inertia page, status 200)
         $this->get('/dashboard')->assertStatus(200);
 
-        // 3. School admin can access dashboard and stats
-        $this->actingAs($schoolAdmin);
+        // 3. Teacher can access teacher dashboard and stats
+        $teacher = User::factory()->create(['role' => UserRole::TEACHER]);
+        $this->actingAs($teacher);
         $this->get('/teacher/dashboard')->assertStatus(200);
         $this->getJson('/api/v1/teacher/stats')->assertStatus(200)
             ->assertJsonStructure([
@@ -261,7 +262,9 @@ class DomainModelTest extends TestCase
                 'recentActivities'
             ]);
 
-        // 4. Admin/School Admin gets redirected from /dashboard to /admin/dashboard
+        // 4. Admin/School Admin gets redirected from /teacher/dashboard and /dashboard to /admin/dashboard
+        $this->actingAs($schoolAdmin);
+        $this->get('/teacher/dashboard')->assertRedirect('/admin/dashboard');
         $this->get('/dashboard')->assertRedirect('/admin/dashboard');
     }
 

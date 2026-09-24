@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\LearnerProfile;
+use App\Models\TeacherProfile;
 use App\Models\School;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -14,6 +15,10 @@ class SchoolSeeder extends Seeder
         // 1. Retrieve Seeded Users
         $schoolAdmin1 = User::where('email', 'schooladmin@example.com')->first();
         $schoolAdmin2 = User::where('email', 'greenwood.admin@example.com')->first();
+
+        $teacher1 = User::where('email', 'teacher@example.com')->first();
+        $teacher2 = User::where('email', 'emeka.teacher@example.com')->first();
+        $teacher3 = User::where('email', 'fatima.teacher@example.com')->first();
 
         $learner1 = User::where('email', 'learner@example.com')->first();
         $learner2 = User::where('email', 'ada.learner@example.com')->first();
@@ -57,7 +62,44 @@ class SchoolSeeder extends Seeder
             ]
         );
 
-        // 4. Create Learner Profiles
+        // 4. Create Teacher Profiles
+        if ($teacher1) {
+            TeacherProfile::updateOrCreate(
+                ['user_id' => $teacher1->id, 'school_id' => $school1->id],
+                [
+                    'employee_id' => 'TCH-001',
+                    'department' => 'Science & Mathematics',
+                    'bio' => 'Senior Physics & Mathematics Instructor with 8+ years experience in STEM curriculum mastery.',
+                    'is_active' => true,
+                ]
+            );
+        }
+
+        if ($teacher2) {
+            TeacherProfile::updateOrCreate(
+                ['user_id' => $teacher2->id, 'school_id' => $school1->id],
+                [
+                    'employee_id' => 'TCH-002',
+                    'department' => 'Commercial & Social Sciences',
+                    'bio' => 'Economics & Accounting teacher focused on secondary business studies.',
+                    'is_active' => true,
+                ]
+            );
+        }
+
+        if ($teacher3) {
+            TeacherProfile::updateOrCreate(
+                ['user_id' => $teacher3->id, 'school_id' => $school2->id],
+                [
+                    'employee_id' => 'GW-TCH-001',
+                    'department' => 'Science Department',
+                    'bio' => 'Chemistry & Integrated Science Specialist at Greenwood High.',
+                    'is_active' => true,
+                ]
+            );
+        }
+
+        // 5. Create Learner Profiles
         if ($learner1) {
             LearnerProfile::updateOrCreate(
                 ['user_id' => $learner1->id],

@@ -112,9 +112,11 @@ Route::prefix('api/v1/auth')->group(function () {
 
 // Protected Core Learning Routes
 Route::middleware('auth')->group(function () {
-    // Shell Pages Renders
     Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::get('/learner/dashboard', fn() => \Inertia\Inertia::render('learner/Dashboard'));
     Route::get('/admin/dashboard', [AdminDashboardController::class, 'index']);
+    Route::get('/super-admin/dashboard', [AdminDashboardController::class, 'index']);
+    Route::get('/school-admin/dashboard', [AdminDashboardController::class, 'index']);
     Route::get('/teacher/dashboard', [TeacherDashboardController::class, 'index']);
     Route::get('/subjects', [SubjectWebController::class, 'index']);
     Route::get('/general-knowledge', [SubjectWebController::class, 'generalKnowledge']);
@@ -169,13 +171,15 @@ Route::middleware('auth')->group(function () {
         Route::post('/progress/sync', [SyncController::class, 'syncProgress']);
         Route::post('/gamification/sync', [SyncController::class, 'syncGamification']);
 
-        // Teacher Dashboard & Class Management (backward compatibility)
+        // Teacher Dashboard & Class Management
         Route::get('/teacher/classes/{classId}/learners', [TeacherDashboardController::class, 'getClassLearners']);
+        Route::get('/teacher/classes/{classId}/diagnostics', [TeacherDashboardController::class, 'getClassDiagnostics']);
+        Route::post('/teacher/interventions/assign', [TeacherDashboardController::class, 'assignIntervention']);
         Route::post('/teacher/classes', [TeacherDashboardController::class, 'createClass']);
         Route::post('/teacher/classes/{classId}/enroll', [TeacherDashboardController::class, 'enrollLearner']);
         Route::delete('/teacher/classes/{classId}/learners/{learnerId}', [TeacherDashboardController::class, 'removeLearner']);
 
-        // Admin Management: Categories, Schools, School Admins, Classes, Learners, Subjects, Topics, Questions
+        // Admin Management: Categories, Schools, School Admins, Teachers, Classes, Learners, Subjects, Topics, Questions
         Route::get('/admin/categories', [AdminDashboardController::class, 'getCategories']);
         Route::get('/admin/schools', [AdminDashboardController::class, 'getSchools']);
         Route::post('/admin/schools', [AdminDashboardController::class, 'saveSchool']);
@@ -186,6 +190,11 @@ Route::middleware('auth')->group(function () {
         Route::post('/admin/school-admins', [AdminDashboardController::class, 'saveSchoolAdmin']);
         Route::put('/admin/school-admins/{id}', [AdminDashboardController::class, 'updateSchoolAdmin']);
         Route::delete('/admin/school-admins/{id}', [AdminDashboardController::class, 'deleteSchoolAdmin']);
+
+        Route::get('/admin/teachers', [AdminDashboardController::class, 'getTeachers']);
+        Route::post('/admin/teachers', [AdminDashboardController::class, 'saveTeacher']);
+        Route::put('/admin/teachers/{id}', [AdminDashboardController::class, 'updateTeacher']);
+        Route::delete('/admin/teachers/{id}', [AdminDashboardController::class, 'deleteTeacher']);
 
         Route::get('/admin/programs', [AdminDashboardController::class, 'getPrograms']);
         Route::get('/admin/classes', [AdminDashboardController::class, 'getClasses']);
@@ -215,6 +224,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/admin/questions', [AdminDashboardController::class, 'saveQuestion']);
         Route::post('/admin/questions/ai-extract', [AdminDashboardController::class, 'aiExtractQuestions']);
         Route::post('/admin/questions/bulk', [AdminDashboardController::class, 'bulkSaveQuestions']);
+        Route::put('/admin/questions/{id}', [AdminDashboardController::class, 'updateQuestion']);
+        Route::delete('/admin/questions/{id}', [AdminDashboardController::class, 'deleteQuestion']);
         // Past Questions & National Exam Simulation Hub
         Route::get('/past-questions/meta', [PastQuestionController::class, 'getMeta']);
         Route::get('/past-questions/questions', [PastQuestionController::class, 'getQuestions']);

@@ -7,6 +7,7 @@ import type {
     TopicItem,
     QuestionItem,
     SchoolAdminItem,
+    TeacherItem,
 } from '../types/admin';
 
 export const ADMIN_DATA_CHANGED_EVENT = 'app:admin-data-changed';
@@ -420,6 +421,50 @@ export async function getCachedAdminSchoolAdmins(): Promise<SchoolAdminItem[]> {
     }
 }
 
+export async function cacheAdminTeachers(serverTeachers: TeacherItem[]): Promise<TeacherItem[]> {
+    try {
+        const existing = await db.adminTeachers.toArray();
+        const pendingSyncItems = existing.filter(t => (t as any)._pendingSync);
+        const pendingDeletions = await db.syncQueue
+            .where('table_name')
+            .equals('adminTeachers')
+            .filter(q => q.action === 'delete' && !q.synced)
+            .toArray();
+        const deletedIds = new Set(pendingDeletions.map(d => String(d.record_id)));
+
+        const filteredServerItems = serverTeachers.filter(t => !deletedIds.has(String(t.id)));
+
+        await db.adminTeachers.clear();
+        if (filteredServerItems.length > 0) {
+            await db.adminTeachers.bulkPut(filteredServerItems);
+        }
+        if (pendingSyncItems.length > 0) {
+            await db.adminTeachers.bulkPut(pendingSyncItems);
+        }
+
+        return [...pendingSyncItems, ...filteredServerItems];
+    } catch (e) {
+        console.warn('[AdminOfflineService] Failed caching teachers:', e);
+        return serverTeachers;
+    }
+}
+
+export async function getCachedAdminTeachers(): Promise<TeacherItem[]> {
+    try {
+        const pendingDeletions = await db.syncQueue
+            .where('table_name')
+            .equals('adminTeachers')
+            .filter(q => q.action === 'delete' && !q.synced)
+            .toArray();
+        const deletedIds = new Set(pendingDeletions.map(d => String(d.record_id)));
+
+        const teachers = await db.adminTeachers.toArray();
+        return teachers.filter(t => !deletedIds.has(String(t.id)));
+    } catch {
+        return [];
+    }
+}
+
 // ── Generic Offline-First Action Handler ──
 
 export interface AdminActionResult<T = any> {
@@ -432,7 +477,7 @@ export interface AdminActionResult<T = any> {
 }
 
 export async function executeAdminAction<T = any>(options: {
-    table: 'adminLearners' | 'adminSchools' | 'adminClasses' | 'adminQuestions' | 'adminSchoolAdmins' | 'subjects' | 'topics';
+    table: 'adminLearners' | 'adminSchools' | 'adminClasses' | 'adminQuestions' | 'adminSchoolAdmins' | 'adminTeachers' | 'subjects' | 'topics';
     action: 'insert' | 'update' | 'delete';
     recordId: string;
     endpoint: string;

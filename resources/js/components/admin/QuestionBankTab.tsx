@@ -15,6 +15,8 @@ interface Props {
     loading: boolean;
     onRefresh: () => void;
     showToast: (text: string, type?: 'success' | 'error') => void;
+    school?: { category?: string | null; category_ids?: number[] | null; allowed_grade_levels?: string[] | null } | null;
+    allowedGradeLevels?: string[];
 }
 
 export default function QuestionBankTab({
@@ -25,6 +27,8 @@ export default function QuestionBankTab({
     loading,
     onRefresh,
     showToast,
+    school,
+    allowedGradeLevels,
 }: Props) {
     // ── Filter State ──
     const [questionGradeFilter, setQuestionGradeFilter] = useState('');
@@ -391,6 +395,8 @@ export default function QuestionBankTab({
                 classes={classes}
                 availableSubjects={availableSubjectsForFilter}
                 availableTopics={availableTopicsForFilter}
+                school={school}
+                allowedGradeLevels={allowedGradeLevels}
                 onOpenBulkModal={openBulkModal}
                 onOpenAddModal={() => {
                     setEditingQuestion(null);

@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import type { ClassItem, SubjectItem, TopicItem } from '@/types/admin';
-import { formatClassOptionLabel, ALL_GRADE_GROUPS } from '@/utils/format';
+import { formatClassOptionLabel, ALL_GRADE_GROUPS, getGradeLevelsForSchool } from '@/utils/format';
 
 interface QuestionFilterBarProps {
     questionSearch: string;
@@ -19,6 +20,8 @@ interface QuestionFilterBarProps {
     availableTopics: TopicItem[];
     onOpenBulkModal: () => void;
     onOpenAddModal: () => void;
+    school?: { category?: string | null; category_ids?: number[] | null; allowed_grade_levels?: string[] | null } | null;
+    allowedGradeLevels?: string[];
 }
 
 export default function QuestionFilterBar({
@@ -39,7 +42,41 @@ export default function QuestionFilterBar({
     availableTopics,
     onOpenBulkModal,
     onOpenAddModal,
+    school,
+    allowedGradeLevels,
 }: QuestionFilterBarProps) {
+    const availableGradeGroups = useMemo(() => {
+        if (allowedGradeLevels && allowedGradeLevels.length > 0) {
+            const allowedSet = new Set(allowedGradeLevels.map((g) => g.toUpperCase()));
+            return ALL_GRADE_GROUPS.map((grp) => ({
+                ...grp,
+                options: grp.options.filter((opt) => allowedSet.has(opt.value.toUpperCase())),
+            })).filter((grp) => grp.options.length > 0);
+        }
+
+        if (school && (school.category || (school.category_ids && school.category_ids.length > 0) || (school.allowed_grade_levels && school.allowed_grade_levels.length > 0))) {
+            const schoolGroups = getGradeLevelsForSchool(school);
+            if (schoolGroups && schoolGroups.length > 0 && schoolGroups !== ALL_GRADE_GROUPS) {
+                return schoolGroups;
+            }
+        }
+
+        if (classes && classes.length > 0) {
+            const classGradeLevels = new Set(
+                classes.map((c) => c.grade_level?.toUpperCase()).filter(Boolean) as string[]
+            );
+            if (classGradeLevels.size > 0) {
+                const matched = ALL_GRADE_GROUPS.map((grp) => ({
+                    ...grp,
+                    options: grp.options.filter((opt) => classGradeLevels.has(opt.value.toUpperCase())),
+                })).filter((grp) => grp.options.length > 0);
+                if (matched.length > 0) return matched;
+            }
+        }
+
+        return ALL_GRADE_GROUPS;
+    }, [allowedGradeLevels, school, classes]);
+
     const filteredClasses = classes.filter(
         (c) => !questionGradeFilter || c.grade_level === questionGradeFilter
     );
@@ -65,7 +102,7 @@ export default function QuestionFilterBar({
                     className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
                 >
                     <option value="">All Grade Levels</option>
-                    {ALL_GRADE_GROUPS.map((grp) => (
+                    {availableGradeGroups.map((grp) => (
                         <optgroup key={grp.group} label={grp.group}>
                             {grp.options.map((opt) => (
                                 <option key={opt.value} value={opt.value}>

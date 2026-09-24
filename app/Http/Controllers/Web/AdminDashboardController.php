@@ -49,6 +49,13 @@ class AdminDashboardController extends Controller
         $totalSchools = School::where('is_active', true)->count();
         $totalSchoolAdmins = User::where('role', 'school_admin')->count();
 
+        // Teachers query scoped by school if school_admin
+        $teachersQuery = User::where('role', 'teacher');
+        if (!$isSuperAdmin && $schoolId) {
+            $teachersQuery->whereHas('teacherProfile', fn ($q) => $q->where('school_id', $schoolId));
+        }
+        $totalTeachers = $teachersQuery->count();
+
         // Learners query scoped by school if school_admin
         $learnersQuery = User::where('role', 'learner');
         if (!$isSuperAdmin && $schoolId) {
@@ -163,6 +170,7 @@ class AdminDashboardController extends Controller
             'overview' => [
                 'total_schools' => $totalSchools,
                 'total_school_admins' => $totalSchoolAdmins,
+                'total_teachers' => $totalTeachers,
                 'total_learners' => $totalLearners,
                 'total_classes' => $totalClasses,
                 'total_subjects' => $totalSubjects,
@@ -550,6 +558,228 @@ class AdminDashboardController extends Controller
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    // Teachers Management (School Admin & Super Admin)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    public function getTeachers(Request $request): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+        $user = $request->user();
+        $isSuperAdmin = $user->isPlatformAdmin();
+        $schoolId = $user->isSchoolAdmin() ? $user->primarySchool()?->id : null;
+
+        $query = User::where('role', 'teacher')
+            ->with([
+                'teacherProfile.school:id,name',
+                'classes' => function ($q) {
+                    $q->wherePivot('role', 'teacher')
+                      ->select(['classes.id', 'classes.name', 'classes.grade_level', 'classes.arm', 'classes.section']);
+                },
+            ]);
+
+        if (!$isSuperAdmin && $schoolId) {
+            $query->whereHas('teacherProfile', fn ($q) => $q->where('school_id', $schoolId));
+        } elseif ($request->filled('school_id')) {
+            $query->whereHas('teacherProfile', fn ($q) => $q->where('school_id', $request->school_id));
+        }
+
+        if ($request->filled('class_id')) {
+            $query->whereHas('classMemberships', fn ($q) => $q->where('class_id', $request->class_id)->where('role', 'teacher'));
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhereHas('teacherProfile', fn ($tp) => $tp->where('employee_id', 'like', "%{$search}%")->orWhere('department', 'like', "%{$search}%"));
+            });
+        }
+
+        $perPage = (int) $request->get('per_page', 20);
+        $teachers = $query->orderBy('name')->paginate($perPage);
+
+        return response()->json($teachers);
+    }
+
+    public function saveTeacher(Request $request): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+        $user = $request->user();
+        $isSuperAdmin = $user->isPlatformAdmin();
+        $schoolId = $user->isSchoolAdmin() ? $user->primarySchool()?->id : null;
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users,email',
+            'password' => 'required|string|min:6',
+            'school_id' => $isSuperAdmin ? 'required|exists:schools,id' : 'nullable|exists:schools,id',
+            'class_id' => 'nullable|exists:classes,id',
+            'class_ids' => 'nullable|array',
+            'class_ids.*' => 'exists:classes,id',
+            'department' => 'nullable|string|max:100',
+            'employee_id' => 'nullable|string|max:50',
+            'bio' => 'nullable|string',
+        ]);
+
+        $targetSchoolId = $isSuperAdmin ? ($validated['school_id'] ?? $schoolId) : $schoolId;
+
+        $teacherUser = DB::transaction(function () use ($validated, $targetSchoolId) {
+            $teacher = User::create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => Hash::make($validated['password']),
+                'role' => UserRole::TEACHER,
+            ]);
+
+            \App\Models\TeacherProfile::create([
+                'user_id' => $teacher->id,
+                'school_id' => $targetSchoolId,
+                'employee_id' => $validated['employee_id'] ?? null,
+                'department' => $validated['department'] ?? null,
+                'bio' => $validated['bio'] ?? null,
+                'is_active' => true,
+            ]);
+
+            $classIds = [];
+            if (!empty($validated['class_ids'])) {
+                $classIds = $validated['class_ids'];
+            } elseif (!empty($validated['class_id'])) {
+                $classIds = [$validated['class_id']];
+            }
+
+            foreach ($classIds as $cId) {
+                ClassMembership::updateOrCreate(
+                    ['class_id' => $cId, 'user_id' => $teacher->id],
+                    ['role' => 'teacher', 'is_active' => true]
+                );
+            }
+
+            return $teacher;
+        });
+
+        $teacherUser->load([
+            'teacherProfile.school:id,name',
+            'classes' => fn ($q) => $q->wherePivot('role', 'teacher')->select(['classes.id', 'classes.name', 'classes.grade_level', 'classes.arm', 'classes.section']),
+        ]);
+
+        return response()->json([
+            'message' => 'Teacher created and assigned successfully',
+            'teacher' => $teacherUser,
+        ], 201);
+    }
+
+    public function updateTeacher(Request $request, string $id): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+        $user = $request->user();
+        $isSuperAdmin = $user->isPlatformAdmin();
+        $schoolId = $user->isSchoolAdmin() ? $user->primarySchool()?->id : null;
+
+        $teacherUser = User::where('id', $id)->where('role', 'teacher')->firstOrFail();
+
+        if (!$isSuperAdmin && $schoolId) {
+            $belongsToSchool = $teacherUser->teacherProfile()->where('school_id', $schoolId)->exists();
+            if (!$belongsToSchool) {
+                return response()->json(['error' => 'Forbidden. This teacher does not belong to your school.'], 403);
+            }
+        }
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users,email,' . $id,
+            'password' => 'nullable|string|min:6',
+            'school_id' => 'nullable|exists:schools,id',
+            'class_id' => 'nullable|exists:classes,id',
+            'class_ids' => 'nullable|array',
+            'class_ids.*' => 'exists:classes,id',
+            'department' => 'nullable|string|max:100',
+            'employee_id' => 'nullable|string|max:50',
+            'bio' => 'nullable|string',
+            'is_active' => 'nullable|boolean',
+        ]);
+
+        DB::transaction(function () use ($teacherUser, $validated, $isSuperAdmin) {
+            $userData = [
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+            ];
+            if (!empty($validated['password'])) {
+                $userData['password'] = Hash::make($validated['password']);
+            }
+            $teacherUser->update($userData);
+
+            $profileData = [];
+            if (array_key_exists('department', $validated)) $profileData['department'] = $validated['department'];
+            if (array_key_exists('employee_id', $validated)) $profileData['employee_id'] = $validated['employee_id'];
+            if (array_key_exists('bio', $validated)) $profileData['bio'] = $validated['bio'];
+            if (array_key_exists('is_active', $validated)) $profileData['is_active'] = $validated['is_active'];
+            if ($isSuperAdmin && !empty($validated['school_id'])) $profileData['school_id'] = $validated['school_id'];
+
+            if (!empty($profileData)) {
+                $teacherUser->teacherProfile()->updateOrCreate(['user_id' => $teacherUser->id], $profileData);
+            }
+
+            // Sync classes if provided
+            if (array_key_exists('class_ids', $validated) || array_key_exists('class_id', $validated)) {
+                $classIds = [];
+                if (isset($validated['class_ids'])) {
+                    $classIds = $validated['class_ids'];
+                } elseif (!empty($validated['class_id'])) {
+                    $classIds = [$validated['class_id']];
+                }
+
+                ClassMembership::where('user_id', $teacherUser->id)
+                    ->where('role', 'teacher')
+                    ->whereNotIn('class_id', $classIds)
+                    ->delete();
+
+                foreach ($classIds as $cId) {
+                    ClassMembership::updateOrCreate(
+                        ['class_id' => $cId, 'user_id' => $teacherUser->id],
+                        ['role' => 'teacher', 'is_active' => true]
+                    );
+                }
+            }
+        });
+
+        $teacherUser->load([
+            'teacherProfile.school:id,name',
+            'classes' => fn ($q) => $q->wherePivot('role', 'teacher')->select(['classes.id', 'classes.name', 'classes.grade_level', 'classes.arm', 'classes.section']),
+        ]);
+
+        return response()->json([
+            'message' => 'Teacher updated successfully',
+            'teacher' => $teacherUser,
+        ]);
+    }
+
+    public function deleteTeacher(Request $request, string $id): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+        $user = $request->user();
+        $isSuperAdmin = $user->isPlatformAdmin();
+        $schoolId = $user->isSchoolAdmin() ? $user->primarySchool()?->id : null;
+
+        $teacherUser = User::where('id', $id)->where('role', 'teacher')->firstOrFail();
+
+        if (!$isSuperAdmin && $schoolId) {
+            $belongsToSchool = $teacherUser->teacherProfile()->where('school_id', $schoolId)->exists();
+            if (!$belongsToSchool) {
+                return response()->json(['error' => 'Forbidden. This teacher does not belong to your school.'], 403);
+            }
+        }
+
+        DB::transaction(function () use ($teacherUser) {
+            ClassMembership::where('user_id', $teacherUser->id)->delete();
+            $teacherUser->teacherProfile()->delete();
+            $teacherUser->delete();
+        });
+
+        return response()->json(['message' => 'Teacher deleted successfully']);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // Learners Management
     // ──────────────────────────────────────────────────────────────────────────
 
@@ -785,10 +1015,11 @@ class AdminDashboardController extends Controller
 
     public function getSubjects(Request $request): JsonResponse
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeAdminOrTeacher($request);
         $user = $request->user();
         $isSuperAdmin = $user->isPlatformAdmin();
-        $schoolId = $user->isSchoolAdmin() ? $user->primarySchool()?->id : null;
+        $isTeacher = $user->isTeacher();
+        $schoolId = ($user->isSchoolAdmin() || $isTeacher) ? $user->primarySchool()?->id : null;
 
         $query = Subject::withCount(['topics'])
             ->with([
@@ -799,7 +1030,14 @@ class AdminDashboardController extends Controller
                 }
             ]);
 
-        if (!$isSuperAdmin && $schoolId) {
+        if ($isTeacher) {
+            $teacherClassIds = $user->classes()->pluck('classes.id')->toArray();
+            if (!empty($teacherClassIds)) {
+                $query->whereIn('class_id', $teacherClassIds);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        } elseif (!$isSuperAdmin && $schoolId) {
             $query->where(function ($q) use ($schoolId) {
                 $q->where('school_id', $schoolId)->orWhereNull('school_id');
             });
@@ -947,9 +1185,21 @@ class AdminDashboardController extends Controller
 
     public function getTopics(Request $request): JsonResponse
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeAdminOrTeacher($request);
+        $user = $request->user();
+        $isTeacher = $user && $user->isTeacher();
+        $schoolId = ($user && ($user->isSchoolAdmin() || $isTeacher)) ? $user->primarySchool()?->id : null;
 
         $query = Topic::with(['subject:id,name,slug,school_id,class_id', 'subject.schoolClass:id,name,grade_level'])->withCount('questions');
+
+        if ($isTeacher) {
+            $teacherClassIds = $user->classes()->pluck('classes.id')->toArray();
+            if (!empty($teacherClassIds)) {
+                $query->whereHas('subject', fn ($sub) => $sub->whereIn('class_id', $teacherClassIds));
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
 
         if ($request->filled('subject_id')) {
             $query->where('subject_id', $request->subject_id);
@@ -1059,10 +1309,11 @@ class AdminDashboardController extends Controller
 
     public function getQuestions(Request $request): JsonResponse
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeAdminOrTeacher($request);
         $user = $request->user();
         $isSuperAdmin = $user->isPlatformAdmin();
-        $schoolId = $user->isSchoolAdmin() ? $user->primarySchool()?->id : null;
+        $isTeacher = $user->isTeacher();
+        $schoolId = ($user->isSchoolAdmin() || $isTeacher) ? $user->primarySchool()?->id : null;
 
         $query = Question::with([
             'options',
@@ -1071,7 +1322,14 @@ class AdminDashboardController extends Controller
             'school:id,name'
         ]);
 
-        if (!$isSuperAdmin && $schoolId) {
+        if ($isTeacher) {
+            $teacherClassIds = $user->classes()->pluck('classes.id')->toArray();
+            if (!empty($teacherClassIds)) {
+                $query->whereHas('topic.subject', fn ($sub) => $sub->whereIn('class_id', $teacherClassIds));
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        } elseif (!$isSuperAdmin && $schoolId) {
             $query->where(function ($q) use ($schoolId) {
                 $q->where('questions.school_id', $schoolId)
                   ->orWhereNull('questions.school_id')
@@ -1107,10 +1365,11 @@ class AdminDashboardController extends Controller
 
     public function saveQuestion(Request $request): JsonResponse
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeAdminOrTeacher($request);
         $user = $request->user();
         $isSuperAdmin = $user->isPlatformAdmin();
-        $schoolId = $user->isSchoolAdmin() ? $user->primarySchool()?->id : null;
+        $isTeacher = $user->isTeacher();
+        $schoolId = ($user->isSchoolAdmin() || $isTeacher) ? $user->primarySchool()?->id : null;
 
         $validated = $request->validate([
             'topic_id' => 'required|exists:topics,id',
@@ -1186,7 +1445,7 @@ class AdminDashboardController extends Controller
 
     public function aiExtractQuestions(Request $request): JsonResponse
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeAdminOrTeacher($request);
 
         $validated = $request->validate([
             'raw_text' => 'required|string',
@@ -1220,10 +1479,11 @@ class AdminDashboardController extends Controller
 
     public function bulkSaveQuestions(Request $request): JsonResponse
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeAdminOrTeacher($request);
         $user = $request->user();
         $isSuperAdmin = $user->isPlatformAdmin();
-        $schoolId = $user->isSchoolAdmin() ? $user->primarySchool()?->id : null;
+        $isTeacher = $user->isTeacher();
+        $schoolId = ($user->isSchoolAdmin() || $isTeacher) ? $user->primarySchool()?->id : null;
 
         $validated = $request->validate([
             'topic_id' => 'required|exists:topics,id',
@@ -1309,10 +1569,11 @@ class AdminDashboardController extends Controller
 
     public function updateQuestion(Request $request, int $id): JsonResponse
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeAdminOrTeacher($request);
         $user = $request->user();
         $isSuperAdmin = $user->isPlatformAdmin();
-        $schoolId = $user->isSchoolAdmin() ? $user->primarySchool()?->id : null;
+        $isTeacher = $user->isTeacher();
+        $schoolId = ($user->isSchoolAdmin() || $isTeacher) ? $user->primarySchool()?->id : null;
 
         $question = Question::findOrFail($id);
 
@@ -1390,7 +1651,7 @@ class AdminDashboardController extends Controller
 
     public function deleteQuestion(Request $request, int $id): JsonResponse
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeAdminOrTeacher($request);
 
         $question = Question::findOrFail($id);
         $question->delete();
@@ -1404,11 +1665,12 @@ class AdminDashboardController extends Controller
 
     public function getClasses(Request $request): JsonResponse
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeAdminOrTeacher($request);
 
         $user = $request->user();
         $isSchoolAdmin = $user && $user->isSchoolAdmin();
-        $schoolId = $isSchoolAdmin ? $user->primarySchool()?->id : $request->school_id;
+        $isTeacher = $user && $user->isTeacher();
+        $schoolId = ($isSchoolAdmin || $isTeacher) ? $user->primarySchool()?->id : $request->school_id;
 
         $gradeOrder = [
             'CRECHE' => 1, 'KG1' => 2, 'KG2' => 3, 'NUR1' => 4, 'NUR2' => 5,
@@ -1416,9 +1678,16 @@ class AdminDashboardController extends Controller
             'JSS1' => 12, 'JSS2' => 13, 'JSS3' => 14, 'SS1' => 15, 'SS2' => 16, 'SS3' => 17,
         ];
 
-        $classes = ClassModel::with(['school:id,name', 'program:id,name,code,slug'])
-            ->withCount(['learnerUsers as learner_count'])
-            ->when($schoolId, fn ($q) => $q->where('school_id', $schoolId))
+        $classesQuery = ClassModel::with(['school:id,name', 'program:id,name,code,slug'])
+            ->withCount(['learnerUsers as learner_count']);
+
+        if ($isTeacher) {
+            $classesQuery->whereHas('teachers', fn ($t) => $t->where('user_id', $user->id));
+        } elseif ($schoolId) {
+            $classesQuery->where('school_id', $schoolId);
+        }
+
+        $classes = $classesQuery
             ->when($request->filled('grade_level'), fn ($q) => $q->where('grade_level', $request->grade_level))
             ->when($request->filled('program_id'), fn ($q) => $q->where('program_id', $request->program_id))
             ->get()
@@ -1437,7 +1706,7 @@ class AdminDashboardController extends Controller
 
     public function getPrograms(Request $request): JsonResponse
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeAdminOrTeacher($request);
 
         $programs = Program::where('is_active', true)
             ->orderBy('name')
@@ -1672,6 +1941,14 @@ class AdminDashboardController extends Controller
         $user = $request->user();
         if (!$user || !$user->isAdmin()) {
             abort(403, 'Forbidden');
+        }
+    }
+
+    private function authorizeAdminOrTeacher(Request $request): void
+    {
+        $user = $request->user();
+        if (!$user || (!$user->isAdmin() && !$user->isTeacher())) {
+            abort(403, 'Forbidden. Admin or Teacher access required.');
         }
     }
 

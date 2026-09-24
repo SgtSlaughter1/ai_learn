@@ -116,6 +116,11 @@ class User extends Authenticatable
         return $this->isPlatformAdmin() || $this->isSchoolAdmin();
     }
 
+    public function isTeacher(): bool
+    {
+        return $this->role === UserRole::TEACHER || $this->role === 'teacher';
+    }
+
     public function isLearner(): bool
     {
         return $this->role === UserRole::LEARNER || $this->role === 'learner';
@@ -131,6 +136,9 @@ class User extends Authenticatable
         }
         if ($this->isSchoolAdmin()) {
             return $this->administeredSchool()->first() ?? School::first();
+        }
+        if ($this->isTeacher()) {
+            return $this->teacherProfile()->first()?->school ?? School::first();
         }
         if ($this->isLearner()) {
             return $this->learnerProfile()->first()?->school;

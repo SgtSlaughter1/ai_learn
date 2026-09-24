@@ -6,5 +6,7 @@ enum UserRole: string
 {
     case PLATFORM_ADMIN = 'platform_admin';
     case SCHOOL_ADMIN = 'school_admin';
+    case TEACHER = 'teacher';
     case LEARNER = 'learner';
 }
+

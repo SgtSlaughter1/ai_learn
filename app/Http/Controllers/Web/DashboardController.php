@@ -19,6 +19,9 @@ class DashboardController extends Controller
         if ($user?->isAdmin()) {
             return redirect('/admin/dashboard');
         }
+        if ($user?->isTeacher()) {
+            return redirect('/teacher/dashboard');
+        }
         return Inertia::render('Dashboard');
     }
 

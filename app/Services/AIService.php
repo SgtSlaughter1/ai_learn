@@ -222,7 +222,7 @@ Rules:
      */
     public function generateChatResponse(User $user, string $message, array $history): string
     {
-        if ($user->isAdmin()) {
+        if ($user->isAdmin() || $user->isTeacher()) {
             return $this->generateAdminChatResponse($user, $message, $history);
         }
 
@@ -230,30 +230,39 @@ Rules:
     }
 
     /**
-     * Generate AI response tailored for School Admins & Platform Admins.
+     * Generate AI response tailored for School Admins, Platform Admins & Teachers.
      */
     public function generateAdminChatResponse(User $user, string $message, array $history): string
     {
         $isSuperAdmin = $user->isPlatformAdmin();
-        $school = $user->administeredSchool()->first() ?? ($isSuperAdmin ? School::first() : null);
+        $isTeacher = $user->isTeacher();
+        $school = $user->primarySchool() ?? $user->administeredSchool()->first() ?? ($isSuperAdmin ? School::first() : null);
         $schoolName = $school ? $school->name : ($isSuperAdmin ? 'All Schools (Platform-wide)' : 'School');
         $schoolCategory = $school ? ucfirst($school->category ?? 'secondary') : 'Secondary';
         $locationStr = $school ? implode(', ', array_filter([$school->city, $school->state])) : 'Nigeria';
 
-        // 1. Enrolled learners count
+        // 1. Enrolled learners count (scoped to teacher's classes if teacher)
         $learnersCountQuery = User::where('role', 'learner');
-        if (!$isSuperAdmin && $school) {
+        if ($isTeacher) {
+            $learnersCountQuery->whereHas('classMemberships', function ($q) use ($user) {
+                $q->whereIn('class_id', function ($sq) use ($user) {
+                    $sq->select('class_id')->from('class_memberships')->where('user_id', $user->id)->where('role', 'teacher');
+                });
+            });
+        } elseif (!$isSuperAdmin && $school) {
             $learnersCountQuery->whereHas('learnerProfile', fn($q) => $q->where('school_id', $school->id));
         }
         $totalLearners = $learnersCountQuery->count();
 
         // 2. Active Classes
         $classesQuery = ClassModel::where('is_active', true);
-        if (!$isSuperAdmin && $school) {
+        if ($isTeacher) {
+            $classesQuery->whereHas('memberships', fn ($q) => $q->where('user_id', $user->id)->where('role', 'teacher'));
+        } elseif (!$isSuperAdmin && $school) {
             $classesQuery->where('school_id', $school->id);
         }
         $classes = $classesQuery->pluck('name')->toArray();
-        $classesStr = !empty($classes) ? implode(', ', $classes) : 'SS1, SS2, SS3';
+        $classesStr = !empty($classes) ? implode(', ', $classes) : 'Active Classes';
 
         // 3. Active Subjects
         $subjectsQuery = Subject::where('status', 'active');
@@ -323,8 +332,11 @@ Rules:
             })->implode("\n")
             : "  - No custom questions logged yet. Standard curriculum active.";
 
-        $systemInstruction = "You are the AILEARN School Administrator Copilot & Academic Advisor.
-You are assisting an academic school administrator: {$user->name} at {$schoolName} ({$schoolCategory} Category, {$locationStr}).
+        $copilotRole = $isTeacher ? 'AI Teacher Copilot & Academic Advisor' : 'AI School Administrator Copilot & Academic Advisor';
+        $userRoleDesc = $isTeacher ? 'teacher / subject educator' : 'academic school administrator';
+
+        $systemInstruction = "You are the AILEARN {$copilotRole}.
+You are assisting {$userRoleDesc}: {$user->name} at {$schoolName} ({$schoolCategory} Category, {$locationStr}).
 
 School Data & Academic Context:
 - Enrolled Learners: {$totalLearners}
@@ -340,12 +352,12 @@ School Data & Academic Context:
 School & General Knowledge Question Bank (Curriculum Reference Knowledge):
 {$sampleQuestionsStr}
 
-Your Core Capabilities for the School Administrator:
-1. School Diagnostic & Academic Performance Analytics: Summarize class and subject performance, highlight learning gaps and mastery trends.
+Your Core Capabilities for the {$userRoleDesc}:
+1. Class & Subject Diagnostic Analytics: Summarize student performance, highlight learning gaps and mastery trends.
 2. Remedial & Intervention Strategies: Propose pedagogical strategies, remedial lesson plans, and classroom drill ideas to help struggling learners in specific subjects/topics.
 3. Curriculum & Scheme of Work Planning: Generate structured lesson outlines, learning objectives, and curriculum breakdown aligned with Nigerian (WAEC/NECO/NERDC) secondary education standards.
-4. Assessment & Question Bank Generation: Draft high-standard multiple choice questions with four options (A, B, C, D), marking the correct answer and providing step-by-step educational explanations so the admin can import them into the school question bank. Leverage the style and concepts from the school's question bank where appropriate.
-5. School Operations & Roster Insights: Answer questions about classes, student distribution, and subject management.
+4. Assessment & Question Bank Generation: Draft high-standard multiple choice questions with four options (A, B, C, D), marking the correct answer and providing step-by-step educational explanations so they can import them into the Question Bank. Leverage the style and concepts from the school's question bank where appropriate.
+5. Classroom & Teaching Insights: Answer questions about lesson delivery, rubric design, student engagement, and subject mastery.
 
 Guidelines:
 1. Maintain an authoritative, professional, and supportive tone suitable for school principals and academic directors.

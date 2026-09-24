@@ -20,6 +20,10 @@ class ClassSeeder extends Seeder
         $progHumanities = Program::where('slug', 'humanities')->first();
         $progBusiness = Program::where('slug', 'business')->first();
 
+        $teacher1 = User::where('email', 'teacher@example.com')->first();
+        $teacher2 = User::where('email', 'emeka.teacher@example.com')->first();
+        $teacher3 = User::where('email', 'fatima.teacher@example.com')->first();
+
         $learner1 = User::where('email', 'learner@example.com')->first();
         $learner2 = User::where('email', 'ada.learner@example.com')->first();
         $learner3 = User::where('email', 'kemi.learner@example.com')->first();
@@ -208,6 +212,39 @@ class ClassSeeder extends Seeder
                 'is_active' => true,
             ]
         );
+
+        // ==========================================
+        // Assign Teachers to Classes
+        // ==========================================
+        if ($teacher1) {
+            // Sarah Teacher teaches Senior Science (SS1, SS2, SS3)
+            foreach ([$ss1Science, $ss2Science, $ss3Science] as $cls) {
+                ClassMembership::updateOrCreate(
+                    ['class_id' => $cls->id, 'user_id' => $teacher1->id],
+                    ['role' => 'teacher', 'is_active' => true]
+                );
+            }
+        }
+
+        if ($teacher2) {
+            // Emeka Okafor teaches Senior Business (SS1, SS2, SS3)
+            foreach ([$ss1Business, $ss2Business, $ss3Business] as $cls) {
+                ClassMembership::updateOrCreate(
+                    ['class_id' => $cls->id, 'user_id' => $teacher2->id],
+                    ['role' => 'teacher', 'is_active' => true]
+                );
+            }
+        }
+
+        if ($teacher3) {
+            // Fatima Sanusi teaches Greenwood Science (SS1, SS2, SS3)
+            foreach ([$gwSS1Science, $gwSS2Science, $gwSS3Science] as $cls) {
+                ClassMembership::updateOrCreate(
+                    ['class_id' => $cls->id, 'user_id' => $teacher3->id],
+                    ['role' => 'teacher', 'is_active' => true]
+                );
+            }
+        }
 
         // ==========================================
         // Enroll Learners into Classes

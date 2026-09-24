@@ -28,8 +28,9 @@ class LoginController extends Controller
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
             $request->session()->regenerate();
             $user = Auth::user();
+            $role = $user->role instanceof \BackedEnum ? $user->role->value : ($user->role ?? 'learner');
 
-            $redirectPath = $user->isAdmin() ? '/admin/dashboard' : '/dashboard';
+            $redirectPath = $user->isAdmin() ? '/admin/dashboard' : ($user->isTeacher() ? '/teacher/dashboard' : '/dashboard');
 
             if ($request->wantsJson()) {
                 return response()->json([
@@ -39,13 +40,13 @@ class LoginController extends Controller
                         'id' => $user->id,
                         'name' => $user->name,
                         'email' => $user->email,
-                        'role' => $role ?? 'learner',
+                        'role' => $role,
                     ],
                     'redirect' => $redirectPath,
                 ]);
             }
 
-            return redirect()->intended($redirectPath);
+            return redirect($redirectPath);
         }
 
         if ($request->wantsJson()) {

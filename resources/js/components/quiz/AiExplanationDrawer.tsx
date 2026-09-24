@@ -314,7 +314,7 @@ export function AiExplanationDrawer({
                                                 AI Diagnostic Tutor
                                             </div>
                                             <div className="text-[11px] font-semibold text-[var(--color-muted)]">
-                                                Formulating pedagogical breakdown
+                                                Preparing step-by-step explanation
                                             </div>
                                         </div>
                                     </div>

@@ -54,18 +54,29 @@ export const ALL_GRADE_GROUPS: GradeGroup[] = [
  * Otherwise falls back to category string.
  */
 export function getGradeLevelsForSchool(
-    categoryOrSchool?: string | null | { category?: string | null; category_ids?: number[] | null },
+    categoryOrSchool?: string | null | { category?: string | null; category_ids?: number[] | null; allowed_grade_levels?: string[] | null },
     categoryIdsParam?: number[] | null
 ): GradeGroup[] {
     let cat: string | undefined;
     let ids: number[] | undefined;
+    let allowed: string[] | undefined;
 
     if (typeof categoryOrSchool === 'object' && categoryOrSchool !== null) {
         cat = categoryOrSchool.category?.toLowerCase();
         ids = categoryOrSchool.category_ids || undefined;
+        allowed = categoryOrSchool.allowed_grade_levels || undefined;
     } else {
         cat = categoryOrSchool?.toLowerCase();
         ids = categoryIdsParam || undefined;
+    }
+
+    if (allowed && allowed.length > 0) {
+        const allowedSet = new Set(allowed.map((g) => g.toUpperCase()));
+        const groups = ALL_GRADE_GROUPS.map((grp) => ({
+            ...grp,
+            options: grp.options.filter((opt) => allowedSet.has(opt.value.toUpperCase())),
+        })).filter((grp) => grp.options.length > 0);
+        if (groups.length > 0) return groups;
     }
 
     if (ids && ids.length > 0) {
@@ -92,6 +103,9 @@ export function getGradeLevelsForSchool(
     }
     if (cat === 'junior') {
         return ALL_GRADE_GROUPS.filter((g) => g.group === 'Junior Secondary');
+    }
+    if (cat === 'secondary' || cat === 'combined_secondary') {
+        return ALL_GRADE_GROUPS.filter((g) => g.group === 'Junior Secondary' || g.group === 'Senior Secondary');
     }
     if (cat === 'primary') {
         return ALL_GRADE_GROUPS.filter((g) => g.group === 'Primary School' || g.group === 'Early Childhood');

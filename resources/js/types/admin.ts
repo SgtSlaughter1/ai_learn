@@ -1,6 +1,7 @@
 export interface Overview {
     total_schools: number;
     total_school_admins?: number;
+    total_teachers?: number;
     total_learners: number;
     total_classes: number;
     total_subjects: number;
@@ -63,6 +64,36 @@ export interface SchoolAdminItem {
         state?: string | null;
     } | null;
     school_id?: number | null;
+    _pendingSync?: boolean;
+    _offlineDeleted?: boolean;
+}
+
+export interface TeacherItem {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    teacher_profile?: {
+        id: number;
+        school_id: number;
+        employee_id?: string | null;
+        department?: string | null;
+        bio?: string | null;
+        is_active: boolean;
+        school?: {
+            id: number;
+            name: string;
+        };
+    } | null;
+    classes?: Array<{
+        id: number;
+        name: string;
+        grade_level?: string | null;
+        arm?: string | null;
+        section?: string | null;
+        school_class_arm?: string | null;
+    }>;
+    created_at?: string;
     _pendingSync?: boolean;
     _offlineDeleted?: boolean;
 }

@@ -118,7 +118,7 @@ export interface LocalGamification {
     synced: boolean;
 }
 
-import type { Learner, SchoolItem, ClassItem, QuestionItem, SchoolAdminItem } from '../types/admin';
+import type { Learner, SchoolItem, ClassItem, QuestionItem, SchoolAdminItem, TeacherItem } from '../types/admin';
 
 export interface SyncQueueItem {
     id?: number;
@@ -161,11 +161,12 @@ export class OfflineDB extends Dexie {
     adminClasses!: Table<ClassItem, number>;
     adminQuestions!: Table<QuestionItem, number>;
     adminSchoolAdmins!: Table<SchoolAdminItem, string>;
+    adminTeachers!: Table<TeacherItem, string>;
 
     constructor() {
         super('AILEARNDatabase');
 
-        this.version(3).stores({
+        this.version(4).stores({
             subjects: 'id, school_id, slug, status, cached_at, _pendingSync',
             topics: 'id, subject_id, slug, level, status, cached_at, _pendingSync',
             quizzes: 'id, school_id, status, cached_at',
@@ -180,6 +181,7 @@ export class OfflineDB extends Dexie {
             adminClasses: 'id, school_id, name, _pendingSync',
             adminQuestions: 'id, topic_id, school_id, _pendingSync',
             adminSchoolAdmins: 'id, email, school_id, _pendingSync',
+            adminTeachers: 'id, email, name, _pendingSync',
         });
     }
 }

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Head, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
-import { Stats, SchoolItem, SchoolAdminItem, ClassItem, Learner, SubjectItem, QuestionItem, TopicItem } from '@/types/admin';
+import { Stats, SchoolItem, SchoolAdminItem, TeacherItem, ClassItem, Learner, SubjectItem, QuestionItem, TopicItem } from '@/types/admin';
 import {
     cacheAdminSchools,
     getCachedAdminSchools,
     cacheAdminSchoolAdmins,
     getCachedAdminSchoolAdmins,
+    cacheAdminTeachers,
+    getCachedAdminTeachers,
     cacheAdminClasses,
     getCachedAdminClasses,
     cacheAdminLearners,
@@ -15,11 +17,14 @@ import {
     getCachedAdminSubjects,
     cacheAdminQuestions,
     getCachedAdminQuestions,
+    cacheAdminTopics,
+    getCachedAdminTopics,
     ADMIN_DATA_CHANGED_EVENT,
 } from '@/services/AdminOfflineService';
 import OverviewTab from '@/components/admin/OverviewTab';
 import SchoolsTab from '@/components/admin/SchoolsTab';
 import SchoolAdminsTab from '@/components/admin/SchoolAdminsTab';
+import TeachersTab from '@/components/admin/TeachersTab';
 import ClassesTab from '@/components/admin/ClassesTab';
 import LearnersTab from '@/components/admin/LearnersTab';
 import SubjectsTab from '@/components/admin/SubjectsTab';
@@ -27,7 +32,7 @@ import QuestionBankTab from '@/components/admin/QuestionBankTab';
 
 export default function Dashboard() {
     const { auth } = usePage<{ auth: { user: { id: number; name: string; email: string; role: string } } }>().props;
-    const [activeTab, setActiveTab] = useState<'overview' | 'schools' | 'school_admins' | 'classes' | 'learners' | 'subjects' | 'questions'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'schools' | 'school_admins' | 'teachers' | 'classes' | 'learners' | 'subjects' | 'questions'>('overview');
     
     // Data States
     const [stats, setStats] = useState<Stats | null>(null);
@@ -40,6 +45,9 @@ export default function Dashboard() {
 
     const [schoolAdmins, setSchoolAdmins] = useState<SchoolAdminItem[]>([]);
     const [loadingSchoolAdmins, setLoadingSchoolAdmins] = useState(false);
+
+    const [teachers, setTeachers] = useState<TeacherItem[]>([]);
+    const [loadingTeachers, setLoadingTeachers] = useState(false);
     
     const [classes, setClasses] = useState<ClassItem[]>([]);
     const [loadingClasses, setLoadingClasses] = useState(false);
@@ -49,6 +57,8 @@ export default function Dashboard() {
     
     const [subjects, setSubjects] = useState<SubjectItem[]>([]);
     const [loadingSubjects, setLoadingSubjects] = useState(false);
+
+    const [allTopics, setAllTopics] = useState<TopicItem[]>([]);
     
     const [questions, setQuestions] = useState<QuestionItem[]>([]);
     const [loadingQuestions, setLoadingQuestions] = useState(false);
@@ -142,6 +152,33 @@ export default function Dashboard() {
         }
     };
 
+    // Fetch Teachers
+    const fetchTeachers = async () => {
+        setLoadingTeachers(true);
+        try {
+            if (!navigator.onLine) {
+                const cached = await getCachedAdminTeachers();
+                setTeachers(cached);
+                return;
+            }
+            const res = await fetch('/api/v1/admin/teachers');
+            if (res.ok) {
+                const data = await res.json();
+                const items = data.data || data.teachers || [];
+                const merged = await cacheAdminTeachers(items);
+                setTeachers(merged);
+            } else {
+                throw new Error('Server error');
+            }
+        } catch (err) {
+            console.warn('Loading teachers from offline storage:', err);
+            const cached = await getCachedAdminTeachers();
+            setTeachers(cached);
+        } finally {
+            setLoadingTeachers(false);
+        }
+    };
+
     // Fetch Classes
     const fetchClasses = async () => {
         setLoadingClasses(true);
@@ -203,6 +240,8 @@ export default function Dashboard() {
             if (!navigator.onLine) {
                 const cached = await getCachedAdminSubjects();
                 setSubjects(cached);
+                const cachedTopics = await getCachedAdminTopics();
+                setAllTopics(cachedTopics);
                 return;
             }
             const res = await fetch('/api/v1/admin/subjects');
@@ -211,6 +250,12 @@ export default function Dashboard() {
                 const items = data.data || data.subjects || [];
                 const merged = await cacheAdminSubjects(items);
                 setSubjects(merged);
+
+                const extractedTopics = items.flatMap((s: SubjectItem) => s.topics || []);
+                setAllTopics(extractedTopics);
+                if (extractedTopics.length > 0) {
+                    await cacheAdminTopics(extractedTopics);
+                }
             } else {
                 throw new Error('Server error');
             }
@@ -250,56 +295,35 @@ export default function Dashboard() {
         }
     };
 
-    // Initial load & sync event listener
+    // Initial Load & Event Listener
     useEffect(() => {
         fetchStats();
         fetchSchools();
+        if (isSuperAdmin) {
+            fetchSchoolAdmins();
+        }
+        fetchTeachers();
+        fetchClasses();
+        fetchLearners();
+        fetchSubjects();
+        fetchQuestions();
 
         const handleDataChange = () => {
-            if (activeTab === 'learners') fetchLearners();
-            if (activeTab === 'subjects') fetchSubjects();
-            if (activeTab === 'questions') fetchQuestions();
-            if (activeTab === 'classes') fetchClasses();
-            if (activeTab === 'schools') fetchSchools();
-            if (activeTab === 'school_admins') fetchSchoolAdmins();
+            fetchStats();
+            fetchSchools();
+            if (isSuperAdmin) {
+                fetchSchoolAdmins();
+            }
+            fetchTeachers();
+            fetchClasses();
+            fetchLearners();
+            fetchSubjects();
+            fetchQuestions();
         };
 
         window.addEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
-        window.addEventListener('online', handleDataChange);
-        return () => {
-            window.removeEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
-            window.removeEventListener('online', handleDataChange);
-        };
-    }, [activeTab]);
-
-    // Ensure non-super-admins cannot remain on super-admin-only tabs
-    useEffect(() => {
-        if (!isSuperAdmin && (activeTab === 'schools' || activeTab === 'school_admins')) {
-            setActiveTab('overview');
-        }
-    }, [isSuperAdmin, activeTab]);
-
-    // Lazy load tab data
-    useEffect(() => {
-        if (activeTab === 'schools' && isSuperAdmin && schools.length === 0) fetchSchools();
-        if (activeTab === 'school_admins' && isSuperAdmin) {
-            if (schoolAdmins.length === 0) fetchSchoolAdmins();
-            if (schools.length === 0) fetchSchools();
-        }
-        if (activeTab === 'classes' && classes.length === 0) fetchClasses();
-        if (activeTab === 'learners') {
-            if (learners.length === 0) fetchLearners();
-            if (classes.length === 0) fetchClasses();
-        }
-        if (activeTab === 'subjects' && subjects.length === 0) fetchSubjects();
-        if (activeTab === 'questions') {
-            if (questions.length === 0) fetchQuestions();
-            if (subjects.length === 0) fetchSubjects();
-        }
-    }, [activeTab, isSuperAdmin]);
-
-    // Flatten all topics across subjects for QuestionBank dropdowns
-    const allTopics: TopicItem[] = subjects.flatMap(s => s.topics || []);
+        return () => window.removeEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
+    }, [isSuperAdmin]);
 
     const allTabs = [
         {
@@ -307,7 +331,7 @@ export default function Dashboard() {
             label: 'Overview',
             icon: (
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                 </svg>
             ),
             superAdminOnly: false,
@@ -335,11 +359,22 @@ export default function Dashboard() {
             superAdminOnly: true,
         },
         {
+            id: 'teachers' as const,
+            label: 'Teachers',
+            icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+            ),
+            count: teachers.length || undefined,
+            superAdminOnly: false,
+        },
+        {
             id: 'classes' as const,
             label: 'Classes',
             icon: (
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
             ),
             count: classes.length || undefined,
@@ -347,10 +382,10 @@ export default function Dashboard() {
         },
         {
             id: 'learners' as const,
-            label: 'Learners Directory',
+            label: 'Learners',
             icon: (
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-5.824-3.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222" />
                 </svg>
             ),
             count: learners.length || undefined,
@@ -358,7 +393,7 @@ export default function Dashboard() {
         },
         {
             id: 'subjects' as const,
-            label: 'Subjects & Topics',
+            label: 'Subjects',
             icon: (
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
@@ -477,6 +512,17 @@ export default function Dashboard() {
                     />
                 )}
 
+                {activeTab === 'teachers' && (
+                    <TeachersTab
+                        teachers={teachers}
+                        schools={schools}
+                        classes={classes}
+                        loading={loadingTeachers}
+                        onRefresh={() => { fetchTeachers(); fetchStats(); }}
+                        showToast={showToast}
+                    />
+                )}
+
                 {activeTab === 'classes' && (
                     <ClassesTab
                         classes={classes}
@@ -514,6 +560,7 @@ export default function Dashboard() {
                         subjects={subjects}
                         classes={classes}
                         allTopics={allTopics}
+                        school={schools[0] || (stats?.school as any) || null}
                         loading={loadingQuestions}
                         onRefresh={() => { fetchQuestions(); fetchStats(); }}
                         showToast={showToast}
@@ -523,4 +570,3 @@ export default function Dashboard() {
         </AuthenticatedLayout>
     );
 }
-

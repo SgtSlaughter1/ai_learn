@@ -77,23 +77,25 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
                     + `*Connect online to synchronize live student quiz scores and mastery averages.*`;
             }
 
-            // 2. Intervention & Remedial Plan
+            // 2. Student Support & Help Plan
             if (
+                query.includes('support') ||
                 query.includes('intervention') ||
                 query.includes('remedial') ||
                 query.includes('struggle') ||
                 query.includes('help student') ||
+                query.includes('extra help') ||
                 query.includes('weak')
             ) {
-                return `### Targeted Remedial Intervention Strategy\n\n`
-                    + `**Objective:** Boost student pass rates on weak topics to $\\ge 75\\%$.\n\n`
-                    + `#### 3-Phase Action Plan\n`
-                    + `1. **Phase 1: Formative Diagnostic (Day 1)**\n`
+                return `### Targeted Student Support Plan\n\n`
+                    + `**Goal:** Help students understand difficult topics and achieve $\\ge 75\\%$ score.\n\n`
+                    + `#### 3-Step Action Plan\n`
+                    + `1. **Step 1: Quick Practice Check (Day 1)**\n`
                     + `   * Assign a 10-question practice test from the Question Bank.\n`
-                    + `2. **Phase 2: Active Recall & Concept Drill (Days 2-4)**\n`
-                    + `   * Deploy micro-lessons and flashcards in the app for daily 15-minute drills.\n`
-                    + `3. **Phase 3: Mastery Check (Day 5)**\n`
-                    + `   * Re-test cohort. Ensure learners achieve $\\ge 80\\%$ mastery before progressing.\n\n`
+                    + `2. **Step 2: Concept Review & Practice Drills (Days 2-4)**\n`
+                    + `   * Review key ideas using flashcards and daily 15-minute drills in the app.\n`
+                    + `3. **Step 3: Progress Check (Day 5)**\n`
+                    + `   * Re-test students to ensure they understand the topic before moving forward.\n\n`
                     + `*Ask me to draft exam questions for any specific subject or topic.*`;
             }
 
@@ -541,10 +543,14 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
 export default function ChatWidget() {
     const { auth } = usePage<any>().props;
     const user = auth?.user;
-    const isAdmin = user?.role === 'school_admin' || user?.role === 'platform_admin';
+    const isTeacher = user?.role === 'teacher';
+    const isSchoolAdmin = user?.role === 'school_admin' || user?.role === 'platform_admin';
+    const isStaffOrEducator = isSchoolAdmin || isTeacher;
 
-    const defaultGreeting = isAdmin
-        ? `Hello ${user?.name || 'Admin'}! I am your AI School Administrator Copilot. Ask me to summarize student performance, recommend remedial interventions, draft exam questions, or create lesson outlines.`
+    const defaultGreeting = isSchoolAdmin
+        ? `Hello ${user?.name || 'Admin'}! I am your AI School Administrator Copilot. Ask me to summarize student scores, suggest student support plans, draft exam questions, or create lesson outlines.`
+        : isTeacher
+        ? `Hello ${user?.name || 'Teacher'}! I am your AI Educator Copilot. Ask me to draft exam questions, plan revision lessons, create lesson outlines, or check class scores.`
         : "Hi! I'm your AI Study Companion. Ask me to recommend what to study, explain a topic, or plan your schedule!";
 
     const [chatOpen, setChatOpen] = useState<boolean>(false);
@@ -559,7 +565,7 @@ export default function ChatWidget() {
     // Update greeting if auth changes
     useEffect(() => {
         setMessages([{ role: 'model', content: defaultGreeting }]);
-    }, [isAdmin, user?.name]);
+    }, [isStaffOrEducator, isTeacher, user?.name]);
 
     // Scroll chat to bottom on new message
     useEffect(() => {
@@ -584,7 +590,7 @@ export default function ChatWidget() {
         // If offline, use the local AI response generator
         if (!navigator.onLine) {
             setTimeout(async () => {
-                const response = await generateOfflineResponse(textToSend, isAdmin, messages);
+                const response = await generateOfflineResponse(textToSend, isStaffOrEducator, messages);
                 setMessages((prev) => [...prev, { role: 'model', content: response }]);
                 setChatLoading(false);
             }, 600);
@@ -613,7 +619,7 @@ export default function ChatWidget() {
         } catch (error) {
             console.error('AI chat online request failed, falling back to local heuristic:', error);
             // Fallback to local response generator if network fails
-            const response = await generateOfflineResponse(textToSend, isAdmin, messages);
+            const response = await generateOfflineResponse(textToSend, isStaffOrEducator, messages);
             setMessages((prev) => [...prev, { role: 'model', content: response }]);
         } finally {
             setChatLoading(false);
@@ -626,10 +632,17 @@ export default function ChatWidget() {
     };
 
     const adminQuickPrompts = [
-        "Summarize school mastery",
-        "Remedial plan for struggling students",
+        "Summarize school scores",
+        "Support plan for struggling students",
         "Draft 5 WAEC exam questions",
-        "Curriculum lesson outline"
+        "Lesson plan outline"
+    ];
+
+    const teacherQuickPrompts = [
+        "Draft 5 exam questions",
+        "Extra help plan for my class",
+        "Lesson plan outline",
+        "Summarize class scores"
     ];
 
     const learnerQuickPrompts = [
@@ -638,7 +651,7 @@ export default function ChatWidget() {
         "Give me a practice problem"
     ];
 
-    const quickPrompts = isAdmin ? adminQuickPrompts : learnerQuickPrompts;
+    const quickPrompts = isSchoolAdmin ? adminQuickPrompts : isTeacher ? teacherQuickPrompts : learnerQuickPrompts;
 
     return (
         <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex flex-col items-end">
@@ -651,10 +664,10 @@ export default function ChatWidget() {
                             <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping" />
                             <div>
                                 <h4 className="text-sm font-extrabold text-[var(--color-text)]">
-                                    {isAdmin ? 'AI School Copilot' : 'AI Study Companion'}
+                                    {isSchoolAdmin ? 'AI School Copilot' : isTeacher ? 'AI Educator Copilot' : 'AI Study Companion'}
                                 </h4>
                                 <span className="text-[10px] text-[var(--color-muted)] block font-semibold">
-                                    {isAdmin ? 'Academic & School Intelligence' : 'Online/Offline Hybrid'}
+                                    {isSchoolAdmin ? 'Academic & School Intelligence' : isTeacher ? 'Teaching & Lesson Assistant' : 'Online/Offline Hybrid'}
                                 </span>
                             </div>
                         </div>
@@ -716,7 +729,7 @@ export default function ChatWidget() {
                         {chatLoading && (
                             <div className="flex justify-start">
                                 <div className="bg-[var(--color-background)]/50 text-[var(--color-muted)] border border-[var(--color-border)] rounded-2xl rounded-tl-none p-3.5 text-xs animate-pulse font-semibold">
-                                    {isAdmin ? 'AI Copilot is analyzing...' : 'Tutor is thinking...'}
+                                    {isStaffOrEducator ? 'AI Copilot is analyzing...' : 'Tutor is thinking...'}
                                 </div>
                             </div>
                         )}
@@ -729,7 +742,7 @@ export default function ChatWidget() {
                             type="text"
                             value={chatInput}
                             onChange={(e) => setChatInput(e.target.value)}
-                            placeholder={isAdmin ? "Ask AI Copilot about mastery, interventions, questions..." : "Ask AI anything..."}
+                            placeholder={isStaffOrEducator ? "Ask AI Copilot about lesson plans, mastery, questions..." : "Ask AI anything..."}
                             disabled={chatLoading}
                             className="flex-1 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-xs text-[var(--color-text)] placeholder-[var(--color-muted)] focus:outline-none focus:border-teal-500 min-h-[38px]"
                         />
@@ -748,7 +761,7 @@ export default function ChatWidget() {
             <button
                 onClick={() => setChatOpen(!chatOpen)}
                 className="h-14 w-14 rounded-full bg-[var(--color-primary)] hover:bg-[var(--color-primary)] text-white flex items-center justify-center shadow-lg hover:shadow-teal-500/20 shadow-teal-600/30 transition-transform active:scale-95 cursor-pointer focus:outline-none"
-                title={isAdmin ? "Open AI School Copilot" : "Open AI Study Companion"}
+                title={isStaffOrEducator ? (isTeacher ? "Open AI Educator Copilot" : "Open AI School Copilot") : "Open AI Study Companion"}
             >
                 {chatOpen ? (
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
