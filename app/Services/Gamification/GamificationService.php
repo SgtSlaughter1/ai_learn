@@ -234,6 +234,55 @@ class GamificationService
     }
 
     /**
+     * Award XP and process gamification updates after a daily spaced repetition revision session.
+     *
+     * @param  User  $user
+     * @param  int   $correctCount
+     * @param  int   $totalQuestions
+     * @return array Progress summary (bonus_xp, total_xp, level, tier, new_level, new_tier, new_achievements)
+     */
+    public function processRevisionCompletion(User $user, int $correctCount, int $totalQuestions): array
+    {
+        return DB::transaction(function () use ($user, $correctCount, $totalQuestions) {
+            $profile  = $this->getProfile($user);
+            $oldLevel = $profile->level;
+            $oldTier  = $profile->tier;
+
+            // Performance-based XP: only award completion bonus XP if learner answered questions correctly
+            $bonusXp = 0;
+            if ($correctCount > 0) {
+                $bonusXp = $correctCount * self::XP_CORRECT_ANSWER;
+                if ($totalQuestions > 0 && $correctCount === $totalQuestions) {
+                    $bonusXp += self::XP_PERFECT_SCORE_BONUS;
+                }
+            }
+
+            if ($bonusXp > 0) {
+                $this->awardXp(
+                    $user,
+                    $bonusXp,
+                    'daily_revision_bonus',
+                    "Daily Revision: {$correctCount}/{$totalQuestions} correct"
+                );
+            } else {
+                $this->updateStreak($user);
+            }
+
+            $newAchievements = $this->checkAchievements($user);
+
+            return [
+                'bonus_xp'         => $bonusXp,
+                'total_xp'         => $profile->fresh()->total_xp,
+                'level'            => $profile->level,
+                'tier'             => $profile->tier,
+                'new_level'        => $profile->level > $oldLevel ? $profile->level : null,
+                'new_tier'         => $profile->tier !== $oldTier ? $profile->tier : null,
+                'new_achievements' => $newAchievements,
+            ];
+        });
+    }
+
+    /**
      * Get aggregated gamification dashboard metrics for a user.
      *
      * @param  User  $user
@@ -368,11 +417,14 @@ class GamificationService
      * @param  int          $amount
      * @param  string       $source
      * @param  string|null  $description
-     * @return void
+     * @return array
      */
-    private function awardXp(User $user, int $amount, string $source, ?string $description = null): void
+    public function awardXp(User $user, int $amount, string $source, ?string $description = null): array
     {
-        $profile = $this->getProfile($user);
+        $profile  = $this->getProfile($user);
+        $oldLevel = $profile->level;
+        $oldTier  = $profile->tier;
+
         $profile->total_xp += $amount;
         $profile->save();
         $this->recalculateLevel($profile);
@@ -383,6 +435,18 @@ class GamificationService
             'source'      => $source,
             'description' => $description,
         ]);
+
+        $this->updateStreak($user);
+        $newAchievements = $this->checkAchievements($user);
+
+        return [
+            'total_xp'         => $profile->total_xp,
+            'level'            => $profile->level,
+            'tier'             => $profile->tier,
+            'new_level'        => $profile->level > $oldLevel ? $profile->level : null,
+            'new_tier'         => $profile->tier !== $oldTier ? $profile->tier : null,
+            'new_achievements' => $newAchievements,
+        ];
     }
 
     /**

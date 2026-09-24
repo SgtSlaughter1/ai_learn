@@ -21,6 +21,11 @@ class ClassMembership extends Model
         return $this->belongsTo(ClassModel::class, 'class_id');
     }
 
+    public function schoolClass(): BelongsTo
+    {
+        return $this->belongsTo(ClassModel::class, 'class_id');
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

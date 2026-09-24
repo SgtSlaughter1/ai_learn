@@ -26,3 +26,11 @@ Route::prefix('v1/questions')->group(function () {
     Route::post('/explain', [\App\Http\Controllers\Web\AIWebController::class, 'explain']);
 });
 
+// Spaced Repetition API
+Route::prefix('v1/revision')->group(function () {
+    Route::get('/today', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'getTodayQueue']);
+    Route::post('/submit', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'submitReview']);
+    Route::post('/complete-session', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'completeSession']);
+    Route::get('/stats', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'getStats']);
+});
+

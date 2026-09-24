@@ -30,7 +30,29 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
     }, []);
 
     const activeRouteClass = (path: string) => {
-        const currentPath = url || window.location.pathname;
+        const currentUrl = url || (typeof window !== 'undefined' ? (window.location.pathname + window.location.search) : '');
+        const currentPath = currentUrl.split('?')[0];
+        const searchParams = new URLSearchParams(
+            currentUrl.includes('?')
+                ? currentUrl.split('?')[1]
+                : (typeof window !== 'undefined' ? window.location.search : '')
+        );
+        const isGeneralScope = searchParams.get('scope') === 'general';
+
+        if (path === '/general-knowledge') {
+            const isActive = currentPath === '/general-knowledge' || (currentPath.startsWith('/subjects') && isGeneralScope);
+            return isActive
+                ? 'bg-white/10 text-white border-l-4 border-[var(--color-accent)] font-semibold'
+                : 'text-white/70 hover:bg-white/10 hover:text-white border-l-4 border-transparent';
+        }
+
+        if (path === '/subjects') {
+            const isActive = currentPath.startsWith('/subjects') && !isGeneralScope;
+            return isActive
+                ? 'bg-white/10 text-white border-l-4 border-[var(--color-accent)] font-semibold'
+                : 'text-white/70 hover:bg-white/10 hover:text-white border-l-4 border-transparent';
+        }
+
         const isActive = path === '/' ? currentPath === '/' : currentPath.startsWith(path);
         return isActive
             ? 'bg-white/10 text-white border-l-4 border-[var(--color-accent)] font-semibold'

@@ -151,6 +151,12 @@ Route::middleware('auth')->group(function () {
         Route::get('/ai/similar-question', [AIWebController::class, 'similarQuestion']);
         Route::post('/ai/chat', [AIWebController::class, 'chat']);
 
+        // Spaced Repetition (Daily 5-Min Smart Revision)
+        Route::get('/revision/today', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'getTodayQueue']);
+        Route::post('/revision/submit', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'submitReview']);
+        Route::post('/revision/complete-session', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'completeSession']);
+        Route::get('/revision/stats', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'getStats']);
+
         // Flashcards Deck API
         Route::get('/flashcards/deck', [FlashcardController::class, 'getDeck']);
         Route::post('/flashcards/complete', [FlashcardController::class, 'complete']);

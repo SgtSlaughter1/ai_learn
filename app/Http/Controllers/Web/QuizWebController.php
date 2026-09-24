@@ -196,6 +196,20 @@ class QuizWebController extends Controller
         $gamificationService = app(GamificationService::class);
         $newAchievements = $gamificationService->processQuizCompletion($user, $attempt, $quiz);
 
+        // Auto-record questions into Spaced Repetition memory engine
+        try {
+            $srsService = app(\App\Services\SpacedRepetition\SpacedRepetitionService::class);
+            foreach ($answersToInsert as $ans) {
+                $srsService->recordAttempt($user, [
+                    'question_id' => $ans['question_id'],
+                    'is_correct' => $ans['is_correct'],
+                    'selected_option_id' => $ans['selected_option_id'],
+                ]);
+            }
+        } catch (\Throwable $t) {
+            \Illuminate\Support\Facades\Log::warning('SRS quiz attempt record failed: ' . $t->getMessage());
+        }
+
         if ($request->wantsJson()) {
             return response()->json([
                 'success' => true,

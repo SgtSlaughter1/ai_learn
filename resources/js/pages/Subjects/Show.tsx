@@ -146,6 +146,7 @@ export default function Show({ slug }: Props) {
 
     const uniqueLevels = ['all', ...Array.from(new Set(topics.map((t) => t.level)))];
     const filteredTopics = selectedLevel === 'all' ? topics : topics.filter((t) => t.level === selectedLevel);
+    const isGeneralScope = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('scope') === 'general';
 
     return (
         <AuthenticatedLayout
@@ -153,7 +154,9 @@ export default function Show({ slug }: Props) {
                 <div className="space-y-3">
                     <Breadcrumbs
                         items={[
-                            { label: 'Subjects', href: '/subjects' },
+                            isGeneralScope
+                                ? { label: 'General Knowledge', href: '/general-knowledge' }
+                                : { label: 'Curriculum', href: '/subjects' },
                             { label: loading ? 'Loading...' : subject?.name || 'Subject' },
                         ]}
                     />

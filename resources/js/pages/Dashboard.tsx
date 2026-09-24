@@ -7,6 +7,7 @@ import { preloadFullOfflineCurriculum, saveLocalGamification } from '@/services/
 import { StatsOverview } from '@/components/dashboard/StatsOverview';
 import { LevelProgressBar, GamificationData } from '@/components/dashboard/LevelProgressBar';
 import { RecentAttemptsList, DashboardAttempt } from '@/components/dashboard/RecentAttemptsList';
+import { DashboardRevisionCard } from '@/components/dashboard/DashboardRevisionCard';
 import 'katex/dist/katex.min.css';
 
 const LEVEL_THRESHOLDS = [0, 0, 100, 250, 450, 700, 1000, 1400, 1900, 2500, 3200];
@@ -292,6 +293,18 @@ export default function Dashboard() {
             </Head>
 
             <div className="space-y-8 relative">
+                {/* Daily 5-Minute Spaced Repetition Hero Card */}
+                {isOnline && (
+                    <DashboardRevisionCard
+                        onSessionCompleted={() => {
+                            fetch('/api/v1/gamification/profile')
+                                .then((r) => r.json())
+                                .then((d) => setGamification(d))
+                                .catch(() => {});
+                        }}
+                    />
+                )}
+
                 {/* 4 Summary Stats Cards */}
                 <StatsOverview
                     loading={loading}
