@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Question;
 use App\Models\Quiz;
 use App\Models\School;
+use App\Models\Subject;
 use App\Models\Topic;
 use Illuminate\Database\Seeder;
 
@@ -12,147 +13,119 @@ class QuizSeeder extends Seeder
 {
     public function run(): void
     {
-        $school1 = School::where('slug', 'acedrill-academy')->first();
+        $school1 = School::where('slug', 'acedrill-academy')->first() ?? School::first();
         $school2 = School::where('slug', 'greenwood-high-school')->first();
 
-        // 1. Mathematics Quiz (School 1: AceDrill Academy)
-        $mathQuiz = Quiz::updateOrCreate(
-            ['title' => 'SS1 Mathematics Diagnostic Assessment'],
-            [
-                'school_id' => $school1?->id,
-                'description' => 'A diagnostic quiz covering fundamental Algebra, Geometry, and Trigonometric concepts with LaTeX math notation.',
+        // 1. Seed Dedicated 15-Question Topic Quizzes for all 15 Curriculum Topics
+        $topics = Topic::with(['subject', 'questions'])->get();
+
+        foreach ($topics as $topic) {
+            $subjectName = $topic->subject?->name ?? 'General';
+            $quizTitle = "{$topic->name} - {$subjectName} Quiz";
+
+            $topicQuiz = Quiz::updateOrCreate(
+                ['title' => $quizTitle],
+                [
+                    'school_id' => $topic->subject?->school_id ?? $school1?->id,
+                    'description' => "15-question targeted mastery quiz for {$topic->name} in {$subjectName}.",
+                    'time_limit_minutes' => 20,
+                    'status' => 'active',
+                ]
+            );
+
+            $questions = $topic->questions;
+            if ($questions->isNotEmpty()) {
+                $topicQuiz->questions()->sync(
+                    $questions->take(15)->pluck('id')->mapWithKeys(function ($id, $index) {
+                        return [$id => ['sort_order' => $index + 1, 'marks' => 2]];
+                    })->toArray()
+                );
+            }
+        }
+
+        // 2. Comprehensive 15-Question Subject Diagnostic Quizzes (SS1, SS2, SS3)
+        $subjectSlugs = [
+            'ss1-mathematics' => [
+                'title' => 'SS1 Mathematics Comprehensive Assessment',
+                'description' => 'Comprehensive 15-question diagnostic assessment across Algebra, Euclidean Geometry, Quadratics, Trigonometry, and Statistics.',
                 'time_limit_minutes' => 30,
-                'status' => 'active',
-            ]
-        );
-
-        $mathTopicIds = Topic::whereHas('subject', function ($query) {
-            $query->where('slug', 'mathematics');
-        })->pluck('id');
-
-        $mathQuestions = Question::whereIn('topic_id', $mathTopicIds)->get();
-
-        $mathQuiz->questions()->sync(
-            $mathQuestions->pluck('id')->mapWithKeys(function ($id, $index) {
-                return [$id => ['sort_order' => $index + 1, 'marks' => 2]];
-            })->toArray()
-        );
-
-        // 2. English Language Placement Quiz (School 1: AceDrill Academy)
-        $englishQuiz = Quiz::updateOrCreate(
-            ['title' => 'SS1 English Language Placement Quiz'],
-            [
-                'school_id' => $school1?->id,
-                'description' => 'Verify your command of verb tenses, aspect, and advanced concord rules.',
-                'time_limit_minutes' => 20,
-                'status' => 'active',
-            ]
-        );
-
-        $englishTopicIds = Topic::whereHas('subject', function ($query) {
-            $query->where('slug', 'english');
-        })->pluck('id');
-
-        $englishQuestions = Question::whereIn('topic_id', $englishTopicIds)->get();
-
-        $englishQuiz->questions()->sync(
-            $englishQuestions->pluck('id')->mapWithKeys(function ($id, $index) {
-                return [$id => ['sort_order' => $index + 1, 'marks' => 5]];
-            })->toArray()
-        );
-
-        // 3. Biology Quiz (School 1: AceDrill Academy)
-        $biologyQuiz = Quiz::updateOrCreate(
-            ['title' => 'SS1 Biology Foundations Quiz'],
-            [
-                'school_id' => $school1?->id,
-                'description' => 'Evaluation of cell organelles, membrane transport, and Mendelian genetics.',
-                'time_limit_minutes' => 15,
-                'status' => 'active',
-            ]
-        );
-
-        $biologyTopicIds = Topic::whereHas('subject', function ($query) {
-            $query->where('slug', 'biology');
-        })->pluck('id');
-
-        $biologyQuestions = Question::whereIn('topic_id', $biologyTopicIds)->get();
-
-        $biologyQuiz->questions()->sync(
-            $biologyQuestions->pluck('id')->mapWithKeys(function ($id, $index) {
-                return [$id => ['sort_order' => $index + 1, 'marks' => 5]];
-            })->toArray()
-        );
-
-        // 4. SS1 Government Assessment (School 1: AceDrill Academy)
-        $govQuiz = Quiz::updateOrCreate(
-            ['title' => 'SS1 Government Foundations Assessment'],
-            [
-                'school_id' => $school1?->id,
-                'description' => 'Senior secondary assessment covering arms of government, separation of powers, and civic structures.',
-                'time_limit_minutes' => 15,
-                'status' => 'active',
-            ]
-        );
-
-        $govTopicIds = Topic::whereHas('subject', function ($query) {
-            $query->where('slug', 'ss1-government');
-        })->pluck('id');
-
-        $govQuestions = Question::whereIn('topic_id', $govTopicIds)->get();
-
-        $govQuiz->questions()->sync(
-            $govQuestions->pluck('id')->mapWithKeys(function ($id, $index) {
-                return [$id => ['sort_order' => $index + 1, 'marks' => 5]];
-            })->toArray()
-        );
-
-        // 5. Chemistry & Physics Assessment (School 2: Greenwood High School)
-        $school2Quiz = Quiz::updateOrCreate(
-            ['title' => 'Greenwood Senior Science Diagnostic Exam'],
-            [
-                'school_id' => $school2?->id,
-                'description' => 'Chemistry stoichiometry, chemical bonding, and Newton\'s laws of motion evaluation.',
+            ],
+            'ss1-physics' => [
+                'title' => 'SS1 Physics Diagnostic Assessment',
+                'description' => 'Comprehensive 15-question physics evaluation spanning Kinematics, Dynamics, Energy, Waves, and Electric Circuits.',
+                'time_limit_minutes' => 30,
+            ],
+            'ss1-english' => [
+                'title' => 'SS1 English Language Placement Assessment',
+                'description' => 'Comprehensive 15-question evaluation testing Concord, Tenses, Phrasal Verbs, Punctuation, and Lexis in Context.',
                 'time_limit_minutes' => 25,
-                'status' => 'active',
-            ]
-        );
+            ],
+            'ss2-mathematics' => [
+                'title' => 'SS2 Mathematics Comprehensive Assessment',
+                'description' => 'Comprehensive evaluation across Logarithms, Sequences (AP/GP), Coordinate Geometry, and Circle Theorems.',
+                'time_limit_minutes' => 30,
+            ],
+            'ss2-physics' => [
+                'title' => 'SS2 Physics Diagnostic Assessment',
+                'description' => 'Advanced physics assessment spanning Projectiles, Circular Motion, Heat Expansion, and Magnetism.',
+                'time_limit_minutes' => 30,
+            ],
+            'ss2-english' => [
+                'title' => 'SS2 English Language Diagnostic Assessment',
+                'description' => 'Evaluation of advanced concord, modal auxiliaries, clause analysis, and vocabulary precision.',
+                'time_limit_minutes' => 25,
+            ],
+            'ss3-mathematics' => [
+                'title' => 'SS3 Mathematics Mastery Exam',
+                'description' => 'Senior secondary national exam preparation covering Calculus, Matrices, Permutations, and Probability.',
+                'time_limit_minutes' => 35,
+            ],
+            'ss3-physics' => [
+                'title' => 'SS3 Physics Mastery Exam',
+                'description' => 'Senior secondary physics exam covering Atomic physics, Nuclear reactions, Electronics, and AC circuits.',
+                'time_limit_minutes' => 35,
+            ],
+            'ss3-english' => [
+                'title' => 'SS3 English Language Mastery Exam',
+                'description' => 'Senior exam preparation testing syntactic transformations, stylistic analysis, and comprehension.',
+                'time_limit_minutes' => 30,
+            ],
+        ];
 
-        $scienceTopicIds = Topic::whereHas('subject', function ($query) {
-            $query->whereIn('slug', ['chemistry', 'physics']);
-        })->pluck('id');
+        foreach ($subjectSlugs as $slug => $meta) {
+            $subject = Subject::where('slug', $slug)->first();
+            if (!$subject) {
+                continue;
+            }
 
-        $scienceQuestions = Question::whereIn('topic_id', $scienceTopicIds)->get();
+            $subjectQuiz = Quiz::updateOrCreate(
+                ['title' => $meta['title']],
+                [
+                    'school_id' => $subject->school_id ?? $school1?->id,
+                    'description' => $meta['description'],
+                    'time_limit_minutes' => $meta['time_limit_minutes'],
+                    'status' => 'active',
+                ]
+            );
 
-        $school2Quiz->questions()->sync(
-            $scienceQuestions->pluck('id')->mapWithKeys(function ($id, $index) {
-                return [$id => ['sort_order' => $index + 1, 'marks' => 5]];
-            })->toArray()
-        );
+            // Fetch questions from all topics in this subject (up to 15 questions)
+            $subjectTopicIds = Topic::where('subject_id', $subject->id)->pluck('id');
+            $subjectQuestions = Question::whereIn('topic_id', $subjectTopicIds)
+                ->inRandomOrder(42) // Deterministic seed for reproducible 15 questions
+                ->take(15)
+                ->get();
 
-        // 6. Global General Knowledge Tech Quiz (Cross-school / Platform-wide)
-        $techQuiz = Quiz::updateOrCreate(
-            ['title' => 'Global AI & Digital Skills Bowl'],
-            [
-                'school_id' => null, // General Knowledge platform-wide
-                'description' => 'Open assessment testing fundamentals of computing, algorithm complexity, and AI paradigms.',
-                'time_limit_minutes' => 15,
-                'status' => 'active',
-            ]
-        );
+            if ($subjectQuestions->isEmpty()) {
+                $subjectQuestions = Question::whereIn('topic_id', $subjectTopicIds)->take(15)->get();
+            }
 
-        $techTopicIds = Topic::whereHas('subject', function ($query) {
-            $query->where('slug', 'computer-studies');
-        })->pluck('id');
+            $subjectQuiz->questions()->sync(
+                $subjectQuestions->pluck('id')->mapWithKeys(function ($id, $index) {
+                    return [$id => ['sort_order' => $index + 1, 'marks' => 3]];
+                })->toArray()
+            );
+        }
 
-        $techQuestions = Question::whereIn('topic_id', $techTopicIds)->get();
-
-        $techQuiz->questions()->sync(
-            $techQuestions->pluck('id')->mapWithKeys(function ($id, $index) {
-                return [$id => ['sort_order' => $index + 1, 'marks' => 5]];
-            })->toArray()
-        );
-
-        $this->command?->info("Quizzes seeded and linked with questions successfully.");
+        $this->command?->info("Successfully seeded dedicated 15-question topic quizzes and comprehensive subject assessments.");
     }
 }

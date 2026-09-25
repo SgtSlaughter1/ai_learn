@@ -2,7 +2,6 @@ import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import { db } from '@/db/database';
-import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
 import { LevelFilterTabs } from '@/components/subjects/LevelFilterTabs';
 import { TopicCard, SubjectTopic } from '@/components/subjects/TopicCard';
 import { SubjectQuizCard, SubjectQuiz } from '@/components/subjects/SubjectQuizCard';
@@ -146,20 +145,11 @@ export default function Show({ slug }: Props) {
 
     const uniqueLevels = ['all', ...Array.from(new Set(topics.map((t) => t.level)))];
     const filteredTopics = selectedLevel === 'all' ? topics : topics.filter((t) => t.level === selectedLevel);
-    const isGeneralScope = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('scope') === 'general';
 
     return (
         <AuthenticatedLayout
             header={
                 <div className="space-y-3">
-                    <Breadcrumbs
-                        items={[
-                            isGeneralScope
-                                ? { label: 'General Knowledge', href: '/general-knowledge' }
-                                : { label: 'Curriculum', href: '/subjects' },
-                            { label: loading ? 'Loading...' : subject?.name || 'Subject' },
-                        ]}
-                    />
                     {loading ? (
                         <div className="space-y-2.5">
                             <div className="h-8 bg-[var(--color-surface)] rounded w-1/4 animate-pulse" />
