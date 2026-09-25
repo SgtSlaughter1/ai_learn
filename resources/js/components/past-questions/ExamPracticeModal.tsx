@@ -121,37 +121,40 @@ export const ExamPracticeModal: React.FC<Props> = ({
     const generateOfflineExplanation = () => {
         const topicName = currentQ.topic?.name || '';
         const subjectName = currentQ.subject?.name || '';
+        const isCorrect = selectedOpt && selectedOpt.is_correct;
 
-        let out = `### 1. What You Chose\n\n`;
-        if (selectedOpt) {
-            if (selectedOpt.is_correct) {
-                out += `You chose **"${selectedOpt.label || ''} ${selectedOpt.option_text}"**, which is the **correct answer**! Great work applying curriculum concepts in **${topicName || subjectName || 'this subject'}**.\n\n`;
-            } else {
-                out += `You chose **"${selectedOpt.label || ''} ${selectedOpt.option_text}"**. This option is a common trap in past examination questions.\n\n`;
+        if (isCorrect) {
+            let out = `### 1. Why Your Answer is Correct\n\n`;
+            out += `You chose **"${selectedOpt.label || ''} ${selectedOpt.option_text}"**, which is the **correct answer** for ${currentQ.exam_code || 'this exam'}! Great work.\n\n`;
+            if (currentQ.explanation && currentQ.explanation.trim().length > 0) {
+                out += `${currentQ.explanation.trim()}\n\n`;
+            } else if (correctOpt) {
+                out += `This solution satisfies the official marking scheme for **${topicName || subjectName || 'this subject'}**.\n\n`;
             }
-        } else {
-            out += `You have not selected an option yet. Let's study the method so you can solve it with confidence.\n\n`;
+            out += `### 2. A Simple Example\n\n`;
+            out += `* **Key Rule:** When tackling questions on **${topicName || 'this topic'}**, remember the underlying principle and check your working carefully.`;
+            return out;
         }
 
-        out += `### 2. Why It Was Incorrect\n\n`;
-        if (selectedOpt && !selectedOpt.is_correct) {
-            out += `Option **"${selectedOpt.label || ''} ${selectedOpt.option_text}"** does not satisfy the marking scheme or formulas tested in **${topicName || subjectName || 'this question'}**.\n\n`;
+        let out = `### 1. Why Your Choice Was Incorrect\n\n`;
+        if (selectedOpt) {
+            out += `You chose **"${selectedOpt.label || ''} ${selectedOpt.option_text}"**. This choice does not satisfy the marking scheme or formulas tested in **${topicName || subjectName || 'this question'}**.\n\n`;
         } else {
-            out += `Distractor options in ${currentQ.exam_code || 'National'} exams often capture common calculation traps or misapplied definitions.\n\n`;
+            out += `You have not selected an option yet. Here is how to approach this question.\n\n`;
         }
 
-        out += `### 3. What the Correct Reasoning Is\n\n`;
+        out += `### 2. Why the Correct Answer is Right\n\n`;
         if (correctOpt) {
             out += `The correct answer is **"${correctOpt.label || ''} ${correctOpt.option_text}"**.\n\n`;
         }
         if (currentQ.explanation && currentQ.explanation.trim().length > 0) {
-            out += `**Step-by-Step Working:**\n${currentQ.explanation.trim()}\n\n`;
+            out += `${currentQ.explanation.trim()}\n\n`;
         } else if (correctOpt) {
-            out += `* **"${correctOpt.label || ''} ${correctOpt.option_text}"** is the official solution according to the examination syllabus.\n\n`;
+            out += `This is the official solution according to the examination syllabus.\n\n`;
         }
 
-        out += `### 4. A Simple Example\n\n`;
-        out += `* **Key Rule:** When tackling **${subjectName || 'exam'}** questions on **${topicName || 'this topic'}**, write down known formulas and double-check unit conversions and sign rules before picking an option.`;
+        out += `### 3. A Simple Example\n\n`;
+        out += `* **Key Rule:** When tackling **${subjectName || 'exam'}** questions on **${topicName || 'this topic'}**, write down known formulas and double-check unit conversions before picking an option.`;
 
         return out;
     };

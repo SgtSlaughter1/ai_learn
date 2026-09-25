@@ -11,7 +11,7 @@ const XP_RULES = [
     { icon: <Sparkles className="w-4 h-4 text-amber-500" />, label: 'Perfect Score', xp: '+3 XP', desc: '100% accuracy bonus on a quiz' },
     { icon: <BookOpen className="w-4 h-4 text-[var(--color-primary)]" />, label: 'First Attempt', xp: '+2 XP', desc: 'First time attempting a new assignment' },
     { icon: <Flame className="w-4 h-4 text-orange-500" />, label: 'Daily Streak', xp: '+5 XP', desc: 'Every 7 consecutive active study days' },
-    { icon: <Trophy className="w-4 h-4 text-yellow-500" />, label: 'Achievement Badge', xp: '+5–10 XP', desc: 'Unlock milestones, badges, and awards' },
+    { icon: <Trophy className="w-4 h-4 text-yellow-500" />, label: 'Achievement Badge', xp: '+5 to 10 XP', desc: 'Unlock milestones, badges, and awards' },
 ];
 
 export function XpGuideModal({ isOpen, onToggle }: XpGuideModalProps) {

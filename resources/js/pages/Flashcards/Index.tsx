@@ -141,7 +141,7 @@ export default function Index() {
                         <button
                             type="button"
                             onClick={fetchDeck}
-                            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-[var(--color-text)] hover:text-white bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-slate-700 rounded-xl transition-all focus:outline-none min-h-[48px] cursor-pointer"
+                            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-[var(--color-text)] hover:text-white bg-[var(--color-surface)] hover:bg-[var(--color-primary)] border border-[var(--color-border)] hover:border-[var(--color-primary)] rounded-xl transition-all focus:outline-none min-h-[48px] cursor-pointer shadow-2xs"
                         >
                             <RefreshCw className="w-4 h-4" />
                             Refresh Deck
@@ -151,8 +151,8 @@ export default function Index() {
             }
         >
             <Head>
-                <title>Active Recall Flashcards & Spaced Repetition | AILEARN</title>
-                <meta name="description" content="Practice curriculum concepts with spaced-repetition flashcards on AILEARN. Build long-term memory and topic mastery offline." />
+                <title>Active Recall Flashcards & Spaced Repetition | PassPoint</title>
+                <meta name="description" content="Practice curriculum concepts with spaced-repetition flashcards on PassPoint. Build long-term memory and topic mastery offline." />
             </Head>
 
             <div className="max-w-2xl mx-auto py-4 space-y-8">

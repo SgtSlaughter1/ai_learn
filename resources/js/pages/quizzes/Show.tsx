@@ -422,7 +422,7 @@ export default function Show({ quizId }: Props) {
         return (
             <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex flex-col justify-between p-4 md:p-8">
                 <Head>
-                    <title>{`${quiz?.title || 'Quiz'} | Adaptive Mode | AILEARN`}</title>
+                    <title>{`${quiz?.title || 'Quiz'} | Adaptive Mode | PassPoint`}</title>
                     <meta name="robots" content="noindex, nofollow" />
                 </Head>
 
@@ -478,7 +478,7 @@ export default function Show({ quizId }: Props) {
     return (
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex flex-col justify-between p-4 md:p-8">
             <Head>
-                <title>{`${quiz?.title || 'Quiz'} | AILEARN`}</title>
+                <title>{`${quiz?.title || 'Quiz'} | PassPoint`}</title>
                 <meta name="robots" content="noindex, nofollow" />
             </Head>
 

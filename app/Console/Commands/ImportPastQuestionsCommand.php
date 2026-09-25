@@ -21,7 +21,7 @@ class ImportPastQuestionsCommand extends Command
     public function handle(AlocImportService $importService): int
     {
         $this->info('====================================================');
-        $this->info('  AIlearn Past Questions Ingestion (ALOC Station)   ');
+        $this->info('  PassPoint Past Questions Ingestion (ALOC Station)   ');
         $this->info('====================================================');
 
         if ($this->option('ssce')) {

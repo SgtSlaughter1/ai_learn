@@ -98,19 +98,24 @@ export default function Index() {
     return (
         <AuthenticatedLayout
             header={
-                <div>
-                    <h1 className="text-3xl font-extrabold text-[var(--color-text)] tracking-tight">General Knowledge</h1>
-                    <p className="text-[var(--color-muted)] mt-1">
-                        Explore open curricula and practice all questions across schools and platforms.
+                <div className="space-y-1">
+                    <div className="flex items-center gap-2.5">
+                        <h1 className="text-3xl font-extrabold text-[var(--color-text)] tracking-tight">General Knowledge</h1>
+                        <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-[var(--color-accent-10)] text-[var(--color-accent)] border border-[var(--color-accent-20)]">
+                            Open Library
+                        </span>
+                    </div>
+                    <p className="text-[var(--color-muted)] text-sm max-w-3xl leading-relaxed">
+                        Explore open study materials and extra practice questions across all subjects. Please note: <strong>Questions in General Knowledge are for self-study and broad revision, and are not based on your school's class tests or assignments.</strong>
                     </p>
                 </div>
             }
         >
             <Head>
-                <title>General Knowledge & Open Curriculum Library | AILEARN</title>
-                <meta name="description" content="Access open curriculum questions, verified educational answers, and general knowledge concepts on AILEARN." />
-                <meta property="og:title" content="General Knowledge & Open Curriculum Library | AILEARN" />
-                <meta property="og:description" content="Access open curriculum questions, verified educational answers, and general knowledge concepts on AILEARN." />
+                <title>General Knowledge & Open Curriculum Library | PassPoint</title>
+                <meta name="description" content="Access open curriculum questions, verified educational answers, and general knowledge concepts on PassPoint." />
+                <meta property="og:title" content="General Knowledge & Open Curriculum Library | PassPoint" />
+                <meta property="og:description" content="Access open curriculum questions, verified educational answers, and general knowledge concepts on PassPoint." />
             </Head>
 
             <div className="space-y-6">
@@ -119,7 +124,7 @@ export default function Index() {
                     <div className="relative">
                         <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[var(--color-muted)]">
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                             </svg>
                         </span>
                         <input
@@ -132,19 +137,30 @@ export default function Index() {
                     </div>
                 </div>
 
-                {/* Scope Banner */}
-                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-4 flex items-center justify-between gap-3 text-xs text-[var(--color-text)]">
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-[var(--color-primary-5)] border border-[var(--color-primary)]/20 flex items-center justify-center text-[var(--color-primary)] shrink-0">
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                {/* Scope / Clarification Banner */}
+                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs text-[var(--color-text)] shadow-sm">
+                    <div className="flex items-start gap-3.5">
+                        <div className="w-10 h-10 rounded-xl bg-[var(--color-primary-10)] border border-[var(--color-primary-20)] flex items-center justify-center text-[var(--color-primary)] shrink-0 mt-0.5 md:mt-0">
+                            <svg className="w-5 h-5 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </div>
-                        <div>
-                            <strong className="font-bold text-[var(--color-primary)] block text-sm">Open Practice Bank</strong>
-                            <span className="text-[var(--color-muted)]">You have open access to all subjects, diagnostic tests, and curriculum topics regardless of school enrollment.</span>
+                        <div className="space-y-1">
+                            <strong className="font-bold text-[var(--color-text)] text-sm block">Open Practice Bank (Not School-Specific)</strong>
+                            <p className="text-[var(--color-muted)] leading-relaxed">
+                                This library contains open curriculum topics and practice questions for independent study. For tests and questions assigned by your teachers, visit your school curriculum page.
+                            </p>
                         </div>
                     </div>
+                    <Link
+                        href="/subjects"
+                        className="inline-flex items-center gap-1 text-xs font-bold text-[var(--color-primary)] hover:underline whitespace-nowrap self-start md:self-center shrink-0"
+                    >
+                        <span>View My School Curriculum</span>
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                    </Link>
                 </div>
 
                 {/* Subjects Grid / Skeleton Screen */}

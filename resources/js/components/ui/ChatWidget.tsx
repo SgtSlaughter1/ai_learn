@@ -527,7 +527,7 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
             }
         }
     } catch (e) {
-        console.warn('AILEARN helper error:', e);
+        console.warn('PassPoint helper error:', e);
     }
 
     // 7. Default Dynamic Offline fallback message for learners (deduplicated)
@@ -537,7 +537,7 @@ async function generateOfflineResponse(message: string, isAdmin: boolean = false
     const subjectList = uniqueSubjectNames.length > 0 ? uniqueSubjectNames.join(', ') : 'all enrolled subjects';
     const sampleTopics = cachedTopics.slice(0, 3).map(t => `**${t.name}**`).join(', ');
 
-    return `**AILEARN Tutor Mode**\n\nI am operating in offline mode using your local curriculum library for **${subjectList}**.\n\nWhile offline, I can help you with:\n1. **"Recommend what to study"**: I will analyze your local mastery and suggest topics.\n2. **"List subjects"**: View your offline curriculum and descriptions.\n3. Ask about any topic in your library (e.g. ${sampleTopics || 'your topics'}) to see concept notes.`;
+    return `**PassPoint Tutor Mode**\n\nI am operating in offline mode using your local curriculum library for **${subjectList}**.\n\nWhile offline, I can help you with:\n1. **"Recommend what to study"**: I will analyze your local mastery and suggest topics.\n2. **"List subjects"**: View your offline curriculum and descriptions.\n3. Ask about any topic in your library (e.g. ${sampleTopics || 'your topics'}) to see concept notes.`;
 }
 
 export default function ChatWidget() {

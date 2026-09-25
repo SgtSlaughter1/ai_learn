@@ -1,10 +1,10 @@
-# 🧠 AILEARN — Autonomous Personal Learning & Assessment Platform
+# 🧠 PassPoint — Autonomous Personal Learning & Assessment Platform
 
 > **An offline-first, AI-powered digital learning ecosystem engineered for schools, teachers, and learners. Combines curriculum-aligned learning, authentic Nigerian CBT exam simulations (WAEC, JAMB, NECO), and the scientifically proven SuperMemo SM-2 Spaced Repetition memory engine.**
 
 ---
 
-## 💡 Why AILEARN? (The Problem & The Solution)
+## 💡 Why PassPoint? (The Problem & The Solution)
 
 ### The Problem with Traditional Learning & Standard CBT Apps
 1. **The Cram-and-Forget Trap**: Students study for tests and forget 70%+ of what they learned within a week.
@@ -12,8 +12,8 @@
 3. **Overworked Classrooms**: Teachers with 50+ students cannot personalize homework for every student's individual weak spots.
 4. **Internet & Data Cost Barriers**: Expensive data plans and spotty internet make streaming video lessons impossible for millions of families.
 
-### How AILEARN Solves This
-* **5-Minute Daily Memory Engine**: AILEARN tells the learner what to review each day using the **SuperMemo SM-2 Spaced Repetition Algorithm** so they never forget previous lessons.
+### How PassPoint Solves This
+* **5-Minute Daily Memory Engine**: PassPoint tells the learner what to review each day using the **SuperMemo SM-2 Spaced Repetition Algorithm** so they never forget previous lessons.
 * **Class & Programme Scoped**: Sourced strictly from the student's exact class (`SS1`) and academic programme track (`Science` vs `Business` vs `Arts`).
 * **Socratic AI Tutor**: An intelligent 24/7 personal tutor that guides students through mistakes step-by-step.
 * **100% Zero-Data Offline Continuity**: The entire curriculum, question bank, and memory engine lives in the browser / device with zero data usage.

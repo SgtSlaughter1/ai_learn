@@ -282,8 +282,8 @@ export default function LearnerDashboard() {
             }
         >
             <Head>
-                <title>Learner Dashboard | AILEARN</title>
-                <meta name="description" content="View your subject mastery progress, active study streaks, recommended practice topics, and offline quiz history on AILEARN." />
+                <title>Learner Dashboard | PassPoint</title>
+                <meta name="description" content="View your subject mastery progress, active study streaks, recommended practice topics, and offline quiz history on PassPoint." />
             </Head>
 
             <div className="space-y-8 relative">

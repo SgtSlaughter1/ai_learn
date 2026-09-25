@@ -14,7 +14,7 @@ class SubjectSeeder extends Seeder
 {
     public function run(): void
     {
-        $school1 = School::where('slug', 'ailearn-academy')->first();
+        $school1 = School::where('slug', 'passpoint-academy')->first();
         $school2 = School::where('slug', 'greenwood-high-school')->first();
 
         $classSS1Science = ClassModel::where('slug', 'ss1-science')->first();
@@ -33,7 +33,7 @@ class SubjectSeeder extends Seeder
         $classGreenwoodSS2 = ClassModel::where('slug', 'ss2-greenwood-science')->first();
 
         // =========================================================================
-        // 1. SS1 SCIENCE (AILEARN Academy)
+        // 1. SS1 SCIENCE (PassPoint Academy)
         // =========================================================================
 
         // 1.1 Mathematics (SS1 Science)
@@ -184,7 +184,7 @@ class SubjectSeeder extends Seeder
         );
 
         // =========================================================================
-        // 2. SS2 SCIENCE (AILEARN Academy)
+        // 2. SS2 SCIENCE (PassPoint Academy)
         // =========================================================================
         $physicsSS2 = Subject::updateOrCreate(
             ['slug' => 'ss2-physics'],
@@ -226,7 +226,7 @@ class SubjectSeeder extends Seeder
         );
 
         // =========================================================================
-        // 3. SS1 BUSINESS (AILEARN Academy)
+        // 3. SS1 BUSINESS (PassPoint Academy)
         // =========================================================================
         $accountingSS1 = Subject::updateOrCreate(
             ['slug' => 'ss1-financial-accounting'],
@@ -299,7 +299,7 @@ class SubjectSeeder extends Seeder
         );
 
         // =========================================================================
-        // 4. SS2 BUSINESS (AILEARN Academy)
+        // 4. SS2 BUSINESS (PassPoint Academy)
         // =========================================================================
         $accountingSS2 = Subject::updateOrCreate(
             ['slug' => 'ss2-financial-accounting'],
@@ -333,7 +333,7 @@ class SubjectSeeder extends Seeder
         );
 
         // =========================================================================
-        // 5. SS1 HUMANITIES (AILEARN Academy)
+        // 5. SS1 HUMANITIES (PassPoint Academy)
         // =========================================================================
         $govSS1 = Subject::updateOrCreate(
             ['slug' => 'ss1-government'],

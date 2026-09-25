@@ -12,10 +12,10 @@ class QuizSeeder extends Seeder
 {
     public function run(): void
     {
-        $school1 = School::where('slug', 'ailearn-academy')->first();
+        $school1 = School::where('slug', 'passpoint-academy')->first();
         $school2 = School::where('slug', 'greenwood-high-school')->first();
 
-        // 1. Mathematics Quiz (School 1: AILEARN Academy)
+        // 1. Mathematics Quiz (School 1: PassPoint Academy)
         $mathQuiz = Quiz::updateOrCreate(
             ['title' => 'SS1 Mathematics Diagnostic Assessment'],
             [
@@ -38,7 +38,7 @@ class QuizSeeder extends Seeder
             })->toArray()
         );
 
-        // 2. English Language Placement Quiz (School 1: AILEARN Academy)
+        // 2. English Language Placement Quiz (School 1: PassPoint Academy)
         $englishQuiz = Quiz::updateOrCreate(
             ['title' => 'SS1 English Language Placement Quiz'],
             [
@@ -61,7 +61,7 @@ class QuizSeeder extends Seeder
             })->toArray()
         );
 
-        // 3. Biology Quiz (School 1: AILEARN Academy)
+        // 3. Biology Quiz (School 1: PassPoint Academy)
         $biologyQuiz = Quiz::updateOrCreate(
             ['title' => 'SS1 Biology Foundations Quiz'],
             [
@@ -84,7 +84,7 @@ class QuizSeeder extends Seeder
             })->toArray()
         );
 
-        // 4. SS1 Government Assessment (School 1: AILEARN Academy)
+        // 4. SS1 Government Assessment (School 1: PassPoint Academy)
         $govQuiz = Quiz::updateOrCreate(
             ['title' => 'SS1 Government Foundations Assessment'],
             [

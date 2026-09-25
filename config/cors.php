@@ -34,6 +34,7 @@ return [
         'http://127.0.0.1:8001',
         'http://localhost:8002',
         'https://ailearn.gt.tc',
+        'https://passpoint.gt.tc',
     ],
 
     'allowed_origins_patterns' => ['#^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$#'],

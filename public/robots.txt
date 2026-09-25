@@ -1,4 +1,4 @@
-# AILEARN - Robots.txt
+# PassPoint - Robots.txt
 # Comprehensive Crawl Rules for Web Search & AI Engines
 
 User-agent: *
@@ -40,4 +40,4 @@ User-agent: Bingbot
 Allow: /
 
 # Sitemaps & LLM Context Discovery
-Sitemap: https://ailearn.app/sitemap.xml
+Sitemap: https://passpoint.app/sitemap.xml

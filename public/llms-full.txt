@@ -1,7 +1,7 @@
-# AILEARN - Comprehensive Platform & Architecture Specification
+# PassPoint - Comprehensive Platform & Architecture Specification
 
 ## Overview
-AILEARN is an offline-first educational technology system designed to democratize high-quality secondary education across regions with low or intermittent internet connectivity. It combines local Progressive Web App caching, client-side IndexedDB databases, dynamic question solving algorithms, and multi-model AI logic.
+PassPoint is an offline-first educational technology system designed to democratize high-quality secondary education across regions with low or intermittent internet connectivity. It combines local Progressive Web App caching, client-side IndexedDB databases, dynamic question solving algorithms, and multi-model AI logic.
 
 ---
 

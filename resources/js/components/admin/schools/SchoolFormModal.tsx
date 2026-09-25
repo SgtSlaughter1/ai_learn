@@ -112,7 +112,7 @@ export default function SchoolFormModal({
                                 required
                                 value={form.name}
                                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                placeholder="e.g. AILEARN Academy"
+                                placeholder="e.g. PassPoint Academy"
                                 className="w-full px-3.5 py-2.5 text-sm bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl focus:outline-none focus:border-[var(--color-primary)] transition-colors"
                             />
                         </div>
@@ -148,9 +148,9 @@ export default function SchoolFormModal({
 
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                 {[
-                                    { id: 1, label: 'Primary School', sub: 'Creche – Pri 6' },
-                                    { id: 2, label: 'Junior Secondary', sub: 'JSS 1 – 3' },
-                                    { id: 3, label: 'Senior Secondary', sub: 'SS 1 – 3' },
+                                    { id: 1, label: 'Primary School', sub: 'Creche - Pri 6' },
+                                    { id: 2, label: 'Junior Secondary', sub: 'JSS 1 - 3' },
+                                    { id: 3, label: 'Senior Secondary', sub: 'SS 1 - 3' },
                                 ].map((cat) => {
                                     const isChecked = (form.category_ids || []).includes(cat.id);
                                     return (

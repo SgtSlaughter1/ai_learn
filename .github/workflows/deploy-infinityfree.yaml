@@ -20,7 +20,7 @@ jobs:
       - name: 🔧 Setup PHP 8.3
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: "8.3"
           extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, dom, filter, gd, json, zip, curl, opcache
           coverage: none
 
@@ -32,15 +32,15 @@ jobs:
       - name: 🔧 Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
 
       - name: 📦 Install Node dependencies
         run: npm ci
 
       - name: 🏗️ Build frontend (Vite + Inertia)
         env:
-          VITE_APP_NAME: "Antigravity AI"
+          VITE_APP_NAME: "PassPoint"
           VITE_BASE_URL: "https://ailearn.gt.tc"
           VITE_API_BASE_URL: "https://ailearn.gt.tc"
           VITE_STORAGE_URL: "https://ailearn.gt.tc/storage"
@@ -49,7 +49,7 @@ jobs:
       # ── Create .env from GitHub Secrets ───────────────────
       - name: 📝 Create .env file
         run: |
-          echo 'APP_NAME="Antigravity AI"' > .env
+          echo 'APP_NAME="PassPoint"' > .env
           echo 'APP_ENV=production' >> .env
           echo 'APP_KEY=${{ secrets.APP_KEY }}' >> .env
           echo 'APP_DEBUG=false' >> .env
@@ -66,6 +66,17 @@ jobs:
           echo 'CACHE_STORE=file' >> .env
           echo 'FILESYSTEM_DISK=local' >> .env
           echo 'QUEUE_CONNECTION=sync' >> .env
+          echo 'AI_PROVIDER=${{ secrets.AI_PROVIDER }}' >> .env
+          echo 'AI_API_KEY=${{ secrets.AI_API_KEY }}' >> .env
+          echo 'GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}' >> .env
+          echo 'MAIL_MAILER=${{ secrets.MAIL_MAILER }}' >> .env
+          echo 'MAIL_HOST=${{ secrets.MAIL_HOST }}' >> .env
+          echo 'MAIL_PORT=${{ secrets.MAIL_PORT }}' >> .env
+          echo 'MAIL_USERNAME=${{ secrets.MAIL_USERNAME }}' >> .env
+          echo 'MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}' >> .env
+          echo 'MAIL_ENCRYPTION=${{ secrets.MAIL_ENCRYPTION }}' >> .env
+          echo 'MAIL_FROM_ADDRESS=${{ secrets.MAIL_FROM_ADDRESS }}' >> .env
+          echo 'MAIL_FROM_NAME="PassPoint"' >> .env
 
       # ── Laravel optimizations ─────────────────────────────
       - name: 🔑 Generate APP_KEY (if missing)
@@ -180,7 +191,7 @@ jobs:
           rm -f /htdocs/public/build/manifest.webmanifest || true
           rm -f /htdocs/public/build/sw.js || true
           rm -f /htdocs/public/build/registerSW.js || true
-          
+
           # Clean old root public static files to let fresh manifest and worker take over
           rm -f /htdocs/sw.js || true
           rm -f /htdocs/manifest.webmanifest || true

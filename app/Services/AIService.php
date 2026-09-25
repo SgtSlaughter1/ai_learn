@@ -89,24 +89,22 @@ class AIService
             $question->load(['options', 'topic.subject']);
             $correctOption = $question->options->firstWhere('is_correct', true);
             $selectedOption = $selectedOptionId ? $question->options->firstWhere('id', $selectedOptionId) : null;
+            $isCorrect = $selectedOption && $correctOption && ($selectedOption->id === $correctOption->id);
 
             $subjectName = $question->topic->subject->name ?? 'Unknown Subject';
             $topicName = $question->topic->name ?? 'Unknown Topic';
 
-            $prompt = "You are an expert AI Tutor helping a secondary school student understand their mistake and master the concept in {$subjectName} (Topic: {$topicName}).
-Explain the student's mistake using the following EXACT 4-part structure with Markdown headers:
+            if ($isCorrect) {
+                $prompt = "You are an expert AI Tutor helping a secondary school student in {$subjectName} (Topic: {$topicName}).
+The student answered this question CORRECTLY by choosing \"{$selectedOption->option_text}\".
 
-### 1. What You Chose
-State clearly what option the student chose (" . ($selectedOption ? "\"{$selectedOption->option_text}\"" : "Skipped / No answer") . ") and what misconception or assumption commonly leads someone to pick this option.
+Explain why their answer is correct using the following 2-part structure with Markdown headers:
 
-### 2. Why It Was Incorrect
-Explain precisely why this choice is incorrect, highlighting the specific calculation trap, false premise, or overlooked rule.
+### 1. Why Your Answer is Correct
+Confirm that \"{$selectedOption->option_text}\" is correct and explain the core principle and reason. If there is only one step, explain it as a clear sentence or paragraph without writing \"Step 1\".
 
-### 3. What the Correct Reasoning Is
-Provide crystal-clear, step-by-step logic, formula, or mathematical proof demonstrating why the correct answer is \"{$correctOption->option_text}\".
-
-### 4. A Simple Example
-Provide a brief, concrete mini-example or easy-to-remember rule that reinforces how to solve similar problems.
+### 2. A Simple Example
+Provide a concrete, real-world mini-example or easy memory rule that reinforces this concept.
 
 Question:
 \"{$question->question_text}\"
@@ -115,10 +113,42 @@ Options:
 " . $question->options->map(fn($o) => "- " . $o->option_text . ($o->is_correct ? " (CORRECT)" : ""))->implode("\n") . "
 
 Rules:
-- Strictly format output with the 4 exact Markdown headers (### 1. What You Chose, ### 2. Why It Was Incorrect, ### 3. What the Correct Reasoning Is, ### 4. A Simple Example).
+- Use simple, everyday words that are easy for secondary school learners to understand and remember.
+- Avoid overly complex vocabulary, complicated jargon, or \"big grammar\"—explain ideas simply and clearly.
+- Do NOT include any \"Why It Was Incorrect\" section because the student answered correctly.
+- Do NOT use em dashes (—). Use standard hyphens, commas, or colons.
+- Keep total response concise (under 200 words).";
+            } else {
+                $prompt = "You are an expert AI Tutor helping a secondary school student understand their mistake in {$subjectName} (Topic: {$topicName}).
+The student " . ($selectedOption ? "chose \"{$selectedOption->option_text}\"" : "skipped this question without answering") . ".
+
+Explain using the following 3-part structure with Markdown headers:
+
+### 1. Why Your Choice Was Incorrect
+" . ($selectedOption ? "Explain why \"{$selectedOption->option_text}\" is incorrect, highlighting the specific calculation trap, false premise, or overlooked rule." : "Explain that this question was skipped and summarize the key concept being tested.") . "
+
+### 2. Why the Correct Answer is Right
+Explain clearly why \"{$correctOption->option_text}\" is the correct answer. If there is only one step, explain it directly as a clear sentence or paragraph without writing \"Step 1\".
+
+### 3. A Simple Example
+Provide a concrete, real-world mini-example or easy memory rule that reinforces how to solve this correctly.
+
+Question:
+\"{$question->question_text}\"
+
+Options:
+" . $question->options->map(fn($o) => "- " . $o->option_text . ($o->is_correct ? " (CORRECT)" : ""))->implode("\n") . "
+
+Rules:
+- Use simple, everyday words and clear sentence structures that secondary school students can easily comprehend and remember.
+- Avoid overly complex terminology or \"big grammar\"—break concepts down simply.
+- If solving the problem requires multiple calculation or logical steps (2 or more steps), format them clearly with **Step 1:**, **Step 2:**, etc.
+- If it is a conceptual question or only requires 1 step, explain it directly as a clear sentence or paragraph without any \"Step 1\" label.
+- Do NOT use em dashes (—). Use standard hyphens, commas, or colons.
 - Keep the tone encouraging, pedagogical, and secondary-school appropriate.
-- When writing mathematical expressions or variables, use ONLY LaTeX notation with dollar signs ($...$ for inline, $$...$$ for display).
-- Keep total response concise (under 280 words).";
+- When writing mathematical expressions or variables, use LaTeX notation with dollar signs ($...$).
+- Keep total response concise (under 240 words).";
+            }
 
             $geminiResult = $this->callGemini([
                 ['role' => 'user', 'parts' => [['text' => $prompt]]]
@@ -146,25 +176,23 @@ Rules:
 
             $selectedOption = $question->options->firstWhere('id', $selectedOptionId);
             $correctOption = $question->options->firstWhere('is_correct', true) ?? $question->options->first();
+            $isCorrect = $selectedOption && $correctOption && ($selectedOption->id === $correctOption->id);
 
             $subjectName = $question->subject?->name ?? ($question->topic?->subject?->name ?? 'General Science/Arts');
             $topicName = $question->topic?->name ?? 'Curriculum Mastery';
             $examTitle = strtoupper($question->exam_code) . ($question->exam_year ? " {$question->exam_year}" : '');
 
-            $prompt = "You are an expert AI Tutor helping a Nigerian secondary school student prepare for the {$examTitle} examination in Subject '{$subjectName}' (Topic: '{$topicName}').
-Diagnose the student's mistake using the following EXACT 4-part structure with Markdown headers:
+            if ($isCorrect) {
+                $prompt = "You are an expert AI Tutor helping a Nigerian secondary school student in {$examTitle} ({$subjectName} - Topic: {$topicName}).
+The student answered CORRECTLY by choosing " . ($selectedOption->option_key ? "Option {$selectedOption->option_key}: " : "") . "\"{$selectedOption->option_text}\".
 
-### 1. What You Chose
-State what option was chosen (" . ($selectedOption ? ($selectedOption->option_key ? "Option {$selectedOption->option_key}: " : "") . "\"{$selectedOption->option_text}\"" : "Question inquiry without selection") . ") and identify what examiner distractor or misunderstanding it represents.
+Explain why their answer is correct using the following 2-part structure with Markdown headers:
 
-### 2. Why It Was Incorrect
-Explain why that choice is incorrect according to the examination marking scheme.
+### 1. Why Your Answer is Correct
+Confirm that the answer is correct according to the {$examTitle} syllabus and explain the underlying principle. If there is only one step, explain it without writing \"Step 1\".
 
-### 3. What the Correct Reasoning Is
-Provide the complete, step-by-step mathematical working or conceptual derivation proving why (" . ($correctOption->option_key ? "Option {$correctOption->option_key}: " : "") . "\"{$correctOption->option_text}\") is correct." . ($question->explanation ? "\nOfficial Reference Solution:\n{$question->explanation}" : "") . "
-
-### 4. A Simple Example
-Provide a brief, crystal-clear mini-example or core exam strategy rule for {$examTitle} questions on {$topicName}.
+### 2. A Simple Example
+Provide a concrete, real-world mini-example or exam memory rule for {$topicName}.
 
 Question:
 \"{$question->question_text}\"" . ($question->passage_text ? "\n\nPassage:\n\"{$question->passage_text}\"" : "") . "
@@ -173,9 +201,43 @@ Options:
 " . $question->options->map(fn($o) => "- " . ($o->option_key ? "{$o->option_key}. " : "") . $o->option_text . ($o->is_correct ? " (CORRECT)" : ""))->implode("\n") . "
 
 Rules:
-- Strictly format output with the 4 exact headers (### 1. What You Chose, ### 2. Why It Was Incorrect, ### 3. What the Correct Reasoning Is, ### 4. A Simple Example).
+- Use simple, straightforward language that secondary school students can easily understand and remember.
+- Avoid unnecessary jargon or \"big grammar\"—keep explanations direct and plain.
+- If solving the problem requires multiple calculation or logical steps (2 or more steps), format them clearly with **Step 1:**, **Step 2:**, etc.
+- If it is a conceptual question or only requires 1 step, explain it directly as a clear sentence or paragraph without any \"Step 1\" label.
+- Do NOT include any \"Why It Was Incorrect\" section.
+- Do NOT use em dashes (—). Use standard hyphens, commas, or colons.
+- Keep total response concise (under 200 words).";
+            } else {
+                $prompt = "You are an expert AI Tutor helping a Nigerian secondary school student prepare for {$examTitle} ({$subjectName} - Topic: {$topicName}).
+The student " . ($selectedOption ? "chose " . ($selectedOption->option_key ? "Option {$selectedOption->option_key}: " : "") . "\"{$selectedOption->option_text}\"" : "reviewed this question without selecting an option") . ".
+
+Explain using the following 3-part structure with Markdown headers:
+
+### 1. Why Your Choice Was Incorrect
+" . ($selectedOption ? "Explain why this option is incorrect according to the {$examTitle} marking scheme." : "Explain that this question was reviewed without a selection and summarize what the question tests.") . "
+
+### 2. Why the Correct Answer is Right
+Explain why (" . ($correctOption->option_key ? "Option {$correctOption->option_key}: " : "") . "\"{$correctOption->option_text}\") is correct with clear working. If there is only one step, explain it directly as a clear sentence or paragraph without writing \"Step 1\"." . ($question->explanation ? "\nOfficial Reference Solution:\n{$question->explanation}" : "") . "
+
+### 3. A Simple Example
+Provide a concrete mini-example or core exam strategy rule for {$examTitle} questions on {$topicName}.
+
+Question:
+\"{$question->question_text}\"" . ($question->passage_text ? "\n\nPassage:\n\"{$question->passage_text}\"" : "") . "
+
+Options:
+" . $question->options->map(fn($o) => "- " . ($o->option_key ? "{$o->option_key}. " : "") . $o->option_text . ($o->is_correct ? " (CORRECT)" : ""))->implode("\n") . "
+
+Rules:
+- Use simple, clear language that is easy to comprehend and remember for secondary school students.
+- Avoid overly complicated words or \"big grammar\"—make the steps friendly, plain, and easy to memorize.
+- If solving the problem requires multiple calculation or logical steps (2 or more steps), format them clearly with **Step 1:**, **Step 2:**, etc.
+- If it is a conceptual question or only requires 1 step, explain it directly as a clear sentence or paragraph without any \"Step 1\" label.
+- Do NOT use em dashes (—). Use standard hyphens, commas, or colons.
 - Use ONLY LaTeX with dollar signs for mathematical expressions ($...$).
 - Keep total response concise, direct, and encouraging.";
+            }
 
             $geminiResult = $this->callGemini([
                 ['role' => 'user', 'parts' => [['text' => $prompt]]]
@@ -185,33 +247,36 @@ Rules:
                 return $geminiResult;
             }
 
-            // Offline Heuristic Fallback: 4-part structured breakdown
-            $out = "### 1. What You Chose\n\n";
-            if ($selectedOption) {
-                if ($selectedOption->id === $correctOption->id) {
-                    $out .= "You selected **" . ($selectedOption->option_key ? "Option {$selectedOption->option_key}: " : "") . "\"{$selectedOption->option_text}\"**, which is the **correct answer** for {$examTitle}!\n\n";
+            // Offline Heuristic Fallback
+            if ($isCorrect) {
+                $out = "### 1. Why Your Answer is Correct\n\n";
+                $out .= "You selected **" . ($selectedOption->option_key ? "Option {$selectedOption->option_key}: " : "") . "\"{$selectedOption->option_text}\"**, which is the **correct answer** for {$examTitle}!\n\n";
+                if ($question->explanation) {
+                    $out .= $question->explanation . "\n\n";
                 } else {
-                    $out .= "You selected **" . ($selectedOption->option_key ? "Option {$selectedOption->option_key}: " : "") . "\"{$selectedOption->option_text}\"**. This option is a common distractor in {$examTitle} papers.\n\n";
+                    $out .= "This answer accurately applies the syllabus rules for **{$topicName}**.\n\n";
                 }
+                $out .= "### 2. A Simple Example\n\n";
+                $out .= "- **Exam Strategy:** When answering {$subjectName} questions on **{$topicName}**, always check key terms and formulas before choosing your option.";
             } else {
-                $out .= "You reviewed this question without selecting an option. Let's study the examination method together.\n\n";
-            }
+                $out = "### 1. Why Your Choice Was Incorrect\n\n";
+                if ($selectedOption) {
+                    $out .= "You selected **" . ($selectedOption->option_key ? "Option {$selectedOption->option_key}: " : "") . "\"{$selectedOption->option_text}\"**. This choice does not satisfy the formula or rule tested in **{$topicName}**.\n\n";
+                } else {
+                    $out .= "You reviewed this question without selecting an option. Let's study the method together.\n\n";
+                }
 
-            $out .= "### 2. Why It Was Incorrect\n\n";
-            if ($selectedOption && $selectedOption->id !== $correctOption->id) {
-                $out .= "This choice does not satisfy the formula or rule tested in **{$topicName}**. Examination distractors often test incomplete steps or sign reversals.\n\n";
-            } else {
-                $out .= "Incorrect options in {$examTitle} often represent partial calculations or inverted ratios.\n\n";
-            }
+                $out .= "### 2. Why the Correct Answer is Right\n\n";
+                $out .= "The correct answer is **" . ($correctOption->option_key ? "Option {$correctOption->option_key}: " : "") . "\"{$correctOption->option_text}\"**.\n\n";
+                if ($question->explanation) {
+                    $out .= $question->explanation . "\n\n";
+                } else {
+                    $out .= "This choice satisfies the curriculum requirements for **{$topicName}**.\n\n";
+                }
 
-            $out .= "### 3. What the Correct Reasoning Is\n\n";
-            $out .= "The correct answer is **" . ($correctOption->option_key ? "Option {$correctOption->option_key}: " : "") . "\"{$correctOption->option_text}\"**.\n\n";
-            if ($question->explanation) {
-                $out .= "**Step-by-Step Working:**\n" . $question->explanation . "\n\n";
+                $out .= "### 3. A Simple Example\n\n";
+                $out .= "- **Exam Strategy:** When approaching {$subjectName} questions on **{$topicName}**, write out given variables and standard formulas before calculating.";
             }
-
-            $out .= "### 4. A Simple Example\n\n";
-            $out .= "- **Exam Strategy:** When approaching {$subjectName} questions on **{$topicName}**, always write out given variables and standard formulas before calculating.";
 
             return $out;
         });
@@ -335,7 +400,7 @@ Rules:
         $copilotRole = $isTeacher ? 'AI Teacher Copilot & Academic Advisor' : 'AI School Administrator Copilot & Academic Advisor';
         $userRoleDesc = $isTeacher ? 'teacher / subject educator' : 'academic school administrator';
 
-        $systemInstruction = "You are the AILEARN {$copilotRole}.
+        $systemInstruction = "You are the PassPoint {$copilotRole}.
 You are assisting {$userRoleDesc}: {$user->name} at {$schoolName} ({$schoolCategory} Category, {$locationStr}).
 
 School Data & Academic Context:
@@ -360,10 +425,11 @@ Your Core Capabilities for the {$userRoleDesc}:
 5. Classroom & Teaching Insights: Answer questions about lesson delivery, rubric design, student engagement, and subject mastery.
 
 Guidelines:
-1. Maintain an authoritative, professional, and supportive tone suitable for school principals and academic directors.
-2. Keep responses structured, concise, and actionable using clear markdown headings and bullet points. Keep answers under 250 words unless generating full questions/lesson plans.
-3. When drafting exam questions, provide the question, options A-D, clearly indicate the correct option, and include a full step-by-step solution.
-4. CRITICAL: When writing math, use ONLY LaTeX with dollar signs ($...$ for inline, $$...$$ for display). NEVER write the same expression in both LaTeX AND plain text. Use ONLY the LaTeX version, not both.";
+1. Use simple, everyday, direct language that is easy to comprehend, digest, and remember. Avoid unnecessarily complex vocabulary, convoluted phrasing, or \"big grammar\".
+2. Maintain a supportive, practical, and professional tone suitable for teachers, subject educators, and school administrators.
+3. Keep responses structured, concise, and actionable using clear markdown headings and bullet points. Keep answers under 250 words unless generating full questions/lesson plans.
+4. When drafting exam questions, provide the question, options A-D, clearly indicate the correct option, and include a full step-by-step solution explained simply.
+5. CRITICAL: When writing math, use ONLY LaTeX with dollar signs ($...$ for inline, $$...$$ for display). NEVER write the same expression in both LaTeX AND plain text. Use ONLY the LaTeX version, not both.";
 
         $contents = [];
         foreach ($history as $msg) {
@@ -419,7 +485,7 @@ Guidelines:
             ? $learnerSampleQuestions->map(fn($q) => "  - [{$q->topic?->subject?->name} -> {$q->topic?->name}]: {$q->question_text} | Key Concept: {$q->explanation}")->implode("\n")
             : "  - Standard curriculum active.";
 
-        $systemInstruction = "You are the AILEARN Learning Companion, a friendly, encouraging personal study assistant for secondary school students. 
+        $systemInstruction = "You are the PassPoint Learning Companion, a friendly, encouraging personal study assistant for secondary school students. 
 You know the student's name is: {$user->name}.
 Here is their current subject mastery progress:
 {$masterySummary}
@@ -429,12 +495,13 @@ Curriculum & Question Bank Knowledge Base (School & General Curriculum):
 
 Guidelines:
 1. Help them understand curriculum concepts, plan what to study, or explain hard questions. Use the uploaded curriculum concepts as reference.
-2. Keep your answers brief, engaging, highly structured (using bullet points and bold text), and easy to read.
-3. Recommend taking diagnostic quizzes for subjects where their mastery is low (below 80%).
-4. If they ask about offline access, explain that the app calculates progress, scores, and adapts difficulty fully offline!
-5. Use markdown formatting. Keep answers under 150 words.
-6. CRITICAL: When writing math, use ONLY LaTeX with dollar signs ($...$ for inline, $$...$$ for display). NEVER write the same expression in both LaTeX AND plain text. Use ONLY the LaTeX version, not both.
-7. CONVERSATIONAL CONTINUITY: When a student replies to a practice question with their answer attempt (e.g. an algebraic expression like (x-5x)(x-2x), an option letter like A/B/C/D, or an equation), ALWAYS directly evaluate their response. Point out what they got right, gently explain any mistake, show the step-by-step solution, and offer another challenge. NEVER respond with a generic greeting or reset the conversation.";
+2. Use simple, everyday words that are easy for secondary school students to comprehend and remember. Avoid big grammar, complicated vocabulary, or dense jargon.
+3. Keep your answers brief, engaging, highly structured (using bullet points and bold text), and easy to read.
+4. Recommend taking diagnostic quizzes for subjects where their mastery is low (below 80%).
+5. If they ask about offline access, explain that the app calculates progress, scores, and adapts difficulty fully offline!
+6. Use markdown formatting. Keep answers under 150 words.
+7. CRITICAL: When writing math, use ONLY LaTeX with dollar signs ($...$ for inline, $$...$$ for display). NEVER write the same expression in both LaTeX AND plain text. Use ONLY the LaTeX version, not both.
+8. CONVERSATIONAL CONTINUITY: When a student replies to a practice question with their answer attempt (e.g. an algebraic expression like (x-5x)(x-2x), an option letter like A/B/C/D, or an equation), ALWAYS directly evaluate their response. Point out what they got right, gently explain any mistake, show the step-by-step solution, and offer another challenge. NEVER respond with a generic greeting or reset the conversation.";
 
         $contents = [];
         foreach ($history as $msg) {
@@ -529,31 +596,32 @@ Guidelines:
 
     private function generateHeuristicExplanation(Question $question, ?QuestionOption $selectedOption, QuestionOption $correctOption, string $subject, string $topic): string
     {
-        $out = "### 1. What You Chose\n\n";
+        $isCorrect = $selectedOption && ($selectedOption->id === $correctOption->id);
+
+        if ($isCorrect) {
+            $out = "### 1. Why Your Answer is Correct\n\n";
+            $out .= "You chose **\"{$selectedOption->option_text}\"**, which is the **correct answer**! Great job applying the principles of **{$topic}**.\n\n";
+            $steps = $this->generateStepByStep($question, $correctOption, $topic);
+            $out .= $steps . "\n\n";
+            $out .= "### 2. A Simple Example\n\n";
+            $out .= $this->generateStudyTip($topic, $question);
+            return $out;
+        }
+
+        $out = "### 1. Why Your Choice Was Incorrect\n\n";
         if ($selectedOption) {
-            if ($selectedOption->id === $correctOption->id) {
-                $out .= "You chose **\"{$selectedOption->option_text}\"**, which is the **correct answer**! Great job applying the principles of **{$topic}**.\n\n";
-            } else {
-                $out .= "You chose **\"{$selectedOption->option_text}\"**. This option is a common trap when looking at initial numbers without applying the full formula.\n\n";
-            }
-        } else {
-            $out .= "You skipped this question without choosing an option. Let's break down the method so you can solve it with confidence.\n\n";
-        }
-
-        $out .= "### 2. Why It Was Incorrect\n\n";
-        if ($selectedOption && $selectedOption->id !== $correctOption->id) {
             $reason = $this->generateWrongAnswerReason($selectedOption, $correctOption, $question, $topic);
-            $out .= "Option **\"{$selectedOption->option_text}\"** is incorrect because {$reason}\n\n";
+            $out .= "You chose **\"{$selectedOption->option_text}\"**. This option is incorrect because {$reason}\n\n";
         } else {
-            $out .= "Distractor options often use reversed signs, partial operations, or common calculation traps.\n\n";
+            $out .= "You skipped this question without choosing an option. Here is the concept being tested in **{$topic}**.\n\n";
         }
 
-        $out .= "### 3. What the Correct Reasoning Is\n\n";
+        $out .= "### 2. Why the Correct Answer is Right\n\n";
         $out .= "The correct answer is **\"{$correctOption->option_text}\"**.\n\n";
         $steps = $this->generateStepByStep($question, $correctOption, $topic);
         $out .= $steps . "\n\n";
 
-        $out .= "### 4. A Simple Example\n\n";
+        $out .= "### 3. A Simple Example\n\n";
         $out .= $this->generateStudyTip($topic, $question);
 
         return $out;
@@ -607,7 +675,6 @@ Guidelines:
                 }
                 $stepNumber++;
             } else {
-                // Fallback: use the database explanation but expand it
                 if (!empty($explanation)) {
                     $out .= "**Step {$stepNumber}: Apply the solving method**\n";
                     $out .= "{$explanation}\n\n";
@@ -632,39 +699,34 @@ Guidelines:
         // ── Simplification problems (e.g., "Simplify: 3(x + 2) - 2x") ──
         elseif (preg_match('/simplif/i', $questionText)) {
             if (!empty($explanation)) {
-                // Break the explanation into digestible steps
-                $explanationSteps = preg_split('/\.\s+/', $explanation);
-                foreach ($explanationSteps as $step) {
-                    $step = trim($step);
-                    if (!empty($step)) {
-                        $out .= "**Step {$stepNumber}:** {$step}.\n\n";
-                        $stepNumber++;
+                $sentences = array_values(array_filter(array_map('trim', preg_split('/(?<=[.!?])\s+/', $explanation))));
+                if (count($sentences) >= 2) {
+                    foreach ($sentences as $idx => $step) {
+                        $out .= "**Step " . ($idx + 1) . ":** {$step}\n\n";
                     }
+                } else {
+                    $out .= trim($explanation) . "\n\n";
                 }
             } else {
-                $out .= "**Step {$stepNumber}:** Identify the expression to simplify.\n\n";
-                $stepNumber++;
-                $out .= "**Step {$stepNumber}:** Expand any brackets by multiplying the outside term by everything inside.\n\n";
-                $stepNumber++;
-                $out .= "**Step {$stepNumber}:** Combine like terms (terms with the same variable and exponent).\n\n";
-                $stepNumber++;
+                $out .= "**Step 1:** Expand any brackets by multiplying the outside term by everything inside.\n\n";
+                $out .= "**Step 2:** Combine like terms with the same variable and exponent.\n\n";
+                $out .= "Therefore, the simplified answer is **{$correctText}**\n\n";
             }
-            $out .= "Therefore, the simplified answer is **{$correctText}**\n\n";
         }
         // ── General fallback: expand the database explanation into steps ──
         else {
             if (!empty($explanation)) {
-                // Split the explanation by periods, commas, or 'then' to find steps
-                $explanationSteps = preg_split('/\.|;|\bthen\b/i', $explanation);
-                foreach ($explanationSteps as $step) {
-                    $step = trim($step);
-                    if (!empty($step)) {
-                        $out .= "**Step {$stepNumber}:** {$step}.\n\n";
-                        $stepNumber++;
+                $cleaned = trim($explanation);
+                $sentences = array_values(array_filter(array_map('trim', preg_split('/(?<=[.!?])\s+/', $cleaned))));
+                if (count($sentences) >= 2) {
+                    foreach ($sentences as $idx => $step) {
+                        $out .= "**Step " . ($idx + 1) . ":** {$step}\n\n";
                     }
+                } else {
+                    $out .= "{$cleaned}\n\n";
                 }
             } else {
-                $out .= "The correct answer is **{$correctText}**. This follows the core rules of **{$topic}**. Review the definitions and practice similar problems to master this concept.\n\n";
+                $out .= "The correct answer is **{$correctText}**. This follows the core rules of **{$topic}**.\n\n";
             }
         }
 
@@ -751,7 +813,7 @@ Instructions:
 2. For each question, extract all its option choices (e.g., A, B, C, D).
 3. If an answer key or correct answer is explicitly marked in the text (e.g., 'Answer: B', 'Ans: C', marked with asterisk, or indicated in an answer section), use that.
 4. If no answer is indicated, SOLVE the question accurately and determine which option is the correct answer. Exactly one option MUST have is_correct = true.
-5. Provide a clear, concise educational explanation (1-2 sentences) explaining why that choice is correct.
+5. Provide a clear, concise educational explanation (1-2 sentences) in simple, easy-to-understand language without complex terminology or \"big grammar\" explaining why that choice is correct.
 6. Estimate the difficulty: 'easy', 'medium', or 'hard'.
 7. Set question_type to 'multiple_choice' (or 'true_false' if applicable).
 8. Clean up any numbering (e.g. remove leading '1.', 'Q2:' from the question text). Remove leading 'A.', 'B)' from option text.

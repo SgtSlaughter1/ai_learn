@@ -29,8 +29,8 @@ export default function Login({ status }: LoginProps) {
             <div className="absolute bottom-1/4 right-1/4 w-72 sm:w-96 h-72 sm:h-96 bg-[var(--color-accent)]/5 rounded-full blur-3xl -z-10 pointer-events-none" />
 
             <Head>
-                <title>Sign In | AILEARN Portal</title>
-                <meta name="description" content="Sign in to your AILEARN account to access your offline-first secondary curriculum, quizzes, and personalized AI tutor." />
+                <title>Sign In | PassPoint Portal</title>
+                <meta name="description" content="Sign in to your PassPoint account to access your offline-first secondary curriculum, quizzes, and personalized AI tutor." />
             </Head>
 
             <div className="w-full max-w-md space-y-6 sm:space-y-8">

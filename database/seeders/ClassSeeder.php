@@ -13,7 +13,7 @@ class ClassSeeder extends Seeder
 {
     public function run(): void
     {
-        $school1 = School::where('slug', 'ailearn-academy')->first();
+        $school1 = School::where('slug', 'passpoint-academy')->first();
         $school2 = School::where('slug', 'greenwood-high-school')->first();
 
         $progScience = Program::where('slug', 'science')->first();
@@ -36,7 +36,7 @@ class ClassSeeder extends Seeder
         }
 
         // ==========================================
-        // School 1: AILEARN Academy (Senior Secondary)
+        // School 1: PassPoint Academy (Senior Secondary)
         // ==========================================
 
         // 1. Senior Secondary - Science Track (SS1 - SS3)

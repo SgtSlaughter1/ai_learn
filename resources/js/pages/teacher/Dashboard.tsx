@@ -121,6 +121,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
     const [assigningMap, setAssigningMap] = useState<Record<string, 'loading' | 'assigned'>>({});
     const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
     const [selectedLearnerDiagnostic, setSelectedLearnerDiagnostic] = useState<LearnerDiagnostic | null>(null);
+    const [openDropdownLearnerId, setOpenDropdownLearnerId] = useState<string | null>(null);
 
     const teacherClassIds = useMemo(() => new Set(classes.map((c) => c.id)), [classes]);
 
@@ -418,7 +419,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
             }
         >
             <Head>
-                <title>Teacher Dashboard | AILEARN</title>
+                <title>Teacher Dashboard | PassPoint</title>
                 <meta name="robots" content="noindex, nofollow" />
             </Head>
 
@@ -788,16 +789,257 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                     </p>
                                 </div>
                             ) : (
-                                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {stats.struggling_learners.map((learner) => (
-                                        <IntelligentInterventionCard
-                                            key={learner.id}
-                                            learner={learner}
-                                            assigningMap={assigningMap}
-                                            onAssign={handleAssignIntervention}
-                                            onViewDetail={() => setSelectedLearnerDiagnostic(learner)}
-                                        />
-                                    ))}
+                                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-xs min-h-[300px]">
+                                    <div className="overflow-x-auto pb-20">
+                                        <table className="w-full text-left text-xs">
+                                            <thead>
+                                                <tr className="border-b border-[var(--color-border)] bg-[var(--color-background)]/50 text-[var(--color-muted)] font-bold uppercase tracking-wider">
+                                                    <th className="py-3.5 px-4">Student</th>
+                                                    <th className="py-3.5 px-4">Subject</th>
+                                                    <th className="py-3.5 px-4">Mastery</th>
+                                                    <th className="py-3.5 px-4 min-w-[220px]">Identified Weak Topics</th>
+                                                    <th className="py-3.5 px-4">Recommended Practice</th>
+                                                    <th className="py-3.5 px-4 text-right">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-[var(--color-border)]">
+                                                {stats.struggling_learners.map((learner) => {
+                                                    const intervention = learner.recommended_intervention;
+                                                    const assignKey = intervention ? `${learner.id}-${intervention.topic_id}` : '';
+                                                    const isAssigned = assigningMap[assignKey] === 'assigned';
+                                                    const isLoading = assigningMap[assignKey] === 'loading';
+
+                                                    const initials = learner.name
+                                                        .split(' ')
+                                                        .map((n) => n[0])
+                                                        .join('')
+                                                        .toUpperCase()
+                                                        .slice(0, 2);
+
+                                                    return (
+                                                        <tr key={learner.id} className="hover:bg-[var(--color-primary-5)]/30 transition-colors group">
+                                                            {/* Student Name & Level */}
+                                                            <td className="py-4 px-4 align-top">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="w-9 h-9 rounded-xl bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-black text-xs flex items-center justify-center border border-[var(--color-primary)]/20 shrink-0">
+                                                                        {initials}
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <p className="font-bold text-sm text-[var(--color-text)] truncate group-hover:text-[var(--color-primary)] transition-colors">
+                                                                            {learner.name}
+                                                                        </p>
+                                                                        <p className="text-[11px] text-[var(--color-muted)]">
+                                                                            Lv.{learner.level} • {learner.tier}
+                                                                        </p>
+                                                                        {learner.email && (
+                                                                            <p className="text-[10px] text-[var(--color-muted)] truncate max-w-[140px]">
+                                                                                {learner.email}
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+
+                                                            {/* Subject */}
+                                                            <td className="py-4 px-4 align-top whitespace-nowrap">
+                                                                <span className="inline-block px-2.5 py-1 rounded-lg bg-[var(--color-primary-5)] text-[var(--color-primary)] border border-[var(--color-primary-10)] font-bold text-xs uppercase tracking-wider">
+                                                                    {learner.subject_name}
+                                                                </span>
+                                                            </td>
+
+                                                            {/* Average Mastery */}
+                                                            <td className="py-4 px-4 align-top whitespace-nowrap">
+                                                                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black ${
+                                                                    learner.avg_mastery >= 75
+                                                                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                                                        : learner.avg_mastery >= 50
+                                                                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                                                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                                                                }`}>
+                                                                    <span className={`w-1.5 h-1.5 rounded-full ${
+                                                                        learner.avg_mastery >= 75 ? 'bg-emerald-500' : learner.avg_mastery >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+                                                                    }`} />
+                                                                    {learner.avg_mastery}%
+                                                                </span>
+                                                            </td>
+
+                                                            {/* Identified Weak Topics */}
+                                                            <td className="py-4 px-4 align-top">
+                                                                <div className="flex flex-wrap gap-1.5 max-w-sm">
+                                                                    {learner.topics.slice(0, 3).map((topic) => (
+                                                                        <span
+                                                                            key={topic.id}
+                                                                            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[var(--color-background)] border border-[var(--color-border)] text-[11px] font-medium text-[var(--color-text)]"
+                                                                            title={`${topic.name}: ${topic.mastery_score}% mastery`}
+                                                                        >
+                                                                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                                                                topic.mastery_score >= 75 ? 'bg-emerald-500' : topic.mastery_score >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+                                                                            }`} />
+                                                                            <span className="truncate max-w-[130px]">{topic.name}</span>
+                                                                            <span className="font-bold shrink-0">{topic.mastery_score}%</span>
+                                                                        </span>
+                                                                    ))}
+                                                                    {learner.topics.length > 3 && (
+                                                                        <button
+                                                                            onClick={() => setSelectedLearnerDiagnostic(learner)}
+                                                                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold text-[var(--color-primary)] hover:underline cursor-pointer"
+                                                                        >
+                                                                            +{learner.topics.length - 3} more
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+
+                                                            {/* Recommended Practice Set */}
+                                                            <td className="py-4 px-4 align-top">
+                                                                {intervention ? (
+                                                                    <div className="space-y-0.5">
+                                                                        <p className="font-bold text-xs text-[var(--color-text)]">
+                                                                            {intervention.topic_name}
+                                                                        </p>
+                                                                        <p className="text-[11px] text-[var(--color-muted)]">
+                                                                            {intervention.question_count || 10} practice questions
+                                                                        </p>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-xs text-[var(--color-muted)]">None required</span>
+                                                                )}
+                                                            </td>
+
+                                                            {/* Actions Dropdown */}
+                                                            <td className="py-4 px-4 align-top text-right">
+                                                                <div className="relative inline-block text-left">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setOpenDropdownLearnerId(openDropdownLearnerId === learner.id ? null : learner.id);
+                                                                        }}
+                                                                        className={`p-2 rounded-xl border transition-all cursor-pointer inline-flex items-center gap-1.5 ${
+                                                                            openDropdownLearnerId === learner.id
+                                                                                ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-sm'
+                                                                                : 'bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text)] border-[var(--color-border)] hover:border-[var(--color-primary-30)] shadow-2xs'
+                                                                        }`}
+                                                                        title="Learner Actions"
+                                                                    >
+                                                                        {/* 3x3 Grid Icon */}
+                                                                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                                                            <rect x="4" y="4" width="4" height="4" rx="1" />
+                                                                            <rect x="10" y="4" width="4" height="4" rx="1" />
+                                                                            <rect x="16" y="4" width="4" height="4" rx="1" />
+                                                                            <rect x="4" y="10" width="4" height="4" rx="1" />
+                                                                            <rect x="10" y="10" width="4" height="4" rx="1" />
+                                                                            <rect x="16" y="10" width="4" height="4" rx="1" />
+                                                                            <rect x="4" y="16" width="4" height="4" rx="1" />
+                                                                            <rect x="10" y="16" width="4" height="4" rx="1" />
+                                                                            <rect x="16" y="16" width="4" height="4" rx="1" />
+                                                                        </svg>
+                                                                        <svg
+                                                                            className={`w-3 h-3 transition-transform duration-200 ${
+                                                                                openDropdownLearnerId === learner.id ? 'rotate-180' : ''
+                                                                            }`}
+                                                                            fill="none"
+                                                                            viewBox="0 0 24 24"
+                                                                            stroke="currentColor"
+                                                                        >
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                                                        </svg>
+                                                                    </button>
+
+                                                                    {openDropdownLearnerId === learner.id && (
+                                                                        <>
+                                                                            {/* Backdrop to dismiss on outside click */}
+                                                                            <div
+                                                                                className="fixed inset-0 z-40"
+                                                                                onClick={() => setOpenDropdownLearnerId(null)}
+                                                                            />
+
+                                                                            {/* Dropdown Menu */}
+                                                                            <div
+                                                                                className="absolute right-0 mt-2 w-64 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-xl z-50 py-1.5 overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-left"
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                            >
+                                                                                <div className="px-3.5 py-2.5 border-b border-[var(--color-border)] bg-[var(--color-background)]/50">
+                                                                                    <p className="text-xs font-bold text-[var(--color-text)] truncate">{learner.name}</p>
+                                                                                    <p className="text-[10px] text-[var(--color-muted)] truncate">{learner.subject_name} • {learner.avg_mastery}% Mastery</p>
+                                                                                </div>
+
+                                                                                <div className="p-1 space-y-0.5">
+                                                                                    {/* Action 1: View Diagnostic */}
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            setSelectedLearnerDiagnostic(learner);
+                                                                                            setOpenDropdownLearnerId(null);
+                                                                                        }}
+                                                                                        className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] flex items-center gap-2.5 transition-colors cursor-pointer group/item"
+                                                                                    >
+                                                                                        <span className="p-1.5 rounded-lg bg-[var(--color-primary-10)] text-[var(--color-primary)] group-hover/item:bg-[var(--color-primary)] group-hover/item:text-white transition-colors shrink-0">
+                                                                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                                            </svg>
+                                                                                        </span>
+                                                                                        <div>
+                                                                                            <p className="font-bold text-xs text-[var(--color-text)]">View Details</p>
+                                                                                            <p className="text-[10px] text-[var(--color-muted)]">Inspect weak topics & mastery</p>
+                                                                                        </div>
+                                                                                    </button>
+
+                                                                                    {/* Action 2: Send Practice */}
+                                                                                    {intervention && (
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            disabled={isLoading || isAssigned}
+                                                                                            onClick={() => {
+                                                                                                handleAssignIntervention(learner.id, intervention.topic_id, intervention.question_count || 10);
+                                                                                                if (!isLoading) setOpenDropdownLearnerId(null);
+                                                                                            }}
+                                                                                            className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-colors cursor-pointer group/item ${
+                                                                                                isAssigned
+                                                                                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 cursor-default'
+                                                                                                    : 'text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
+                                                                                            }`}
+                                                                                        >
+                                                                                            <span className={`p-1.5 rounded-lg shrink-0 transition-colors ${
+                                                                                                isAssigned
+                                                                                                    ? 'bg-emerald-500/20 text-emerald-500'
+                                                                                                    : 'bg-amber-500/10 text-amber-500 group-hover/item:bg-amber-500 group-hover/item:text-white'
+                                                                                            }`}>
+                                                                                                {isLoading ? (
+                                                                                                    <div className="w-3.5 h-3.5 animate-spin rounded-full border-2 border-amber-500 border-r-transparent" />
+                                                                                                ) : isAssigned ? (
+                                                                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                                                                                    </svg>
+                                                                                                ) : (
+                                                                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                                                                                    </svg>
+                                                                                                )}
+                                                                                            </span>
+                                                                                            <div>
+                                                                                                <p className="font-bold text-xs">
+                                                                                                    {isLoading ? 'Sending Practice...' : isAssigned ? 'Practice Assigned' : 'Send Practice'}
+                                                                                                </p>
+                                                                                                <p className="text-[10px] text-[var(--color-muted)] truncate max-w-[150px]">
+                                                                                                    {intervention.topic_name} ({intervention.question_count || 10} Qs)
+                                                                                                </p>
+                                                                                            </div>
+                                                                                        </button>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -1058,140 +1300,6 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
 }
 
 // ── Sub-components ──
-
-/**
- * Priority 5: Intelligent Intervention Card
- * Renders the exact specification:
- * Student (Bola) -> Subject (Physics) -> Topic Mastery (Mechanics 42%, Waves 61%, Electricity 83%)
- * -> Recommended Practice Set (Mechanics, "Send 10 targeted questions", [Send Practice Questions])
- */
-function IntelligentInterventionCard({
-    learner,
-    assigningMap,
-    onAssign,
-    onViewDetail,
-}: {
-    learner: LearnerDiagnostic;
-    assigningMap: Record<string, 'loading' | 'assigned'>;
-    onAssign: (learnerId: string, topicId: number, count: number) => void;
-    onViewDetail: () => void;
-}) {
-    const intervention = learner.recommended_intervention;
-    const assignKey = intervention ? `${learner.id}-${intervention.topic_id}` : '';
-    const isAssigned = assigningMap[assignKey] === 'assigned';
-    const isLoading = assigningMap[assignKey] === 'loading';
-
-    return (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-5 shadow-lg flex flex-col justify-between hover:border-[var(--color-primary-light)]/40 transition-all group">
-            {/* Header: Student Name & Level */}
-            <div>
-                <div className="flex items-start justify-between gap-2 mb-1">
-                    <div>
-                        <h4 className="text-base font-black text-[var(--color-text)] group-hover:text-[var(--color-primary-light)] transition-colors">
-                            {learner.name}
-                        </h4>
-                        <p className="text-xs text-[var(--color-muted)] font-medium">
-                            Lv.{learner.level} • {learner.tier}
-                        </p>
-                    </div>
-                    <span className="text-xs font-black px-2.5 py-1 rounded-xl bg-[var(--color-primary)]/10 text-[var(--color-primary-light)] border border-[var(--color-primary)]/20">
-                        {learner.avg_mastery}% Avg
-                    </span>
-                </div>
-
-                {/* Subject Header */}
-                <div className="mt-2.5 mb-3 flex items-center justify-between">
-                    <span className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-text)]">
-                        {learner.subject_name}
-                    </span>
-                    <button
-                        onClick={onViewDetail}
-                        className="text-[11px] text-[var(--color-primary)] hover:underline font-semibold cursor-pointer"
-                    >
-                        View All Topics
-                    </button>
-                </div>
-
-                {/* Topic Mastery List */}
-                <div className="bg-[var(--color-background)] rounded-2xl p-3 border border-[var(--color-border)] mb-4">
-                    <div className="flex items-center justify-between text-[11px] font-bold text-[var(--color-muted)] uppercase tracking-wider pb-1.5 border-b border-[var(--color-border)] mb-2">
-                        <span>Topic</span>
-                        <span>Mastery</span>
-                    </div>
-                    <div className="space-y-2">
-                        {learner.topics.slice(0, 4).map((topic) => (
-                            <div key={topic.id} className="space-y-1">
-                                <div className="flex items-center justify-between text-xs font-medium">
-                                    <span className="text-[var(--color-text)] flex items-center gap-1.5 truncate">
-                                        <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${topic.mastery_score >= 75 ? 'bg-emerald-500' : topic.mastery_score >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`} />
-                                        <span className="truncate">{topic.name}</span>
-                                    </span>
-                                    <span className="font-bold text-[var(--color-text)] shrink-0">
-                                        {topic.mastery_score}%
-                                    </span>
-                                </div>
-                                <div className="w-full bg-[var(--color-surface)] h-1 rounded-full overflow-hidden">
-                                    <div
-                                        className={`h-full rounded-full transition-all ${
-                                            topic.mastery_score >= 75
-                                                ? 'bg-emerald-500'
-                                                : topic.mastery_score >= 50
-                                                ? 'bg-amber-500'
-                                                : 'bg-rose-500'
-                                        }`}
-                                        style={{ width: `${topic.mastery_score}%` }}
-                                    />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-
-            {/* Recommended Intervention Section */}
-            {intervention && (
-                <div className="bg-[var(--color-background)] border border-[var(--color-border)] rounded-2xl p-4 mt-auto">
-                    <div className="flex items-center gap-1.5 mb-1 text-[11px] font-black uppercase tracking-wider text-[var(--color-primary)]">
-                        <span>Recommended Practice Set</span>
-                    </div>
-
-                    <p className="text-sm font-black text-[var(--color-text)] mb-0.5">
-                        {intervention.topic_name}
-                    </p>
-
-                    <p className="text-xs text-[var(--color-muted)] mb-3">
-                        {intervention.action_label || `Send ${intervention.question_count} targeted questions directly to student deck.`}
-                    </p>
-
-                    <button
-                        disabled={isLoading || isAssigned}
-                        onClick={() => onAssign(learner.id, intervention.topic_id, intervention.question_count || 10)}
-                        className={`w-full py-2.5 px-4 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md ${
-                            isAssigned
-                                ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 cursor-default'
-                                : 'bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white shadow-[var(--color-primary)]/20 active:scale-[0.98]'
-                        }`}
-                    >
-                        {isLoading ? (
-                            <>
-                                <div className="w-3.5 h-3.5 animate-spin rounded-full border-2 border-white border-r-transparent" />
-                                <span>Sending Practice...</span>
-                            </>
-                        ) : isAssigned ? (
-                            <>
-                                <span>Practice Sent ({intervention.question_count} Questions)</span>
-                            </>
-                        ) : (
-                            <>
-                                <span>Send Practice Questions</span>
-                            </>
-                        )}
-                    </button>
-                </div>
-            )}
-        </div>
-    );
-}
 
 function StatCard({
     label,

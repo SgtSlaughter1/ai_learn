@@ -181,10 +181,10 @@ export default function Index() {
             }
         >
             <Head>
-                <title>School Curriculum & Subjects | AILEARN</title>
-                <meta name="description" content="Explore secondary school curriculum subjects on AILEARN. Access syllabus topics, interactive quizzes, and offline study materials." />
-                <meta property="og:title" content="School Curriculum & Subjects | AILEARN" />
-                <meta property="og:description" content="Explore secondary school curriculum subjects on AILEARN. Access syllabus topics, interactive quizzes, and offline study materials." />
+                <title>School Curriculum & Subjects | PassPoint</title>
+                <meta name="description" content="Explore secondary school curriculum subjects on PassPoint. Access syllabus topics, interactive quizzes, and offline study materials." />
+                <meta property="og:title" content="School Curriculum & Subjects | PassPoint" />
+                <meta property="og:description" content="Explore secondary school curriculum subjects on PassPoint. Access syllabus topics, interactive quizzes, and offline study materials." />
                 <script type="application/ld+json">
                     {JSON.stringify({
                         "@context": "https://schema.org",
@@ -194,13 +194,13 @@ export default function Index() {
                                 "@type": "ListItem",
                                 "position": 1,
                                 "name": "Home",
-                                "item": "https://ailearn.app/"
+                                "item": "https://passpoint.app/"
                             },
                             {
                                 "@type": "ListItem",
                                 "position": 2,
                                 "name": "Curriculum",
-                                "item": "https://ailearn.app/subjects"
+                                "item": "https://passpoint.app/subjects"
                             }
                         ]
                     })}

@@ -72,7 +72,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                     href="/dashboard"
                     className="text-xl font-bold text-[var(--color-primary)] tracking-tight"
                 >
-                    AILEARN
+                    PassPoint
                 </Link>
                 <div className="flex items-center gap-3">
                     <div className="bg-[var(--color-background)] border border-[var(--color-border)] px-2.5 py-1 rounded-full scale-90">
@@ -113,7 +113,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                 <div>
                     {/* Mobile Close Button & Header */}
                     <div className="md:hidden flex items-center justify-between p-5 border-b border-white/10 bg-black/20">
-                        <span className="text-white font-bold text-xl tracking-tight">AILEARN</span>
+                        <span className="text-white font-bold text-xl tracking-tight">PassPoint</span>
                         <button
                             onClick={() => setIsMobileMenuOpen(false)}
                             className="p-1.5 text-white/70 hover:text-white rounded-lg hover:bg-white/10 focus:outline-none cursor-pointer"
@@ -147,7 +147,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                             href="/dashboard"
                             className="text-2xl font-bold text-white tracking-tight"
                         >
-                            AILEARN
+                            PassPoint
                         </Link>
                         <p className="text-xs text-[var(--color-primary-light)] mt-0.5 font-medium">Offline-First Learning</p>
                         <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center justify-between">

@@ -120,10 +120,10 @@ export default function Result({ attemptId }: Props) {
         );
     };
 
-    // AILEARN Tutor Explanation Generator (4-Part Diagnostic Offline Fallback)
+    // PassPoint Tutor Explanation Generator (4-Part Diagnostic Offline Fallback)
     const generateOfflineExplanation = async (
         questionId: number,
-        questionText: string,
+        _questionText: string,
         selectedOptionId: number | null,
         answerObj?: ResultAnswer
     ): Promise<string> => {
@@ -168,42 +168,45 @@ export default function Result({ attemptId }: Props) {
 
             const selectedOption = selectedOptionId ? options.find((o) => o.id === selectedOptionId) : null;
             const correctOption = options.find((o) => o.is_correct);
+            const isCorrect = selectedOption && selectedOption.is_correct;
 
-            let out = `### 1. What You Chose\n\n`;
-            if (selectedOption) {
-                if (selectedOption.is_correct) {
-                    out += `You chose **"${selectedOption.option_text}"**, which is the **correct answer**! Great work applying curriculum concepts in **${topicName || 'this topic'}**.\n\n`;
-                } else {
-                    out += `You chose **"${selectedOption.option_text}"**. This option is a common trap when looking at initial numbers without applying the complete step formulas.\n\n`;
+            if (isCorrect) {
+                let out = `### 1. Why Your Answer is Correct\n\n`;
+                out += `You chose **"${selectedOption.option_text}"**, which is the **correct answer**! Great work applying curriculum concepts in **${topicName || 'this topic'}**.\n\n`;
+                if (cachedExplanation && cachedExplanation.trim().length > 0) {
+                    out += `${cachedExplanation.trim()}\n\n`;
+                } else if (correctOption) {
+                    out += `This answer satisfies the curriculum requirements for **${topicName || 'this subject'}**.\n\n`;
                 }
-            } else {
-                out += `You skipped this question without selecting an option. Let's study the method so you can solve it with confidence.\n\n`;
+                out += `### 2. A Simple Example\n\n`;
+                out += `* **Key Rule:** When solving questions on **${topicName || subjectName || 'this subject'}**, check your units and definitions before finalizing your answer.`;
+                return out;
             }
 
-            out += `### 2. Why It Was Incorrect\n\n`;
-            if (selectedOption && !selectedOption.is_correct) {
-                out += `Option **"${selectedOption.option_text}"** is incorrect because it does not satisfy the rules or formulas tested in **${topicName || 'this problem'}**.\n\n`;
+            let out = `### 1. Why Your Choice Was Incorrect\n\n`;
+            if (selectedOption) {
+                out += `You chose **"${selectedOption.option_text}"**. This choice does not satisfy the rules or formulas tested in **${topicName || 'this problem'}**.\n\n`;
             } else {
-                out += `Distractor options often use reversed signs, partial operations, or common calculation traps.\n\n`;
+                out += `You skipped this question without selecting an option. Let's review how to solve it step by step.\n\n`;
             }
 
-            out += `### 3. What the Correct Reasoning Is\n\n`;
+            out += `### 2. Why the Correct Answer is Right\n\n`;
             if (correctOption) {
                 out += `The correct answer is **"${correctOption.option_text}"**.\n\n`;
             }
             if (cachedExplanation && cachedExplanation.trim().length > 0) {
-                out += `**Step-by-Step Working:**\n${cachedExplanation.trim()}\n\n`;
+                out += `${cachedExplanation.trim()}\n\n`;
             } else if (correctOption) {
-                out += `* The question asks: *"${questionText}"*\n* **"${correctOption.option_text}"** is the correct answer according to curriculum standards.\n\n`;
+                out += `This option is the correct solution according to curriculum standards.\n\n`;
             }
 
-            out += `### 4. A Simple Example\n\n`;
+            out += `### 3. A Simple Example\n\n`;
             out += `* **Key Rule:** When solving questions on **${topicName || subjectName || 'this subject'}**, always write out given variables and standard formulas before calculating.`;
 
             return out;
         } catch (e) {
             console.error('Offline explanation generation error:', e);
-            return `### 1. What You Chose\n\nOption review.\n\n### 2. Why It Was Incorrect\n\nIncorrect calculation.\n\n### 3. What the Correct Reasoning Is\n\nReview curriculum notes for this question.\n\n### 4. A Simple Example\n\nPractice similar questions to master this topic.`;
+            return `### 1. Why the Correct Answer is Right\n\nReview curriculum notes for this question.\n\n### 2. A Simple Example\n\nPractice similar questions to master this topic.`;
         }
     };
 
@@ -352,7 +355,7 @@ export default function Result({ attemptId }: Props) {
     return (
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] p-4 md:p-8 relative overflow-x-hidden">
             <Head>
-                <title>{`${attempt.quiz_title || 'Quiz'} Results | AILEARN`}</title>
+                <title>{`${attempt.quiz_title || 'Quiz'} Results | PassPoint`}</title>
                 <meta name="robots" content="noindex, nofollow" />
             </Head>
 

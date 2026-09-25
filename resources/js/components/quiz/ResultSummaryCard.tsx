@@ -85,7 +85,7 @@ export function ResultSummaryCard({
                 <div className="flex gap-3">
                     <Link
                         href="/dashboard"
-                        className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-text)] hover:text-white px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl hover:border-slate-700 transition-colors cursor-pointer min-h-[38px] flex items-center"
+                        className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-text)] hover:text-white px-4 py-2 bg-[var(--color-surface)] hover:bg-[var(--color-primary)] border border-[var(--color-border)] hover:border-[var(--color-primary)] rounded-xl transition-all cursor-pointer min-h-[38px] flex items-center shadow-2xs"
                     >
                         Go to Dashboard
                     </Link>

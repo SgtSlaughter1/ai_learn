@@ -188,8 +188,8 @@ export default defineConfig({
             },
             manifest: {
                 id: '/',
-                name: 'AILEARN',
-                short_name: 'AILEARN',
+                name: 'PassPoint',
+                short_name: 'PassPoint',
                 description: 'An offline-first adaptive AI learning platform.',
                 theme_color: '#183B2B',
                 background_color: '#F7F4EC',
