@@ -225,22 +225,22 @@ export function InteractiveBookAnimation() {
                 </div>
 
                 {/* Book Base Hardcover Shadow & Shell */}
-                <div className="relative mx-auto rounded-2xl sm:rounded-3xl p-2 sm:p-4 bg-gradient-to-b from-[#143124] to-[#0D2118] border-2 border-[#204936] shadow-2xl">
+                <div className="relative mx-auto rounded-2xl sm:rounded-3xl p-2 sm:p-4 bg-gradient-to-b from-[var(--color-primary)] via-[var(--color-surface)] to-[var(--color-background)] border-2 border-[var(--color-border)] shadow-2xl">
                     {/* Golden Bookmark Ribbon (Visible on desktop, compact on mobile) */}
                     <div className="hidden sm:block absolute top-0 left-1/2 -translate-x-1/2 w-4 h-10 bg-gradient-to-b from-[var(--color-accent)] to-[#B3792A] rounded-b-md shadow-md z-20" />
 
                     {/* Book Pages Spread */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-[#FDFCFA] rounded-xl sm:rounded-2xl border border-[#E2DFD6] overflow-hidden shadow-inner min-h-[360px]">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-[var(--color-surface)] rounded-xl sm:rounded-2xl border border-[var(--color-border)] overflow-hidden shadow-inner min-h-[360px]">
                         {/* ── Left Page: Curriculum & Theory (Visible if desktop OR if mobilePageMode === 'theory') ── */}
                         <div
-                            className={`p-5 sm:p-8 flex-col justify-between border-b md:border-b-0 md:border-r border-[#EBE7DC] relative bg-gradient-to-br from-[#FFFFFF] via-[#FAF8F2] to-[#F5F2E9] ${
+                            className={`p-5 sm:p-8 flex-col justify-between border-b md:border-b-0 md:border-r border-[var(--color-border)] relative bg-[var(--color-surface)] ${
                                 mobilePageMode === 'theory' ? 'flex' : 'hidden md:flex'
                             }`}
                         >
                             {/* Page Header */}
                             <div>
                                 <div className="flex items-center justify-between mb-3 sm:mb-4">
-                                    <span className="px-2.5 py-1 rounded-md bg-[var(--color-primary-10)] text-[var(--color-primary)] font-bold text-[10px] tracking-wider uppercase">
+                                    <span className="px-2.5 py-1 rounded-md bg-[var(--color-primary-10)] text-[var(--color-primary)] font-bold text-[10px] tracking-wider uppercase border border-[var(--color-primary-20)]">
                                         {currentSubject.badge}
                                     </span>
                                     <span className="text-[10px] font-mono text-[var(--color-muted)]">Page 42</span>
@@ -250,11 +250,11 @@ export function InteractiveBookAnimation() {
                                     {currentSubject.leftPageHeading}
                                 </h3>
 
-                                <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xs">
+                                <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] shadow-xs">
                                     <span className="text-[10px] font-bold text-[var(--color-muted)] uppercase tracking-wider block mb-1">
                                         Core Theorem / Formula
                                     </span>
-                                    <div className="text-xs sm:text-sm text-[var(--color-primary)] font-bold bg-[var(--color-background)] px-2 py-1.5 rounded-lg border border-[var(--color-border)]">
+                                    <div className="text-xs sm:text-sm text-[var(--color-primary)] font-bold bg-[var(--color-surface)] px-2 py-1.5 rounded-lg border border-[var(--color-border)]">
                                         <MathDisplay math={currentSubject.formula} />
                                     </div>
                                 </div>
@@ -273,15 +273,15 @@ export function InteractiveBookAnimation() {
                             </div>
 
                             {/* Page Footer / Page Number */}
-                            <div className="pt-4 sm:pt-6 mt-4 border-t border-[#EBE7DC] flex items-center justify-between text-[10px] text-[var(--color-muted)]">
+                            <div className="pt-4 sm:pt-6 mt-4 border-t border-[var(--color-border)] flex items-center justify-between text-[10px] text-[var(--color-muted)]">
                                 <span>AceDrill Standard</span>
-                                <span className="font-serif italic font-semibold">Offline Ready</span>
+                                <span className="font-serif italic font-semibold text-[var(--color-primary)]">Offline Ready</span>
                             </div>
                         </div>
 
                         {/* ── Right Page: Interactive Diagnostic Practice (Visible if desktop OR if mobilePageMode === 'quiz') ── */}
                         <div
-                            className={`p-5 sm:p-8 flex-col justify-between relative bg-gradient-to-bl from-[#FFFFFF] via-[#FAF8F2] to-[#F5F2E9] ${
+                            className={`p-5 sm:p-8 flex-col justify-between relative bg-[var(--color-surface)] ${
                                 mobilePageMode === 'quiz' ? 'flex' : 'hidden md:flex'
                             }`}
                         >
@@ -313,9 +313,9 @@ export function InteractiveBookAnimation() {
                                                 className={`w-full text-left p-2.5 sm:p-3 rounded-xl border transition-all duration-200 cursor-pointer flex items-center justify-between ${
                                                     isSelected
                                                         ? isCorrect
-                                                            ? 'bg-[var(--color-success)]/10 border-[var(--color-success)] text-[var(--color-success)] shadow-xs font-bold'
-                                                            : 'bg-[var(--color-error)]/10 border-[var(--color-error)] text-[var(--color-error)] font-bold'
-                                                        : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text)] hover:border-[var(--color-primary-light)]'
+                                                            ? 'bg-[var(--color-success-10)] border-[var(--color-success)] text-[var(--color-success)] shadow-xs font-bold'
+                                                            : 'bg-[var(--color-error-10)] border-[var(--color-error)] text-[var(--color-error)] font-bold'
+                                                        : 'bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text)] hover:border-[var(--color-primary-light)]'
                                                 }`}
                                             >
                                                 <div className="flex items-center gap-2.5 sm:gap-3">
@@ -336,7 +336,9 @@ export function InteractiveBookAnimation() {
                                                 </div>
 
                                                 {isSelected && (
-                                                    <span className="text-[10px] sm:text-[11px] font-bold shrink-0 ml-2">
+                                                    <span className={`text-[10px] sm:text-[11px] font-bold shrink-0 ml-2 ${
+                                                        isCorrect ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'
+                                                    }`}>
                                                         {isCorrect ? 'Correct' : 'Review'}
                                                     </span>
                                                 )}
@@ -347,14 +349,14 @@ export function InteractiveBookAnimation() {
 
                                 {/* Step-by-Step AI Explanation Card */}
                                 {selectedOption && (
-                                    <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 rounded-xl bg-[var(--color-primary-5)] border border-[var(--color-primary-20)] animate-fadeIn">
+                                    <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 rounded-xl bg-[var(--color-primary-10)] border border-[var(--color-primary-20)] animate-fadeIn">
                                         <div className="flex items-center gap-1.5 text-[10px] font-bold text-[var(--color-primary)] uppercase tracking-wider mb-1">
                                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                             </svg>
                                             Instant Explanation
                                         </div>
-                                        <div className="text-[11px] sm:text-xs text-[var(--color-muted)] leading-relaxed">
+                                        <div className="text-[11px] sm:text-xs text-[var(--color-text)] leading-relaxed">
                                             <FormattedMathText text={currentSubject.sampleQuestion.explanation} />
                                         </div>
                                     </div>
@@ -362,7 +364,7 @@ export function InteractiveBookAnimation() {
                             </div>
 
                             {/* Page Footer */}
-                            <div className="pt-3 sm:pt-4 mt-3 sm:mt-4 border-t border-[#EBE7DC] flex items-center justify-between text-[10px] text-[var(--color-muted)]">
+                            <div className="pt-3 sm:pt-4 mt-3 sm:mt-4 border-t border-[var(--color-border)] flex items-center justify-between text-[10px] text-[var(--color-muted)]">
                                 <span className="font-mono text-[var(--color-primary)] font-bold">+25 XP for Mastery</span>
                                 <span>WAEC & NECO Aligned</span>
                             </div>
