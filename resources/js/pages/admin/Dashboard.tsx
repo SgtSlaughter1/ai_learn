@@ -420,7 +420,7 @@ export default function Dashboard() {
     return (
         <AuthenticatedLayout>
             <Head>
-                <title>{isSuperAdmin ? "Super Admin Command Center | PassPoint" : `${stats?.school?.name || 'School'} Admin Portal | PassPoint`}</title>
+                <title>{isSuperAdmin ? "Super Admin Command Center | AceDrill" : `${stats?.school?.name || 'School'} Admin Portal | AceDrill`}</title>
                 <meta name="robots" content="noindex, nofollow" />
             </Head>
 

@@ -443,7 +443,7 @@ Rules:
         $copilotRole = $isTeacher ? 'AI Teacher Copilot & Academic Advisor' : 'AI School Administrator Copilot & Academic Advisor';
         $userRoleDesc = $isTeacher ? 'teacher / subject educator' : 'academic school administrator';
 
-        $systemInstruction = "You are the PassPoint {$copilotRole}.
+        $systemInstruction = "You are the AceDrill {$copilotRole}.
 You are assisting {$userRoleDesc}: {$user->name} at {$schoolName} ({$schoolCategory} Category, {$locationStr}).
 
 School Data & Academic Context:
@@ -548,7 +548,7 @@ Guidelines:
             ? $learnerSampleQuestions->map(fn($q) => "  - [{$q->topic?->subject?->name} -> {$q->topic?->name}]: {$q->question_text} | Key Concept: {$q->explanation}")->implode("\n")
             : "  - Standard curriculum active.";
 
-        $systemInstruction = "You are the PassPoint Learning Companion, a friendly, encouraging personal study assistant for secondary school students. 
+        $systemInstruction = "You are the AceDrill Learning Companion, a friendly, encouraging personal study assistant for secondary school students. 
 You know the student's name is: {$user->name}.
 Here is their current subject mastery progress:
 {$masterySummary}

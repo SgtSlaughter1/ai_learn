@@ -112,10 +112,10 @@ export default function Index() {
             }
         >
             <Head>
-                <title>General Knowledge & Open Curriculum Library | PassPoint</title>
-                <meta name="description" content="Access open curriculum questions, verified educational answers, and general knowledge concepts on PassPoint." />
-                <meta property="og:title" content="General Knowledge & Open Curriculum Library | PassPoint" />
-                <meta property="og:description" content="Access open curriculum questions, verified educational answers, and general knowledge concepts on PassPoint." />
+                <title>General Knowledge & Open Curriculum Library | AceDrill</title>
+                <meta name="description" content="Access open curriculum questions, verified educational answers, and general knowledge concepts on AceDrill." />
+                <meta property="og:title" content="General Knowledge & Open Curriculum Library | AceDrill" />
+                <meta property="og:description" content="Access open curriculum questions, verified educational answers, and general knowledge concepts on AceDrill." />
             </Head>
 
             <div className="space-y-6">

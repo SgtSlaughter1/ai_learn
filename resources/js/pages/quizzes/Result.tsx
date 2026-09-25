@@ -120,7 +120,7 @@ export default function Result({ attemptId }: Props) {
         );
     };
 
-    // PassPoint Tutor Explanation Generator (4-Part Diagnostic Offline Fallback)
+    // AceDrill Tutor Explanation Generator (4-Part Diagnostic Offline Fallback)
     const generateOfflineExplanation = async (
         questionId: number,
         _questionText: string,
@@ -355,7 +355,7 @@ export default function Result({ attemptId }: Props) {
     return (
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] p-4 md:p-8 relative overflow-x-hidden">
             <Head>
-                <title>{`${attempt.quiz_title || 'Quiz'} Results | PassPoint`}</title>
+                <title>{`${attempt.quiz_title || 'Quiz'} Results | AceDrill`}</title>
                 <meta name="robots" content="noindex, nofollow" />
             </Head>
 

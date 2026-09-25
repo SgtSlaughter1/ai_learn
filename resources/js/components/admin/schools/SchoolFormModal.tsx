@@ -112,7 +112,7 @@ export default function SchoolFormModal({
                                 required
                                 value={form.name}
                                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                placeholder="e.g. PassPoint Academy"
+                                placeholder="e.g. AceDrill Academy"
                                 className="w-full px-3.5 py-2.5 text-sm bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl focus:outline-none focus:border-[var(--color-primary)] transition-colors"
                             />
                         </div>

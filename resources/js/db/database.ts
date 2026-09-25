@@ -164,7 +164,7 @@ export class OfflineDB extends Dexie {
     adminTeachers!: Table<TeacherItem, string>;
 
     constructor() {
-        super('PassPointDatabase');
+        super('AceDrillDatabase');
 
         this.version(4).stores({
             subjects: 'id, school_id, slug, status, cached_at, _pendingSync',

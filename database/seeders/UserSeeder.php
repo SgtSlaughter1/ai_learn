@@ -26,7 +26,7 @@ class UserSeeder extends Seeder
             ],
             [
                 'email' => 'schooladmin@example.com',
-                'name' => 'PassPoint School Admin',
+                'name' => 'AceDrill School Admin',
                 'password' => Hash::make('password'),
                 'role' => UserRole::SCHOOL_ADMIN,
                 'email_verified_at' => now(),

@@ -1,6 +1,6 @@
-# PassPoint
+# AceDrill
 
-> PassPoint is an offline-first, adaptive AI learning platform engineered for secondary education. It enables students to study curriculum subjects, take adaptive diagnostic assessments, practice active recall flashcards, and interact with an offline AI study companion without requiring constant internet access.
+> AceDrill is an offline-first, adaptive AI learning platform engineered for secondary education. It enables students to study curriculum subjects, take adaptive diagnostic assessments, practice active recall flashcards, and interact with an offline AI study companion without requiring constant internet access.
 
 ## Core Capabilities
 - **100% Offline Learning**: Full local client-side operation powered by Progressive Web App (PWA) service workers, IndexedDB (Dexie.js), and offline heuristic AI tutoring.
@@ -11,10 +11,10 @@
 - **Curriculum Alignment**: Built to support Senior and Junior Secondary curricula (WAEC, NECO, and NERDC standards) across STEM, Humanities, and Commercial subjects.
 
 ## Key Modules & URLs
-- [Home & Overview](https://passpoint.app/): Platform features, curriculum summary, and offline access guide.
-- [School Curriculum](https://passpoint.app/subjects): Complete syllabus directory across Mathematics, Physics, Chemistry, Biology, English Language, Economics, and Financial Accounting.
-- [General Knowledge Library](https://passpoint.app/general-knowledge): Open curriculum concepts, verified Q&A, and study guides.
-- [Student & Faculty Portal](https://passpoint.app/login): Unified access for learners, teachers, and school administrators.
+- [Home & Overview](https://acedrill.app/): Platform features, curriculum summary, and offline access guide.
+- [School Curriculum](https://acedrill.app/subjects): Complete syllabus directory across Mathematics, Physics, Chemistry, Biology, English Language, Economics, and Financial Accounting.
+- [General Knowledge Library](https://acedrill.app/general-knowledge): Open curriculum concepts, verified Q&A, and study guides.
+- [Student & Faculty Portal](https://acedrill.app/login): Unified access for learners, teachers, and school administrators.
 
 ## Technical Architecture
 - **Front-End**: React 19, TypeScript, Inertia.js, Tailwind CSS v4, KaTeX.

@@ -111,8 +111,8 @@ $serveManifest = function () {
 
     // Fallback: Return a complete, valid PWA manifest instead of an empty `{}`
     $fallbackManifest = [
-        'name' => 'PassPoint',
-        'short_name' => 'PassPoint',
+        'name' => 'AceDrill',
+        'short_name' => 'AceDrill',
         'start_url' => '/',
         'display' => 'standalone',
         'background_color' => '#F7F4EC',

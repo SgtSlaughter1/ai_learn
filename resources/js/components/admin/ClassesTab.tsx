@@ -161,6 +161,39 @@ export default function ClassesTab({ classes, schools, loading, onRefresh, showT
         }
     };
 
+    const handleCreateNewLearnerInClass = async (learnerData: { name: string; email: string; password?: string; student_id?: string }) => {
+        if (!selectedClassForRoster) return;
+        setEnrollingLearner(true);
+
+        const payload = {
+            name: learnerData.name,
+            email: learnerData.email,
+            password: learnerData.password || 'password123',
+            school_id: selectedClassForRoster.school_id,
+            grade_level: selectedClassForRoster.grade_level,
+            class_id: selectedClassForRoster.id,
+            student_id: learnerData.student_id || null,
+        };
+
+        const res = await executeAdminAction({
+            table: 'adminLearners',
+            action: 'insert',
+            recordId: `temp_lrn_${Date.now()}`,
+            endpoint: '/api/v1/admin/learners',
+            method: 'POST',
+            payload,
+        });
+
+        if (res.success) {
+            showToast('New learner registered and added to class roster!', 'success');
+            openClassRoster(selectedClassForRoster);
+            onRefresh();
+        } else {
+            showToast(res.error || 'Failed to create learner', 'error');
+        }
+        setEnrollingLearner(false);
+    };
+
     const handleRemoveLearnerFromClass = async (learnerId: string) => {
         if (!selectedClassForRoster) return;
         if (!confirm('Remove this learner from the class?')) return;
@@ -272,6 +305,7 @@ export default function ClassesTab({ classes, schools, loading, onRefresh, showT
                 enrollingLearner={enrollingLearner}
                 onClose={() => setIsRosterModalOpen(false)}
                 onEnrollLearner={handleEnrollLearnerInClass}
+                onCreateLearner={handleCreateNewLearnerInClass}
                 onRemoveLearner={handleRemoveLearnerFromClass}
             />
         </div>

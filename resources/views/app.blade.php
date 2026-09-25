@@ -7,32 +7,49 @@
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-        <meta name="apple-mobile-web-app-title" content="PassPoint">
-        <meta name="description" content="PassPoint is an offline-first adaptive AI learning platform. Study curriculum subjects, solve interactive practice problems with step-by-step explanations, and master topics without internet access.">
+        <meta name="apple-mobile-web-app-title" content="AceDrill">
+        <meta name="description" content="AceDrill is an offline-first adaptive AI learning platform. Study curriculum subjects, solve interactive practice problems with step-by-step explanations, and master topics without internet access.">
         <meta name="keywords" content="offline learning, AI tutor, secondary education, adaptive quiz, WAEC, NECO, curriculum, study companion, offline study app">
-        <meta name="author" content="PassPoint Platform">
+        <meta name="author" content="AceDrill Platform">
         <meta name="robots" content="index, follow">
 
-        <title inertia>{{ config('app.name', 'PassPoint') }}</title>
+        <title inertia>{{ config('app.name', 'AceDrill') }}</title>
+
+        <!-- Theme Initialization (Anti-FOUC) -->
+        <script>
+            (function() {
+                try {
+                    var theme = localStorage.getItem('theme');
+                    var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    if (theme === 'dark' || (!theme && prefersDark)) {
+                        document.documentElement.classList.add('dark');
+                        document.documentElement.setAttribute('data-theme', 'dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                        document.documentElement.setAttribute('data-theme', 'light');
+                    }
+                } catch (e) {}
+            })();
+        </script>
 
         <!-- Canonical & Base Metadata -->
         <link rel="canonical" href="{{ url()->current() }}">
 
         <!-- Open Graph / Facebook -->
         <meta property="og:type" content="website">
-        <meta property="og:site_name" content="PassPoint">
+        <meta property="og:site_name" content="AceDrill">
         <meta property="og:url" content="{{ url()->current() }}">
-        <meta property="og:title" content="PassPoint — Offline-First Adaptive AI Learning Platform">
+        <meta property="og:title" content="AceDrill — Offline-First Adaptive AI Learning Platform">
         <meta property="og:description" content="Master secondary school subjects offline with adaptive quizzes, smart flashcards, and an intelligent offline AI study companion.">
         <meta property="og:image" content="{{ asset('images/screenshot-desktop.png') }}">
         <meta property="og:image:width" content="1280">
         <meta property="og:image:height" content="720">
-        <meta property="og:image:alt" content="PassPoint Adaptive Learning Dashboard">
+        <meta property="og:image:alt" content="AceDrill Adaptive Learning Dashboard">
         <meta property="og:locale" content="en_US">
 
         <!-- Twitter / X Cards -->
         <meta name="twitter:card" content="summary_large_image">
-        <meta name="twitter:title" content="PassPoint — Offline-First Adaptive AI Learning Platform">
+        <meta name="twitter:title" content="AceDrill — Offline-First Adaptive AI Learning Platform">
         <meta name="twitter:description" content="Master secondary school subjects offline with adaptive quizzes, smart flashcards, and an intelligent offline AI study companion.">
         <meta name="twitter:image" content="{{ asset('images/screenshot-desktop.png') }}">
 
@@ -44,17 +61,17 @@
                 {
                     "@@type": "EducationalOrganization",
                     "@@id": "{{ url('/') }}/#organization",
-                    "name": "PassPoint",
+                    "name": "AceDrill",
                     "url": "{{ url('/') }}",
                     "logo": "{{ asset('images/icon-512x512.png') }}",
-                    "description": "PassPoint is an offline-first adaptive learning platform empowering secondary school students with personalized AI tutoring and curriculum mastery.",
+                    "description": "AceDrill is an offline-first adaptive learning platform empowering secondary school students with personalized AI tutoring and curriculum mastery.",
                     "inLanguage": "en"
                 },
                 {
                     "@@type": "WebSite",
                     "@@id": "{{ url('/') }}/#website",
                     "url": "{{ url('/') }}",
-                    "name": "PassPoint",
+                    "name": "AceDrill",
                     "publisher": {
                         "@@id": "{{ url('/') }}/#organization"
                     },
@@ -67,7 +84,7 @@
                 {
                     "@@type": "WebApplication",
                     "@@id": "{{ url('/') }}/#webapp",
-                    "name": "PassPoint Web App",
+                    "name": "AceDrill Web App",
                     "url": "{{ url('/') }}",
                     "applicationCategory": "EducationalApplication",
                     "operatingSystem": "All modern browsers (Chrome, Safari, Edge, Firefox), Android, iOS, Windows, macOS",

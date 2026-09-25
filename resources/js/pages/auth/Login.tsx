@@ -1,6 +1,7 @@
 import { Head, Link, useForm } from '@inertiajs/react';
 import { useState, FormEvent } from 'react';
 import { Eye, EyeOff, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import ThemeToggle from '@/components/ui/ThemeToggle';
 
 interface LoginProps {
     status?: string;
@@ -29,8 +30,8 @@ export default function Login({ status }: LoginProps) {
             <div className="absolute bottom-1/4 right-1/4 w-72 sm:w-96 h-72 sm:h-96 bg-[var(--color-accent)]/5 rounded-full blur-3xl -z-10 pointer-events-none" />
 
             <Head>
-                <title>Sign In | PassPoint Portal</title>
-                <meta name="description" content="Sign in to your PassPoint account to access your offline-first secondary curriculum, quizzes, and personalized AI tutor." />
+                <title>Sign In | AceDrill Portal</title>
+                <meta name="description" content="Sign in to your AceDrill account to access your offline-first secondary curriculum, quizzes, and personalized AI tutor." />
             </Head>
 
             <div className="w-full max-w-md space-y-6 sm:space-y-8">
@@ -43,10 +44,7 @@ export default function Login({ status }: LoginProps) {
                         <ArrowLeft className="w-4 h-4" />
                         <span>Back to Home</span>
                     </Link>
-                    {/* <span className="text-[11px] font-bold text-[var(--color-success)] bg-[var(--color-success)]/10 border border-[var(--color-success)]/20 px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-success)] animate-pulse" />
-                        Offline Ready
-                    </span> */}
+                    <ThemeToggle />
                 </div>
 
                 {/* Brand Header */}

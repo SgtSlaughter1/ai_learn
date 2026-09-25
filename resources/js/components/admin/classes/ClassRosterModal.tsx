@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { ClassItem, ClassLearner } from '@/types/admin';
 
 interface ClassRosterModalProps {
@@ -11,6 +11,7 @@ interface ClassRosterModalProps {
     enrollingLearner: boolean;
     onClose: () => void;
     onEnrollLearner: (e: React.FormEvent) => void;
+    onCreateLearner?: (learnerData: { name: string; email: string; password?: string; student_id?: string }) => void;
     onRemoveLearner: (learnerId: string) => void;
 }
 
@@ -24,9 +25,26 @@ export default function ClassRosterModal({
     enrollingLearner,
     onClose,
     onEnrollLearner,
+    onCreateLearner,
     onRemoveLearner,
 }: ClassRosterModalProps) {
+    const [actionTab, setActionTab] = useState<'enroll' | 'create'>('enroll');
+    const [newLearner, setNewLearner] = useState({
+        name: '',
+        email: '',
+        password: '',
+        student_id: '',
+    });
+
     if (!isOpen || !selectedClass) return null;
+
+    const handleCreateSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (onCreateLearner) {
+            onCreateLearner(newLearner);
+            setNewLearner({ name: '', email: '', password: '', student_id: '' });
+        }
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
@@ -52,30 +70,117 @@ export default function ClassRosterModal({
                     </button>
                 </div>
 
-                {/* Quick Enroll Form */}
-                <form
-                    onSubmit={onEnrollLearner}
-                    className="flex items-center gap-3 p-3 rounded-2xl bg-[var(--color-primary-5)] border border-[var(--color-border)]"
-                >
-                    <input
-                        type="email"
-                        required
-                        placeholder="Enter learner's email address to enroll..."
-                        value={enrollLearnerEmail}
-                        onChange={(e) => setEnrollLearnerEmail(e.target.value)}
-                        className="flex-1 px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
-                    />
+                {/* Mode Selector */}
+                <div className="flex bg-[var(--color-background)] p-1 rounded-xl border border-[var(--color-border)] text-xs">
                     <button
-                        type="submit"
-                        disabled={enrollingLearner}
-                        className="px-5 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs font-bold rounded-xl shadow-sm transition-all duration-200 cursor-pointer active:scale-[0.98] whitespace-nowrap flex items-center gap-1.5"
+                        type="button"
+                        onClick={() => setActionTab('enroll')}
+                        className={`flex-1 py-1.5 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                            actionTab === 'enroll'
+                                ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-xs border border-[var(--color-border)]'
+                                : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                        }`}
                     >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                         </svg>
-                        <span>{enrollingLearner ? 'Enrolling...' : 'Enroll Student'}</span>
+                        <span>Enroll Existing by Email</span>
                     </button>
-                </form>
+                    {onCreateLearner && (
+                        <button
+                            type="button"
+                            onClick={() => setActionTab('create')}
+                            className={`flex-1 py-1.5 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                actionTab === 'create'
+                                    ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-xs border border-[var(--color-border)]'
+                                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                            }`}
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                            </svg>
+                            <span>Add New Learner Account</span>
+                        </button>
+                    )}
+                </div>
+
+                {/* Form based on Mode */}
+                {actionTab === 'enroll' ? (
+                    <form
+                        onSubmit={onEnrollLearner}
+                        className="flex items-center gap-3 p-3 rounded-2xl bg-[var(--color-primary-5)] border border-[var(--color-border)]"
+                    >
+                        <input
+                            type="email"
+                            required
+                            placeholder="Enter learner's email address to enroll..."
+                            value={enrollLearnerEmail}
+                            onChange={(e) => setEnrollLearnerEmail(e.target.value)}
+                            className="flex-1 px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+                        />
+                        <button
+                            type="submit"
+                            disabled={enrollingLearner}
+                            className="px-5 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs font-bold rounded-xl shadow-sm transition-all duration-200 cursor-pointer active:scale-[0.98] whitespace-nowrap flex items-center gap-1.5"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            <span>{enrollingLearner ? 'Enrolling...' : 'Enroll Student'}</span>
+                        </button>
+                    </form>
+                ) : (
+                    <form
+                        onSubmit={handleCreateSubmit}
+                        className="p-4 rounded-2xl bg-[var(--color-primary-5)] border border-[var(--color-border)] space-y-3"
+                    >
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            <input
+                                type="text"
+                                required
+                                placeholder="Full Name *"
+                                value={newLearner.name}
+                                onChange={(e) => setNewLearner({ ...newLearner, name: e.target.value })}
+                                className="px-3.5 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+                            />
+                            <input
+                                type="email"
+                                required
+                                placeholder="Email Address *"
+                                value={newLearner.email}
+                                onChange={(e) => setNewLearner({ ...newLearner, email: e.target.value })}
+                                className="px-3.5 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+                            />
+                            <input
+                                type="password"
+                                required
+                                placeholder="Initial Password *"
+                                value={newLearner.password}
+                                onChange={(e) => setNewLearner({ ...newLearner, password: e.target.value })}
+                                className="px-3.5 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+                            />
+                            <input
+                                type="text"
+                                placeholder="Student ID (Optional)"
+                                value={newLearner.student_id}
+                                onChange={(e) => setNewLearner({ ...newLearner, student_id: e.target.value })}
+                                className="px-3.5 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+                            />
+                        </div>
+                        <div className="flex justify-end">
+                            <button
+                                type="submit"
+                                disabled={enrollingLearner}
+                                className="px-5 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs font-bold rounded-xl shadow-sm transition-all duration-200 cursor-pointer active:scale-[0.98] flex items-center gap-1.5"
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                                <span>{enrollingLearner ? 'Creating...' : 'Create & Add to Class'}</span>
+                            </button>
+                        </div>
+                    </form>
+                )}
 
                 {/* Roster Table */}
                 <div className="flex-1 overflow-y-auto border border-[var(--color-border)] rounded-2xl">

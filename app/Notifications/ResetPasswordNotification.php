@@ -35,7 +35,7 @@ class ResetPasswordNotification extends Notification
         $expireMinutes = config('auth.passwords.users.expire', 60);
 
         return (new MailMessage)
-            ->subject(Lang::get('Reset Your Password — PassPoint'))
+            ->subject(Lang::get('Reset Your Password — AceDrill'))
             ->view('emails.reset-password', [
                 'name' => $name,
                 'resetUrl' => $resetUrl,

@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\ClassModel;
 use App\Models\ClassMembership;
+use App\Models\LearnerProfile;
 use App\Models\LearnerProgress;
 use App\Models\Question;
 use App\Models\QuizAttempt;
@@ -17,6 +18,7 @@ use App\Models\UserGamification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 
 class TeacherDashboardController extends Controller
@@ -351,6 +353,103 @@ class TeacherDashboardController extends Controller
             ],
             'message' => 'Class created successfully',
         ]);
+    }
+
+    /**
+     * Add a new learner or create a learner account directly from the teacher dashboard.
+     */
+    public function saveLearner(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user || (!$user->isAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
+            abort(403);
+        }
+
+        $teacherProfile = $user->teacherProfile()->first();
+        $school = $teacherProfile?->school ?? ($user->isAdmin() ? $user->primarySchool() : null);
+
+        if (!$school) {
+            return response()->json(['error' => 'No school associated with this account.'], 400);
+        }
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users,email',
+            'password' => 'required|string|min:6',
+            'class_id' => 'required|exists:classes,id',
+            'student_id' => 'nullable|string|max:50',
+            'grade_level' => 'nullable|string|max:50',
+        ]);
+
+        $targetClass = ClassModel::find($validated['class_id']);
+        if (!$targetClass) {
+            return response()->json(['error' => 'Selected class does not exist.'], 422);
+        }
+
+        if ($targetClass->school_id !== $school->id) {
+            return response()->json(['error' => 'The selected class does not belong to your school.'], 422);
+        }
+
+        // Verify teacher teaches this class (unless admin)
+        if (!$user->isAdmin()) {
+            $isAssigned = ClassMembership::where('class_id', $targetClass->id)
+                ->where('user_id', $user->id)
+                ->where('role', 'teacher')
+                ->where('is_active', true)
+                ->exists();
+
+            if (!$isAssigned) {
+                return response()->json(['error' => 'You are not assigned to teach this class.'], 403);
+            }
+        }
+
+        $gradeLevel = $validated['grade_level'] ?? $targetClass->grade_level;
+
+        $createdLearner = DB::transaction(function () use ($validated, $school, $targetClass, $gradeLevel) {
+            $learnerUser = User::create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => Hash::make($validated['password']),
+                'role' => UserRole::LEARNER,
+            ]);
+
+            LearnerProfile::create([
+                'user_id' => $learnerUser->id,
+                'school_id' => $school->id,
+                'grade_level' => $gradeLevel,
+                'student_id' => $validated['student_id'] ?? null,
+                'is_active' => true,
+            ]);
+
+            UserGamification::create([
+                'user_id' => $learnerUser->id,
+                'total_xp' => 0,
+                'current_streak' => 0,
+                'longest_streak' => 0,
+                'level' => 1,
+                'tier' => 'Newcomer',
+            ]);
+
+            ClassMembership::create([
+                'class_id' => $targetClass->id,
+                'user_id' => $learnerUser->id,
+                'role' => 'learner',
+                'is_active' => true,
+            ]);
+
+            return $learnerUser;
+        });
+
+        return response()->json([
+            'message' => 'Learner added and enrolled successfully',
+            'learner' => [
+                'id' => $createdLearner->id,
+                'name' => $createdLearner->name,
+                'email' => $createdLearner->email,
+                'class_id' => $targetClass->id,
+                'class_name' => $targetClass->name,
+            ],
+        ], 201);
     }
 
     /**

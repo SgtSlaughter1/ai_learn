@@ -24,8 +24,8 @@ export default function ForgotPassword({ status }: ForgotPasswordProps) {
             <div className="absolute bottom-1/4 right-1/4 w-72 sm:w-96 h-72 sm:h-96 bg-[var(--color-accent)]/5 rounded-full blur-3xl -z-10 pointer-events-none" />
 
             <Head>
-                <title>Forgot Password | PassPoint</title>
-                <meta name="description" content="Reset your PassPoint password to regain access to your offline-first secondary curriculum." />
+                <title>Forgot Password | AceDrill</title>
+                <meta name="description" content="Reset your AceDrill password to regain access to your offline-first secondary curriculum." />
             </Head>
 
             <div className="w-full max-w-md space-y-6 sm:space-y-8">

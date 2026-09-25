@@ -177,6 +177,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/teacher/interventions/assign', [TeacherDashboardController::class, 'assignIntervention']);
         Route::post('/teacher/classes', [TeacherDashboardController::class, 'createClass']);
         Route::post('/teacher/classes/{classId}/enroll', [TeacherDashboardController::class, 'enrollLearner']);
+        Route::post('/teacher/learners', [TeacherDashboardController::class, 'saveLearner']);
         Route::delete('/teacher/classes/{classId}/learners/{learnerId}', [TeacherDashboardController::class, 'removeLearner']);
 
         // Admin Management: Categories, Schools, School Admins, Teachers, Classes, Learners, Subjects, Topics, Questions

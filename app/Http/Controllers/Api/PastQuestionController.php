@@ -153,7 +153,7 @@ class PastQuestionController extends Controller
         return response()->json([
             'success' => true,
             'is_guest' => $isGuest,
-            'guest_question_limit' => 50,
+            'guest_question_limit' => 20,
             'data' => [
                 'exams' => $exams,
                 'years' => $years,
@@ -161,14 +161,14 @@ class PastQuestionController extends Controller
                 'subjects' => $subjectsData,
                 'total_questions' => $totalQuestions,
                 'is_guest' => $isGuest,
-                'guest_question_limit' => 50,
+                'guest_question_limit' => 20,
             ],
         ]);
     }
 
     /**
      * Get past questions filtered by exam, subject, year, or topic.
-     * Unauthenticated (guest) users are strictly capped to 50 questions max.
+     * Unauthenticated (guest) users are strictly capped to 20 questions max.
      */
     public function getQuestions(Request $request): JsonResponse
     {
@@ -181,9 +181,9 @@ class PastQuestionController extends Controller
         $subjectId = $request->query('subject_id');
         $topicId = $request->query('topic_id');
 
-        // Unauthenticated guests are capped to a maximum of 50 questions alone
+        // Unauthenticated guests are capped to a maximum of 20 questions alone
         $requestedLimit = (int) ($request->query('limit', 40));
-        $limit = $isGuest ? min($requestedLimit, 50) : min($requestedLimit, 100);
+        $limit = $isGuest ? min($requestedLimit, 20) : min($requestedLimit, 100);
         $random = $request->boolean('random', true);
 
         $query = PastQuestion::with([
@@ -276,7 +276,7 @@ class PastQuestionController extends Controller
             'success' => true,
             'count' => $formatted->count(),
             'is_guest' => $isGuest,
-            'guest_limit' => 50,
+            'guest_limit' => 20,
             'data' => $formatted,
         ]);
     }
@@ -324,7 +324,7 @@ class PastQuestionController extends Controller
         $isGuest = !$user;
 
         $totalQuestions = $isGuest
-            ? min((int) ($validated['total_questions'] ?? 40), 50)
+            ? min((int) ($validated['total_questions'] ?? 20), 20)
             : min((int) ($validated['total_questions'] ?? 40), 100);
 
         $simulationId = null;

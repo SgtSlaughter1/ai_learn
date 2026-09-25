@@ -213,7 +213,7 @@ export default function SuperAdminDashboard() {
 
     return (
         <AuthenticatedLayout>
-            <Head title="Super Admin Dashboard | PassPoint" />
+            <Head title="Super Admin Dashboard | AceDrill" />
 
             {/* Toast Notifications */}
             {toast && (

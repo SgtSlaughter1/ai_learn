@@ -26,11 +26,11 @@ class SchoolSeeder extends Seeder
         $learner4 = User::where('email', 'chidi.learner@example.com')->first();
         $learner5 = User::where('email', 'amina.learner@example.com')->first();
 
-        // 2. Create School 1: PassPoint Academy
+        // 2. Create School 1: AceDrill Academy
         $school1 = School::updateOrCreate(
-            ['slug' => 'passpoint-academy'],
+            ['slug' => 'acedrill-academy'],
             [
-                'name' => 'PassPoint Academy',
+                'name' => 'AceDrill Academy',
                 'category' => 'senior',
                 'category_ids' => [3],
                 'admin_user_id' => $schoolAdmin1?->id,
@@ -38,7 +38,7 @@ class SchoolSeeder extends Seeder
                 'city' => 'Lagos',
                 'state' => 'Lagos',
                 'phone' => '+234 800 111 2222',
-                'email' => 'admin@passpoint.app',
+                'email' => 'admin@acedrill.app',
                 'description' => 'A premier senior secondary school focused on STEM, commercial, humanities, and secondary academic excellence.',
                 'is_active' => true,
             ]

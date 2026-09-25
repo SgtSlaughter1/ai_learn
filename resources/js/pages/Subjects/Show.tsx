@@ -179,9 +179,9 @@ export default function Show({ slug }: Props) {
             }
         >
             <Head>
-                <title>{loading ? 'Loading Subject...' : `${subject?.name || 'Subject'} Syllabus & Topics | PassPoint`}</title>
-                <meta name="description" content={subject?.description || `Study ${subject?.name || 'this subject'} syllabus, interactive topics, and quizzes on PassPoint.`} />
-                <meta property="og:title" content={`${subject?.name || 'Subject'} | PassPoint Curriculum`} />
+                <title>{loading ? 'Loading Subject...' : `${subject?.name || 'Subject'} Syllabus & Topics | AceDrill`}</title>
+                <meta name="description" content={subject?.description || `Study ${subject?.name || 'this subject'} syllabus, interactive topics, and quizzes on AceDrill.`} />
+                <meta property="og:title" content={`${subject?.name || 'Subject'} | AceDrill Curriculum`} />
                 <meta property="og:description" content={subject?.description || `Study ${subject?.name || 'this subject'} offline with AI tutoring.`} />
                 {subject && (
                     <script type="application/ld+json">
@@ -192,8 +192,8 @@ export default function Show({ slug }: Props) {
                             "description": subject.description || `Secondary school course covering ${subject.name} curriculum topics.`,
                             "provider": {
                                 "@type": "EducationalOrganization",
-                                "name": "PassPoint",
-                                "url": "https://passpoint.app"
+                                "name": "AceDrill",
+                                "url": "https://acedrill.app"
                             }
                         })}
                     </script>

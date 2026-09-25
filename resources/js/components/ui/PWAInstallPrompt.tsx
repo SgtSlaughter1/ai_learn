@@ -118,7 +118,7 @@ export default function PWAInstallPrompt() {
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
                             <h4 className="font-bold text-sm text-[var(--color-text)]">
-                                Install PassPoint
+                                Install AceDrill
                             </h4>
                             <button
                                 onClick={handleDismiss}

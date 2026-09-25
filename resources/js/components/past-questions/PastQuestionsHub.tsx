@@ -57,7 +57,7 @@ export const PastQuestionsHub: React.FC = () => {
         setErrorToast(null);
 
         try {
-            const questionLimit = isGuest ? '50' : (mode === 'simulation' ? '40' : '50');
+            const questionLimit = isGuest ? '20' : (mode === 'simulation' ? '40' : '50');
             const params = new URLSearchParams({
                 exam_code: selectedExam,
                 mode: mode,
@@ -172,11 +172,11 @@ export const PastQuestionsHub: React.FC = () => {
                                     Guest Preview Mode
                                 </span>
                                 <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[var(--color-accent-20)] text-[var(--color-accent)] border border-[var(--color-accent)]/30">
-                                    50 Free Questions
+                                    20 Free Questions
                                 </span>
                             </div>
                             <p className="text-xs text-[var(--color-text)] font-medium leading-relaxed">
-                                You are exploring a <strong>50-question free trial</strong>. Sign in for unrestricted access to all examination years, full-length timed CBT simulations, and AI diagnostic score tracking.
+                                You are exploring a <strong>20-question free trial</strong>. Sign in for unrestricted access to all examination years, full-length timed CBT simulations, and AI diagnostic score tracking.
                             </p>
                         </div>
                     </div>

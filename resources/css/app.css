@@ -5,12 +5,13 @@
 @source '../../storage/framework/views/*.php';
 
 /* ═══════════════════════════════════════════════════════════
-   DESIGN SYSTEM — PassPoint
+   DESIGN SYSTEM — AceDrill
    Edit these variables to change the entire theme globally.
    ═══════════════════════════════════════════════════════════ */
 
-:root {
-    /* ── Core Palette ── */
+:root,
+html[data-theme="light"] {
+    /* ── Light Palette ── */
     --color-primary:        #183B2B;
     --color-primary-light:  #6F8F7A;
     --color-accent:         #D99A3D;
@@ -22,7 +23,7 @@
     --color-success:        #3F7D58;
     --color-error:          #B94A48;
 
-    /* ── Derived Colors ── */
+    /* ── Derived Colors (Light Mode) ── */
     --color-primary-hover:  #1e4d37;
     --color-surface-hover:  #F5F1E8;
     --color-accent-hover:   #c48a2f;
@@ -39,6 +40,42 @@
     --color-error-10:       rgba(185, 74, 72, 0.10);
     --color-error-20:       rgba(185, 74, 72, 0.20);
     --color-overlay:        rgba(32, 37, 34, 0.5);
+    color-scheme: light;
+}
+
+.dark,
+html[data-theme="dark"],
+[data-theme="dark"] {
+    /* ── Dark Palette (AceDrill Obsidian Emerald) ── */
+    --color-primary:        #2E7D52;
+    --color-primary-light:  #52B788;
+    --color-accent:         #E5A93C;
+    --color-background:     #0D1510;
+    --color-surface:        #16221C;
+    --color-text:           #F1F5F2;
+    --color-muted:          #9AA8A0;
+    --color-border:         #24352B;
+    --color-success:        #10B981;
+    --color-error:          #EF4444;
+
+    /* ── Derived Colors (Dark Mode) ── */
+    --color-primary-hover:  #389363;
+    --color-surface-hover:  #1F2F27;
+    --color-accent-hover:   #F59E0B;
+    --color-primary-5:      rgba(82, 183, 136, 0.08);
+    --color-primary-10:     rgba(82, 183, 136, 0.15);
+    --color-primary-20:     rgba(82, 183, 136, 0.25);
+    --color-accent-5:       rgba(229, 169, 60, 0.08);
+    --color-accent-10:      rgba(229, 169, 60, 0.15);
+    --color-accent-20:      rgba(229, 169, 60, 0.25);
+    --color-success-5:      rgba(16, 185, 129, 0.08);
+    --color-success-10:     rgba(16, 185, 129, 0.15);
+    --color-success-20:     rgba(16, 185, 129, 0.25);
+    --color-error-5:        rgba(239, 68, 68, 0.08);
+    --color-error-10:       rgba(239, 68, 68, 0.15);
+    --color-error-20:       rgba(239, 68, 68, 0.25);
+    --color-overlay:        rgba(0, 0, 0, 0.75);
+    color-scheme: dark;
 }
 
 @theme {

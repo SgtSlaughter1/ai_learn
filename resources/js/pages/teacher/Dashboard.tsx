@@ -9,9 +9,12 @@ import {
     getCachedAdminQuestions,
     cacheAdminTopics,
     getCachedAdminTopics,
+    executeAdminAction,
+    getCachedAdminLearners,
     ADMIN_DATA_CHANGED_EVENT,
 } from '@/services/AdminOfflineService';
 import QuestionBankTab from '@/components/admin/QuestionBankTab';
+import { getGradeLevelsForSchool } from '@/utils/format';
 
 export interface DiagnosticTopic {
     id: number;
@@ -104,10 +107,17 @@ interface Props {
 export default function Dashboard({ school, classes, selectedClass }: Props) {
     const [stats, setStats] = useState<Stats | null>(null);
     const [loading, setLoading] = useState(true);
-    const [showCreateClass, setShowCreateClass] = useState(false);
-    const [showEnrollModal, setShowEnrollModal] = useState(false);
-    const [enrollEmail, setEnrollEmail] = useState('');
-    const [createClassForm, setCreateClassForm] = useState({ name: '', grade_level: '', section: '' });
+    const [showLearnerModal, setShowLearnerModal] = useState(false);
+    const [learnerForm, setLearnerForm] = useState({
+        name: '',
+        email: '',
+        password: '',
+        school_id: school?.id ? String(school.id) : '',
+        class_id: '',
+        student_id: '',
+        grade_level: '',
+    });
+    const [savingLearner, setSavingLearner] = useState(false);
     const [activeTab, setActiveTab] = useState<'overview' | 'learners' | 'top' | 'struggling' | 'questions'>('overview');
 
     // Question Bank States
@@ -246,40 +256,81 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
         router.get('/teacher/dashboard', { class_id: classId }, { preserveState: true, replace: true });
     };
 
-    const handleCreateClass = async (e: React.FormEvent) => {
-        e.preventDefault();
-        try {
-            const res = await fetch('/api/v1/teacher/classes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                body: JSON.stringify(createClassForm),
-            });
-            if (res.ok) {
-                setShowCreateClass(false);
-                setCreateClassForm({ name: '', grade_level: '', section: '' });
-                window.location.reload();
-            }
-        } catch (e) {
-            console.error('Failed to create class', e);
-        }
+    const handleOpenAddLearner = () => {
+        const defaultClassId = selectedClass ? String(selectedClass) : (classes[0]?.id ? String(classes[0].id) : '');
+        const matchedClass = classes.find((c) => String(c.id) === defaultClassId);
+        const defaultGrade = matchedClass?.grade_level || classes[0]?.grade_level || 'SS 1';
+        setLearnerForm({
+            name: '',
+            email: '',
+            password: '',
+            school_id: school?.id ? String(school.id) : '',
+            class_id: defaultClassId,
+            student_id: '',
+            grade_level: defaultGrade,
+        });
+        setShowLearnerModal(true);
     };
 
-    const handleEnrollLearner = async (e: React.FormEvent) => {
+    const handleSaveLearner = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedClass) return;
+        setSavingLearner(true);
+
         try {
-            const res = await fetch(`/api/v1/teacher/classes/${selectedClass}/enroll`, {
+            const tempId = `temp_${Date.now()}`;
+            const selectedClassObj = classes.find((c) => String(c.id) === String(learnerForm.class_id));
+            const optimisticLearner = {
+                id: tempId,
+                name: learnerForm.name,
+                email: learnerForm.email,
+                school_id: school?.id ? Number(school.id) : undefined,
+                class_id: learnerForm.class_id ? Number(learnerForm.class_id) : null,
+                class_name: selectedClassObj?.name,
+                grade_level: learnerForm.grade_level,
+                student_id: learnerForm.student_id,
+                xp: 0,
+                level: 1,
+                streak: 0,
+                mastery_percentage: 0,
+                overall_accuracy: 0,
+                _pendingSync: true,
+            };
+
+            const payload = {
+                ...learnerForm,
+                school_id: school?.id || learnerForm.school_id,
+            };
+
+            const res = await executeAdminAction({
+                table: 'adminLearners',
+                action: 'insert',
+                recordId: tempId,
+                endpoint: '/api/v1/teacher/learners',
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                body: JSON.stringify({ email: enrollEmail }),
+                payload,
+                optimisticRecord: optimisticLearner,
             });
-            if (res.ok) {
-                setShowEnrollModal(false);
-                setEnrollEmail('');
+
+            if (res.success) {
+                setToastMessage({
+                    text: res.offline
+                        ? `Learner ${learnerForm.name} saved offline! Will sync when connection is restored.`
+                        : res.message || `Learner ${learnerForm.name} enrolled successfully!`,
+                    type: 'success',
+                });
+                setShowLearnerModal(false);
                 fetchStats();
+            } else {
+                setToastMessage({
+                    text: res.error || 'Failed to enroll learner',
+                    type: 'error',
+                });
             }
-        } catch (e) {
-            console.error('Failed to enroll learner', e);
+        } catch (err: any) {
+            console.error('Failed to save learner', err);
+            setToastMessage({ text: err?.message || 'A network error occurred', type: 'error' });
+        } finally {
+            setSavingLearner(false);
         }
     };
 
@@ -288,36 +339,37 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
         setAssigningMap((prev) => ({ ...prev, [key]: 'loading' }));
 
         try {
-            const res = await fetch('/api/v1/teacher/interventions/assign', {
+            const res = await executeAdminAction({
+                table: 'adminQuestions',
+                action: 'insert',
+                recordId: `intervention_${learnerId}_${topicId}_${Date.now()}`,
+                endpoint: '/api/v1/teacher/interventions/assign',
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                body: JSON.stringify({
+                payload: {
                     learner_id: learnerId,
                     topic_id: topicId,
                     question_count: questionCount,
-                }),
+                },
             });
 
-            const data = await res.json();
-
-            if (res.ok && data.success) {
+            if (res.success) {
                 setAssigningMap((prev) => ({ ...prev, [key]: 'assigned' }));
                 setToastMessage({
-                    text: data.message || `Sent ${questionCount} targeted practice questions to student's queue!`,
+                    text: res.offline
+                        ? `Practice assigned offline! Will sync when connection is restored.`
+                        : res.message || `Sent ${questionCount} targeted practice questions to student's queue!`,
                     type: 'success',
                 });
             } else {
                 setAssigningMap((prev) => ({ ...prev, [key]: 'loading' }));
                 setToastMessage({
-                    text: data.error || data.message || 'Failed to send practice questions.',
+                    text: res.error || 'Failed to send practice questions.',
                     type: 'error',
                 });
             }
         } catch (err) {
             console.error('Intervention assignment failed', err);
+            setAssigningMap((prev) => ({ ...prev, [key]: 'loading' }));
             setToastMessage({
                 text: 'Network error sending practice questions. Please try again.',
                 type: 'error',
@@ -388,38 +440,14 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
     return (
         <AuthenticatedLayout
             header={
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold text-[var(--color-text)]">Teacher Dashboard</h1>
-                        <p className="text-sm text-[var(--color-muted)] mt-1">{school.name}</p>
-                    </div>
-                    <div className="flex gap-2">
-                        {selectedClass && (
-                            <button
-                                onClick={() => setShowEnrollModal(true)}
-                                className="px-4 py-2 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text)] border border-[var(--color-border)] text-sm font-semibold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
-                            >
-                                <svg className="w-4 h-4 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                                </svg>
-                                <span>Enroll Learner</span>
-                            </button>
-                        )}
-                        <button
-                            onClick={() => setShowCreateClass(true)}
-                            className="px-4 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-semibold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
-                        >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                            </svg>
-                            <span>New Class</span>
-                        </button>
-                    </div>
+                <div>
+                    <h1 className="text-2xl font-bold text-[var(--color-text)]">Teacher Dashboard</h1>
+                    <p className="text-sm text-[var(--color-muted)] mt-1">{school.name}</p>
                 </div>
             }
         >
             <Head>
-                <title>Teacher Dashboard | PassPoint</title>
+                <title>Teacher Dashboard | AceDrill</title>
                 <meta name="robots" content="noindex, nofollow" />
             </Head>
 
@@ -1055,6 +1083,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                 const found = stats.struggling_learners.find((s) => s.id === learnerId);
                                 if (found) setSelectedLearnerDiagnostic(found);
                             }}
+                            onAddLearner={handleOpenAddLearner}
                         />
                     )}
 
@@ -1205,91 +1234,135 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                 </Modal>
             )}
 
-            {/* Create Class Modal */}
-            {showCreateClass && (
-                <Modal onClose={() => setShowCreateClass(false)} title="Create New Class">
-                    <form onSubmit={handleCreateClass} className="space-y-4">
+            {/* Enroll New Learner Modal */}
+            {showLearnerModal && (
+                <Modal onClose={() => setShowLearnerModal(false)} title="Enroll New Learner">
+                    <form onSubmit={handleSaveLearner} className="space-y-4">
                         <div>
-                            <label className="block text-xs font-bold uppercase tracking-wider text-[var(--color-text)] mb-1">Class Name</label>
+                            <label className="block font-bold text-xs text-[var(--color-text)] mb-1">Full Name *</label>
                             <input
                                 type="text"
                                 required
-                                value={createClassForm.name}
-                                onChange={(e) => setCreateClassForm({ ...createClassForm, name: e.target.value })}
-                                placeholder="e.g. JSS3 Blue"
-                                className="w-full px-3.5 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] text-sm focus:outline-none focus:border-[var(--color-primary)]"
+                                value={learnerForm.name}
+                                onChange={(e) => setLearnerForm({ ...learnerForm, name: e.target.value })}
+                                placeholder="e.g. John Doe"
+                                className="w-full px-3.5 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] text-sm focus:outline-none focus:border-[var(--color-primary)] placeholder-[var(--color-muted)]"
                             />
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-[var(--color-text)] mb-1">Grade Level</label>
-                                <input
-                                    type="text"
-                                    value={createClassForm.grade_level}
-                                    onChange={(e) => setCreateClassForm({ ...createClassForm, grade_level: e.target.value })}
-                                    placeholder="e.g. JSS3"
-                                    className="w-full px-3.5 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] text-sm focus:outline-none focus:border-[var(--color-primary)]"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-[var(--color-text)] mb-1">Section</label>
-                                <input
-                                    type="text"
-                                    value={createClassForm.section}
-                                    onChange={(e) => setCreateClassForm({ ...createClassForm, section: e.target.value })}
-                                    placeholder="e.g. Blue"
-                                    className="w-full px-3.5 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] text-sm focus:outline-none focus:border-[var(--color-primary)]"
-                                />
-                            </div>
-                        </div>
-                        <div className="flex gap-3 pt-2">
-                            <button
-                                type="button"
-                                onClick={() => setShowCreateClass(false)}
-                                className="flex-1 px-4 py-2.5 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text)] text-sm font-semibold rounded-xl border border-[var(--color-border)] transition-colors cursor-pointer"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                className="flex-1 px-4 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-semibold rounded-xl transition-all cursor-pointer"
-                            >
-                                Create Class
-                            </button>
-                        </div>
-                    </form>
-                </Modal>
-            )}
 
-            {/* Enroll Learner Modal */}
-            {showEnrollModal && (
-                <Modal onClose={() => setShowEnrollModal(false)} title="Enroll Learner">
-                    <form onSubmit={handleEnrollLearner} className="space-y-4">
                         <div>
-                            <label className="block text-xs font-bold uppercase tracking-wider text-[var(--color-text)] mb-1">Learner Email</label>
+                            <label className="block font-bold text-xs text-[var(--color-text)] mb-1">Email Address *</label>
                             <input
                                 type="email"
                                 required
-                                value={enrollEmail}
-                                onChange={(e) => setEnrollEmail(e.target.value)}
-                                placeholder="learner@email.com"
-                                className="w-full px-3.5 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] text-sm focus:outline-none focus:border-[var(--color-primary)]"
+                                value={learnerForm.email}
+                                onChange={(e) => setLearnerForm({ ...learnerForm, email: e.target.value })}
+                                placeholder="learner@example.com"
+                                className="w-full px-3.5 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] text-sm focus:outline-none focus:border-[var(--color-primary)] placeholder-[var(--color-muted)]"
                             />
-                            <p className="text-xs text-[var(--color-muted)] mt-1">The learner must already have an account</p>
                         </div>
-                        <div className="flex gap-3">
+
+                        <div>
+                            <label className="block font-bold text-xs text-[var(--color-text)] mb-1">Initial Password *</label>
+                            <input
+                                type="password"
+                                required
+                                value={learnerForm.password}
+                                onChange={(e) => setLearnerForm({ ...learnerForm, password: e.target.value })}
+                                placeholder="Minimum 6 characters"
+                                className="w-full px-3.5 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] text-sm focus:outline-none focus:border-[var(--color-primary)] placeholder-[var(--color-muted)]"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block font-bold text-xs text-[var(--color-text)] mb-1">School *</label>
+                            <select
+                                value={learnerForm.school_id || (school?.id ? String(school.id) : '')}
+                                onChange={(e) => setLearnerForm({ ...learnerForm, school_id: e.target.value })}
+                                className="w-full px-3.5 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] text-sm font-semibold focus:outline-none focus:border-[var(--color-primary)] cursor-pointer"
+                            >
+                                <option value={school?.id ? String(school.id) : ''}>{school?.name || 'School'}</option>
+                            </select>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label className="block font-bold text-xs text-[var(--color-text)] mb-1">Grade Level *</label>
+                                <select
+                                    value={learnerForm.grade_level}
+                                    onChange={(e) => {
+                                        const newGrade = e.target.value;
+                                        const currentCls = classes.find((c) => String(c.id) === learnerForm.class_id);
+                                        const classId = currentCls && currentCls.grade_level !== newGrade ? '' : learnerForm.class_id;
+                                        setLearnerForm({ ...learnerForm, grade_level: newGrade, class_id: classId });
+                                    }}
+                                    className="w-full px-3 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] text-sm font-semibold focus:outline-none focus:border-[var(--color-primary)] cursor-pointer"
+                                >
+                                    {(() => {
+                                        const groups = getGradeLevelsForSchool(school);
+                                        return groups.map((grp) => (
+                                            <optgroup key={grp.group} label={grp.group} className="bg-[var(--color-surface)] text-[var(--color-text)]">
+                                                {grp.options.map((opt) => (
+                                                    <option key={opt.value} value={opt.value} className="bg-[var(--color-surface)] text-[var(--color-text)]">
+                                                        {opt.label}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        ));
+                                    })()}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block font-bold text-xs text-[var(--color-text)] mb-1">Assigned Class</label>
+                                <select
+                                    value={learnerForm.class_id}
+                                    onChange={(e) => {
+                                        const selectedClsId = e.target.value;
+                                        const matchedCls = classes.find((c) => String(c.id) === selectedClsId);
+                                        setLearnerForm({
+                                            ...learnerForm,
+                                            class_id: selectedClsId,
+                                            grade_level: matchedCls?.grade_level || learnerForm.grade_level,
+                                        });
+                                    }}
+                                    className="w-full px-3 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] text-sm font-semibold focus:outline-none focus:border-[var(--color-primary)] cursor-pointer"
+                                >
+                                    <option value="" className="bg-[var(--color-surface)] text-[var(--color-text)]">No Class (General)</option>
+                                    {classes.map((cls) => (
+                                        <option key={cls.id} value={cls.id} className="bg-[var(--color-surface)] text-[var(--color-text)]">
+                                            {cls.name} {cls.grade_level ? `(${cls.grade_level})` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block font-bold text-xs text-[var(--color-text)] mb-1">Student ID</label>
+                            <input
+                                type="text"
+                                value={learnerForm.student_id}
+                                onChange={(e) => setLearnerForm({ ...learnerForm, student_id: e.target.value })}
+                                placeholder="e.g. STU-001"
+                                className="w-full px-3.5 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] text-sm focus:outline-none focus:border-[var(--color-primary)] placeholder-[var(--color-muted)]"
+                            />
+                        </div>
+
+                        <div className="pt-3 flex items-center justify-end gap-3 border-t border-[var(--color-border)]">
                             <button
                                 type="button"
-                                onClick={() => setShowEnrollModal(false)}
-                                className="flex-1 px-4 py-2.5 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text)] text-sm font-semibold rounded-xl border border-[var(--color-border)] transition-colors cursor-pointer"
+                                onClick={() => setShowLearnerModal(false)}
+                                className="px-5 py-2.5 text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] rounded-xl transition-colors cursor-pointer"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="submit"
-                                className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl transition-all cursor-pointer"
+                                disabled={savingLearner}
+                                className="px-6 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
                             >
-                                Enroll
+                                {savingLearner ? 'Saving...' : 'Add Learner'}
                             </button>
                         </div>
                     </form>
@@ -1356,11 +1429,13 @@ function ClassLearnersPanel({
     getTierColor,
     getMasteryColor,
     onSelectDiagnostic,
+    onAddLearner,
 }: {
     selectedClass: number | null;
     getTierColor: (level: number) => string;
     getMasteryColor: (score: number) => string;
     onSelectDiagnostic?: (learnerId: string) => void;
+    onAddLearner?: () => void;
 }) {
     const [learners, setLearners] = useState<Learner[]>([]);
     const [className, setClassName] = useState('');
@@ -1384,23 +1459,62 @@ function ClassLearnersPanel({
             setLoading(false);
             return;
         }
-        setLoading(true);
-        fetch(`/api/v1/teacher/classes/${selectedClass}/learners`, {
-            headers: getAuthHeaders(),
-        })
-            .then((r) => r.json())
-            .then((data) => {
-                setLearners(data.learners || []);
-                setClassName(data.class?.name || '');
-            })
-            .catch(() => setLearners([]))
-            .finally(() => setLoading(false));
+
+        const loadLearners = async () => {
+            setLoading(true);
+            try {
+                if (!navigator.onLine) {
+                    const cached = await getCachedAdminLearners();
+                    const matched = cached.filter((l: any) => String(l.class_id) === String(selectedClass));
+                    setLearners(matched as any[]);
+                    return;
+                }
+                const res = await fetch(`/api/v1/teacher/classes/${selectedClass}/learners`, {
+                    headers: getAuthHeaders(),
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setLearners(data.learners || []);
+                    setClassName(data.class?.name || '');
+                } else {
+                    const cached = await getCachedAdminLearners();
+                    const matched = cached.filter((l: any) => String(l.class_id) === String(selectedClass));
+                    setLearners(matched as any[]);
+                }
+            } catch {
+                const cached = await getCachedAdminLearners();
+                const matched = cached.filter((l: any) => String(l.class_id) === String(selectedClass));
+                setLearners(matched as any[]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadLearners();
+
+        const handleDataChange = () => {
+            loadLearners();
+        };
+
+        window.addEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
+        return () => window.removeEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
     }, [selectedClass]);
 
     if (!selectedClass) {
         return (
-            <div className="text-center py-16 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl">
-                <p className="text-[var(--color-muted)]">Select a class to view enrolled learners</p>
+            <div className="text-center py-16 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6">
+                <p className="text-[var(--color-muted)] mb-4">Select a class to view enrolled learners</p>
+                {onAddLearner && (
+                    <button
+                        onClick={onAddLearner}
+                        className="px-4 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer inline-flex items-center gap-1.5"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span>Add Learner</span>
+                    </button>
+                )}
             </div>
         );
     }
@@ -1418,19 +1532,32 @@ function ClassLearnersPanel({
                     </svg>
                     <span>{className} ({learners.length} Enrolled Learners)</span>
                 </h3>
-                <div className="relative">
-                    <input
-                        type="text"
-                        placeholder="Search learners..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="pl-9 pr-4 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] w-56 focus:outline-none focus:border-[var(--color-primary)]"
-                    />
-                    <span className="absolute left-3 top-2.5 text-[var(--color-muted)]">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                    </span>
+                <div className="flex items-center gap-3">
+                    <div className="relative">
+                        <input
+                            type="text"
+                            placeholder="Search learners..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="pl-9 pr-4 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] w-56 focus:outline-none focus:border-[var(--color-primary)]"
+                        />
+                        <span className="absolute left-3 top-2.5 text-[var(--color-muted)]">
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </span>
+                    </div>
+                    {onAddLearner && (
+                        <button
+                            onClick={onAddLearner}
+                            className="px-3.5 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                            </svg>
+                            <span>Add Learner</span>
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -1440,7 +1567,7 @@ function ClassLearnersPanel({
                 </div>
             ) : filtered.length === 0 ? (
                 <p className="text-[var(--color-muted)] text-xs text-center py-8">
-                    {learners.length === 0 ? 'No learners enrolled yet. Click "+ Enroll Learner" to add one.' : 'No learners match your search.'}
+                    {learners.length === 0 ? 'No learners enrolled yet. Click "+ Add Learner" to add one.' : 'No learners match your search.'}
                 </p>
             ) : (
                 <div className="overflow-x-auto">

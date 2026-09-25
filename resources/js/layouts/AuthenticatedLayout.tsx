@@ -1,8 +1,8 @@
 import { Link, usePage } from '@inertiajs/react';
 import React, { useState, useEffect } from 'react';
 import ChatWidget from '@/components/ui/ChatWidget';
-import SyncIndicator from '@/components/ui/SyncIndicator';
 import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt';
+import UserProfileMenu from '@/components/ui/UserProfileMenu';
 import { preloadFullOfflineCurriculum } from '@/services/OfflineService';
 
 interface User {
@@ -67,21 +67,19 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
     return (
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex flex-col relative">
             {/* Mobile Header Bar */}
-            <div className="md:hidden bg-[var(--color-surface)] border-b border-[var(--color-border)] px-5 py-3.5 flex items-center justify-between sticky top-0 z-50">
+            <div className="md:hidden bg-[var(--color-surface)] border-b border-[var(--color-border)] px-4 py-3 flex items-center justify-between sticky top-0 z-50">
                 <Link
                     href="/dashboard"
                     className="text-xl font-bold text-[var(--color-primary)] tracking-tight"
                 >
-                    PassPoint
+                    AceDrill
                 </Link>
-                <div className="flex items-center gap-3">
-                    <div className="bg-[var(--color-background)] border border-[var(--color-border)] px-2.5 py-1 rounded-full scale-90">
-                        <SyncIndicator />
-                    </div>
+                <div className="flex items-center gap-2">
+                    <UserProfileMenu user={auth?.user} />
 
                     <button
                         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                        className="p-2 text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-md focus:outline-none min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
+                        className="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-md focus:outline-none min-h-[38px] min-w-[38px] flex items-center justify-center cursor-pointer"
                         aria-label="Toggle Menu"
                     >
                         <svg className="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
@@ -113,7 +111,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                 <div>
                     {/* Mobile Close Button & Header */}
                     <div className="md:hidden flex items-center justify-between p-5 border-b border-white/10 bg-black/20">
-                        <span className="text-white font-bold text-xl tracking-tight">PassPoint</span>
+                        <span className="text-white font-bold text-xl tracking-tight">AceDrill</span>
                         <button
                             onClick={() => setIsMobileMenuOpen(false)}
                             className="p-1.5 text-white/70 hover:text-white rounded-lg hover:bg-white/10 focus:outline-none cursor-pointer"
@@ -125,34 +123,15 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                         </button>
                     </div>
 
-                    {/* Mobile-Only User Profile Card at Top of Drawer */}
-                    <div className="md:hidden p-5 border-b border-white/10 bg-black/10">
-                        <div className="flex items-center gap-3.5">
-                            <div className="h-11 w-11 rounded-full bg-white/15 text-white border border-white/20 flex items-center justify-center font-bold text-sm uppercase shrink-0">
-                                {auth?.user?.name?.slice(0, 2) || 'U'}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <h3 className="text-sm font-semibold text-white truncate">{auth?.user?.name}</h3>
-                                <p className="text-xs text-[var(--color-primary-light)] truncate">{auth?.user?.email}</p>
-                                <span className="inline-block mt-1 px-2 py-0.5 text-[9px] font-bold tracking-wider uppercase bg-[var(--color-accent)]/20 text-[var(--color-accent)] rounded-full border border-[var(--color-accent)]/30">
-                                    {auth?.user?.role === 'platform_admin' ? 'Platform Admin' : auth?.user?.role === 'school_admin' ? 'School Admin' : auth?.user?.role === 'teacher' ? 'Teacher' : (auth?.user?.role || 'Learner')}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
                     {/* Desktop Sidebar Brand Header */}
                     <div className="px-6 py-6 border-b border-white/10 hidden md:block">
                         <Link
                             href="/dashboard"
                             className="text-2xl font-bold text-white tracking-tight"
                         >
-                            PassPoint
+                            AceDrill
                         </Link>
                         <p className="text-xs text-[var(--color-primary-light)] mt-0.5 font-medium">Offline-First Learning</p>
-                        <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center justify-between">
-                            <SyncIndicator className="text-white" />
-                        </div>
                     </div>
 
                     {/* Navigation Items */}
@@ -164,7 +143,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                                 onClick={() => setIsMobileMenuOpen(false)}
                             >
                                 <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
                                 </svg>
                                 {isSuperAdmin ? 'Super Admin Portal' : 'School Admin Portal'}
                             </Link>
@@ -244,56 +223,42 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                         )}
                     </nav>
                 </div>
-
-                {/* Sidebar Profile Card footer */}
-                <div className="p-6 border-t border-[var(--color-primary-light)]/20">
-                    <div className="flex items-center space-x-3">
-                        <div className="h-10 w-10 rounded-full bg-[var(--color-primary-light)]/20 flex items-center justify-center border border-[var(--color-primary-light)]/30">
-                            <span className="text-white font-bold uppercase">{auth?.user?.name?.slice(0, 2) || 'U'}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <h2 className="text-sm font-semibold text-white truncate">{auth?.user?.name}</h2>
-                            <p className="text-xs text-[var(--color-primary-light)] truncate">{auth?.user?.email}</p>
-                            <div className="flex items-center justify-between mt-1.5">
-                                <span className="inline-block px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase bg-[var(--color-accent)]/20 text-[var(--color-accent)] rounded-full border border-[var(--color-accent)]/30">
-                                    {auth?.user?.role === 'platform_admin' ? 'Platform Admin' : auth?.user?.role === 'school_admin' ? 'School Admin' : auth?.user?.role === 'teacher' ? 'Teacher' : (auth?.user?.role || 'Learner')}
-                                </span>
-                                <Link
-                                    href="/logout"
-                                    method="post"
-                                    as="button"
-                                    className="text-xs text-[var(--color-error)] hover:opacity-80 font-bold transition-colors cursor-pointer focus:outline-none"
-                                >
-                                    Logout
-                                </Link>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </aside>
 
-        {/* Page Shell Main Content */}
-        <div className="flex-1 flex flex-col min-w-0 md:pl-64 min-h-screen">
-            {/* Header Area */}
-            {header && (
-                <header className="bg-[var(--color-surface)] border-b border-[var(--color-border)] px-4 py-4 sm:px-6 sm:py-6 md:px-8">
-                    <div className="max-w-7xl mx-auto">
-                        {header}
+            {/* Page Shell Main Content */}
+            <div className="flex-1 flex flex-col min-w-0 md:pl-64 min-h-screen">
+                {/* Desktop Top Header Bar */}
+                <header className="hidden md:flex bg-[var(--color-surface)] border-b border-[var(--color-border)] px-6 lg:px-8 py-3.5 items-center justify-between sticky top-0 z-30 shadow-xs">
+                    <div className="min-w-0 flex-1">
+                        {header ? (
+                            header
+                        ) : (
+                            <div className="flex items-center gap-2 text-xs font-semibold text-[var(--color-muted)]">
+                                <span>AceDrill</span>
+                                <span>/</span>
+                                <span className="text-[var(--color-text)] font-bold capitalize">
+                                    {url.split('/')[1]?.replace('-', ' ') || 'Dashboard'}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0 ml-4">
+                        <UserProfileMenu user={auth?.user} />
                     </div>
                 </header>
-            )}
 
-            {/* Main Content Body */}
-            <main className="flex-1 px-3.5 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 max-w-7xl w-full mx-auto pb-24">
-                {children}
-            </main>
+                {/* Main Content Body */}
+                <main className="flex-1 px-3.5 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 max-w-7xl w-full mx-auto pb-24">
+                    {children}
+                </main>
+            </div>
+
+            {/* Persistent AI Companion Floating Widget (Global across all pages) */}
+            <ChatWidget />
+
+            {/* In-App PWA Install Banner */}
+            <PWAInstallPrompt />
         </div>
-
-        {/* Persistent AI Companion Floating Widget (Global across all pages) */}
-        <ChatWidget />
-
-        {/* In-App PWA Install Banner */}
-        <PWAInstallPrompt />
-    </div>
     );
 }
+

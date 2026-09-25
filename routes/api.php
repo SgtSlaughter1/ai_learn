@@ -33,6 +33,8 @@ Route::prefix('v1/teacher')->middleware('auth:sanctum')->group(function () {
     Route::get('/classes/{classId}/learners', [\App\Http\Controllers\Web\TeacherDashboardController::class, 'getClassLearners']);
     Route::get('/classes/{classId}/diagnostics', [\App\Http\Controllers\Web\TeacherDashboardController::class, 'getClassDiagnostics']);
     Route::post('/interventions/assign', [\App\Http\Controllers\Web\TeacherDashboardController::class, 'assignIntervention']);
+    Route::post('/learners', [\App\Http\Controllers\Web\TeacherDashboardController::class, 'saveLearner']);
+    Route::post('/classes/{classId}/enroll', [\App\Http\Controllers\Web\TeacherDashboardController::class, 'enrollLearner']);
 });
 
 // Admin & Teacher Management API

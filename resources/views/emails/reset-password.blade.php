@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reset Your Password — PassPoint</title>
+    <title>Reset Your Password — AceDrill</title>
     <style>
         body {
             margin: 0;
@@ -107,14 +107,14 @@
             <td align="center">
                 <div class="container">
                     <div class="header">
-                        <span class="brand-title">PassPoint</span>
+                        <span class="brand-title">AceDrill</span>
                     </div>
                     
                     <div class="card">
                         <h1 class="greeting">Hello, {{ $name }}!</h1>
                         
                         <p class="paragraph">
-                            We received a request to reset the password for your PassPoint account. You can securely set a new password by clicking the button below:
+                            We received a request to reset the password for your AceDrill account. You can securely set a new password by clicking the button below:
                         </p>
                         
                         <div class="button-wrapper">
@@ -129,7 +129,7 @@
                         
                         <p class="paragraph" style="margin-bottom: 0;">
                             Best regards,<br>
-                            <strong style="color: #183B2B;">PassPoint Team</strong>
+                            <strong style="color: #183B2B;">AceDrill Team</strong>
                         </p>
                         
                         <div class="divider"></div>
@@ -141,7 +141,7 @@
                     </div>
                     
                     <div class="footer">
-                        &copy; {{ date('Y') }} PassPoint Platform. All rights reserved.
+                        &copy; {{ date('Y') }} AceDrill Platform. All rights reserved.
                     </div>
                 </div>
             </td>

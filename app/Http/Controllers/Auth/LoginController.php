@@ -93,7 +93,7 @@ class LoginController extends Controller
             return response()->json(['status' => 'logged_out']);
         }
 
-        return redirect('/login');
+        return redirect('/');
     }
 
     public function logout(Request $request): JsonResponse|RedirectResponse

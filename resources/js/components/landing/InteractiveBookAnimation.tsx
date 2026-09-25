@@ -274,7 +274,7 @@ export function InteractiveBookAnimation() {
 
                             {/* Page Footer / Page Number */}
                             <div className="pt-4 sm:pt-6 mt-4 border-t border-[#EBE7DC] flex items-center justify-between text-[10px] text-[var(--color-muted)]">
-                                <span>PassPoint Standard</span>
+                                <span>AceDrill Standard</span>
                                 <span className="font-serif italic font-semibold">Offline Ready</span>
                             </div>
                         </div>

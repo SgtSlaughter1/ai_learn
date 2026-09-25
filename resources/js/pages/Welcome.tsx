@@ -1,5 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt';
+import ThemeToggle from '@/components/ui/ThemeToggle';
 import { InteractiveBookAnimation } from '@/components/landing/InteractiveBookAnimation';
 
 interface SubjectItem {
@@ -147,7 +148,7 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
 
     const faqData = [
         {
-            question: "Where and how can I practice national Past Questions on PassPoint?",
+            question: "Where and how can I practice national Past Questions on AceDrill?",
             answer: "You can practice directly in the Past Questions & CBT Hub (accessible at /past-questions or via the top menu). It offers two modes: self-paced Interactive Practice Mode (with instant step-by-step AI solutions) and Timed CBT Simulation (with standard exam timers, question palette, and weak-topic scorecards)."
         },
         {
@@ -159,12 +160,12 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
             answer: "Every past question includes an 'Ask AI Tutor' button. When offline, it provides instant step-by-step mathematical derivations and topic formulas from local storage. When online, it connects to our AI engine for deeper interactive explanations and syllabus tips."
         },
         {
-            question: "What curriculum and exams does PassPoint cover?",
-            answer: `PassPoint supports Junior & Senior Secondary school curricula aligned with WAEC, NECO, JAMB/UTME, and NERDC standards across ${totalSubjectsCount} core subjects including Mathematics, English, Physics, Chemistry, Biology, Economics, Accounting, and Government.`
+            question: "What curriculum and exams does AceDrill cover?",
+            answer: `AceDrill supports Junior & Senior Secondary school curricula aligned with WAEC, NECO, JAMB/UTME, and NERDC standards across ${totalSubjectsCount} core subjects including Mathematics, English, Physics, Chemistry, Biology, Economics, Accounting, and Government.`
         },
         {
             question: "How does student progress sync when back online?",
-            answer: "When an internet connection is detected, PassPoint automatically syncs your completed offline quiz attempts, past exam scores, XP points, and topic mastery scores to the cloud seamlessly."
+            answer: "When an internet connection is detected, AceDrill automatically syncs your completed offline quiz attempts, past exam scores, XP points, and topic mastery scores to the cloud seamlessly."
         }
     ];
 
@@ -184,13 +185,13 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
     return (
         <>
             <Head>
-                <title>PassPoint | Offline Learning Platform and AI Tutor for Nigerian Students</title>
+                <title>AceDrill | Offline Learning Platform and AI Tutor for Nigerian Students</title>
                 <meta name="description" content="Interactive offline-first learning platform for Nigerian students with AI-powered explanations, adaptive quizzes, curriculum-aligned lessons, and national past questions practice." />
-                <meta property="og:title" content="PassPoint: Offline Learning Platform and AI Tutor" />
+                <meta property="og:title" content="AceDrill: Offline Learning Platform and AI Tutor" />
                 <meta property="og:description" content="Study secondary school subjects offline with curriculum lessons, adaptive quizzes, intelligent AI tutoring, and authentic JAMB, WAEC, NECO past questions." />
                 <meta property="og:type" content="website" />
                 <meta name="twitter:card" content="summary_large_image" />
-                <meta name="twitter:title" content="PassPoint: Offline Learning Platform and AI Tutor" />
+                <meta name="twitter:title" content="AceDrill: Offline Learning Platform and AI Tutor" />
                 <meta name="twitter:description" content="Study secondary school subjects offline with curriculum lessons, adaptive quizzes, intelligent AI tutoring, and past questions." />
                 <script type="application/ld+json">
                     {JSON.stringify(structuredFaqSchema)}
@@ -208,7 +209,7 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                                 </svg>
                             </div>
-                            <span className="text-base sm:text-lg font-bold tracking-tight text-[var(--color-primary)]">PassPoint</span>
+                            <span className="text-base sm:text-lg font-bold tracking-tight text-[var(--color-primary)]">AceDrill</span>
                         </Link>
 
                         {/* Centered Navigation Links (Desktop) */}
@@ -226,6 +227,7 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
 
                         {/* Right Actions */}
                         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+                            <ThemeToggle />
                             <Link
                                 href="/login"
                                 className="px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors"
@@ -513,7 +515,7 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
                                 Frequently Asked Questions
                             </h2>
                             <p className="mt-3 text-[var(--color-muted)] text-base">
-                                Everything you need to know about practicing past questions and learning offline with PassPoint.
+                                Everything you need to know about practicing past questions and learning offline with AceDrill.
                             </p>
                         </div>
 
@@ -550,7 +552,7 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
                             Ready to Ace Your Next Exam?
                         </h2>
                         <p className="mt-4 text-[var(--color-primary-light)] text-lg">
-                            Join thousands of students practicing past questions and mastering curriculum topics with PassPoint.
+                            Join thousands of students practicing past questions and mastering curriculum topics with AceDrill.
                             No credit card required. 100% Offline ready.
                         </p>
                         <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -579,13 +581,13 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                                 </svg>
                             </div>
-                            <span className="font-bold text-[var(--color-primary)]">PassPoint</span>
+                            <span className="font-bold text-[var(--color-primary)]">AceDrill</span>
                         </div>
                         <p className="text-sm text-[var(--color-muted)]">
                             Offline-first adaptive learning and national past questions CBT engine.
                         </p>
                         <p className="text-xs text-[var(--color-muted)]/60 mt-4">
-                            © {new Date().getFullYear()} PassPoint. Built for learners, by learners.
+                            © {new Date().getFullYear()} AceDrill. Built for learners, by learners.
                         </p>
                     </div>
                 </footer>
