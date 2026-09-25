@@ -3,9 +3,10 @@ import Markdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
+import { usePage } from '@inertiajs/react';
 import { ExamSimulationResult } from '../../types/past-questions';
 import { formatMathText, extractLiteratureContext } from '../../utils/mathFormatter';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, CheckCircle2 } from 'lucide-react';
 
 interface Props {
     result: ExamSimulationResult;
@@ -16,6 +17,10 @@ interface Props {
 export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) => {
     const [activeTab, setActiveTab] = useState<'summary' | 'topics' | 'review'>('summary');
     const [expandedQuestion, setExpandedQuestion] = useState<number | null>(null);
+
+    const pageProps = usePage()?.props as any;
+    const user = pageProps?.auth?.user;
+    const isGuest = !user;
 
     const formatTime = (secs: number) => {
         const m = Math.floor(secs / 60);
@@ -153,24 +158,40 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                                 </div>
                             )}
 
-                            {/* Guest Scorecard Saving Callout */}
-                            <div className="p-5 rounded-2xl bg-gradient-to-r from-[var(--color-primary-10)] to-[var(--color-accent-10)] border border-[var(--color-primary-20)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <div className="space-y-1">
-                                    <h4 className="font-bold text-xs text-[var(--color-text)] flex items-center gap-1.5">
-                                        <span>📊</span>
-                                        <span>Save Your CBT Simulation Scorecard</span>
-                                    </h4>
-                                    <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-                                        Sign in to permanently save your exam score history, track progress across curriculum topics, and unlock unlimited questions.
-                                    </p>
+                            {/* Scorecard Persistence Callout / Status */}
+                            {isGuest ? (
+                                <div className="p-5 rounded-2xl bg-gradient-to-r from-[var(--color-primary-10)] to-[var(--color-accent-10)] border border-[var(--color-primary-20)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                    <div className="space-y-1">
+                                        <h4 className="font-bold text-xs text-[var(--color-text)] flex items-center gap-1.5">
+                                            <span>📊</span>
+                                            <span>Save Your CBT Simulation Scorecard</span>
+                                        </h4>
+                                        <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+                                            Sign in to permanently save your exam score history, track progress across curriculum topics, and unlock unlimited questions.
+                                        </p>
+                                    </div>
+                                    <a
+                                        href="/login"
+                                        className="px-4 py-2 rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-bold text-xs shrink-0 text-center transition-all shadow-xs"
+                                    >
+                                        Sign In / Register →
+                                    </a>
                                 </div>
-                                <a
-                                    href="/login"
-                                    className="px-4 py-2 rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-bold text-xs shrink-0 text-center transition-all shadow-xs"
-                                >
-                                    Sign In / Register →
-                                </a>
-                            </div>
+                            ) : (
+                                <div className="p-4 rounded-2xl bg-[var(--color-success-10)] border border-[var(--color-success-20)] flex items-center gap-3.5">
+                                    <div className="w-8 h-8 rounded-xl bg-[var(--color-success)] flex items-center justify-center text-white shrink-0 shadow-xs">
+                                        <CheckCircle2 className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-xs text-[var(--color-success)]">
+                                            Scorecard Saved to Your Learner Profile
+                                        </h4>
+                                        <p className="text-xs text-[var(--color-muted)]">
+                                            Your mock score, topic breakdown, and XP have been recorded to your account history.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 
