@@ -33,7 +33,7 @@ export default function PastQuestionsIndex() {
     // Guest / Public visitor layout
     return (
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] font-sans">
-            <Head title="Past Questions & CBT Exam Simulation Hub — AILEARN" />
+            <Head title="Past Questions & CBT Exam Practice | AILEARN" />
 
             {/* Glassmorphic Header */}
             <header className="sticky top-0 z-50 w-full px-4 sm:px-6 pt-3 pb-2">

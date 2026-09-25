@@ -263,8 +263,8 @@ function getInertiaVersion(): string {
 /**
  * Pre-warm a route by fetching the full HTML page and storing it in
  * the SW runtime caches. Each cache.put() needs its own Response object
- * so we fetch multiple times — Responses cannot be cloned more than once
- * after their body has been read.
+ * so we fetch multiple times (Responses cannot be cloned more than once
+ * after their body has been read).
  */
 async function prewarmRoute(url: string): Promise<void> {
     const fullUrl = new URL(url, window.location.origin).href;
@@ -306,7 +306,7 @@ async function prewarmRoute(url: string): Promise<void> {
             await appCache.put(inertiaReq, inertiaRes);
         }
     } catch {
-        // Best-effort — silent fail is fine
+        // Best-effort: silent fail is fine
     }
 }
 

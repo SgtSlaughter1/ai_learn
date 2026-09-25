@@ -77,7 +77,7 @@ export default function Index() {
                     }
                 }
             } catch (err) {
-                console.log('Offline mode — loaded subjects from local database');
+                console.log('Offline mode: loaded subjects from local database');
             } finally {
                 if (isMounted) setLoading(false);
             }
@@ -107,9 +107,9 @@ export default function Index() {
             }
         >
             <Head>
-                <title>General Knowledge & Open Curriculum Library — AILEARN</title>
+                <title>General Knowledge & Open Curriculum Library | AILEARN</title>
                 <meta name="description" content="Access open curriculum questions, verified educational answers, and general knowledge concepts on AILEARN." />
-                <meta property="og:title" content="General Knowledge & Open Curriculum Library — AILEARN" />
+                <meta property="og:title" content="General Knowledge & Open Curriculum Library | AILEARN" />
                 <meta property="og:description" content="Access open curriculum questions, verified educational answers, and general knowledge concepts on AILEARN." />
             </Head>
 

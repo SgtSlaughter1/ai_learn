@@ -50,24 +50,24 @@ export interface AiExplanationDrawerProps {
 
 const DIAGNOSTIC_STEPS = [
     {
-        title: 'Analyzing Selected Choice',
-        description: 'Examining the option chosen and recognizing key question variables...',
-        tip: 'Reviewing the examiner distractor pattern.',
+        title: 'Reviewing Your Choice',
+        description: 'Checking the answer you selected and looking at key clues in the question...',
+        tip: 'Looking at how the question tests your understanding.',
     },
     {
-        title: 'Diagnosing Misconception',
-        description: 'Checking common calculation traps, sign inversions & syllabus traps...',
-        tip: 'Pinpointing the exact conceptual divergence.',
+        title: 'Finding the Confusion',
+        description: 'Checking common calculation mistakes, sign errors, or misunderstandings...',
+        tip: 'Pinpointing where the mistake happened.',
     },
     {
-        title: 'Formulating Step-by-Step Working',
-        description: 'Structuring mathematical proof and official curriculum derivation...',
-        tip: 'Formatting crystal-clear LaTeX formulas and proof.',
+        title: 'Building Step-by-Step Solution',
+        description: 'Writing clear steps and formulas to reach the correct answer...',
+        tip: 'Using clear formulas and simple steps.',
     },
     {
-        title: 'Crafting Practical Example & Rule',
-        description: 'Building an easy-to-remember exam analogy and similar problem...',
-        tip: 'Almost ready! Results are cached for instant re-access.',
+        title: 'Creating a Quick Study Tip',
+        description: 'Creating a simple tip and a similar practice problem to help you remember...',
+        tip: 'Almost ready! Answers are saved for quick review anytime.',
     },
 ];
 
@@ -241,7 +241,7 @@ export function AiExplanationDrawer({
                                     Explain My Mistake
                                 </h3>
                                 <p className="text-xs font-semibold text-[var(--color-muted)]">
-                                    AI Diagnostic & Mastery Loop
+                                    AI Step-by-Step Guide
                                 </p>
                             </div>
                         </div>

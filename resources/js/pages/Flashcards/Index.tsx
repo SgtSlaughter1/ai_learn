@@ -151,7 +151,7 @@ export default function Index() {
             }
         >
             <Head>
-                <title>Active Recall Flashcards & Spaced Repetition — AILEARN</title>
+                <title>Active Recall Flashcards & Spaced Repetition | AILEARN</title>
                 <meta name="description" content="Practice curriculum concepts with spaced-repetition flashcards on AILEARN. Build long-term memory and topic mastery offline." />
             </Head>
 

@@ -364,7 +364,7 @@ export default function TeachersTab({
                                         </td>
                                         <td className="py-3.5 px-4">
                                             <p className="font-semibold text-[var(--color-text)]">
-                                                {teacher.teacher_profile?.department || '—'}
+                                                {teacher.teacher_profile?.department || '-'}
                                             </p>
                                             {teacher.teacher_profile?.employee_id && (
                                                 <p className="text-[10px] text-[var(--color-muted)]">ID: {teacher.teacher_profile.employee_id}</p>

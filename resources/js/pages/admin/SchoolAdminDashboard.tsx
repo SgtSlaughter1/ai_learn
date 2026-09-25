@@ -284,7 +284,7 @@ export default function SchoolAdminDashboard() {
 
     return (
         <AuthenticatedLayout>
-            <Head title={`${schoolName} — School Admin Dashboard`} />
+            <Head title={`${schoolName} | School Admin Dashboard`} />
 
             {/* Toast Notifications */}
             {toast && (

@@ -139,7 +139,7 @@ export default function Index() {
                     }
                 }
             } catch (err) {
-                console.log('Offline mode — loaded subjects from local database');
+                console.log('Offline mode: loaded subjects from local database');
             } finally {
                 if (isMounted) setLoading(false);
             }
@@ -164,7 +164,7 @@ export default function Index() {
                     <div>
                         <h1 className="text-3xl font-extrabold text-[var(--color-text)] tracking-tight">School Curriculum</h1>
                         <p className="text-[var(--color-muted)] mt-1">
-                            Curricula & diagnostic assessments for <strong className="text-[var(--color-primary)] font-semibold">{userSchool?.name || 'Your School'}</strong>.
+                            Curriculum and practice quizzes for <strong className="text-[var(--color-primary)] font-semibold">{userSchool?.name || 'Your School'}</strong>.
                         </p>
                     </div>
 
@@ -181,9 +181,9 @@ export default function Index() {
             }
         >
             <Head>
-                <title>School Curriculum & Subjects — AILEARN</title>
+                <title>School Curriculum & Subjects | AILEARN</title>
                 <meta name="description" content="Explore secondary school curriculum subjects on AILEARN. Access syllabus topics, interactive quizzes, and offline study materials." />
-                <meta property="og:title" content="School Curriculum & Subjects — AILEARN" />
+                <meta property="og:title" content="School Curriculum & Subjects | AILEARN" />
                 <meta property="og:description" content="Explore secondary school curriculum subjects on AILEARN. Access syllabus topics, interactive quizzes, and offline study materials." />
                 <script type="application/ld+json">
                     {JSON.stringify({

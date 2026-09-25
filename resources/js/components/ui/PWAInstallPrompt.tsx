@@ -103,7 +103,7 @@ export default function PWAInstallPrompt() {
     if (isStandalone) return null;
     // Dismissed recently
     if (isDismissed) return null;
-    // Nothing to show — no install trigger and not iOS
+    // Nothing to show, no install trigger and not iOS
     if (!deferredPrompt && !isIOS) return null;
 
     return (

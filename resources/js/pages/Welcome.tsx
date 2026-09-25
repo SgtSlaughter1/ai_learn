@@ -184,13 +184,13 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
     return (
         <>
             <Head>
-                <title>AILEARN — Offline Learning Platform & AI Tutor for Nigerian Students</title>
+                <title>AILEARN | Offline Learning Platform and AI Tutor for Nigerian Students</title>
                 <meta name="description" content="Interactive offline-first learning platform for Nigerian students with AI-powered explanations, adaptive quizzes, curriculum-aligned lessons, and national past questions practice." />
-                <meta property="og:title" content="AILEARN — Offline Learning Platform & AI Tutor" />
+                <meta property="og:title" content="AILEARN: Offline Learning Platform and AI Tutor" />
                 <meta property="og:description" content="Study secondary school subjects offline with curriculum lessons, adaptive quizzes, intelligent AI tutoring, and authentic JAMB, WAEC, NECO past questions." />
                 <meta property="og:type" content="website" />
                 <meta name="twitter:card" content="summary_large_image" />
-                <meta name="twitter:title" content="AILEARN — Offline Learning Platform & AI Tutor" />
+                <meta name="twitter:title" content="AILEARN: Offline Learning Platform and AI Tutor" />
                 <meta name="twitter:description" content="Study secondary school subjects offline with curriculum lessons, adaptive quizzes, intelligent AI tutoring, and past questions." />
                 <script type="application/ld+json">
                     {JSON.stringify(structuredFaqSchema)}
@@ -310,7 +310,7 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
                                 Authentic Past Questions for All Major Exams
                             </h2>
                             <p className="text-sm sm:text-base text-[var(--color-muted)] leading-relaxed">
-                                Practice thousands of verified questions from real past papers. No scattered PDFs — unified by exam body and subject with realistic computer-based test simulation.
+                                Practice thousands of verified questions from real past papers. No scattered PDFs. Everything is organized by exam body and subject with realistic computer-based test practice.
                             </p>
                         </div>
 

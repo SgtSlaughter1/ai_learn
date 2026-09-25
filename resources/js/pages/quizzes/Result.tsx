@@ -99,7 +99,7 @@ export default function Result({ attemptId }: Props) {
                     }
                 }
             } catch {
-                console.log('Offline mode — loaded quiz result from local database');
+                console.log('Offline mode: loaded quiz result from local database');
             } finally {
                 if (isMounted) setLoading(false);
             }
@@ -352,7 +352,7 @@ export default function Result({ attemptId }: Props) {
     return (
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] p-4 md:p-8 relative overflow-x-hidden">
             <Head>
-                <title>{`${attempt.quiz_title || 'Assessment'} Results — AILEARN`}</title>
+                <title>{`${attempt.quiz_title || 'Quiz'} Results | AILEARN`}</title>
                 <meta name="robots" content="noindex, nofollow" />
             </Head>
 

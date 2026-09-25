@@ -33,7 +33,7 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
             <div className="absolute bottom-1/4 right-1/4 w-72 sm:w-96 h-72 sm:h-96 bg-[var(--color-accent)]/5 rounded-full blur-3xl -z-10 pointer-events-none" />
 
             <Head>
-                <title>Create New Password — AILEARN</title>
+                <title>Create New Password | AILEARN</title>
                 <meta name="description" content="Set a new secure password for your AILEARN account." />
             </Head>
 

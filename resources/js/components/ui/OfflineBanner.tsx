@@ -7,7 +7,7 @@ interface OfflineBannerProps {
 }
 
 export function OfflineBanner({
-    message = 'Offline — showing cached data',
+    message = 'Offline: showing saved data',
     variant = 'pill',
     className = '',
 }: OfflineBannerProps) {

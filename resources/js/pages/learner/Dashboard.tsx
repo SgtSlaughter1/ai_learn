@@ -8,7 +8,6 @@ import { StatsOverview } from '@/components/dashboard/StatsOverview';
 import { LevelProgressBar, GamificationData } from '@/components/dashboard/LevelProgressBar';
 import { AchievementsGrid } from '@/components/dashboard/AchievementsGrid';
 import { RecentAttemptsList, DashboardAttempt } from '@/components/dashboard/RecentAttemptsList';
-import { XpGuideModal } from '@/components/dashboard/XpGuideModal';
 import { DashboardRevisionCard } from '@/components/dashboard/DashboardRevisionCard';
 import 'katex/dist/katex.min.css';
 
@@ -272,7 +271,7 @@ export default function LearnerDashboard() {
                         {!isOnline && (
                             <span className="inline-flex items-center gap-1 mt-2 text-xs font-bold text-[var(--color-accent)] bg-[var(--color-accent)]/10 px-2 py-1 rounded-full border border-[var(--color-accent)]/20">
                                 <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)] animate-pulse" />
-                                Offline — showing cached data
+                                Offline: showing saved data
                             </span>
                         )}
                     </div>
@@ -283,7 +282,7 @@ export default function LearnerDashboard() {
             }
         >
             <Head>
-                <title>Learner Dashboard — AILEARN</title>
+                <title>Learner Dashboard | AILEARN</title>
                 <meta name="description" content="View your subject mastery progress, active study streaks, recommended practice topics, and offline quiz history on AILEARN." />
             </Head>
 
@@ -335,12 +334,6 @@ export default function LearnerDashboard() {
                     isOnline={isOnline}
                     attempts={recentAttempts}
                     averageMastery={avgMasteryScore}
-                />
-
-                {/* XP Guide Modal */}
-                <XpGuideModal
-                    isOpen={showXpGuide}
-                    onToggle={() => setShowXpGuide(!showXpGuide)}
                 />
             </div>
         </AuthenticatedLayout>

@@ -420,7 +420,7 @@ export default function Dashboard() {
     return (
         <AuthenticatedLayout>
             <Head>
-                <title>{isSuperAdmin ? "Super Admin Command Center — AILEARN" : `${stats?.school?.name || 'School'} Admin Portal — AILEARN`}</title>
+                <title>{isSuperAdmin ? "Super Admin Command Center | AILEARN" : `${stats?.school?.name || 'School'} Admin Portal | AILEARN`}</title>
                 <meta name="robots" content="noindex, nofollow" />
             </Head>
 
@@ -457,7 +457,7 @@ export default function Dashboard() {
                         <p className="text-[var(--color-muted)] text-sm mt-1">
                             {isSuperAdmin 
                                 ? 'Super admin platform oversight, school provisioning, admin assignment, and global curriculum management.'
-                                : `School administration for ${stats?.school?.name || 'your institution'} — manage classes, learners, and learning performance.`
+                                : `School administration for ${stats?.school?.name || 'your institution'}: manage classes, learners, and learning performance.`
                             }
                         </p>
                     </div>

@@ -31,7 +31,7 @@ export function QuizModeSelect({
                     <div className="bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20 rounded-xl px-4 py-3 flex items-center gap-3 max-w-2xl w-full">
                         <WifiOff className="w-5 h-5 text-[var(--color-accent)] shrink-0" />
                         <span className="text-sm font-semibold text-[var(--color-accent)]">
-                            You're offline. Standard quizzes are available — answers will sync when you reconnect.
+                            You are offline. Standard quizzes are available, and your answers will sync when you reconnect.
                         </span>
                     </div>
                 )}

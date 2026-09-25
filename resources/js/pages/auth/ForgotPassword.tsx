@@ -24,7 +24,7 @@ export default function ForgotPassword({ status }: ForgotPasswordProps) {
             <div className="absolute bottom-1/4 right-1/4 w-72 sm:w-96 h-72 sm:h-96 bg-[var(--color-accent)]/5 rounded-full blur-3xl -z-10 pointer-events-none" />
 
             <Head>
-                <title>Forgot Password — AILEARN</title>
+                <title>Forgot Password | AILEARN</title>
                 <meta name="description" content="Reset your AILEARN password to regain access to your offline-first secondary curriculum." />
             </Head>
 
