@@ -104,33 +104,33 @@ export const DashboardRevisionCard: React.FC<Props> = ({ onSessionCompleted }) =
             const isRetention = items.some((i) => i.badge?.color === 'success' || i.badge?.label?.toLowerCase().includes('retention') || i.badge?.label?.toLowerCase().includes('check'));
 
             let reasonType: TopicRevisionGroup['reasonType'] = 'general';
-            let badgeLabel = 'Daily Recall';
-            let why = 'Quick active recall warmup to maintain solid understanding.';
+            let badgeLabel = 'Daily Warmup';
+            let why = 'Quick active recall practice to keep your understanding solid.';
             let badgeColorClass = 'text-[var(--color-primary)] bg-[var(--color-primary-10)] border-[var(--color-primary-20)]';
             let icon = <Brain className="w-3 h-3 text-[var(--color-primary)]" />;
 
             if (hasMistake) {
                 reasonType = 'recent_mistake';
-                badgeLabel = 'Recent Mistake';
-                why = 'Review missed questions to fix misconceptions before they become habits.';
+                badgeLabel = 'Mistake Review';
+                why = 'Review questions you missed to turn them into your strengths.';
                 badgeColorClass = 'text-rose-500 bg-rose-500/10 border-rose-500/20';
                 icon = <AlertCircle className="w-3 h-3 text-rose-500" />;
             } else if (isWeakTopic) {
                 reasonType = 'weak_topic';
                 badgeLabel = 'Targeted Boost';
-                why = 'Teacher-targeted practice to reinforce fundamentals and boost your mastery score.';
+                why = 'Targeted practice to strengthen fundamentals and boost your mastery score.';
                 badgeColorClass = 'text-amber-500 bg-amber-500/10 border-amber-500/20';
                 icon = <Target className="w-3 h-3 text-amber-500" />;
             } else if (isFragile) {
                 reasonType = 'fragile_mastery';
-                badgeLabel = 'Memory Decay';
-                why = 'Concept is entering the forgetting zone. A 2-minute review keeps it fresh.';
+                badgeLabel = 'Quick Refresh';
+                why = 'A quick 2-minute review keeps this topic fresh and sharp in your memory.';
                 badgeColorClass = 'text-sky-500 bg-sky-500/10 border-sky-500/20';
                 icon = <Zap className="w-3 h-3 text-sky-500" />;
             } else if (isRetention) {
                 reasonType = 'retention_check';
                 badgeLabel = 'Mastery Lock';
-                why = 'Final retention check to confirm this topic is locked into permanent memory.';
+                why = 'A quick check to lock this topic permanently into your memory.';
                 badgeColorClass = 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
                 icon = <ShieldCheck className="w-3 h-3 text-emerald-500" />;
             }
@@ -430,7 +430,7 @@ export const DashboardRevisionCard: React.FC<Props> = ({ onSessionCompleted }) =
                                             : 'bg-[var(--color-background)] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'
                                     }`}
                                 >
-                                    Memory Decay ({topicGroups.filter((g) => g.reasonType === 'fragile_mastery').length})
+                                    Quick Refresh ({topicGroups.filter((g) => g.reasonType === 'fragile_mastery').length})
                                 </button>
                                 <button
                                     type="button"

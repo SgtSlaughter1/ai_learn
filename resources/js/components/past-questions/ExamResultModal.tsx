@@ -101,7 +101,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                                     : 'bg-[var(--color-error-5)] border-[var(--color-error)]/30'
                             }`}>
                                 <div className="inline-block px-3.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider mb-2 shadow-xs bg-[var(--color-surface)] border border-[var(--color-border)]">
-                                    {isExcellence ? 'Outstanding Mastery' : isPass ? 'Passed - Good Attempt' : 'Needs Dedicated Review'}
+                                    {isExcellence ? 'Outstanding Mastery' : isPass ? 'Passed - Good Attempt' : 'Good Effort - Keep Practicing'}
                                 </div>
                                 <div className="text-6xl md:text-7xl font-extrabold text-[var(--color-text)] my-2">
                                     {score}%
@@ -131,14 +131,14 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                                 </div>
                             </div>
 
-                            {/* Key Weak Areas Alert */}
+                            {/* Key Focus Areas Alert */}
                             {result.weak_topics?.length > 0 && (
                                 <div className="p-5 rounded-2xl bg-[var(--color-accent-10)] border border-[var(--color-accent-20)]">
                                     <div className="flex items-center gap-2 text-[var(--color-accent)] font-bold text-xs uppercase tracking-wider mb-2">
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                         </svg>
-                                        Recommended Topics for Revision:
+                                        Topics Recommended for Practice:
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                         {result.weak_topics.map((t, i) => (
@@ -185,6 +185,8 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                                     if (topic.status === 'moderate') badgeColor = 'bg-[var(--color-accent-10)] text-[var(--color-accent)] border-[var(--color-accent-20)]';
                                     if (topic.status === 'weak') badgeColor = 'bg-[var(--color-error-10)] text-[var(--color-error)] border-[var(--color-error-20)]';
 
+                                    const displayStatus = topic.status === 'weak' ? 'Needs Practice' : topic.status === 'moderate' ? 'Review' : 'Mastered';
+
                                     return (
                                         <div
                                             key={idx}
@@ -196,7 +198,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                                                         {topic.topic_name}
                                                     </span>
                                                     <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase border ${badgeColor}`}>
-                                                        {topic.status}
+                                                        {displayStatus}
                                                     </span>
                                                 </div>
                                                 <span className="text-xs text-[var(--color-muted)] font-medium">

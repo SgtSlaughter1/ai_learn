@@ -599,21 +599,21 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                                     Diagnostic Recommendations
                                                 </span>
                                                 <span className="text-xs text-[var(--color-muted)]">
-                                                    {stats.struggling_learners.length} students need extra support on weak topics
+                                                    {stats.struggling_learners.length} students recommended for targeted practice
                                                 </span>
                                             </div>
                                             <h2 className="text-lg font-black text-[var(--color-text)]">
                                                 Targeted Practice Recommendations
                                             </h2>
                                             <p className="text-xs text-[var(--color-muted)] max-w-xl">
-                                                The diagnostic engine identifies specific topics where students need support. "Send Practice to All" queues 10 tailored review questions directly into each struggling student's daily revision deck.
+                                                The diagnostic engine identifies specific topics where students can boost their mastery. "Send Practice to All" queues 10 tailored review questions directly into each student's daily revision deck.
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <button
                                                 onClick={handleAssignAllInterventions}
                                                 className="px-4 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-2"
-                                                title="Send 10 targeted practice questions on weak topics to all struggling students"
+                                                title="Send 10 targeted practice questions on focus topics to all students"
                                             >
                                                 <span>Send Practice to All ({stats.struggling_learners.length})</span>
                                             </button>
@@ -757,14 +757,14 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                         </span>
                                     </div>
                                     <p className="text-xs text-[var(--color-muted)] max-w-2xl">
-                                        Calculated from student question responses. Sending practice queues 10 targeted review questions on identified weak topics into each student's daily revision deck.
+                                        Calculated from student question responses. Sending practice queues 10 targeted review questions on focus topics into each student's daily revision deck.
                                     </p>
                                 </div>
                                 {stats.struggling_learners.length > 0 && (
                                     <button
                                         onClick={handleAssignAllInterventions}
                                         className="px-4 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap"
-                                        title="Queues a 10-question practice set on weak topics to all struggling students"
+                                        title="Queues a 10-question practice set on focus topics to all students"
                                     >
                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -797,7 +797,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                                     <th className="py-3.5 px-4">Student</th>
                                                     <th className="py-3.5 px-4">Subject</th>
                                                     <th className="py-3.5 px-4">Mastery</th>
-                                                    <th className="py-3.5 px-4 min-w-[220px]">Identified Weak Topics</th>
+                                                    <th className="py-3.5 px-4 min-w-[220px]">Focus Topics for Review</th>
                                                     <th className="py-3.5 px-4">Recommended Practice</th>
                                                     <th className="py-3.5 px-4 text-right">Actions</th>
                                                 </tr>
@@ -982,7 +982,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                                                                         </span>
                                                                                         <div>
                                                                                             <p className="font-bold text-xs text-[var(--color-text)]">View Details</p>
-                                                                                            <p className="text-[10px] text-[var(--color-muted)]">Inspect weak topics & mastery</p>
+                                                                                            <p className="text-[10px] text-[var(--color-muted)]">Inspect focus topics & mastery</p>
                                                                                         </div>
                                                                                     </button>
 

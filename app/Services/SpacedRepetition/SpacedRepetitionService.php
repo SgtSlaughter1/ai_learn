@@ -458,8 +458,8 @@ class SpacedRepetitionService
                 'icon' => 'alert-circle',
             ],
             'fragile_mastery' => [
-                'label' => 'Strengthen Recall',
-                'description' => 'Review before the concept begins to decay',
+                'label' => 'Quick Refresh',
+                'description' => 'A quick review to keep this topic fresh and sharp in your memory',
                 'color' => 'accent',
                 'icon' => 'zap',
             ],

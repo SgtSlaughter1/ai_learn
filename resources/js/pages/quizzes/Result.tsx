@@ -287,20 +287,20 @@ export default function Result({ attemptId }: Props) {
         if (percent >= 80) {
             return {
                 title: 'Excellent Mastery!',
-                desc: 'Outstanding performance! You have fully mastered this topic and curriculum level.',
+                desc: 'Outstanding performance! You know this topic very well.',
                 colorClass: 'text-[var(--color-success)] bg-[var(--color-success)]/10 border-[var(--color-success)]/20',
             };
         }
         if (percent >= 50) {
             return {
                 title: 'Good Effort!',
-                desc: 'Nice progress. Consider reviewing the explanations below to target your weaker spots.',
+                desc: 'Good progress! Check out the explanations below to strengthen your understanding even more.',
                 colorClass: 'text-[var(--color-accent)] bg-[var(--color-accent)]/10 border-[var(--color-accent)]/20',
             };
         }
         return {
             title: 'Keep Practicing!',
-            desc: 'A solid start, but you need more review. Read through the explanations and try again!',
+            desc: 'Every attempt builds your knowledge! Review the step-by-step explanations below and try again to boost your score.',
             colorClass: 'text-[var(--color-error)] bg-[var(--color-error)]/10 border-[var(--color-error)]/20',
         };
     };

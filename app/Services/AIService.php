@@ -306,18 +306,69 @@ Rules:
         $schoolCategory = $school ? ucfirst($school->category ?? 'secondary') : 'Secondary';
         $locationStr = $school ? implode(', ', array_filter([$school->city, $school->state])) : 'Nigeria';
 
-        // 1. Enrolled learners count (scoped to teacher's classes if teacher)
-        $learnersCountQuery = User::where('role', 'learner');
+        // 1. Enrolled learners (scoped to teacher's classes if teacher)
+        $learnersQuery = User::where('role', 'learner')
+            ->with([
+                'learnerProfile',
+                'classes:id,name,grade_level',
+                'learnerProgress.topic.subject'
+            ]);
+
         if ($isTeacher) {
-            $learnersCountQuery->whereHas('classMemberships', function ($q) use ($user) {
+            $learnersQuery->whereHas('classMemberships', function ($q) use ($user) {
                 $q->whereIn('class_id', function ($sq) use ($user) {
                     $sq->select('class_id')->from('class_memberships')->where('user_id', $user->id)->where('role', 'teacher');
                 });
             });
         } elseif (!$isSuperAdmin && $school) {
-            $learnersCountQuery->whereHas('learnerProfile', fn($q) => $q->where('school_id', $school->id));
+            $learnersQuery->whereHas('learnerProfile', fn($q) => $q->where('school_id', $school->id));
         }
-        $totalLearners = $learnersCountQuery->count();
+
+        $allLearners = $learnersQuery->get();
+        $totalLearners = $allLearners->count();
+
+        // Build detailed learner profiles list for AI context
+        $learnersSummaryList = [];
+        $strugglingLearnersList = [];
+
+        foreach ($allLearners as $learner) {
+            $className = $learner->classes->first()?->name 
+                ?? $learner->learnerProfile?->grade_level 
+                ?? 'Standard Class';
+            $progressItems = $learner->learnerProgress;
+            $avgScore = $progressItems->isNotEmpty() ? (int) round($progressItems->avg('mastery_score')) : 0;
+            
+            // Find topics needing attention (<50%)
+            $lowTopics = $progressItems->filter(fn($p) => $p->mastery_score < 50 && $p->topic)
+                ->map(fn($p) => ($p->topic->subject?->name ? "{$p->topic->subject->name} - " : "") . "{$p->topic->name} (" . round($p->mastery_score) . "% mastery)")
+                ->take(3)
+                ->values()
+                ->toArray();
+            
+            $learnerInfoStr = "  - Student Name: {$learner->name} | Class: {$className} | Overall Mastery: {$avgScore}%";
+            if (!empty($lowTopics)) {
+                $learnerInfoStr .= " | Priority Focus Topics: " . implode(', ', $lowTopics);
+            }
+            $learnersSummaryList[] = $learnerInfoStr;
+
+            if ($avgScore < 50 || !empty($lowTopics)) {
+                $strugglingLearnersList[] = [
+                    'name' => $learner->name,
+                    'class' => $className,
+                    'avg_mastery' => $avgScore,
+                    'low_topics' => $lowTopics,
+                    'info' => $learnerInfoStr,
+                ];
+            }
+        }
+
+        $learnersRosterStr = !empty($learnersSummaryList)
+            ? implode("\n", array_slice($learnersSummaryList, 0, 25))
+            : "  - No individual student profiles recorded yet.";
+
+        $strugglingRosterStr = !empty($strugglingLearnersList)
+            ? implode("\n", array_column($strugglingLearnersList, 'info'))
+            : "  - All enrolled students are currently performing at or above standard mastery.";
 
         // 2. Active Classes
         $classesQuery = ClassModel::where('is_active', true);
@@ -340,15 +391,7 @@ Rules:
         $subjectsSummary = $subjects->map(fn($s) => "  - {$s->name} ({$s->topics_count} topics)")->implode("\n");
 
         // 4. Real-time school mastery aggregates
-        $strugglingCount = DB::table('users as u')
-            ->join('learner_progress as lp', 'lp.user_id', '=', 'u.id')
-            ->leftJoin('learner_profiles as lprof', 'lprof.user_id', '=', 'u.id')
-            ->when(!$isSuperAdmin && $school, fn($q) => $q->where('lprof.school_id', $school->id))
-            ->select('u.id')
-            ->groupBy('u.id')
-            ->havingRaw('AVG(lp.mastery_score) < 40')
-            ->get()
-            ->count();
+        $strugglingCount = count($strugglingLearnersList);
 
         $progressAggregates = DB::table('learner_progress as lp')
             ->join('users as u', 'u.id', '=', 'lp.user_id')
@@ -404,14 +447,22 @@ Rules:
 You are assisting {$userRoleDesc}: {$user->name} at {$schoolName} ({$schoolCategory} Category, {$locationStr}).
 
 School Data & Academic Context:
-- Enrolled Learners: {$totalLearners}
+- Enrolled Learners Count: {$totalLearners}
 - Active Classes: {$classesStr}
 - Average Student Mastery: {$avgMastery}%
 - Total Questions Solved by Students: {$totalQuestionsAttempted}
-- Struggling Learners (Mastery < 40%): {$strugglingCount}
-- Lowest-Scoring Curriculum Topics Needing Attention:
+- Students Needing Attention (Mastery < 50%): {$strugglingCount}
+
+Enrolled Student Roster & Performance:
+{$learnersRosterStr}
+
+Students Needing Targeted Practice & Support:
+{$strugglingRosterStr}
+
+Lowest-Scoring Curriculum Topics Needing Attention:
 {$weakestTopicsStr}
-- Active Curriculum Subjects:
+
+Active Curriculum Subjects:
 {$subjectsSummary}
 
 School & General Knowledge Question Bank (Curriculum Reference Knowledge):
@@ -419,17 +470,18 @@ School & General Knowledge Question Bank (Curriculum Reference Knowledge):
 
 Your Core Capabilities for the {$userRoleDesc}:
 1. Class & Subject Diagnostic Analytics: Summarize student performance, highlight learning gaps and mastery trends.
-2. Remedial & Intervention Strategies: Propose pedagogical strategies, remedial lesson plans, and classroom drill ideas to help struggling learners in specific subjects/topics.
+2. Remedial & Intervention Strategies: Propose pedagogical strategies, remedial lesson plans, and classroom drill ideas to help students in specific subjects/topics.
 3. Curriculum & Scheme of Work Planning: Generate structured lesson outlines, learning objectives, and curriculum breakdown aligned with Nigerian (WAEC/NECO/NERDC) secondary education standards.
 4. Assessment & Question Bank Generation: Draft high-standard multiple choice questions with four options (A, B, C, D), marking the correct answer and providing step-by-step educational explanations so they can import them into the Question Bank. Leverage the style and concepts from the school's question bank where appropriate.
 5. Classroom & Teaching Insights: Answer questions about lesson delivery, rubric design, student engagement, and subject mastery.
 
 Guidelines:
 1. Use simple, everyday, direct language that is easy to comprehend, digest, and remember. Avoid unnecessarily complex vocabulary, convoluted phrasing, or \"big grammar\".
-2. Maintain a supportive, practical, and professional tone suitable for teachers, subject educators, and school administrators.
+2. Maintain a supportive, practical, and encouraging tone suitable for teachers, subject educators, and school administrators.
 3. Keep responses structured, concise, and actionable using clear markdown headings and bullet points. Keep answers under 250 words unless generating full questions/lesson plans.
 4. When drafting exam questions, provide the question, options A-D, clearly indicate the correct option, and include a full step-by-step solution explained simply.
-5. CRITICAL: When writing math, use ONLY LaTeX with dollar signs ($...$ for inline, $$...$$ for display). NEVER write the same expression in both LaTeX AND plain text. Use ONLY the LaTeX version, not both.";
+5. CRITICAL: When writing math, use ONLY LaTeX with dollar signs ($...$ for inline, $$...$$ for display). NEVER write the same expression in both LaTeX AND plain text. Use ONLY the LaTeX version, not both.
+6. MANDATORY FOR STUDENT REFERENCES: When referencing individual learners, diagnosing learning gaps, or recommending intervention plans, ALWAYS explicitly mention the student by their full name and their class/grade (e.g. \"John Doe (JSS 2A)\" or \"Amina Yusuf (SS 1 Science)\"). Never refer to them as generic unnamed learners (do not just say \"1 learner\"). Always provide the learner's name and class so the educator knows exactly who needs support.";
 
         $contents = [];
         foreach ($history as $msg) {
@@ -449,7 +501,18 @@ Guidelines:
             return $geminiResult;
         }
 
-        return $this->generateHeuristicAdminChatResponse($user, $message, $schoolName, $totalLearners, $classesStr, $avgMastery, $strugglingCount, $weakestTopics);
+        return $this->generateHeuristicAdminChatResponse(
+            $user,
+            $message,
+            $schoolName,
+            $totalLearners,
+            $classesStr,
+            $avgMastery,
+            $strugglingCount,
+            $weakestTopics,
+            $strugglingLearnersList,
+            $learnersSummaryList
+        );
     }
 
     /**
@@ -1524,7 +1587,9 @@ You MUST return ONLY a valid JSON array matching this exact schema:
         string $classesStr,
         int $avgMastery,
         int $strugglingCount,
-        $weakestTopics
+        $weakestTopics,
+        array $strugglingLearnersList = [],
+        array $learnersSummaryList = []
     ): string {
         $query = strtolower(trim($message));
         $isSuperAdmin = $user->isPlatformAdmin();
@@ -1539,26 +1604,41 @@ You MUST return ONLY a valid JSON array matching this exact schema:
             str_contains($query, 'mastery') ||
             str_contains($query, 'report') ||
             str_contains($query, 'struggling') ||
+            str_contains($query, 'student') ||
+            str_contains($query, 'learner') ||
             str_contains($query, 'analytics')
         ) {
             $weakestList = $weakestTopics->isNotEmpty()
                 ? $weakestTopics->map(fn($w) => "* **{$w->subject_name}** - {$w->topic_name} (Average Mastery: **{$w->avg_topic_mastery}%**)")->implode("\n")
                 : "* All syllabus topics currently performing at standard threshold.";
 
-            return "### Executive Academic Diagnostic Summary\n\n"
+            $learnersBreakdownStr = '';
+            if (!empty($strugglingLearnersList)) {
+                $learnersBreakdownStr = "\n\n#### Students Needing Attention\n"
+                    . implode("\n", array_map(function ($s) {
+                        $topics = !empty($s['low_topics']) ? ' (Focus: ' . implode(', ', $s['low_topics']) . ')' : '';
+                        return "* **{$s['name']}** ({$s['class']}) — Mastery: **{$s['avg_mastery']}%**{$topics}";
+                    }, array_slice($strugglingLearnersList, 0, 5)));
+            } elseif (!empty($learnersSummaryList)) {
+                $learnersBreakdownStr = "\n\n#### Enrolled Students\n"
+                    . implode("\n", array_slice($learnersSummaryList, 0, 5));
+            }
+
+            return "### Academic Diagnostic Summary\n\n"
                 . "**Institution:** {$schoolName}\n"
-                . "**Administrator:** {$user->name}\n\n"
+                . "**Educator / Admin:** {$user->name}\n\n"
                 . "#### Key Metrics Overview\n"
                 . "* **Total Enrolled Learners:** {$totalLearners} students\n"
                 . "* **Active Classes:** {$classesStr}\n"
                 . "* **School-wide Average Mastery:** **{$avgMastery}%**\n"
-                . "* **Learners Needing Academic Support (<40% Mastery):** **{$strugglingCount}** students\n\n"
+                . "* **Learners Needing Practice (<50% Mastery):** **{$strugglingCount}** students"
+                . "{$learnersBreakdownStr}\n\n"
                 . "#### Priority Focus Topics (Lowest School Mastery)\n"
                 . "{$weakestList}\n\n"
-                . "#### Recommended Admin Actions\n"
-                . "1. **Intervention Scheduling:** Direct subject teachers to conduct formative review sessions on the low-mastery topics above.\n"
-                . "2. **Targeted Quizzes:** Generate standard diagnostic practice tests in the Question Bank.\n"
-                . "3. **Roster Review:** Inspect the Learners Directory for individual learner breakdown.";
+                . "#### Recommended Actions\n"
+                . "1. **Targeted Practice:** Assign personalized revision quizzes to students listed above.\n"
+                . "2. **Review Sessions:** Conduct quick 15-minute refreshers on low-mastery curriculum topics.\n"
+                . "3. **Track Progress:** Check student scores after the next practice session to verify improvement.";
         }
 
         // 2. Remedial & Intervention Strategies
@@ -1568,23 +1648,31 @@ You MUST return ONLY a valid JSON array matching this exact schema:
             str_contains($query, 'help student') ||
             str_contains($query, 'weak') ||
             str_contains($query, 'strategy') ||
-            (str_contains($query, 'plan') && str_contains($query, 'struggle'))
+            str_contains($query, 'support') ||
+            (str_contains($query, 'plan') && (str_contains($query, 'struggle') || str_contains($query, 'help')))
         ) {
             $targetTopic = $weakestTopics->first();
             $topicName = $targetTopic ? "{$targetTopic->subject_name} ({$targetTopic->topic_name})" : "High Priority Curriculum Topics";
 
-            return "### Targeted Academic Intervention & Remediation Strategy\n\n"
+            $studentTargetLine = '';
+            if (!empty($strugglingLearnersList)) {
+                $names = array_map(fn($s) => "{$s['name']} ({$s['class']})", array_slice($strugglingLearnersList, 0, 3));
+                $studentTargetLine = "**Target Students:** " . implode(', ', $names) . "\n";
+            }
+
+            return "### Targeted Academic Support & Practice Strategy\n\n"
+                . "{$studentTargetLine}"
                 . "**Target Area:** {$topicName}\n"
-                . "**Goal:** Elevate struggling student comprehension from <40% to >=75% baseline mastery.\n\n"
-                . "#### 3-Phase Action Plan for Teachers\n"
-                . "1. **Phase 1: Diagnostic Assessment (Day 1)**\n"
-                . "   * Deploy a 10-question formative diagnostic test under **Question Bank**.\n"
-                . "   * Identify specific error patterns (calculation errors vs conceptual misunderstandings).\n\n"
-                . "2. **Phase 2: Micro-Lesson & Active Recall Drills (Days 2-4)**\n"
+                . "**Goal:** Boost student understanding to >=75% baseline mastery.\n\n"
+                . "#### 3-Phase Action Plan\n"
+                . "1. **Phase 1: Quick Practice Check (Day 1)**\n"
+                . "   * Deploy a 10-question formative practice test under **Question Bank**.\n"
+                . "   * Identify specific areas where students need clarification.\n\n"
+                . "2. **Phase 2: Focused Practice & Recall Drills (Days 2-4)**\n"
                 . "   * Break concepts into bite-sized 15-minute instructional modules.\n"
                 . "   * Have learners practice with flashcards and adaptive quizzes in the app.\n\n"
                 . "3. **Phase 3: Mastery Verification (Day 5)**\n"
-                . "   * Re-test cohort. Require students to score >=80% before advancing in the scheme of work.\n\n"
+                . "   * Re-test cohort. Ensure students score >=80% before advancing in the scheme of work.\n\n"
                 . "*Would you like me to retrieve practice questions from your Question Bank for this intervention?*";
         }
 
