@@ -1,5 +1,6 @@
 import { Link } from '@inertiajs/react';
 import { FileText } from 'lucide-react';
+import { Skeleton } from '@/components/common/Skeleton';
 
 export interface DashboardAttempt {
     id: string;
@@ -13,7 +14,7 @@ export interface DashboardAttempt {
 interface RecentAttemptsListProps {
     loading: boolean;
     isOnline: boolean;
-    attempts: DashboardAttempt[];
+    attempts: DashboardAttempt[] | null | undefined;
     averageMastery: number;
 }
 
@@ -23,6 +24,12 @@ export function RecentAttemptsList({
     attempts,
     averageMastery,
 }: RecentAttemptsListProps) {
+    const attemptList: DashboardAttempt[] = Array.isArray(attempts)
+        ? attempts
+        : attempts && typeof attempts === 'object'
+        ? (Array.isArray((attempts as any).data) ? (attempts as any).data : Object.values(attempts))
+        : [];
+
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Mastery Level Circular Indicator */}
@@ -33,8 +40,8 @@ export function RecentAttemptsList({
                 </div>
                 <div className="my-8 flex justify-center items-center">
                     {loading ? (
-                        <div className="h-40 w-40 rounded-full bg-[var(--color-background)] border border-[var(--color-border)] flex items-center justify-center animate-pulse">
-                            <div className="h-32 w-32 rounded-full bg-[var(--color-surface)]" />
+                        <div className="h-40 w-40 rounded-full border border-[var(--color-border)] flex items-center justify-center">
+                            <Skeleton variant="circular" className="h-36 w-36" animate="wave" />
                         </div>
                     ) : (
                         <div className="relative h-40 w-40 flex items-center justify-center">
@@ -66,7 +73,7 @@ export function RecentAttemptsList({
                 </div>
                 <div className="text-center text-xs text-[var(--color-muted)] bg-[var(--color-background)] py-2.5 rounded-xl border border-[var(--color-border)] flex items-center justify-center gap-1.5 font-medium">
                     {loading ? (
-                        <span className="text-[var(--color-muted)] font-bold">Loading mastery...</span>
+                        <Skeleton variant="text" className="h-3.5 w-32 mx-auto" />
                     ) : averageMastery >= 80 ? (
                         <>
                             <svg className="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
@@ -102,19 +109,19 @@ export function RecentAttemptsList({
                         [1, 2, 3].map((n) => (
                             <div
                                 key={n}
-                                className="flex items-center justify-between p-4 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl animate-pulse"
+                                className="flex items-center justify-between p-4 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl"
                             >
                                 <div className="flex items-center space-x-3 w-2/3">
-                                    <div className="h-9 w-9 bg-[var(--color-surface)] rounded-lg shrink-0" />
+                                    <Skeleton variant="rounded" className="h-9 w-9 shrink-0" animate="wave" />
                                     <div className="space-y-2 w-full">
-                                        <div className="h-4 bg-[var(--color-surface)] rounded w-3/4" />
-                                        <div className="h-3 bg-[var(--color-surface)] rounded w-1/4" />
+                                        <Skeleton variant="text" className="h-4 w-3/4" animate="wave" />
+                                        <Skeleton variant="text" className="h-3 w-1/4" animate="wave" />
                                     </div>
                                 </div>
-                                <div className="h-5 bg-[var(--color-surface)] rounded w-12" />
+                                <Skeleton variant="rounded" className="h-5 w-12" animate="wave" />
                             </div>
                         ))
-                    ) : attempts.length === 0 ? (
+                    ) : attemptList.length === 0 ? (
                         <div className="text-center py-12 border border-dashed border-[var(--color-border)] rounded-xl bg-[var(--color-background)]">
                             <p className="text-sm text-[var(--color-muted)]">No attempts found yet.</p>
                             <Link
@@ -125,9 +132,9 @@ export function RecentAttemptsList({
                             </Link>
                         </div>
                     ) : (
-                        attempts.map((attempt) => (
+                        attemptList.map((attempt, index) => (
                             <div
-                                key={attempt.id}
+                                key={attempt.id ? `attempt-${attempt.id}-${index}` : `attempt-idx-${index}`}
                                 className="flex items-center justify-between p-4 bg-[var(--color-background)] border border-[var(--color-border)] hover:border-[var(--color-primary-light)] rounded-xl transition-all"
                             >
                                 <div className="flex items-center space-x-3">

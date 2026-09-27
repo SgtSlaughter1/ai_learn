@@ -6,8 +6,8 @@ use App\Http\Controllers\SubjectController;
 use Illuminate\Support\Facades\Route;
 
 // Public and test endpoints (will be wrapped in auth middleware when fully integrated)
-Route::get('/subjects', [SubjectController::class, 'index']);
-Route::get('/quizzes/{quiz}', [QuizController::class, 'show']);
+Route::get('/subjects', [SubjectController::class, 'getSubjectsList']);
+Route::get('/quizzes/{quiz}', [QuizController::class, 'showQuizDetails']);
 
 // Past questions public API endpoints (accessible for standalone PWA and client simulations)
 Route::prefix('v1/past-questions')->group(function () {
@@ -29,7 +29,7 @@ Route::prefix('v1/questions')->group(function () {
 
 // Teacher & Classroom Intervention API
 Route::prefix('v1/teacher')->middleware('auth:sanctum')->group(function () {
-    Route::get('/stats', [\App\Http\Controllers\Web\TeacherDashboardController::class, 'getStats']);
+    Route::get('/stats', [\App\Http\Controllers\Web\TeacherDashboardController::class, 'getTeacherStats']);
     Route::get('/classes/{classId}/learners', [\App\Http\Controllers\Web\TeacherDashboardController::class, 'getClassLearners']);
     Route::get('/classes/{classId}/diagnostics', [\App\Http\Controllers\Web\TeacherDashboardController::class, 'getClassDiagnostics']);
     Route::post('/interventions/assign', [\App\Http\Controllers\Web\TeacherDashboardController::class, 'assignIntervention']);
@@ -63,5 +63,13 @@ Route::prefix('v1/revision')->group(function () {
     Route::post('/complete-session', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'completeSession']);
     Route::get('/stats', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'getStats']);
 });
+
+// Feedback & Inquiries API (Public & Authenticated)
+Route::post('v1/feedback', [\App\Http\Controllers\Api\FeedbackController::class, 'store']);
+Route::prefix('v1/admin/feedbacks')->middleware('auth:sanctum')->group(function () {
+    Route::get('/', [\App\Http\Controllers\Api\FeedbackController::class, 'index']);
+    Route::put('/{id}/status', [\App\Http\Controllers\Api\FeedbackController::class, 'updateStatus']);
+});
+
 
 

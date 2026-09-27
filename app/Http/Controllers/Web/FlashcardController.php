@@ -8,6 +8,7 @@ use App\Models\Question;
 use App\Models\Subject;
 use App\Services\Gamification\GamificationService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -17,7 +18,7 @@ class FlashcardController extends Controller
     /**
      * Render the flashcards study shell page.
      */
-    public function index(Request $request): mixed
+    public function showFlashcardsPage(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
         if ($user?->isAdmin()) {
@@ -27,9 +28,17 @@ class FlashcardController extends Controller
     }
 
     /**
+     * Backward-compatible alias for showFlashcardsPage.
+     */
+    public function index(Request $request): Response|RedirectResponse
+    {
+        return $this->showFlashcardsPage($request);
+    }
+
+    /**
      * Generate a personalized recall deck of 10 cards.
      */
-    public function getDeck(Request $request): JsonResponse
+    public function getFlashcardDeck(Request $request): JsonResponse
     {
         $user = $request->user();
 
@@ -81,9 +90,17 @@ class FlashcardController extends Controller
     }
 
     /**
+     * Backward-compatible alias for getFlashcardDeck.
+     */
+    public function getDeck(Request $request): JsonResponse
+    {
+        return $this->getFlashcardDeck($request);
+    }
+
+    /**
      * Submit flashcard session completion and calculate/award XP.
      */
-    public function complete(Request $request): JsonResponse
+    public function completeFlashcardReview(Request $request): JsonResponse
     {
         $user = $request->user();
         $ratings = $request->input('ratings', []);
@@ -119,5 +136,13 @@ class FlashcardController extends Controller
             'new_tier' => $result['new_tier'],
             'new_achievements' => $result['new_achievements'],
         ]);
+    }
+
+    /**
+     * Backward-compatible alias for completeFlashcardReview.
+     */
+    public function complete(Request $request): JsonResponse
+    {
+        return $this->completeFlashcardReview($request);
     }
 }

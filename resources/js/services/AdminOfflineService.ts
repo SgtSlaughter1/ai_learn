@@ -29,6 +29,7 @@ export function getAdminAuthHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
     };
     const xsrf = getCsrfToken();
     if (xsrf) {
@@ -493,22 +494,24 @@ export async function executeAdminAction<T = any>(options: {
             const res = await fetch(endpoint, {
                 method,
                 headers: getAdminAuthHeaders(),
-                credentials: 'same-origin',
+                credentials: 'include',
                 body: payload ? JSON.stringify(payload) : undefined,
             });
 
             if (res.ok) {
-                const data = await res.json();
+                const data = await res.json().catch(() => ({}));
                 try {
                     const tableObj = (db as any)[table];
                     if (tableObj) {
                         if (action === 'delete') {
                             await tableObj.delete(recordId.startsWith('temp_') ? recordId : isNaN(Number(recordId)) ? recordId : Number(recordId));
-                        } else if (data.learner || data.subject || data.question || data.class || data.school || data.admin) {
-                            const saved = data.learner || data.subject || data.question || data.class || data.school || data.admin;
-                            await tableObj.put(saved);
-                        } else if (optimisticRecord) {
-                            await tableObj.put({ ...optimisticRecord, _pendingSync: false });
+                        } else {
+                            const saved = data.learner || data.subject || data.question || data.class || data.school || data.admin || data.teacher || data.topic || data.data;
+                            if (saved) {
+                                await tableObj.put(saved);
+                            } else if (optimisticRecord) {
+                                await tableObj.put({ ...optimisticRecord, _pendingSync: false });
+                            }
                         }
                     }
                 } catch (e) {
@@ -520,7 +523,7 @@ export async function executeAdminAction<T = any>(options: {
                     success: true,
                     synced: true,
                     data,
-                    message: data.message || 'Action completed successfully',
+                    message: data.message || (action === 'delete' ? 'Deleted successfully' : 'Saved successfully'),
                 };
             } else {
                 if (res.status >= 400 && res.status < 500) {

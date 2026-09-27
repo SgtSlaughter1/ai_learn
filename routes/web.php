@@ -112,37 +112,37 @@ Route::prefix('api/v1/auth')->group(function () {
 
 // Protected Core Learning Routes
 Route::middleware('auth')->group(function () {
-    Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::get('/dashboard', [DashboardController::class, 'showLearnerDashboard']);
     Route::get('/learner/dashboard', fn() => \Inertia\Inertia::render('learner/Dashboard'));
-    Route::get('/admin/dashboard', [AdminDashboardController::class, 'index']);
-    Route::get('/super-admin/dashboard', [AdminDashboardController::class, 'index']);
-    Route::get('/school-admin/dashboard', [AdminDashboardController::class, 'index']);
-    Route::get('/teacher/dashboard', [TeacherDashboardController::class, 'index']);
-    Route::get('/subjects', [SubjectWebController::class, 'index']);
-    Route::get('/general-knowledge', [SubjectWebController::class, 'generalKnowledge']);
-    Route::get('/subjects/{subject}', [SubjectWebController::class, 'show']);
+    Route::get('/admin/dashboard', [AdminDashboardController::class, 'showAdminDashboard']);
+    Route::get('/super-admin/dashboard', [AdminDashboardController::class, 'showAdminDashboard']);
+    Route::get('/school-admin/dashboard', [AdminDashboardController::class, 'showAdminDashboard']);
+    Route::get('/teacher/dashboard', [TeacherDashboardController::class, 'showTeacherDashboard']);
+    Route::get('/subjects', [SubjectWebController::class, 'showSubjectsPage']);
+    Route::get('/general-knowledge', [SubjectWebController::class, 'showGeneralKnowledgePage']);
+    Route::get('/subjects/{subject}', [SubjectWebController::class, 'showSubject']);
     
     // Quiz Exercises & Attempts
-    Route::get('/quizzes/{quiz}', [QuizWebController::class, 'show']);
-    Route::post('/quizzes/{quiz}/attempt', [QuizWebController::class, 'submit']);
-    Route::get('/quizzes/attempts/{attempt}', [QuizWebController::class, 'result']);
+    Route::get('/quizzes/{quiz}', [QuizWebController::class, 'showQuiz']);
+    Route::post('/quizzes/{quiz}/attempt', [QuizWebController::class, 'submitQuizAttempt']);
+    Route::get('/quizzes/attempts/{attempt}', [QuizWebController::class, 'showQuizResult']);
 
     // Active Recall Flashcards
-    Route::get('/flashcards', [FlashcardController::class, 'index']);
+    Route::get('/flashcards', [FlashcardController::class, 'showFlashcardsPage']);
 
     // Separate JSON Data Routes
     Route::prefix('api/v1')->group(function () {
-        Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
-        Route::get('/admin/stats', [AdminDashboardController::class, 'getStats']);
-        Route::get('/teacher/stats', [TeacherDashboardController::class, 'getStats']);
+        Route::get('/dashboard/stats', [DashboardController::class, 'getLearnerStats']);
+        Route::get('/admin/stats', [AdminDashboardController::class, 'getAdminStats']);
+        Route::get('/teacher/stats', [TeacherDashboardController::class, 'getTeacherStats']);
         Route::get('/classes', [SubjectWebController::class, 'getClasses']);
         Route::get('/subjects', [SubjectWebController::class, 'getSubjects']);
         Route::get('/subjects/{subject}', [SubjectWebController::class, 'getSubjectDetails']);
         Route::get('/subjects/{subject}/topics', [SubjectWebController::class, 'getTopics']);
         Route::get('/quizzes/{quiz}', [QuizWebController::class, 'getQuizData']);
-        Route::post('/quizzes/{quiz}/submit', [QuizWebController::class, 'submit']);
-        Route::get('/quizzes/attempts/{attempt}', [QuizWebController::class, 'getAttemptData']);
-        Route::post('/quizzes/attempts/{attemptId}/sync', [QuizWebController::class, 'syncAttempt']);
+        Route::post('/quizzes/{quiz}/submit', [QuizWebController::class, 'submitQuizAttempt']);
+        Route::get('/quizzes/attempts/{attempt}', [QuizWebController::class, 'getQuizAttemptData']);
+        Route::post('/quizzes/attempts/{attemptId}/sync', [QuizWebController::class, 'syncQuizAttempt']);
 
         // Adaptive Quiz Engine
         Route::post('/quizzes/{quiz}/adaptive/start', [AdaptiveQuizController::class, 'start']);
@@ -503,3 +503,7 @@ Route::get('/run-past-questions-seed', function () use ($guardMaintenance) {
         ], 500);
     }
 });
+
+// Feedback Submission Web Endpoint
+Route::post('/api/v1/feedback', [\App\Http\Controllers\Api\FeedbackController::class, 'store']);
+

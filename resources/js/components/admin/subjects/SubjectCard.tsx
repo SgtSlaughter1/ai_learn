@@ -5,9 +5,10 @@ interface SubjectCardProps {
     onManageTopics: (subject: SubjectItem) => void;
     onEdit: (subject: SubjectItem) => void;
     onDelete: (subject: SubjectItem) => void;
+    isDeleting?: boolean;
 }
 
-export default function SubjectCard({ subject: subj, onManageTopics, onEdit, onDelete }: SubjectCardProps) {
+export default function SubjectCard({ subject: subj, onManageTopics, onEdit, onDelete, isDeleting = false }: SubjectCardProps) {
     const targetClassName = subj.school_class?.name || subj.class_name;
     const targetClassGrade = subj.school_class?.grade_level || subj.class_grade_level;
 
@@ -87,7 +88,8 @@ export default function SubjectCard({ subject: subj, onManageTopics, onEdit, onD
                     <button
                         type="button"
                         onClick={() => onEdit(subj)}
-                        className="p-1.5 hover:bg-[var(--color-primary-5)] text-[var(--color-muted)] hover:text-[var(--color-primary)] active:scale-[0.98] cursor-pointer rounded-lg text-xs font-bold transition-all"
+                        disabled={isDeleting}
+                        className="p-1.5 hover:bg-[var(--color-primary-5)] text-[var(--color-muted)] hover:text-[var(--color-primary)] active:scale-[0.98] cursor-pointer rounded-lg text-xs font-bold transition-all disabled:opacity-50"
                         title="Edit Subject"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -102,17 +104,22 @@ export default function SubjectCard({ subject: subj, onManageTopics, onEdit, onD
                     <button
                         type="button"
                         onClick={() => onDelete(subj)}
-                        className="p-1.5 hover:bg-[var(--color-error-5)] text-[var(--color-muted)] hover:text-[var(--color-error)] active:scale-[0.98] cursor-pointer rounded-lg text-xs font-bold transition-all"
+                        disabled={isDeleting}
+                        className="p-1.5 hover:bg-[var(--color-error-5)] text-[var(--color-muted)] hover:text-[var(--color-error)] active:scale-[0.98] cursor-pointer rounded-lg text-xs font-bold transition-all disabled:opacity-50"
                         title="Delete Subject"
                     >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
-                        </svg>
+                        {isDeleting ? (
+                            <span className="w-4 h-4 border-2 border-[var(--color-error)]/30 border-t-[var(--color-error)] rounded-full animate-spin inline-block"></span>
+                        ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                            </svg>
+                        )}
                     </button>
                 </div>
             </div>

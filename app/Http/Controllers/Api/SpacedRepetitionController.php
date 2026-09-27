@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Revision\CompleteRevisionSessionRequest;
+use App\Http\Requests\Revision\SubmitReviewRequest;
 use App\Services\Gamification\GamificationService;
 use App\Services\SpacedRepetition\SpacedRepetitionService;
 use Illuminate\Http\JsonResponse;
@@ -46,19 +48,10 @@ class SpacedRepetitionController extends Controller
     /**
      * Submit an answer to a single revision question.
      */
-    public function submitReview(Request $request): JsonResponse
+    public function submitReview(SubmitReviewRequest $request): JsonResponse
     {
         $user = Auth::user() ?? $request->user();
-        if (!$user) {
-            return response()->json(['success' => false, 'message' => 'Unauthenticated'], 401);
-        }
-
-        $validated = $request->validate([
-            'item_id' => 'required|integer',
-            'selected_option_id' => 'nullable|integer',
-            'rating' => 'nullable|in:again,hard,good,easy',
-            'time_spent_seconds' => 'nullable|integer',
-        ]);
+        $validated = $request->validated();
 
         $result = $this->spacedRepetitionService->submitReview($user, $validated['item_id'], $validated);
 
@@ -71,18 +64,10 @@ class SpacedRepetitionController extends Controller
     /**
      * Finalize today's revision session, award daily streak bonus XP (+25 XP), and return summary.
      */
-    public function completeSession(Request $request): JsonResponse
+    public function completeSession(CompleteRevisionSessionRequest $request): JsonResponse
     {
         $user = Auth::user() ?? $request->user();
-        if (!$user) {
-            return response()->json(['success' => false, 'message' => 'Unauthenticated'], 401);
-        }
-
-        $validated = $request->validate([
-            'completed_count' => 'nullable|integer',
-            'correct_count' => 'nullable|integer',
-            'time_spent_seconds' => 'nullable|integer',
-        ]);
+        $validated = $request->validated();
 
         $completedCount = (int) ($validated['completed_count'] ?? 0);
         $correctCount = (int) ($validated['correct_count'] ?? 0);

@@ -9,7 +9,10 @@ use Illuminate\Http\Request;
 
 class SubjectController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    /**
+     * Get list of active subjects filtered optionally by class and grade level.
+     */
+    public function getSubjectsList(Request $request): JsonResponse
     {
         $classId = $request->get('class_id');
         $gradeLevel = $request->get('grade_level') ?? $request->get('level');
@@ -35,5 +38,13 @@ class SubjectController extends Controller
             ->get();
 
         return response()->json($subjects);
+    }
+
+    /**
+     * Backward-compatible alias for getSubjectsList.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        return $this->getSubjectsList($request);
     }
 }

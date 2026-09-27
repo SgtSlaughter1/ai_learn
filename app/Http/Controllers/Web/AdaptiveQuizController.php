@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Quiz\AdaptiveQuizAnswerRequest;
 use App\Models\Quiz;
 use App\Services\Adaptive\AdaptiveService;
 use Illuminate\Http\JsonResponse;
@@ -30,21 +31,16 @@ class AdaptiveQuizController extends Controller
     /**
      * Submit an answer and get the next adaptive question.
      */
-    public function answer(Request $request, Quiz $quiz): JsonResponse
+    public function answer(AdaptiveQuizAnswerRequest $request, Quiz $quiz): JsonResponse
     {
-        $request->validate([
-            'state_id'         => ['required'],
-            'question_id'      => ['required', 'integer'],
-            'selected_option_id' => ['nullable', 'integer'],
-        ]);
-
         $user = $request->user();
+        $validated = $request->validated();
 
         $result = $this->adaptiveService->submitAnswer(
             $user->id,
-            $request->input('state_id'),
-            $request->input('question_id'),
-            $request->input('selected_option_id'),
+            $validated['state_id'],
+            $validated['question_id'],
+            $validated['selected_option_id'] ?? null,
         );
 
         return response()->json($result);

@@ -19,6 +19,7 @@ import {
     getCachedAdminQuestions,
     cacheAdminTopics,
     getCachedAdminTopics,
+    getAdminAuthHeaders,
     ADMIN_DATA_CHANGED_EVENT,
 } from '@/services/AdminOfflineService';
 import OverviewTab from '@/components/admin/OverviewTab';
@@ -72,10 +73,14 @@ export default function Dashboard() {
     };
 
     // Fetch Stats
+    // Fetch Stats
     const fetchStats = async () => {
         setLoadingStats(true);
         try {
-            const res = await fetch('/api/v1/admin/stats');
+            const res = await fetch('/api/v1/admin/stats', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 if (data.status === 'success') {
@@ -106,7 +111,10 @@ export default function Dashboard() {
                 setSchools(cached);
                 return;
             }
-            const res = await fetch('/api/v1/admin/schools');
+            const res = await fetch('/api/v1/admin/schools', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const items = data.data || data.schools || [];
@@ -134,7 +142,10 @@ export default function Dashboard() {
                 setSchoolAdmins(cached);
                 return;
             }
-            const res = await fetch('/api/v1/admin/school-admins');
+            const res = await fetch('/api/v1/admin/school-admins', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const items = data.data || data.school_admins || [];
@@ -161,7 +172,10 @@ export default function Dashboard() {
                 setTeachers(cached);
                 return;
             }
-            const res = await fetch('/api/v1/admin/teachers');
+            const res = await fetch('/api/v1/admin/teachers', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const items = data.data || data.teachers || [];
@@ -188,7 +202,10 @@ export default function Dashboard() {
                 setClasses(cached);
                 return;
             }
-            const res = await fetch('/api/v1/admin/classes');
+            const res = await fetch('/api/v1/admin/classes', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const items = data.data || data.classes || [];
@@ -215,7 +232,10 @@ export default function Dashboard() {
                 setLearners(cached);
                 return;
             }
-            const res = await fetch('/api/v1/admin/learners');
+            const res = await fetch('/api/v1/admin/learners', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const items = data.data || data.learners || [];
@@ -244,7 +264,10 @@ export default function Dashboard() {
                 setAllTopics(cachedTopics);
                 return;
             }
-            const res = await fetch('/api/v1/admin/subjects');
+            const res = await fetch('/api/v1/admin/subjects', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const items = data.data || data.subjects || [];
@@ -277,7 +300,10 @@ export default function Dashboard() {
                 setQuestions(cached);
                 return;
             }
-            const res = await fetch('/api/v1/admin/questions');
+            const res = await fetch('/api/v1/admin/questions', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const items = data.data || data.questions || [];

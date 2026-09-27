@@ -12,6 +12,7 @@ use App\Models\UserAchievement;
 use App\Models\UserGamification;
 use App\Models\XpTransaction;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class GamificationService
@@ -351,9 +352,9 @@ class GamificationService
             'xp_into_level'       => $xpIntoLevel,
             'xp_for_next_level'   => $xpForNextLevel,
             'next_level'          => $nextLevelThreshold !== null ? $profile->level + 1 : null,
-            'recent_xp'           => $recentXp,
-            'achievements'        => $achievements,
-            'locked_achievements' => $lockedAchievements,
+            'recent_xp'           => $recentXp->values()->all(),
+            'achievements'        => $achievements->values()->all(),
+            'locked_achievements' => $lockedAchievements->values()->all(),
             'total_achievements'  => count($allAchievements),
             'earned_achievements' => count($achievements),
         ];
@@ -368,19 +369,26 @@ class GamificationService
      */
     public function getLeaderboard(User $currentUser, int $limit = 10): array
     {
-        $topUsers = UserGamification::with('user:id,name')
-            ->orderByDesc('total_xp')
-            ->limit($limit)
-            ->get()
-            ->map(fn(UserGamification $g, int $index) => [
-                'position'        => $index + 1,
-                'user_id'         => $g->user_id,
-                'name'            => $g->user->name ?? 'Unknown',
-                'total_xp'        => $g->total_xp,
-                'level'           => $g->level,
-                'tier'            => $g->tier ?? 'Newcomer',
-                'is_current_user' => $g->user_id === $currentUser->id,
-            ]);
+        $topUsersData = Cache::remember("gamification:leaderboard:top:{$limit}", now()->addMinutes(5), function () use ($limit) {
+            return UserGamification::with('user:id,name')
+                ->orderByDesc('total_xp')
+                ->limit($limit)
+                ->get()
+                ->map(fn(UserGamification $g, int $index) => [
+                    'position'        => $index + 1,
+                    'user_id'         => $g->user_id,
+                    'name'            => $g->user->name ?? 'Unknown',
+                    'total_xp'        => $g->total_xp,
+                    'level'           => $g->level,
+                    'tier'            => $g->tier ?? 'Newcomer',
+                ])
+                ->all();
+        });
+
+        $topUsers = array_map(function ($item) use ($currentUser) {
+            $item['is_current_user'] = $item['user_id'] === $currentUser->id;
+            return $item;
+        }, $topUsersData);
 
         $currentUserPosition = UserGamification::where('total_xp', '>', function ($query) use ($currentUser) {
             $query->select('total_xp')
@@ -400,9 +408,9 @@ class GamificationService
         ];
 
         return [
-            'top_users'           => $topUsers->toArray(),
+            'top_users'           => $topUsers,
             'current_user'        => $currentUserEntry,
-            'current_user_in_top' => $topUsers->contains('user_id', $currentUser->id),
+            'current_user_in_top' => collect($topUsers)->contains('user_id', $currentUser->id),
         ];
     }
 

@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import type { ClassItem } from '@/types/admin';
-import { formatClassOptionLabel, ALL_GRADE_GROUPS } from '@/utils/format';
+import { formatClassOptionLabel, ALL_GRADE_GROUPS, getGradeLevelsForSchool, getGradeLevelsForTeacher } from '@/utils/format';
 
 interface SubjectFilterBarProps {
     subjectSearch: string;
@@ -10,6 +11,9 @@ interface SubjectFilterBarProps {
     setSelectedClassFilter: (v: string | number) => void;
     classes: ClassItem[];
     onOpenAddSubjectModal: () => void;
+    school?: { category?: string | null; category_ids?: number[] | null; allowed_grade_levels?: string[] | null } | null;
+    allowedGradeLevels?: string[];
+    isTeacher?: boolean;
 }
 
 export default function SubjectFilterBar({
@@ -21,7 +25,30 @@ export default function SubjectFilterBar({
     setSelectedClassFilter,
     classes,
     onOpenAddSubjectModal,
+    school,
+    allowedGradeLevels,
+    isTeacher,
 }: SubjectFilterBarProps) {
+    const availableGradeGroups = useMemo(() => {
+        if (allowedGradeLevels && allowedGradeLevels.length > 0) {
+            const allowedSet = new Set(allowedGradeLevels.map((g) => g.toUpperCase()));
+            return ALL_GRADE_GROUPS.map((grp) => ({
+                ...grp,
+                options: grp.options.filter((opt) => allowedSet.has(opt.value.toUpperCase())),
+            })).filter((grp) => grp.options.length > 0);
+        }
+        if (isTeacher) {
+            return getGradeLevelsForTeacher(classes, school);
+        }
+        if (school) {
+            return getGradeLevelsForSchool(school);
+        }
+        if (classes && classes.length > 0) {
+            return getGradeLevelsForTeacher(classes, school);
+        }
+        return ALL_GRADE_GROUPS;
+    }, [allowedGradeLevels, isTeacher, school, classes]);
+
     const filteredClasses = classes.filter(
         (c) => !gradeFilter || c.grade_level === gradeFilter
     );
@@ -63,7 +90,7 @@ export default function SubjectFilterBar({
                     className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
                 >
                     <option value="">All Grade Levels</option>
-                    {ALL_GRADE_GROUPS.map((grp) => (
+                    {availableGradeGroups.map((grp) => (
                         <optgroup key={grp.group} label={grp.group}>
                             {grp.options.map((opt) => (
                                 <option key={opt.value} value={opt.value}>

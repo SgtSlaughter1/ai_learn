@@ -103,6 +103,38 @@ class School extends Model
         return $result;
     }
 
+    public static function filterGradeOptions(array $allowedGradeLevels): array
+    {
+        $all = [
+            'CRECHE' => ['value' => 'CRECHE', 'label' => 'Creche', 'group' => 'Early Childhood'],
+            'KG1'    => ['value' => 'KG1', 'label' => 'KG 1', 'group' => 'Early Childhood'],
+            'KG2'    => ['value' => 'KG2', 'label' => 'KG 2', 'group' => 'Early Childhood'],
+            'NUR1'   => ['value' => 'NUR1', 'label' => 'Nursery 1', 'group' => 'Early Childhood'],
+            'NUR2'   => ['value' => 'NUR2', 'label' => 'Nursery 2', 'group' => 'Early Childhood'],
+            'PRI1'   => ['value' => 'PRI1', 'label' => 'Primary 1', 'group' => 'Primary School'],
+            'PRI2'   => ['value' => 'PRI2', 'label' => 'Primary 2', 'group' => 'Primary School'],
+            'PRI3'   => ['value' => 'PRI3', 'label' => 'Primary 3', 'group' => 'Primary School'],
+            'PRI4'   => ['value' => 'PRI4', 'label' => 'Primary 4', 'group' => 'Primary School'],
+            'PRI5'   => ['value' => 'PRI5', 'label' => 'Primary 5', 'group' => 'Primary School'],
+            'PRI6'   => ['value' => 'PRI6', 'label' => 'Primary 6', 'group' => 'Primary School'],
+            'JSS1'   => ['value' => 'JSS1', 'label' => 'JSS 1', 'group' => 'Junior Secondary'],
+            'JSS2'   => ['value' => 'JSS2', 'label' => 'JSS 2', 'group' => 'Junior Secondary'],
+            'JSS3'   => ['value' => 'JSS3', 'label' => 'JSS 3', 'group' => 'Junior Secondary'],
+            'SS1'    => ['value' => 'SS1', 'label' => 'SS 1', 'group' => 'Senior Secondary'],
+            'SS2'    => ['value' => 'SS2', 'label' => 'SS 2', 'group' => 'Senior Secondary'],
+            'SS3'    => ['value' => 'SS3', 'label' => 'SS 3', 'group' => 'Senior Secondary'],
+        ];
+
+        $normalized = array_map(fn ($g) => strtoupper(str_replace(' ', '', (string) $g)), $allowedGradeLevels);
+        $result = [];
+        foreach ($normalized as $key) {
+            if (isset($all[$key])) {
+                $result[] = $all[$key];
+            }
+        }
+        return $result;
+    }
+
     public function getAllowedGradeLevelsAttribute(): array
     {
         return $this->allowedGradeLevels();
@@ -124,7 +156,30 @@ class School extends Model
 
     public function supportsGradeLevel(string $gradeLevel): bool
     {
-        return in_array(strtoupper($gradeLevel), $this->allowedGradeLevels(), true);
+        return in_array(strtoupper(str_replace(' ', '', $gradeLevel)), $this->allowedGradeLevels(), true);
+    }
+
+    /**
+     * Expand allowed grade levels to include formatted and case variants (e.g. JSS1, JSS 1, jss1).
+     */
+    public static function gradeLevelVariants(array $allowedGrades): array
+    {
+        $variants = [];
+        foreach ($allowedGrades as $g) {
+            $clean = strtoupper(str_replace(' ', '', (string) $g));
+            if (!$clean) {
+                continue;
+            }
+            $variants[] = $clean;
+            $variants[] = strtolower($clean);
+            if (preg_match('/^([A-Z]+)(\d+)$/', $clean, $m)) {
+                $variants[] = $m[1] . ' ' . $m[2];
+                $variants[] = strtolower($m[1]) . ' ' . $m[2];
+                $variants[] = ucfirst(strtolower($m[1])) . ' ' . $m[2];
+                $variants[] = ucfirst(strtolower($m[1])) . $m[2];
+            }
+        }
+        return array_values(array_unique($variants));
     }
 
     /**

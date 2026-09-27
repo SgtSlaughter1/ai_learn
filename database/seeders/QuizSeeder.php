@@ -27,7 +27,7 @@ class QuizSeeder extends Seeder
                 ['title' => $quizTitle],
                 [
                     'school_id' => $topic->subject?->school_id ?? $school1?->id,
-                    'description' => "15-question targeted mastery quiz for {$topic->name} in {$subjectName}.",
+                    'description' => "Topic practice quiz for {$topic->name} in {$subjectName}.",
                     'time_limit_minutes' => 20,
                     'status' => 'active',
                 ]

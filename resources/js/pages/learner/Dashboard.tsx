@@ -51,14 +51,20 @@ export default function LearnerDashboard() {
                     ]);
 
                     if (isMounted) {
-                        setStats(statsData.stats);
-                        setRecentAttempts(statsData.recentAttempts || []);
+                        setStats(statsData?.stats || null);
+                        const rawAttempts = statsData?.recentAttempts;
+                        const safeAttempts = Array.isArray(rawAttempts)
+                            ? rawAttempts
+                            : rawAttempts && typeof rawAttempts === 'object'
+                            ? (Array.isArray((rawAttempts as any).data) ? (rawAttempts as any).data : Object.values(rawAttempts))
+                            : [];
+                        setRecentAttempts(safeAttempts);
                         setGamification(gamData);
                         setLoading(false);
                     }
 
                     // Cache recent attempts, stats, and full gamification profile for offline fallback
-                    if (statsData.recentAttempts) {
+                    if (statsData?.recentAttempts) {
                         localStorage.setItem('cached_dashboard_recent_attempts', JSON.stringify(statsData.recentAttempts));
                     }
                     if (statsData.stats) {
@@ -194,7 +200,12 @@ export default function LearnerDashboard() {
                     const cachedRecentStr = localStorage.getItem('cached_dashboard_recent_attempts');
                     if (cachedRecentStr) {
                         try {
-                            baseRecent = JSON.parse(cachedRecentStr);
+                            const parsed = JSON.parse(cachedRecentStr);
+                            baseRecent = Array.isArray(parsed)
+                                ? parsed
+                                : parsed && typeof parsed === 'object'
+                                ? Object.values(parsed)
+                                : [];
                         } catch {}
                     }
 

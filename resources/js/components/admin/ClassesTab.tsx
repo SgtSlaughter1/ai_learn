@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { ClassItem, ClassLearner, SchoolItem } from '@/types/admin';
 import { executeAdminAction } from '@/services/AdminOfflineService';
 import ClassFilterBar from './classes/ClassFilterBar';
 import ClassCard from './classes/ClassCard';
 import ClassFormModal, { type ClassFormData } from './classes/ClassFormModal';
 import ClassRosterModal from './classes/ClassRosterModal';
+import Pagination from '@/components/common/Pagination';
+import { SkeletonCardGrid } from '@/components/common/Skeleton';
 
 interface Props {
     classes: ClassItem[];
@@ -17,8 +19,11 @@ interface Props {
 export default function ClassesTab({ classes, schools, loading, onRefresh, showToast }: Props) {
     const [classSchoolFilter, setClassSchoolFilter] = useState('');
     const [classGradeFilter, setClassGradeFilter] = useState('');
+    const [page, setPage] = useState(1);
     const [isClassModalOpen, setIsClassModalOpen] = useState(false);
     const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
+    const [isSavingClass, setIsSavingClass] = useState(false);
+    const [deletingClassId, setDeletingClassId] = useState<number | null>(null);
     const [classForm, setClassForm] = useState<ClassFormData>({
         school_id: '',
         name: '',
@@ -26,6 +31,11 @@ export default function ClassesTab({ classes, schools, loading, onRefresh, showT
         section: '',
         description: '',
     });
+
+    // Reset page on filter changes
+    useEffect(() => {
+        setPage(1);
+    }, [classSchoolFilter, classGradeFilter]);
 
     // Class Roster Modal
     const [selectedClassForRoster, setSelectedClassForRoster] = useState<ClassItem | null>(null);
@@ -46,69 +56,85 @@ export default function ClassesTab({ classes, schools, loading, onRefresh, showT
 
     const handleSaveClass = async (e: React.FormEvent) => {
         e.preventDefault();
-        const endpoint = editingClass
-            ? `/api/v1/admin/classes/${editingClass.id}`
-            : '/api/v1/admin/classes';
-        const method = editingClass ? 'PUT' : 'POST';
-        const tempId = editingClass ? String(editingClass.id) : `temp_cls_${Date.now()}`;
+        if (isSavingClass) return;
+        setIsSavingClass(true);
 
-        const selectedSchool = schools.find((s) => String(s.id) === String(classForm.school_id));
-        const optimisticClass: ClassItem = {
-            id: editingClass ? editingClass.id : Date.now(),
-            school_id: Number(classForm.school_id),
-            name: classForm.name,
-            slug: classForm.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-            grade_level: classForm.grade_level,
-            section: classForm.section || null,
-            description: classForm.description || null,
-            is_active: true,
-            learner_count: editingClass ? editingClass.learner_count : 0,
-            school: selectedSchool ? { id: selectedSchool.id, name: selectedSchool.name } : undefined,
-            _pendingSync: true,
-        };
+        try {
+            const endpoint = editingClass
+                ? `/api/v1/admin/classes/${editingClass.id}`
+                : '/api/v1/admin/classes';
+            const method = editingClass ? 'PUT' : 'POST';
+            const tempId = editingClass ? String(editingClass.id) : `temp_cls_${Date.now()}`;
 
-        const res = await executeAdminAction({
-            table: 'adminClasses',
-            action: editingClass ? 'update' : 'insert',
-            recordId: tempId,
-            endpoint,
-            method,
-            payload: classForm,
-            optimisticRecord: optimisticClass,
-        });
+            const selectedSchool = schools.find((s) => String(s.id) === String(classForm.school_id));
+            const optimisticClass: ClassItem = {
+                id: editingClass ? editingClass.id : Date.now(),
+                school_id: Number(classForm.school_id),
+                name: classForm.name,
+                slug: classForm.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                grade_level: classForm.grade_level,
+                section: classForm.section || null,
+                description: classForm.description || null,
+                is_active: true,
+                learner_count: editingClass ? editingClass.learner_count : 0,
+                school: selectedSchool ? { id: selectedSchool.id, name: selectedSchool.name } : undefined,
+                _pendingSync: true,
+            };
 
-        if (res.success) {
-            showToast(res.message || 'Class saved successfully', 'success');
-            setIsClassModalOpen(false);
-            setEditingClass(null);
-            setClassForm({
-                school_id: schools[0]?.id ? String(schools[0].id) : '',
-                name: '',
-                grade_level: 'SS1',
-                section: '',
-                description: '',
+            const res = await executeAdminAction({
+                table: 'adminClasses',
+                action: editingClass ? 'update' : 'insert',
+                recordId: tempId,
+                endpoint,
+                method,
+                payload: classForm,
+                optimisticRecord: optimisticClass,
             });
-            onRefresh();
-        } else {
-            showToast(res.error || 'Failed to save class', 'error');
+
+            if (res.success) {
+                showToast(res.message || (res.offline ? 'Class saved locally (Pending Sync)' : 'Class saved successfully'), 'success');
+                setIsClassModalOpen(false);
+                setEditingClass(null);
+                setClassForm({
+                    school_id: schools[0]?.id ? String(schools[0].id) : '',
+                    name: '',
+                    grade_level: 'SS1',
+                    section: '',
+                    description: '',
+                });
+                onRefresh();
+            } else {
+                showToast(res.error || 'Failed to save class', 'error');
+            }
+        } catch (err: any) {
+            showToast(err?.message || 'Error saving class', 'error');
+        } finally {
+            setIsSavingClass(false);
         }
     };
 
     const handleDeleteClass = async (cls: ClassItem) => {
         if (!confirm(`Are you sure you want to delete class ${cls.name}?`)) return;
-        const res = await executeAdminAction({
-            table: 'adminClasses',
-            action: 'delete',
-            recordId: String(cls.id),
-            endpoint: `/api/v1/admin/classes/${cls.id}`,
-            method: 'DELETE',
-        });
+        setDeletingClassId(cls.id);
+        try {
+            const res = await executeAdminAction({
+                table: 'adminClasses',
+                action: 'delete',
+                recordId: String(cls.id),
+                endpoint: `/api/v1/admin/classes/${cls.id}`,
+                method: 'DELETE',
+            });
 
-        if (res.success) {
-            showToast(res.message || 'Class deleted');
-            onRefresh();
-        } else {
-            showToast(res.error || 'Failed to delete class', 'error');
+            if (res.success) {
+                showToast(res.message || (res.offline ? 'Class deleted locally (Pending Sync)' : 'Class deleted successfully'), 'success');
+                onRefresh();
+            } else {
+                showToast(res.error || 'Failed to delete class', 'error');
+            }
+        } catch (err: any) {
+            showToast(err?.message || 'Error deleting class', 'error');
+        } finally {
+            setDeletingClassId(null);
         }
     };
 
@@ -224,6 +250,8 @@ export default function ClassesTab({ classes, schools, loading, onRefresh, showT
         return true;
     });
 
+    const paginatedClasses = filteredClasses.slice((page - 1) * 50, page * 50);
+
     return (
         <div className="space-y-6">
             <ClassFilterBar
@@ -246,40 +274,46 @@ export default function ClassesTab({ classes, schools, loading, onRefresh, showT
             />
 
             {loading ? (
-                <div className="grid md:grid-cols-3 gap-4">
-                    {[1, 2, 3].map((n) => (
-                        <div
-                            key={n}
-                            className="h-36 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl animate-pulse"
-                        />
-                    ))}
-                </div>
+                <SkeletonCardGrid count={6} cols="grid-cols-1 md:grid-cols-2 lg:grid-cols-3" />
             ) : filteredClasses.length === 0 ? (
                 <div className="p-12 text-center bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl text-[var(--color-muted)] text-sm">
                     <p className="font-bold text-[var(--color-text)]">No classes found</p>
                     <p className="text-xs mt-1">Create classes for JSS1-SS3 cohorts to organize and monitor your students.</p>
                 </div>
             ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {filteredClasses.map((cls) => (
-                        <ClassCard
-                            key={cls.id}
-                            classItem={cls}
-                            onViewRoster={openClassRoster}
-                            onEdit={(item) => {
-                                setEditingClass(item);
-                                setClassForm({
-                                    school_id: String(item.school_id),
-                                    name: item.name,
-                                    grade_level: item.grade_level,
-                                    section: item.section || '',
-                                    description: item.description || '',
-                                });
-                                setIsClassModalOpen(true);
-                            }}
-                            onDelete={handleDeleteClass}
+                <div className="space-y-6">
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+                        {paginatedClasses.map((cls) => (
+                            <ClassCard
+                                key={cls.id}
+                                classItem={cls}
+                                onViewRoster={openClassRoster}
+                                onEdit={(item) => {
+                                    setEditingClass(item);
+                                    setClassForm({
+                                        school_id: String(item.school_id),
+                                        name: item.name,
+                                        grade_level: item.grade_level,
+                                        section: item.section || '',
+                                        description: item.description || '',
+                                    });
+                                    setIsClassModalOpen(true);
+                                }}
+                                onDelete={handleDeleteClass}
+                                isDeleting={deletingClassId === cls.id}
+                            />
+                        ))}
+                    </div>
+
+                    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl overflow-hidden">
+                        <Pagination
+                            currentPage={page}
+                            totalItems={filteredClasses.length}
+                            itemsPerPage={50}
+                            onPageChange={setPage}
+                            itemLabel="classes"
                         />
-                    ))}
+                    </div>
                 </div>
             )}
 
@@ -292,6 +326,7 @@ export default function ClassesTab({ classes, schools, loading, onRefresh, showT
                 setForm={setClassForm}
                 schools={schools}
                 onSubmit={handleSaveClass}
+                isSubmitting={isSavingClass}
             />
 
             {/* Modal: Class Roster & Enrollment */}

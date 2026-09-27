@@ -6,6 +6,7 @@ import SubjectCard from './subjects/SubjectCard';
 import SubjectFormModal, { type SubjectFormData } from './subjects/SubjectFormModal';
 import TopicManagerModal from './subjects/TopicManagerModal';
 import TopicFormModal, { type TopicFormData } from './subjects/TopicFormModal';
+import { SkeletonCardGrid } from '@/components/common/Skeleton';
 
 interface Props {
     subjects: SubjectItem[];
@@ -13,11 +14,25 @@ interface Props {
     loading: boolean;
     onRefresh: () => void;
     showToast: (text: string, type?: 'success' | 'error') => void;
+    school?: { category?: string | null; category_ids?: number[] | null; allowed_grade_levels?: string[] | null } | null;
+    allowedGradeLevels?: string[];
+    isTeacher?: boolean;
 }
 
-export default function SubjectsTab({ subjects, classes = [], loading, onRefresh, showToast }: Props) {
+export default function SubjectsTab({
+    subjects,
+    classes = [],
+    loading,
+    onRefresh,
+    showToast,
+    school,
+    allowedGradeLevels,
+    isTeacher,
+}: Props) {
     const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
     const [editingSubject, setEditingSubject] = useState<SubjectItem | null>(null);
+    const [isSavingSubject, setIsSavingSubject] = useState(false);
+    const [deletingSubjectId, setDeletingSubjectId] = useState<number | null>(null);
     const [gradeFilter, setGradeFilter] = useState('');
     const [selectedClassFilter, setSelectedClassFilter] = useState<string | number>('all');
     const [subjectSearch, setSubjectSearch] = useState('');
@@ -36,6 +51,7 @@ export default function SubjectsTab({ subjects, classes = [], loading, onRefresh
     const [loadingTopics, setLoadingTopics] = useState(false);
     const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
     const [editingTopic, setEditingTopic] = useState<TopicItem | null>(null);
+    const [isSavingTopic, setIsSavingTopic] = useState(false);
     const [topicForm, setTopicForm] = useState<TopicFormData>({
         name: '',
         slug: '',
@@ -56,72 +72,88 @@ export default function SubjectsTab({ subjects, classes = [], loading, onRefresh
 
     const handleSaveSubject = async (e: React.FormEvent) => {
         e.preventDefault();
-        const endpoint = editingSubject
-            ? `/api/v1/admin/subjects/${editingSubject.id}`
-            : '/api/v1/admin/subjects';
-        const method = editingSubject ? 'PUT' : 'POST';
-        const tempId = editingSubject ? String(editingSubject.id) : `temp_subj_${Date.now()}`;
+        if (isSavingSubject) return;
+        setIsSavingSubject(true);
 
-        const payloadData = {
-            ...subjectForm,
-            class_id: subjectForm.class_id ? Number(subjectForm.class_id) : null,
-        };
+        try {
+            const endpoint = editingSubject
+                ? `/api/v1/admin/subjects/${editingSubject.id}`
+                : '/api/v1/admin/subjects';
+            const method = editingSubject ? 'PUT' : 'POST';
+            const tempId = editingSubject ? String(editingSubject.id) : `temp_subj_${Date.now()}`;
 
-        const matchingClass = classes.find((c) => String(c.id) === String(subjectForm.class_id));
+            const payloadData = {
+                ...subjectForm,
+                class_id: subjectForm.class_id ? Number(subjectForm.class_id) : null,
+            };
 
-        const optimisticSubject: SubjectItem = {
-            id: editingSubject ? editingSubject.id : Date.now(),
-            name: subjectForm.name,
-            slug: subjectForm.slug || subjectForm.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-            description: subjectForm.description || null,
-            class_id: subjectForm.class_id ? Number(subjectForm.class_id) : null,
-            school_class: matchingClass
-                ? { id: matchingClass.id, name: matchingClass.name, grade_level: matchingClass.grade_level }
-                : null,
-            class_name: matchingClass ? matchingClass.name : null,
-            class_grade_level: matchingClass ? matchingClass.grade_level : null,
-            status: subjectForm.status,
-            sort_order: subjectForm.sort_order,
-            topics_count: editingSubject ? editingSubject.topics_count : 0,
-            _pendingSync: true,
-        };
+            const matchingClass = classes.find((c) => String(c.id) === String(subjectForm.class_id));
 
-        const res = await executeAdminAction({
-            table: 'subjects',
-            action: editingSubject ? 'update' : 'insert',
-            recordId: tempId,
-            endpoint,
-            method,
-            payload: payloadData,
-            optimisticRecord: optimisticSubject,
-        });
+            const optimisticSubject: SubjectItem = {
+                id: editingSubject ? editingSubject.id : Date.now(),
+                name: subjectForm.name,
+                slug: subjectForm.slug || subjectForm.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                description: subjectForm.description || null,
+                class_id: subjectForm.class_id ? Number(subjectForm.class_id) : null,
+                school_class: matchingClass
+                    ? { id: matchingClass.id, name: matchingClass.name, grade_level: matchingClass.grade_level }
+                    : null,
+                class_name: matchingClass ? matchingClass.name : null,
+                class_grade_level: matchingClass ? matchingClass.grade_level : null,
+                status: subjectForm.status,
+                sort_order: subjectForm.sort_order,
+                topics_count: editingSubject ? editingSubject.topics_count : 0,
+                _pendingSync: true,
+            };
 
-        if (res.success) {
-            showToast(res.message || 'Subject saved successfully', 'success');
-            setIsSubjectModalOpen(false);
-            setEditingSubject(null);
-            setSubjectForm({ name: '', slug: '', description: '', class_id: '', status: 'active', sort_order: 0 });
-            onRefresh();
-        } else {
-            showToast(res.error || 'Failed to save subject', 'error');
+            const res = await executeAdminAction({
+                table: 'subjects',
+                action: editingSubject ? 'update' : 'insert',
+                recordId: tempId,
+                endpoint,
+                method,
+                payload: payloadData,
+                optimisticRecord: optimisticSubject,
+            });
+
+            if (res.success) {
+                showToast(res.message || (res.offline ? 'Subject saved locally (Pending Sync)' : 'Subject saved successfully'), 'success');
+                setIsSubjectModalOpen(false);
+                setEditingSubject(null);
+                setSubjectForm({ name: '', slug: '', description: '', class_id: '', status: 'active', sort_order: 0 });
+                onRefresh();
+            } else {
+                showToast(res.error || 'Failed to save subject', 'error');
+            }
+        } catch (err: any) {
+            showToast(err?.message || 'Error saving subject', 'error');
+        } finally {
+            setIsSavingSubject(false);
         }
     };
 
     const handleDeleteSubject = async (subject: SubjectItem) => {
         if (!confirm(`Delete subject "${subject.name}"? This will also remove its topics.`)) return;
-        const res = await executeAdminAction({
-            table: 'subjects',
-            action: 'delete',
-            recordId: String(subject.id),
-            endpoint: `/api/v1/admin/subjects/${subject.id}`,
-            method: 'DELETE',
-        });
+        setDeletingSubjectId(subject.id);
+        try {
+            const res = await executeAdminAction({
+                table: 'subjects',
+                action: 'delete',
+                recordId: String(subject.id),
+                endpoint: `/api/v1/admin/subjects/${subject.id}`,
+                method: 'DELETE',
+            });
 
-        if (res.success) {
-            showToast(res.message || 'Subject deleted');
-            onRefresh();
-        } else {
-            showToast(res.error || 'Failed to delete subject', 'error');
+            if (res.success) {
+                showToast(res.message || (res.offline ? 'Subject deleted locally (Pending Sync)' : 'Subject deleted successfully'), 'success');
+                onRefresh();
+            } else {
+                showToast(res.error || 'Failed to delete subject', 'error');
+            }
+        } catch (err: any) {
+            showToast(err?.message || 'Error deleting subject', 'error');
+        } finally {
+            setDeletingSubjectId(null);
         }
     };
 
@@ -157,67 +189,78 @@ export default function SubjectsTab({ subjects, classes = [], loading, onRefresh
 
     const handleSaveTopic = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedSubjectForTopics) return;
+        if (!selectedSubjectForTopics || isSavingTopic) return;
+        setIsSavingTopic(true);
 
-        const endpoint = editingTopic
-            ? `/api/v1/admin/topics/${editingTopic.id}`
-            : '/api/v1/admin/topics';
-        const method = editingTopic ? 'PUT' : 'POST';
-        const tempId = editingTopic ? String(editingTopic.id) : `temp_topic_${Date.now()}`;
+        try {
+            const endpoint = editingTopic
+                ? `/api/v1/admin/topics/${editingTopic.id}`
+                : '/api/v1/admin/topics';
+            const method = editingTopic ? 'PUT' : 'POST';
+            const tempId = editingTopic ? String(editingTopic.id) : `temp_topic_${Date.now()}`;
 
-        const optimisticTopic: TopicItem = {
-            id: editingTopic ? editingTopic.id : Date.now(),
-            subject_id: selectedSubjectForTopics.id,
-            name: topicForm.name,
-            slug: topicForm.slug || topicForm.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-            level: topicForm.level,
-            description: topicForm.description || null,
-            status: topicForm.status,
-            sort_order: topicForm.sort_order,
-            _pendingSync: true,
-        };
-
-        const res = await executeAdminAction({
-            table: 'topics',
-            action: editingTopic ? 'update' : 'insert',
-            recordId: tempId,
-            endpoint,
-            method,
-            payload: {
-                ...topicForm,
+            const optimisticTopic: TopicItem = {
+                id: editingTopic ? editingTopic.id : Date.now(),
                 subject_id: selectedSubjectForTopics.id,
-            },
-            optimisticRecord: optimisticTopic,
-        });
+                name: topicForm.name,
+                slug: topicForm.slug || topicForm.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                level: topicForm.level,
+                description: topicForm.description || null,
+                status: topicForm.status,
+                sort_order: topicForm.sort_order,
+                _pendingSync: true,
+            };
 
-        if (res.success) {
-            showToast(res.message || 'Topic saved successfully', 'success');
-            setIsTopicModalOpen(false);
-            setEditingTopic(null);
-            setTopicForm({ name: '', slug: '', level: 'SS1', description: '', status: 'active', sort_order: 0 });
-            openTopicManager(selectedSubjectForTopics);
-            onRefresh();
-        } else {
-            showToast(res.error || 'Failed to save topic', 'error');
+            const res = await executeAdminAction({
+                table: 'topics',
+                action: editingTopic ? 'update' : 'insert',
+                recordId: tempId,
+                endpoint,
+                method,
+                payload: {
+                    ...topicForm,
+                    subject_id: selectedSubjectForTopics.id,
+                },
+                optimisticRecord: optimisticTopic,
+            });
+
+            if (res.success) {
+                showToast(res.message || (res.offline ? 'Topic saved locally (Pending Sync)' : 'Topic saved successfully'), 'success');
+                setIsTopicModalOpen(false);
+                setEditingTopic(null);
+                setTopicForm({ name: '', slug: '', level: 'SS1', description: '', status: 'active', sort_order: 0 });
+                openTopicManager(selectedSubjectForTopics);
+                onRefresh();
+            } else {
+                showToast(res.error || 'Failed to save topic', 'error');
+            }
+        } catch (err: any) {
+            showToast(err?.message || 'Error saving topic', 'error');
+        } finally {
+            setIsSavingTopic(false);
         }
     };
 
     const handleDeleteTopic = async (topic: TopicItem) => {
         if (!confirm(`Delete topic "${topic.name}"?`)) return;
-        const res = await executeAdminAction({
-            table: 'topics',
-            action: 'delete',
-            recordId: String(topic.id),
-            endpoint: `/api/v1/admin/topics/${topic.id}`,
-            method: 'DELETE',
-        });
+        try {
+            const res = await executeAdminAction({
+                table: 'topics',
+                action: 'delete',
+                recordId: String(topic.id),
+                endpoint: `/api/v1/admin/topics/${topic.id}`,
+                method: 'DELETE',
+            });
 
-        if (res.success) {
-            showToast(res.message || 'Topic deleted');
-            if (selectedSubjectForTopics) openTopicManager(selectedSubjectForTopics);
-            onRefresh();
-        } else {
-            showToast(res.error || 'Failed to delete topic', 'error');
+            if (res.success) {
+                showToast(res.message || (res.offline ? 'Topic deleted locally (Pending Sync)' : 'Topic deleted successfully'), 'success');
+                if (selectedSubjectForTopics) openTopicManager(selectedSubjectForTopics);
+                onRefresh();
+            } else {
+                showToast(res.error || 'Failed to delete topic', 'error');
+            }
+        } catch (err: any) {
+            showToast(err?.message || 'Error deleting topic', 'error');
         }
     };
 
@@ -254,6 +297,9 @@ export default function SubjectsTab({ subjects, classes = [], loading, onRefresh
                 selectedClassFilter={selectedClassFilter}
                 setSelectedClassFilter={setSelectedClassFilter}
                 classes={classes}
+                school={school}
+                allowedGradeLevels={allowedGradeLevels}
+                isTeacher={isTeacher}
                 onOpenAddSubjectModal={() => {
                     setEditingSubject(null);
                     setSubjectForm({ name: '', slug: '', description: '', class_id: '', status: 'active', sort_order: 0 });
@@ -262,14 +308,7 @@ export default function SubjectsTab({ subjects, classes = [], loading, onRefresh
             />
 
             {loading ? (
-                <div className="grid md:grid-cols-3 gap-4">
-                    {[1, 2, 3].map((n) => (
-                        <div
-                            key={n}
-                            className="h-40 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl animate-pulse"
-                        />
-                    ))}
-                </div>
+                <SkeletonCardGrid count={6} cols="grid-cols-1 md:grid-cols-2 lg:grid-cols-3" />
             ) : filteredSubjects.length === 0 ? (
                 <div className="p-12 text-center bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl text-[var(--color-muted)] text-sm">
                     No subjects match your filter criteria. Click "Add Subject" to create one.
@@ -294,6 +333,7 @@ export default function SubjectsTab({ subjects, classes = [], loading, onRefresh
                                 setIsSubjectModalOpen(true);
                             }}
                             onDelete={handleDeleteSubject}
+                            isDeleting={deletingSubjectId === subj.id}
                         />
                     ))}
                 </div>
@@ -307,7 +347,11 @@ export default function SubjectsTab({ subjects, classes = [], loading, onRefresh
                 form={subjectForm}
                 setForm={setSubjectForm}
                 classes={classes}
+                school={school}
+                allowedGradeLevels={allowedGradeLevels}
+                isTeacher={isTeacher}
                 onSubmit={handleSaveSubject}
+                isSubmitting={isSavingSubject}
             />
 
             {/* Modal: Topic Manager */}
@@ -354,7 +398,12 @@ export default function SubjectsTab({ subjects, classes = [], loading, onRefresh
                 editingTopic={editingTopic}
                 form={topicForm}
                 setForm={setTopicForm}
+                classes={classes}
+                school={school}
+                allowedGradeLevels={allowedGradeLevels}
+                isTeacher={isTeacher}
                 onSubmit={handleSaveTopic}
+                isSubmitting={isSavingTopic}
             />
         </div>
     );

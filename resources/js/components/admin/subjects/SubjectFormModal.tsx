@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { ClassItem, SubjectItem } from '@/types/admin';
-import { formatClassOptionLabel, ALL_GRADE_GROUPS } from '@/utils/format';
+import { formatClassOptionLabel, ALL_GRADE_GROUPS, getGradeLevelsForSchool, getGradeLevelsForTeacher } from '@/utils/format';
 
 export interface SubjectFormData {
     name: string;
@@ -19,6 +19,10 @@ interface SubjectFormModalProps {
     setForm: React.Dispatch<React.SetStateAction<SubjectFormData>>;
     classes: ClassItem[];
     onSubmit: (e: React.FormEvent) => void;
+    isSubmitting?: boolean;
+    school?: { category?: string | null; category_ids?: number[] | null; allowed_grade_levels?: string[] | null } | null;
+    allowedGradeLevels?: string[];
+    isTeacher?: boolean;
 }
 
 export default function SubjectFormModal({
@@ -29,8 +33,32 @@ export default function SubjectFormModal({
     setForm,
     classes,
     onSubmit,
+    isSubmitting = false,
+    school,
+    allowedGradeLevels,
+    isTeacher,
 }: SubjectFormModalProps) {
     const [selectedGradeLevel, setSelectedGradeLevel] = useState<string>('');
+
+    const availableGradeGroups = useMemo(() => {
+        if (allowedGradeLevels && allowedGradeLevels.length > 0) {
+            const allowedSet = new Set(allowedGradeLevels.map((g) => g.toUpperCase()));
+            return ALL_GRADE_GROUPS.map((grp) => ({
+                ...grp,
+                options: grp.options.filter((opt) => allowedSet.has(opt.value.toUpperCase())),
+            })).filter((grp) => grp.options.length > 0);
+        }
+        if (isTeacher) {
+            return getGradeLevelsForTeacher(classes, school);
+        }
+        if (school) {
+            return getGradeLevelsForSchool(school);
+        }
+        if (classes && classes.length > 0) {
+            return getGradeLevelsForTeacher(classes, school);
+        }
+        return ALL_GRADE_GROUPS;
+    }, [allowedGradeLevels, isTeacher, school, classes]);
 
     // Sync initial grade level when editing
     useEffect(() => {
@@ -97,7 +125,7 @@ export default function SubjectFormModal({
                                 className="w-full px-3 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none focus:border-[var(--color-primary)]"
                             >
                                 <option value="">All Grade Levels</option>
-                                {ALL_GRADE_GROUPS.map((grp) => (
+                                {availableGradeGroups.map((grp) => (
                                     <optgroup key={grp.group} label={grp.group}>
                                         {grp.options.map((opt) => (
                                             <option key={opt.value} value={opt.value}>
@@ -160,15 +188,24 @@ export default function SubjectFormModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-5 py-2.5 text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] cursor-pointer"
+                            disabled={isSubmitting}
+                            className="px-5 py-2.5 text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-50 cursor-pointer"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
-                            className="px-6 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all"
+                            disabled={isSubmitting}
+                            className="px-6 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2"
                         >
-                            {editingSubject ? 'Update Subject' : 'Save Subject'}
+                            {isSubmitting ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    <span>{editingSubject ? 'Updating Subject...' : 'Saving Subject...'}</span>
+                                </>
+                            ) : (
+                                <span>{editingSubject ? 'Update Subject' : 'Save Subject'}</span>
+                            )}
                         </button>
                     </div>
                 </form>

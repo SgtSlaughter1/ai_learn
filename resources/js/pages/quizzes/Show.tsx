@@ -55,6 +55,7 @@ export default function Show({ quizId }: Props) {
     // Standard mode state
     const [activeIndex, setActiveIndex] = useState<number>(0);
     const [answers, setAnswers] = useState<Record<number, number>>({});
+    const [activeQuestions, setActiveQuestions] = useState<QuizQuestion[]>([]);
 
     // Adaptive mode state
     const [adaptiveState, setAdaptiveState] = useState<AdaptiveState | null>(null);
@@ -139,6 +140,18 @@ export default function Show({ quizId }: Props) {
         setAnswers((prev) => ({ ...prev, [questionId]: optionId }));
     };
 
+    const startStandardQuiz = () => {
+        if (!quiz) return;
+        const pool = [...(quiz.questions || [])];
+        const selected = pool.length > 10
+            ? pool.sort(() => Math.random() - 0.5).slice(0, 10)
+            : pool;
+        setActiveQuestions(selected);
+        setActiveIndex(0);
+        setAnswers({});
+        setMode('standard');
+    };
+
     const handleStandardSubmit = async (e?: FormEvent) => {
         if (e) e.preventDefault();
         if (isSubmitting || !quiz) return;
@@ -146,10 +159,11 @@ export default function Show({ quizId }: Props) {
 
         const attemptId = crypto.randomUUID();
         let calculatedScore = 0;
+        const questionsToGrade = activeQuestions.length > 0 ? activeQuestions : quiz.questions.slice(0, 10);
 
         const answerList = Object.entries(answers).map(([qId, oId]) => {
             const questionId = parseInt(qId);
-            const question = quiz.questions.find((q) => q.id === questionId);
+            const question = questionsToGrade.find((q) => q.id === questionId);
             const correctOption = (question?.options as any[])?.find((o) => o.is_correct);
             const isCorrect = correctOption ? correctOption.id === oId : false;
             if (isCorrect) calculatedScore++;
@@ -180,7 +194,7 @@ export default function Show({ quizId }: Props) {
                 quiz_title: quiz.title,
                 status: 'completed',
                 score: calculatedScore,
-                total_marks: quiz.questions.length,
+                total_marks: questionsToGrade.length,
                 started_at: new Date(Date.now() - secondsElapsed * 1000).toISOString(),
                 completed_at: new Date().toISOString(),
                 duration_seconds: secondsElapsed,
@@ -313,7 +327,7 @@ export default function Show({ quizId }: Props) {
         return meta ? meta.getAttribute('content') || '' : '';
     }
 
-    const questions = quiz?.questions || [];
+    const questions = activeQuestions.length > 0 ? activeQuestions : (quiz?.questions?.slice(0, 10) || []);
     const currentQuestion = questions[activeIndex];
     const progressPercent = questions.length > 0 ? ((activeIndex + 1) / questions.length) * 100 : 0;
 
@@ -389,11 +403,11 @@ export default function Show({ quizId }: Props) {
             <QuizModeSelect
                 quizTitle={quiz.title}
                 description={quiz.description}
-                questionCount={questions.length}
+                questionCount={Math.min(quiz.questions.length, 10)}
                 timeLimitMinutes={quiz.time_limit_minutes}
                 isOnline={!isOffline}
                 adaptiveLoading={adaptiveLoading}
-                onSelectStandard={() => setMode('standard')}
+                onSelectStandard={startStandardQuiz}
                 onSelectAdaptive={startAdaptiveQuiz}
             />
         );

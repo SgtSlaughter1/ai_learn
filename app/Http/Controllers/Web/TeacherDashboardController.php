@@ -4,29 +4,39 @@ namespace App\Http\Controllers\Web;
 
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Teacher\AssignInterventionRequest;
+use App\Http\Requests\Teacher\CreateTeacherClassRequest;
+use App\Http\Requests\Teacher\EnrollLearnerRequest;
+use App\Http\Requests\Teacher\SaveTeacherLearnerRequest;
 use App\Models\ClassModel;
 use App\Models\ClassMembership;
 use App\Models\LearnerProfile;
 use App\Models\LearnerProgress;
 use App\Models\Question;
 use App\Models\QuizAttempt;
+use App\Models\School;
 use App\Models\SpacedRepetitionItem;
 use App\Models\Subject;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\UserGamification;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
+use Inertia\Response;
 
 class TeacherDashboardController extends Controller
 {
     /**
      * Render the teacher dashboard page.
      */
-    public function index(Request $request): mixed
+    public function showTeacherDashboard(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
         if (!$user || (!$user->isAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
@@ -57,11 +67,10 @@ class TeacherDashboardController extends Controller
             'JSS1' => 12, 'JSS2' => 13, 'JSS3' => 14, 'SS1' => 15, 'SS2' => 16, 'SS3' => 17,
         ];
 
-        // Get teacher's classes (if admin, show all school classes; if teacher, show classes they are assigned to)
-        $classesQuery = ClassModel::where('school_id', $school->id)->where('is_active', true);
-        if (!$user->isAdmin()) {
-            $classesQuery->whereHas('memberships', fn ($q) => $q->where('user_id', $user->id)->where('role', 'teacher'));
-        }
+        // Get teacher's classes scoped by permissions
+        $classesQuery = ClassModel::forUser($user)
+            ->where('school_id', $school->id)
+            ->where('is_active', true);
 
         $classes = $classesQuery
             ->with(['program:id,name,code,slug'])
@@ -83,7 +92,8 @@ class TeacherDashboardController extends Controller
                 'slug' => $school->slug,
                 'category' => $school->category,
                 'category_ids' => $school->category_ids ?? [],
-                'allowed_grade_levels' => $school->allowed_grade_levels ?? [],
+                'allowed_grade_levels' => $user->allowedGradeLevels(),
+                'grade_options' => $user->gradeOptions(),
             ],
             'classes' => $classes->map(fn ($c) => [
                 'id' => $c->id,
@@ -101,13 +111,24 @@ class TeacherDashboardController extends Controller
                 'learner_count' => $c->learner_count,
             ]),
             'selectedClass' => $selectedClass?->id,
+            'allowed_grade_levels' => $user->allowedGradeLevels(),
+            'grade_options' => $user->gradeOptions(),
         ]);
     }
 
     /**
-     * Get aggregated stats for the teacher's classes with intelligent diagnostic breakdown.
+     * Backward-compatible alias for showTeacherDashboard.
      */
-    public function getStats(Request $request): JsonResponse
+    public function index(Request $request): Response|RedirectResponse
+    {
+        return $this->showTeacherDashboard($request);
+    }
+
+    /**
+     * Get aggregated stats for the teacher's classes with intelligent diagnostic breakdown.
+     * Cached on backend for 5 minutes.
+     */
+    public function getTeacherStats(Request $request): JsonResponse
     {
         $user = $request->user();
         if (!$user || (!$user->isAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
@@ -128,40 +149,118 @@ class TeacherDashboardController extends Controller
             ]);
         }
 
-        $gradeOrder = [
-            'CRECHE' => 1, 'KG1' => 2, 'KG2' => 3, 'NUR1' => 4, 'NUR2' => 5,
-            'PRI1' => 6, 'PRI2' => 7, 'PRI3' => 8, 'PRI4' => 9, 'PRI5' => 10, 'PRI6' => 11,
-            'JSS1' => 12, 'JSS2' => 13, 'JSS3' => 14, 'SS1' => 15, 'SS2' => 16, 'SS3' => 17,
-        ];
+        $selectedClassId = $request->get('class_id');
+        $cacheKey = "analytics:teacher:{$user->id}:class:" . ($selectedClassId ?? 'all');
 
-        // Get all class IDs this teacher teaches (or all classes if admin)
-        if ($user->isAdmin()) {
-            $classIds = ClassModel::where('school_id', $school->id)->where('is_active', true)->pluck('id');
-        } else {
-            $classIds = ClassMembership::where('user_id', $user->id)
-                ->where('role', 'teacher')
-                ->pluck('class_id');
+        if ($request->boolean('refresh')) {
+            Cache::forget($cacheKey);
+            Cache::forget("analytics:teacher:{$user->id}:class:all");
+            if ($selectedClassId) {
+                Cache::forget("analytics:teacher:{$user->id}:class:{$selectedClassId}");
+            }
         }
 
-        $selectedClassId = $request->get('class_id');
+        $data = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($user, $school, $selectedClassId) {
+            $classIds = $this->resolveTeacherClassIds($user, $school);
 
-        // Get learners in the selected class (or all classes) directly from indexed ClassMembership table
-        $learnerIds = ClassMembership::where('role', 'learner')
-            ->when($selectedClassId, fn ($q) => $q->where('class_id', $selectedClassId), fn ($q) => $q->whereIn('class_id', $classIds))
-            ->pluck('user_id');
+            $learnerIds = ClassMembership::where('role', 'learner')
+                ->when($selectedClassId, fn ($q) => $q->where('class_id', $selectedClassId), fn ($q) => $q->whereIn('class_id', $classIds))
+                ->pluck('user_id');
 
-        // Overview stats
-        $progressStats = LearnerProgress::whereIn('user_id', $learnerIds)
+            $progressStats = $this->fetchTeacherProgressStats($learnerIds);
+            $quizStats = $this->fetchTeacherQuizStats($learnerIds);
+            $topPerformers = $this->fetchTeacherTopPerformers($learnerIds);
+            $strugglingLearners = $this->buildLearnerDiagnostics($learnerIds, $school->id, $selectedClassId);
+            $teacherClasses = $this->fetchTeacherClasses($user, $school);
+
+            $totalLearnersCount = count($learnerIds);
+            $allowedGradeLevels = $user->allowedGradeLevels();
+            $gradeOptions = $user->gradeOptions();
+
+            return [
+                'stats' => [
+                    'totalStudents' => $totalLearnersCount,
+                    'classAverageMastery' => round($progressStats?->avg_mastery ?? 0),
+                    'activeStudents' => count($topPerformers),
+                ],
+                'recentActivities' => [],
+                'overview' => [
+                    'total_learners' => $totalLearnersCount,
+                    'total_attempted' => (int) ($progressStats?->total_attempted ?? 0),
+                    'total_correct' => (int) ($progressStats?->total_correct ?? 0),
+                    'avg_mastery' => round($progressStats?->avg_mastery ?? 0),
+                    'total_attempts' => (int) ($quizStats?->total_attempts ?? 0),
+                    'avg_score' => round($quizStats?->avg_score ?? 0),
+                    'best_score' => round($quizStats?->best_score ?? 0),
+                ],
+                'top_performers' => $topPerformers instanceof \Illuminate\Support\Collection ? $topPerformers->values()->all() : array_values((array) $topPerformers),
+                'struggling_learners' => $strugglingLearners instanceof \Illuminate\Support\Collection ? $strugglingLearners->values()->all() : array_values((array) $strugglingLearners),
+                'classes' => $teacherClasses instanceof \Illuminate\Support\Collection ? $teacherClasses->values()->all() : array_values((array) $teacherClasses),
+                'school' => [
+                    'id' => $school->id,
+                    'name' => $school->name,
+                    'category' => $school->category,
+                    'allowed_grade_levels' => $allowedGradeLevels,
+                    'grade_options' => $gradeOptions,
+                ],
+                'allowed_grade_levels' => $allowedGradeLevels,
+                'grade_options' => $gradeOptions,
+            ];
+        });
+
+        return response()->json($data);
+    }
+
+    private function resolveTeacherClassIds(User $user, School $school): Collection
+    {
+        if ($user->isAdmin()) {
+            return ClassModel::where('school_id', $school->id)->where('is_active', true)->pluck('id');
+        }
+
+        return ClassMembership::where('user_id', $user->id)
+            ->where('role', 'teacher')
+            ->pluck('class_id');
+    }
+
+    private function fetchTeacherProgressStats(Collection $learnerIds): ?object
+    {
+        if ($learnerIds->isEmpty()) {
+            return (object) [
+                'total_learners' => 0,
+                'total_attempted' => 0,
+                'total_correct' => 0,
+                'avg_mastery' => 0,
+            ];
+        }
+
+        return LearnerProgress::whereIn('user_id', $learnerIds)
             ->selectRaw('COUNT(DISTINCT user_id) as total_learners, SUM(questions_attempted) as total_attempted, SUM(questions_correct) as total_correct, AVG(mastery_score) as avg_mastery')
             ->first();
+    }
 
-        $quizStats = QuizAttempt::whereIn('user_id', $learnerIds)
+    private function fetchTeacherQuizStats(Collection $learnerIds): ?object
+    {
+        if ($learnerIds->isEmpty()) {
+            return (object) [
+                'total_attempts' => 0,
+                'avg_score' => 0,
+                'best_score' => 0,
+            ];
+        }
+
+        return QuizAttempt::whereIn('user_id', $learnerIds)
             ->selectRaw('COUNT(*) as total_attempts, AVG(score) as avg_score, MAX(score) as best_score')
             ->where('status', 'completed')
             ->first();
+    }
 
-        // Optimized: Sort and limit at database level
-        $topPerformers = DB::table('users as u')
+    private function fetchTeacherTopPerformers(Collection $learnerIds): Collection
+    {
+        if ($learnerIds->isEmpty()) {
+            return collect([]);
+        }
+
+        return DB::table('users as u')
             ->leftJoin('user_gamification as ug', 'ug.user_id', '=', 'u.id')
             ->whereIn('u.id', $learnerIds)
             ->select([
@@ -181,11 +280,17 @@ class TeacherDashboardController extends Controller
                 'level' => (int) $u->level,
                 'tier' => $u->tier,
             ]);
+    }
 
-        // Build rich intelligent diagnostics for struggling learners
-        $strugglingLearners = $this->buildLearnerDiagnostics($learnerIds, $school->id, $selectedClassId);
+    private function fetchTeacherClasses(User $user, School $school): Collection
+    {
+        $gradeOrder = [
+            'CRECHE' => 1, 'KG1' => 2, 'KG2' => 3, 'NUR1' => 4, 'NUR2' => 5,
+            'PRI1' => 6, 'PRI2' => 7, 'PRI3' => 8, 'PRI4' => 9, 'PRI5' => 10, 'PRI6' => 11,
+            'JSS1' => 12, 'JSS2' => 13, 'JSS3' => 14, 'SS1' => 15, 'SS2' => 16, 'SS3' => 17,
+        ];
 
-        $teacherClasses = ClassModel::where('school_id', $school->id)
+        return ClassModel::where('school_id', $school->id)
             ->where('is_active', true)
             ->when(!$user->isAdmin(), fn ($q) => $q->whereHas('memberships', fn ($m) => $m->where('user_id', $user->id)->where('role', 'teacher')))
             ->with(['program:id,name,code,slug'])
@@ -207,29 +312,14 @@ class TeacherDashboardController extends Controller
                 ] : null,
                 'learner_count' => $c->learner_count,
             ]);
+    }
 
-        $totalLearnersCount = count($learnerIds);
-
-        return response()->json([
-            'stats' => [
-                'totalStudents' => $totalLearnersCount,
-                'classAverageMastery' => round($progressStats->avg_mastery ?? 0),
-                'activeStudents' => count($topPerformers),
-            ],
-            'recentActivities' => [],
-            'overview' => [
-                'total_learners' => $totalLearnersCount,
-                'total_attempted' => (int) ($progressStats->total_attempted ?? 0),
-                'total_correct' => (int) ($progressStats->total_correct ?? 0),
-                'avg_mastery' => round($progressStats->avg_mastery ?? 0),
-                'total_attempts' => (int) ($quizStats->total_attempts ?? 0),
-                'avg_score' => round($quizStats->avg_score ?? 0),
-                'best_score' => round($quizStats->best_score ?? 0),
-            ],
-            'top_performers' => $topPerformers,
-            'struggling_learners' => $strugglingLearners,
-            'classes' => $teacherClasses,
-        ]);
+    /**
+     * Backward-compatible alias for getTeacherStats.
+     */
+    public function getStats(Request $request): JsonResponse
+    {
+        return $this->getTeacherStats($request);
     }
 
     /**
@@ -311,7 +401,7 @@ class TeacherDashboardController extends Controller
     /**
      * Create a new class within the teacher's school.
      */
-    public function createClass(Request $request): JsonResponse
+    public function createClass(CreateTeacherClassRequest $request): JsonResponse
     {
         $user = $request->user();
         $teacherProfile = $user->teacherProfile()->first();
@@ -320,12 +410,7 @@ class TeacherDashboardController extends Controller
             return response()->json(['error' => 'No school profile found'], 400);
         }
 
-        $validated = $request->validate([
-            'name' => 'required|string|max:100',
-            'grade_level' => 'nullable|string|max:50',
-            'section' => 'nullable|string|max:50',
-            'description' => 'nullable|string|max:500',
-        ]);
+        $validated = $request->validated();
 
         $slug = \Str::slug($validated['name']) . '-' . \Str::random(5);
 
@@ -358,7 +443,7 @@ class TeacherDashboardController extends Controller
     /**
      * Add a new learner or create a learner account directly from the teacher dashboard.
      */
-    public function saveLearner(Request $request): JsonResponse
+    public function saveLearner(SaveTeacherLearnerRequest $request): JsonResponse
     {
         $user = $request->user();
         if (!$user || (!$user->isAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
@@ -372,38 +457,19 @@ class TeacherDashboardController extends Controller
             return response()->json(['error' => 'No school associated with this account.'], 400);
         }
 
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email',
-            'password' => 'required|string|min:6',
-            'class_id' => 'required|exists:classes,id',
-            'student_id' => 'nullable|string|max:50',
-            'grade_level' => 'nullable|string|max:50',
-        ]);
+        $validated = $request->validated();
 
-        $targetClass = ClassModel::find($validated['class_id']);
-        if (!$targetClass) {
-            return response()->json(['error' => 'Selected class does not exist.'], 422);
-        }
-
+        $targetClass = ClassModel::findOrFail($validated['class_id']);
         if ($targetClass->school_id !== $school->id) {
             return response()->json(['error' => 'The selected class does not belong to your school.'], 422);
         }
 
-        // Verify teacher teaches this class (unless admin)
-        if (!$user->isAdmin()) {
-            $isAssigned = ClassMembership::where('class_id', $targetClass->id)
-                ->where('user_id', $user->id)
-                ->where('role', 'teacher')
-                ->where('is_active', true)
-                ->exists();
-
-            if (!$isAssigned) {
-                return response()->json(['error' => 'You are not assigned to teach this class.'], 403);
-            }
-        }
+        Gate::authorize('manage', $targetClass);
 
         $gradeLevel = $validated['grade_level'] ?? $targetClass->grade_level;
+        if ($gradeLevel && !$user->supportsGradeLevel($gradeLevel)) {
+            return response()->json(['error' => "Grade level '{$gradeLevel}' is not permitted for your school/role."], 422);
+        }
 
         $createdLearner = DB::transaction(function () use ($validated, $school, $targetClass, $gradeLevel) {
             $learnerUser = User::create([
@@ -440,6 +506,8 @@ class TeacherDashboardController extends Controller
             return $learnerUser;
         });
 
+        $this->invalidateTeacherStatsCache($user, $targetClass->id);
+
         return response()->json([
             'message' => 'Learner added and enrolled successfully',
             'learner' => [
@@ -455,7 +523,7 @@ class TeacherDashboardController extends Controller
     /**
      * Enroll a learner into a class.
      */
-    public function enrollLearner(Request $request, int $classId): JsonResponse
+    public function enrollLearner(EnrollLearnerRequest $request, int $classId): JsonResponse
     {
         $user = $request->user();
 
@@ -465,15 +533,22 @@ class TeacherDashboardController extends Controller
             ->where('role', 'teacher')
             ->first();
 
-        if (!$membership) {
+        if (!$membership && !$user->isAdmin()) {
             return response()->json(['error' => 'Access denied'], 403);
         }
 
-        $validated = $request->validate([
-            'email' => 'required|email|exists:users,email',
-        ]);
+        $validated = $request->validated();
 
-        $learner = User::where('email', $validated['email'])->first();
+        $learner = null;
+        if (!empty($validated['email'])) {
+            $learner = User::where('email', $validated['email'])->first();
+        } elseif (!empty($validated['learner_id'])) {
+            $learner = User::find($validated['learner_id']);
+        }
+
+        if (!$learner) {
+            return response()->json(['error' => 'User not found'], 404);
+        }
 
         if (!$learner->isLearner()) {
             return response()->json(['error' => 'User is not a learner'], 400);
@@ -507,6 +582,8 @@ class TeacherDashboardController extends Controller
             }
         }
 
+        $this->invalidateTeacherStatsCache($user, $classId);
+
         return response()->json(['message' => 'Learner enrolled successfully']);
     }
 
@@ -530,6 +607,8 @@ class TeacherDashboardController extends Controller
             ->where('user_id', $learnerId)
             ->where('role', 'learner')
             ->update(['is_active' => false]);
+
+        $this->invalidateTeacherStatsCache($user, $classId);
 
         return response()->json(['message' => 'Learner removed from class']);
     }
@@ -576,18 +655,14 @@ class TeacherDashboardController extends Controller
     /**
      * Assign a targeted practice intervention for a learner's weak topic.
      */
-    public function assignIntervention(Request $request): JsonResponse
+    public function assignIntervention(AssignInterventionRequest $request): JsonResponse
     {
         $user = $request->user();
         if (!$user || (!$user->isAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
-        $validated = $request->validate([
-            'learner_id' => 'required|exists:users,id',
-            'topic_id' => 'required|exists:topics,id',
-            'question_count' => 'nullable|integer|min:1|max:50',
-        ]);
+        $validated = $request->validated();
 
         $learner = User::findOrFail($validated['learner_id']);
         $topic = Topic::with('subject')->findOrFail($validated['topic_id']);
@@ -638,6 +713,8 @@ class TeacherDashboardController extends Controller
             ]);
             $enqueuedCount = $count;
         }
+
+        $this->invalidateTeacherStatsCache($user);
 
         return response()->json([
             'success' => true,
@@ -715,36 +792,34 @@ class TeacherDashboardController extends Controller
                 ];
             }
 
-            // If learner has no progress records yet, generate initial diagnostic baseline from curriculum
-            if (empty($subjectGroups) && $curriculumSubjects->isNotEmpty()) {
+            // If learner has no progress records yet, mark as awaiting assessment with 0% mastery
+            if (empty($subjectGroups)) {
                 $primarySub = $curriculumSubjects->first();
-                $topics = [];
-                // Sample realistic baseline values
-                $sampleScores = [42, 61, 83, 55, 78];
-                $idx = 0;
-                foreach ($primarySub->topics as $t) {
-                    $score = $sampleScores[$idx % count($sampleScores)];
-                    $status = $score < 50 ? 'critical' : ($score < 75 ? 'moderate' : 'mastered');
-                    $indicator = $status;
-                    $topics[] = [
-                        'id' => $t->id,
-                        'name' => $t->name,
-                        'mastery_score' => $score,
-                        'questions_attempted' => 15,
-                        'questions_correct' => (int) round(15 * ($score / 100)),
-                        'status' => $status,
-                        'indicator' => $indicator,
-                    ];
-                    $idx++;
-                }
+                $firstTopic = $primarySub?->topics?->first();
 
-                if (!empty($topics)) {
-                    $subjectGroups[$primarySub->name] = [
-                        'subject_id' => $primarySub->id,
+                $diagnosticsList[] = [
+                    'id' => (string) $learner->id,
+                    'name' => $learner->name,
+                    'email' => $learner->email,
+                    'level' => (int) ($learner->gamification?->level ?? 1),
+                    'tier' => $learner->gamification?->tier ?? 'Newcomer',
+                    'avg_mastery' => 0,
+                    'has_assessment_data' => false,
+                    'subject_name' => $primarySub?->name ?? 'Curriculum',
+                    'topics' => [],
+                    'recommended_intervention' => $firstTopic ? [
+                        'topic_id' => $firstTopic->id,
+                        'topic_name' => $firstTopic->name,
                         'subject_name' => $primarySub->name,
-                        'topics' => $topics,
-                    ];
-                }
+                        'mastery_score' => 0,
+                        'indicator' => 'pending',
+                        'question_count' => 10,
+                        'action_label' => "Assign 10 diagnostic questions.",
+                        'reason' => "No assessment data yet. Assign diagnostic questions to evaluate baseline knowledge.",
+                    ] : null,
+                    'needs_intervention' => true,
+                ];
+                continue;
             }
 
             // Pick primary subject
@@ -787,6 +862,7 @@ class TeacherDashboardController extends Controller
                 'level' => (int) ($learner->gamification?->level ?? 1),
                 'tier' => $learner->gamification?->tier ?? 'Newcomer',
                 'avg_mastery' => $avgMastery,
+                'has_assessment_data' => true,
                 'subject_name' => $primaryGroup['subject_name'],
                 'topics' => $topicsList,
                 'recommended_intervention' => $recommendedIntervention,
@@ -794,10 +870,10 @@ class TeacherDashboardController extends Controller
             ];
         }
 
-        // Sort diagnostics by average mastery ascending (struggling learners first)
+        // Sort diagnostics by average mastery ascending (struggling and pending assessment learners first)
         usort($diagnosticsList, fn ($a, $b) => $a['avg_mastery'] <=> $b['avg_mastery']);
 
-        return array_slice($diagnosticsList, 0, 15);
+        return array_slice($diagnosticsList, 0, 50);
     }
 
     private function emptyOverview(): array
@@ -811,6 +887,14 @@ class TeacherDashboardController extends Controller
             'avg_score' => 0,
             'best_score' => 0,
         ];
+    }
+
+    private function invalidateTeacherStatsCache(User $user, ?int $classId = null): void
+    {
+        Cache::forget("analytics:teacher:{$user->id}:class:all");
+        if ($classId) {
+            Cache::forget("analytics:teacher:{$user->id}:class:{$classId}");
+        }
     }
 }
 

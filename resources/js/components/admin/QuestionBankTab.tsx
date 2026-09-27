@@ -6,6 +6,7 @@ import QuestionFilterBar from './question-bank/QuestionFilterBar';
 import QuestionListItem from './question-bank/QuestionListItem';
 import QuestionFormModal, { type QuestionFormData } from './question-bank/QuestionFormModal';
 import AIBulkImportModal from './question-bank/AIBulkImportModal';
+import { Skeleton, SkeletonText } from '@/components/common/Skeleton';
 
 interface Props {
     questions: QuestionItem[];
@@ -17,6 +18,7 @@ interface Props {
     showToast: (text: string, type?: 'success' | 'error') => void;
     school?: { category?: string | null; category_ids?: number[] | null; allowed_grade_levels?: string[] | null } | null;
     allowedGradeLevels?: string[];
+    isTeacher?: boolean;
 }
 
 export default function QuestionBankTab({
@@ -29,6 +31,7 @@ export default function QuestionBankTab({
     showToast,
     school,
     allowedGradeLevels,
+    isTeacher,
 }: Props) {
     // ── Filter State ──
     const [questionGradeFilter, setQuestionGradeFilter] = useState('');
@@ -41,6 +44,8 @@ export default function QuestionBankTab({
     // ── Single Question Modal State ──
     const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false);
     const [editingQuestion, setEditingQuestion] = useState<QuestionItem | null>(null);
+    const [isSavingQuestion, setIsSavingQuestion] = useState(false);
+    const [deletingQuestionId, setDeletingQuestionId] = useState<number | null>(null);
     const [questionForm, setQuestionForm] = useState<QuestionFormData>({
         topic_id: '',
         question_text: '',
@@ -265,70 +270,86 @@ export default function QuestionBankTab({
 
     const handleSaveQuestion = async (e: React.FormEvent) => {
         e.preventDefault();
-        const endpoint = editingQuestion ? `/api/v1/admin/questions/${editingQuestion.id}` : '/api/v1/admin/questions';
-        const method = editingQuestion ? 'PUT' : 'POST';
-        const tempId = editingQuestion ? String(editingQuestion.id) : `temp_q_${Date.now()}`;
+        if (isSavingQuestion) return;
+        setIsSavingQuestion(true);
 
-        const selectedTopic = allTopics.find((t) => String(t.id) === String(questionForm.topic_id));
-        const optimisticQuestion: QuestionItem = {
-            id: editingQuestion ? editingQuestion.id : Date.now(),
-            topic_id: Number(questionForm.topic_id),
-            question_text: questionForm.question_text,
-            type: questionForm.type,
-            difficulty: questionForm.difficulty,
-            explanation: questionForm.explanation || null,
-            status: questionForm.status,
-            options: questionForm.options.map((opt, i) => ({
-                id: i + 1,
-                option_text: opt.option_text,
-                is_correct: opt.is_correct,
-            })),
-            topic: selectedTopic
-                ? {
-                      id: selectedTopic.id,
-                      name: selectedTopic.name,
-                      subject: selectedTopic.subject,
-                  }
-                : undefined,
-            _pendingSync: true,
-        };
+        try {
+            const endpoint = editingQuestion ? `/api/v1/admin/questions/${editingQuestion.id}` : '/api/v1/admin/questions';
+            const method = editingQuestion ? 'PUT' : 'POST';
+            const tempId = editingQuestion ? String(editingQuestion.id) : `temp_q_${Date.now()}`;
 
-        const res = await executeAdminAction({
-            table: 'adminQuestions',
-            action: editingQuestion ? 'update' : 'insert',
-            recordId: tempId,
-            endpoint,
-            method,
-            payload: questionForm,
-            optimisticRecord: optimisticQuestion,
-        });
+            const selectedTopic = allTopics.find((t) => String(t.id) === String(questionForm.topic_id));
+            const optimisticQuestion: QuestionItem = {
+                id: editingQuestion ? editingQuestion.id : Date.now(),
+                topic_id: Number(questionForm.topic_id),
+                question_text: questionForm.question_text,
+                type: questionForm.type,
+                difficulty: questionForm.difficulty,
+                explanation: questionForm.explanation || null,
+                status: questionForm.status,
+                options: questionForm.options.map((opt, i) => ({
+                    id: i + 1,
+                    option_text: opt.option_text,
+                    is_correct: opt.is_correct,
+                })),
+                topic: selectedTopic
+                    ? {
+                          id: selectedTopic.id,
+                          name: selectedTopic.name,
+                          subject: selectedTopic.subject,
+                      }
+                    : undefined,
+                _pendingSync: true,
+            };
 
-        if (res.success) {
-            showToast(res.message || 'Question saved successfully', 'success');
-            setIsQuestionModalOpen(false);
-            setEditingQuestion(null);
-            resetQuestionForm();
-            onRefresh();
-        } else {
-            showToast(res.error || 'Failed to save question', 'error');
+            const res = await executeAdminAction({
+                table: 'adminQuestions',
+                action: editingQuestion ? 'update' : 'insert',
+                recordId: tempId,
+                endpoint,
+                method,
+                payload: questionForm,
+                optimisticRecord: optimisticQuestion,
+            });
+
+            if (res.success) {
+                showToast(res.message || (res.offline ? 'Question saved locally (Pending Sync)' : 'Question saved successfully'), 'success');
+                setIsQuestionModalOpen(false);
+                setEditingQuestion(null);
+                resetQuestionForm();
+                onRefresh();
+            } else {
+                showToast(res.error || 'Failed to save question', 'error');
+            }
+        } catch (err: any) {
+            showToast(err?.message || 'Error saving question', 'error');
+        } finally {
+            setIsSavingQuestion(false);
         }
     };
 
     const handleDeleteQuestion = async (q: QuestionItem) => {
         if (!confirm('Are you sure you want to delete this question?')) return;
-        const res = await executeAdminAction({
-            table: 'adminQuestions',
-            action: 'delete',
-            recordId: String(q.id),
-            endpoint: `/api/v1/admin/questions/${q.id}`,
-            method: 'DELETE',
-        });
+        setDeletingQuestionId(q.id);
+        try {
+            const res = await executeAdminAction({
+                table: 'adminQuestions',
+                action: 'delete',
+                recordId: String(q.id),
+                endpoint: `/api/v1/admin/questions/${q.id}`,
+                method: 'DELETE',
+            });
 
-        if (res.success) {
-            showToast(res.message || 'Question deleted');
-            onRefresh();
-        } else {
-            showToast(res.error || 'Failed to delete question', 'error');
+            if (res.success) {
+                showToast(res.message || (res.offline ? 'Question deleted locally (Pending Sync)' : 'Question deleted successfully'), 'success');
+                onRefresh();
+            } else {
+                showToast(res.error || 'Failed to delete question', 'error');
+            }
+        } catch (err: any) {
+            showToast(err?.message || 'Error deleting question', 'error');
+        } finally {
+            setDeletingQuestionId(null);
         }
     };
 
@@ -397,6 +418,7 @@ export default function QuestionBankTab({
                 availableTopics={availableTopicsForFilter}
                 school={school}
                 allowedGradeLevels={allowedGradeLevels}
+                isTeacher={isTeacher}
                 onOpenBulkModal={openBulkModal}
                 onOpenAddModal={() => {
                     setEditingQuestion(null);
@@ -407,12 +429,32 @@ export default function QuestionBankTab({
 
             {/* Questions List */}
             {loading ? (
-                <div className="space-y-3">
+                <div className="space-y-4">
                     {[1, 2, 3, 4].map((n) => (
                         <div
                             key={n}
-                            className="h-28 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl animate-pulse"
-                        />
+                            className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-5 shadow-xs space-y-3"
+                        >
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1 space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <Skeleton variant="rounded" className="h-5 w-16 rounded-md" />
+                                        <Skeleton variant="rounded" className="h-5 w-20 rounded-md" />
+                                        <Skeleton variant="rounded" className="h-5 w-12 rounded-full" />
+                                    </div>
+                                    <SkeletonText lines={2} />
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                    <Skeleton variant="rounded" className="w-8 h-8 rounded-lg" />
+                                    <Skeleton variant="rounded" className="w-8 h-8 rounded-lg" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-[var(--color-border)]/40">
+                                {[1, 2, 3, 4].map((opt) => (
+                                    <Skeleton key={opt} variant="rounded" className="h-8 w-full rounded-xl" />
+                                ))}
+                            </div>
+                        </div>
                     ))}
                 </div>
             ) : filteredQuestions.length === 0 ? (
@@ -427,6 +469,7 @@ export default function QuestionBankTab({
                             question={q}
                             onEdit={handleEditQuestion}
                             onDelete={handleDeleteQuestion}
+                            isDeleting={deletingQuestionId === q.id}
                         />
                     ))}
                 </div>
@@ -442,7 +485,11 @@ export default function QuestionBankTab({
                 classes={classes}
                 subjects={subjects}
                 allTopics={allTopics}
+                school={school}
+                allowedGradeLevels={allowedGradeLevels}
+                isTeacher={isTeacher}
                 onSubmit={handleSaveQuestion}
+                isSubmitting={isSavingQuestion}
             />
 
             {/* Modal: AI Bulk Import */}
@@ -466,6 +513,9 @@ export default function QuestionBankTab({
                 classes={classes}
                 subjects={subjects}
                 allTopics={allTopics}
+                school={school}
+                allowedGradeLevels={allowedGradeLevels}
+                isTeacher={isTeacher}
                 onExtract={handleExtractWithAI}
                 onSave={handleSaveBulkQuestions}
                 showToast={showToast}

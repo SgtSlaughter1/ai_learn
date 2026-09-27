@@ -21,11 +21,11 @@ class AIService
     protected ?string $apiKey;
     protected string $modelName;
 
-    public function __construct()
+    public function __construct(?string $provider = null, ?string $apiKey = null, ?string $modelName = null)
     {
-        $this->apiKey = env('GEMINI_API_KEY') ?: env('GOOGLE_API_KEY') ?: env('AI_API_KEY');
-        $this->modelName = env('MODEL_NAME', 'gemini-3-flash-preview');
-        $this->provider = env('AI_PROVIDER') ?: (empty($this->apiKey) ? 'local' : 'gemini');
+        $this->apiKey = $apiKey ?? (config('services.gemini.api_key') ?? (env('GEMINI_API_KEY') ?: env('GOOGLE_API_KEY') ?: env('AI_API_KEY')));
+        $this->modelName = $modelName ?? (config('services.gemini.model') ?? env('MODEL_NAME', 'gemini-3.1-flash-lite'));
+        $this->provider = $provider ?? (config('services.ai.provider') ?? env('AI_PROVIDER') ?: (empty($this->apiKey) ? 'local' : 'gemini'));
     }
 
     /**
@@ -38,12 +38,13 @@ class AIService
         }
 
         $modelsToTry = array_values(array_unique([
-            $this->modelName,
-            'gemini-3-flash-preview',
-            'gemini-3.1-flash-lite-preview',
-            'gemini-3.6-flash',
-            'gemini-3.5-flash',
+            $this->modelName ?: 'gemini-3.1-flash-lite',
+            'gemini-3.1-flash-lite',
+            'gemini-flash-lite-latest',
             'gemini-flash-latest',
+            'gemma-4-31b-it',
+            'gemma-4-26b-a4b-it',
+            'gemini-3.8-flash',
         ]));
 
         $payload = ['contents' => $contents];
@@ -58,7 +59,7 @@ class AIService
 
         foreach ($modelsToTry as $model) {
             try {
-                $response = Http::timeout(15)
+                $response = Http::timeout(35)
                     ->withHeaders(['Content-Type' => 'application/json'])
                     ->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$this->apiKey}", $payload);
 
@@ -68,9 +69,11 @@ class AIService
                     if ($text) {
                         return $this->cleanMathDuplicates(trim($text));
                     }
+                } else {
+                    \Illuminate\Support\Facades\Log::warning("Gemini model {$model} returned status {$response->status()}: " . substr($response->body(), 0, 200));
                 }
             } catch (\Exception $e) {
-                // Try next model
+                \Illuminate\Support\Facades\Log::warning("Gemini model {$model} error: " . $e->getMessage());
             }
         }
 
@@ -640,10 +643,10 @@ Guidelines:
                     $mathContent = trim($matches[2]);
                     $plainText = trim($matches[4]);
                     // Normalize both for comparison (remove spaces, LaTeX commands)
-                    $normMath = preg_replace('/[\s\\]/', '', $mathContent);
-                    $normPlain = preg_replace('/[\s\\]/', '', $plainText);
+                    $normMath = str_replace([' ', "\t", "\n", "\r", '\\'], '', $mathContent);
+                    $normPlain = str_replace([' ', "\t", "\n", "\r", '\\'], '', $plainText);
                     // If they match (or plain is a subset), remove the plain text
-                    if ($normMath === $normPlain || strpos($normPlain, $normMath) !== false) {
+                    if ($normMath !== '' && ($normMath === $normPlain || strpos($normPlain, $normMath) !== false)) {
                         return '$' . $mathContent . '$';
                     }
                     return $matches[0];

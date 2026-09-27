@@ -1,5 +1,6 @@
-import React from 'react';
-import type { TopicItem } from '@/types/admin';
+import React, { useMemo } from 'react';
+import type { TopicItem, ClassItem } from '@/types/admin';
+import { ALL_GRADE_GROUPS, getGradeLevelsForSchool, getGradeLevelsForTeacher } from '@/utils/format';
 
 export interface TopicFormData {
     name: string;
@@ -17,6 +18,11 @@ interface TopicFormModalProps {
     form: TopicFormData;
     setForm: React.Dispatch<React.SetStateAction<TopicFormData>>;
     onSubmit: (e: React.FormEvent) => void;
+    isSubmitting?: boolean;
+    school?: { category?: string | null; category_ids?: number[] | null; allowed_grade_levels?: string[] | null } | null;
+    allowedGradeLevels?: string[];
+    isTeacher?: boolean;
+    classes?: ClassItem[];
 }
 
 export default function TopicFormModal({
@@ -26,7 +32,32 @@ export default function TopicFormModal({
     form,
     setForm,
     onSubmit,
+    isSubmitting = false,
+    school,
+    allowedGradeLevels,
+    isTeacher,
+    classes = [],
 }: TopicFormModalProps) {
+    const availableGradeGroups = useMemo(() => {
+        if (allowedGradeLevels && allowedGradeLevels.length > 0) {
+            const allowedSet = new Set(allowedGradeLevels.map((g) => g.toUpperCase()));
+            return ALL_GRADE_GROUPS.map((grp) => ({
+                ...grp,
+                options: grp.options.filter((opt) => allowedSet.has(opt.value.toUpperCase())),
+            })).filter((grp) => grp.options.length > 0);
+        }
+        if (isTeacher) {
+            return getGradeLevelsForTeacher(classes, school);
+        }
+        if (school) {
+            return getGradeLevelsForSchool(school);
+        }
+        if (classes && classes.length > 0) {
+            return getGradeLevelsForTeacher(classes, school);
+        }
+        return ALL_GRADE_GROUPS;
+    }, [allowedGradeLevels, isTeacher, school, classes]);
+
     if (!isOpen) return null;
 
     return (
@@ -68,12 +99,15 @@ export default function TopicFormModal({
                                 onChange={(e) => setForm({ ...form, level: e.target.value })}
                                 className="w-full px-3 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] font-semibold outline-none focus:border-[var(--color-primary)]"
                             >
-                                <option value="JSS1">JSS1</option>
-                                <option value="JSS2">JSS2</option>
-                                <option value="JSS3">JSS3</option>
-                                <option value="SS1">SS1</option>
-                                <option value="SS2">SS2</option>
-                                <option value="SS3">SS3</option>
+                                {availableGradeGroups.map((grp) => (
+                                    <optgroup key={grp.group} label={grp.group}>
+                                        {grp.options.map((opt) => (
+                                            <option key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                ))}
                             </select>
                         </div>
 
@@ -105,15 +139,24 @@ export default function TopicFormModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] cursor-pointer"
+                            disabled={isSubmitting}
+                            className="px-4 py-2 text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-50 cursor-pointer"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
-                            className="px-5 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all"
+                            disabled={isSubmitting}
+                            className="px-5 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2"
                         >
-                            Save Topic
+                            {isSubmitting ? (
+                                <>
+                                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    <span>{editingTopic ? 'Updating Topic...' : 'Saving Topic...'}</span>
+                                </>
+                            ) : (
+                                <span>{editingTopic ? 'Update Topic' : 'Save Topic'}</span>
+                            )}
                         </button>
                     </div>
                 </form>

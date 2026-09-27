@@ -64,13 +64,15 @@ class PastQuestionSeeder extends Seeder
                     $subjectName = $item['subject_name'] ?: 'General Subject';
 
                     if (!isset($subjectCache[$subjectSlug])) {
-                        $subject = Subject::create([
-                            'slug' => $subjectSlug,
-                            'name' => $subjectName,
-                            'description' => "National past examination curriculum for {$subjectName}.",
-                            'status' => 'active',
-                            'sort_order' => 1,
-                        ]);
+                        $subject = Subject::firstOrCreate(
+                            ['slug' => $subjectSlug],
+                            [
+                                'name' => $subjectName,
+                                'description' => "National past examination curriculum for {$subjectName}.",
+                                'status' => 'active',
+                                'sort_order' => 1,
+                            ]
+                        );
                         $subjectCache[$subjectSlug] = $subject;
                     }
                     $subject = $subjectCache[$subjectSlug];
@@ -83,15 +85,16 @@ class PastQuestionSeeder extends Seeder
                         $topic = $subjectTopics->firstWhere('slug', $topicSlug);
 
                         if (!$topic) {
-                            $topic = Topic::create([
-                                'subject_id' => $subject->id,
-                                'slug' => $topicSlug,
-                                'name' => $item['topic_name'],
-                                'level' => 'SS3',
-                                'description' => "Exam preparation and mastery for {$item['topic_name']}.",
-                                'status' => 'active',
-                                'sort_order' => 1,
-                            ]);
+                            $topic = Topic::firstOrCreate(
+                                ['subject_id' => $subject->id, 'slug' => $topicSlug],
+                                [
+                                    'name' => $item['topic_name'],
+                                    'level' => 'SS3',
+                                    'description' => "Exam preparation and mastery for {$item['topic_name']}.",
+                                    'status' => 'active',
+                                    'sort_order' => 1,
+                                ]
+                            );
                             $topicCache->put($subject->id, $subjectTopics->push($topic));
                         }
                         $topicId = $topic->id;

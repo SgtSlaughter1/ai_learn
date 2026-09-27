@@ -24,6 +24,7 @@ return new class extends Migration
             $table->index('status');
             $table->index('completed_at');
             $table->index(['user_id', 'quiz_id']);
+            $table->index(['user_id', 'status', 'started_at']);
         });
     }
 

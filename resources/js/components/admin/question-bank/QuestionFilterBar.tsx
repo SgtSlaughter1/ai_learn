@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { ClassItem, SubjectItem, TopicItem } from '@/types/admin';
-import { formatClassOptionLabel, ALL_GRADE_GROUPS, getGradeLevelsForSchool } from '@/utils/format';
+import { formatClassOptionLabel, ALL_GRADE_GROUPS, getGradeLevelsForSchool, getGradeLevelsForTeacher } from '@/utils/format';
 
 interface QuestionFilterBarProps {
     questionSearch: string;
@@ -22,6 +22,7 @@ interface QuestionFilterBarProps {
     onOpenAddModal: () => void;
     school?: { category?: string | null; category_ids?: number[] | null; allowed_grade_levels?: string[] | null } | null;
     allowedGradeLevels?: string[];
+    isTeacher?: boolean;
 }
 
 export default function QuestionFilterBar({
@@ -44,6 +45,7 @@ export default function QuestionFilterBar({
     onOpenAddModal,
     school,
     allowedGradeLevels,
+    isTeacher,
 }: QuestionFilterBarProps) {
     const availableGradeGroups = useMemo(() => {
         if (allowedGradeLevels && allowedGradeLevels.length > 0) {
@@ -54,6 +56,10 @@ export default function QuestionFilterBar({
             })).filter((grp) => grp.options.length > 0);
         }
 
+        if (isTeacher) {
+            return getGradeLevelsForTeacher(classes, school);
+        }
+
         if (school && (school.category || (school.category_ids && school.category_ids.length > 0) || (school.allowed_grade_levels && school.allowed_grade_levels.length > 0))) {
             const schoolGroups = getGradeLevelsForSchool(school);
             if (schoolGroups && schoolGroups.length > 0 && schoolGroups !== ALL_GRADE_GROUPS) {
@@ -62,20 +68,11 @@ export default function QuestionFilterBar({
         }
 
         if (classes && classes.length > 0) {
-            const classGradeLevels = new Set(
-                classes.map((c) => c.grade_level?.toUpperCase()).filter(Boolean) as string[]
-            );
-            if (classGradeLevels.size > 0) {
-                const matched = ALL_GRADE_GROUPS.map((grp) => ({
-                    ...grp,
-                    options: grp.options.filter((opt) => classGradeLevels.has(opt.value.toUpperCase())),
-                })).filter((grp) => grp.options.length > 0);
-                if (matched.length > 0) return matched;
-            }
+            return getGradeLevelsForTeacher(classes, school);
         }
 
         return ALL_GRADE_GROUPS;
-    }, [allowedGradeLevels, school, classes]);
+    }, [allowedGradeLevels, isTeacher, school, classes]);
 
     const filteredClasses = classes.filter(
         (c) => !questionGradeFilter || c.grade_level === questionGradeFilter

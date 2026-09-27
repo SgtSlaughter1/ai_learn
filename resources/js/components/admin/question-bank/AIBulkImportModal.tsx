@@ -1,7 +1,7 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import type { ClassItem, SubjectItem, TopicItem } from '@/types/admin';
 import type { ExtractedQuestion } from '@/utils/questionParser';
-import { formatClassOptionLabel, ALL_GRADE_GROUPS } from '@/utils/format';
+import { formatClassOptionLabel, ALL_GRADE_GROUPS, getGradeLevelsForSchool, getGradeLevelsForTeacher } from '@/utils/format';
 import ExtractedQuestionCard from './ExtractedQuestionCard';
 
 interface AIBulkImportModalProps {
@@ -27,6 +27,9 @@ interface AIBulkImportModalProps {
     onExtract: () => void;
     onSave: () => void;
     showToast: (text: string, type?: 'success' | 'error') => void;
+    school?: { category?: string | null; category_ids?: number[] | null; allowed_grade_levels?: string[] | null } | null;
+    allowedGradeLevels?: string[];
+    isTeacher?: boolean;
 }
 
 export default function AIBulkImportModal({
@@ -52,9 +55,32 @@ export default function AIBulkImportModal({
     onExtract,
     onSave,
     showToast,
+    school,
+    allowedGradeLevels,
+    isTeacher,
 }: AIBulkImportModalProps) {
     const [bulkGradeLevel, setBulkGradeLevel] = useState<string>('');
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+    const availableGradeGroups = useMemo(() => {
+        if (allowedGradeLevels && allowedGradeLevels.length > 0) {
+            const allowedSet = new Set(allowedGradeLevels.map((g) => g.toUpperCase()));
+            return ALL_GRADE_GROUPS.map((grp) => ({
+                ...grp,
+                options: grp.options.filter((opt) => allowedSet.has(opt.value.toUpperCase())),
+            })).filter((grp) => grp.options.length > 0);
+        }
+        if (isTeacher) {
+            return getGradeLevelsForTeacher(classes, school);
+        }
+        if (school) {
+            return getGradeLevelsForSchool(school);
+        }
+        if (classes && classes.length > 0) {
+            return getGradeLevelsForTeacher(classes, school);
+        }
+        return ALL_GRADE_GROUPS;
+    }, [allowedGradeLevels, isTeacher, classes, school]);
 
     if (!isOpen) return null;
 
@@ -244,7 +270,7 @@ D) 8`);
                                         className="w-full px-3 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
                                     >
                                         <option value="">All Grade Levels</option>
-                                        {ALL_GRADE_GROUPS.map((grp) => (
+                                        {availableGradeGroups.map((grp) => (
                                             <optgroup key={grp.group} label={grp.group}>
                                                 {grp.options.map((opt) => (
                                                     <option key={opt.value} value={opt.value}>

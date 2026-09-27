@@ -2,6 +2,7 @@ import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import { db } from '@/db/database';
+import { Skeleton, SkeletonText } from '@/components/common/Skeleton';
 
 interface Subject {
     id: number;
@@ -263,24 +264,28 @@ export default function Index() {
                 {/* Subjects Grid / Skeleton Screen */}
                 {loading ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {[1, 2, 3].map((n) => (
+                        {[1, 2, 3, 4, 5, 6].map((n) => (
                             <div
                                 key={n}
-                                className="bg-[var(--color-surface)] backdrop-blur-md border border-[var(--color-border)] rounded-2xl p-6 flex flex-col justify-between h-[220px] animate-pulse"
+                                className="bg-[var(--color-surface)] backdrop-blur-md border border-[var(--color-border)] rounded-2xl p-6 flex flex-col justify-between h-[230px] shadow-xs"
                             >
                                 <div className="space-y-3">
-                                    <div className="flex justify-between items-start">
-                                        <div className="h-6 bg-[var(--color-background)]/80 rounded w-1/2" />
-                                        <div className="h-5 bg-[var(--color-background)]/80 rounded w-16" />
+                                    <div className="flex justify-between items-start gap-2">
+                                        <Skeleton variant="text" className="h-6 w-3/5" />
+                                        <div className="flex flex-col items-end gap-1 shrink-0">
+                                            <Skeleton variant="rounded" className="h-6 w-16 rounded-md" />
+                                            <Skeleton variant="rounded" className="h-4 w-20 rounded-md" />
+                                        </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <div className="h-4 bg-[var(--color-background)]/80 rounded w-full" />
-                                        <div className="h-4 bg-[var(--color-background)]/80 rounded w-5/6" />
-                                    </div>
+                                    <SkeletonText lines={2} />
                                 </div>
-                                <div className="space-y-4">
-                                    <div className="h-2 bg-[var(--color-background)]/80 rounded-full w-full" />
-                                    <div className="h-10 bg-[var(--color-background)]/80 rounded-xl w-full" />
+                                <div className="space-y-3 pt-3 border-t border-[var(--color-border)]/40">
+                                    <div className="flex justify-between items-center">
+                                        <Skeleton variant="text" className="h-3 w-16" />
+                                        <Skeleton variant="text" className="h-3 w-10" />
+                                    </div>
+                                    <Skeleton variant="rounded" className="h-2 w-full rounded-full" />
+                                    <Skeleton variant="rounded" className="h-9 w-full rounded-xl" />
                                 </div>
                             </div>
                         ))}

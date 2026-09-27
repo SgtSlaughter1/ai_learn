@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { TeacherItem, SchoolItem, ClassItem } from '@/types/admin';
 import { executeAdminAction } from '@/services/AdminOfflineService';
+import Pagination from '@/components/common/Pagination';
+import { Skeleton } from '@/components/common/Skeleton';
 
 interface TeachersTabProps {
     teachers: TeacherItem[];
@@ -24,6 +26,23 @@ export default function TeachersTab({
     const [search, setSearch] = useState('');
     const [schoolFilter, setSchoolFilter] = useState<string>('');
     const [classFilter, setClassFilter] = useState<string>('');
+    const [page, setPage] = useState(1);
+    const [openActionDropdownId, setOpenActionDropdownId] = useState<string | number | null>(null);
+    const [dropdownCoords, setDropdownCoords] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
+
+    useEffect(() => {
+        if (!openActionDropdownId) return;
+        const handleClose = () => {
+            setOpenActionDropdownId(null);
+            setDropdownCoords(null);
+        };
+        window.addEventListener('scroll', handleClose, true);
+        window.addEventListener('resize', handleClose);
+        return () => {
+            window.removeEventListener('scroll', handleClose, true);
+            window.removeEventListener('resize', handleClose);
+        };
+    }, [openActionDropdownId]);
 
     // Modals
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -192,6 +211,11 @@ export default function TeachersTab({
         ? classes.filter(c => String(c.school_id) === String(formData.school_id))
         : classes;
 
+    // Reset to page 1 on search or filter change
+    useEffect(() => {
+        setPage(1);
+    }, [search, schoolFilter, classFilter]);
+
     // Filter teachers list
     const filteredTeachers = teachers.filter(t => {
         const matchesSearch =
@@ -206,6 +230,8 @@ export default function TeachersTab({
 
         return matchesSearch && matchesSchool && matchesClass;
     });
+
+    const paginatedTeachers = filteredTeachers.slice((page - 1) * 50, page * 50);
 
     return (
         <div className="space-y-6">
@@ -304,12 +330,39 @@ export default function TeachersTab({
                         </thead>
                         <tbody className="divide-y divide-[var(--color-border)] text-[var(--color-text)]">
                             {loading && teachers.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="py-12 text-center text-[var(--color-muted)]">
-                                        <div className="w-8 h-8 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                                        Loading teachers...
-                                    </td>
-                                </tr>
+                                [1, 2, 3, 4, 5].map((n) => (
+                                    <tr key={n} className="hover:bg-[var(--color-background)]/50">
+                                        <td className="py-3.5 px-4">
+                                            <div className="flex items-center gap-3">
+                                                <Skeleton variant="circular" className="w-9 h-9 shrink-0" />
+                                                <div className="space-y-1.5 flex-1">
+                                                    <Skeleton variant="text" className="h-3.5 w-32" />
+                                                    <Skeleton variant="text" className="h-2.5 w-24" />
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="py-3.5 px-4">
+                                            <Skeleton variant="text" className="h-3.5 w-28" />
+                                        </td>
+                                        <td className="py-3.5 px-4">
+                                            <div className="flex gap-1.5">
+                                                <Skeleton variant="rounded" className="h-5 w-16 rounded-lg" />
+                                                <Skeleton variant="rounded" className="h-5 w-16 rounded-lg" />
+                                            </div>
+                                        </td>
+                                        <td className="py-3.5 px-4">
+                                            <div className="space-y-1">
+                                                <Skeleton variant="text" className="h-3.5 w-24" />
+                                                <Skeleton variant="text" className="h-2.5 w-16" />
+                                            </div>
+                                        </td>
+                                        <td className="py-3.5 px-4 text-right">
+                                            <div className="flex items-center justify-end gap-1.5">
+                                                <Skeleton variant="rounded" className="w-7 h-7 rounded-lg" />
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
                             ) : filteredTeachers.length === 0 ? (
                                 <tr>
                                     <td colSpan={5} className="py-12 text-center text-[var(--color-muted)]">
@@ -323,8 +376,9 @@ export default function TeachersTab({
                                     </td>
                                 </tr>
                             ) : (
-                                filteredTeachers.map((teacher) => (
-                                    <tr key={teacher.id} className="hover:bg-[var(--color-background)]/50 transition-colors">
+                                paginatedTeachers.map((teacher) => {
+                                    return (
+                                    <tr key={teacher.id} className={`hover:bg-[var(--color-background)]/50 transition-colors ${openActionDropdownId === teacher.id ? 'relative z-30' : ''}`}>
                                         <td className="py-3.5 px-4">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-9 h-9 rounded-xl bg-[var(--color-primary-10)] text-[var(--color-primary)] font-black flex items-center justify-center text-sm border border-[var(--color-primary-20)]">
@@ -371,33 +425,129 @@ export default function TeachersTab({
                                             )}
                                         </td>
                                         <td className="py-3.5 px-4 text-right">
-                                            <div className="flex items-center justify-end gap-1.5">
+                                            <div className="relative inline-block text-left">
                                                 <button
-                                                    onClick={() => openEditModal(teacher)}
-                                                    className="p-1.5 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors cursor-pointer"
-                                                    title="Edit Teacher & Class Assignment"
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (openActionDropdownId === teacher.id) {
+                                                            setOpenActionDropdownId(null);
+                                                            setDropdownCoords(null);
+                                                            return;
+                                                        }
+                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                        const spaceBelow = window.innerHeight - rect.bottom;
+                                                        const openUp = spaceBelow < 180;
+
+                                                        setDropdownCoords({
+                                                            top: openUp ? undefined : rect.bottom + 6,
+                                                            bottom: openUp ? window.innerHeight - rect.top + 6 : undefined,
+                                                            right: window.innerWidth - rect.right,
+                                                        });
+                                                        setOpenActionDropdownId(teacher.id);
+                                                    }}
+                                                    className={`p-2 rounded-xl border transition-all duration-150 cursor-pointer inline-flex items-center gap-1.5 shadow-2xs active:scale-95 ${
+                                                        openActionDropdownId === teacher.id
+                                                            ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-xs'
+                                                            : 'bg-[var(--color-surface)] hover:bg-[var(--color-primary-10)] text-[var(--color-text)] border-[var(--color-border)] hover:border-[var(--color-primary-20)] hover:text-[var(--color-primary-light)]'
+                                                    }`}
+                                                    title="Teacher Actions"
                                                 >
-                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    {/* 3x3 Grid Icon */}
+                                                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                                        <rect x="4" y="4" width="4" height="4" rx="1" />
+                                                        <rect x="10" y="4" width="4" height="4" rx="1" />
+                                                        <rect x="16" y="4" width="4" height="4" rx="1" />
+                                                        <rect x="4" y="10" width="4" height="4" rx="1" />
+                                                        <rect x="10" y="10" width="4" height="4" rx="1" />
+                                                        <rect x="16" y="10" width="4" height="4" rx="1" />
+                                                        <rect x="4" y="16" width="4" height="4" rx="1" />
+                                                        <rect x="10" y="16" width="4" height="4" rx="1" />
+                                                        <rect x="16" y="16" width="4" height="4" rx="1" />
+                                                    </svg>
+                                                    <svg
+                                                        className={`w-3 h-3 transition-transform duration-200 ${
+                                                            openActionDropdownId === teacher.id ? 'rotate-180' : ''
+                                                        }`}
+                                                        fill="none"
+                                                        viewBox="0 0 24 24"
+                                                        stroke="currentColor"
+                                                    >
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
                                                     </svg>
                                                 </button>
-                                                <button
-                                                    onClick={() => setDeletingTeacher(teacher)}
-                                                    className="p-1.5 rounded-lg border border-[var(--color-border)] hover:bg-red-500/10 text-[var(--color-muted)] hover:text-red-500 transition-colors cursor-pointer"
-                                                    title="Remove Teacher"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
-                                                </button>
+
+                                                {openActionDropdownId === teacher.id && dropdownCoords && (
+                                                    <>
+                                                        <div
+                                                            className="fixed inset-0 z-[9998]"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setOpenActionDropdownId(null);
+                                                                setDropdownCoords(null);
+                                                            }}
+                                                        />
+                                                        <div
+                                                            style={{
+                                                                position: 'fixed',
+                                                                top: dropdownCoords.top !== undefined ? `${dropdownCoords.top}px` : 'auto',
+                                                                bottom: dropdownCoords.bottom !== undefined ? `${dropdownCoords.bottom}px` : 'auto',
+                                                                right: `${dropdownCoords.right}px`,
+                                                            }}
+                                                            className="w-44 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-2xl z-[9999] p-1.5 text-left animate-in fade-in zoom-in-95 duration-100 backdrop-blur-md"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setOpenActionDropdownId(null);
+                                                                    setDropdownCoords(null);
+                                                                    openEditModal(teacher);
+                                                                }}
+                                                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-primary-10)] hover:text-[var(--color-primary-light)] transition-colors cursor-pointer text-left"
+                                                            >
+                                                                <svg className="w-3.5 h-3.5 text-[var(--color-primary-light)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                </svg>
+                                                                <span>Edit Teacher</span>
+                                                            </button>
+
+                                                            <div className="h-px bg-[var(--color-border)] my-1" />
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setOpenActionDropdownId(null);
+                                                                    setDropdownCoords(null);
+                                                                    setDeletingTeacher(teacher);
+                                                                }}
+                                                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[var(--color-error)] hover:bg-[var(--color-error-10)] transition-colors cursor-pointer text-left"
+                                                            >
+                                                                <svg className="w-3.5 h-3.5 text-[var(--color-error)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                </svg>
+                                                                <span>Remove Teacher</span>
+                                                            </button>
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
-                                ))
+                                );
+                            })
                             )}
                         </tbody>
                     </table>
                 </div>
+
+                <Pagination
+                    currentPage={page}
+                    totalItems={filteredTeachers.length}
+                    itemsPerPage={50}
+                    onPageChange={setPage}
+                    itemLabel="teachers"
+                />
             </div>
 
             {/* Create / Edit Teacher Modal */}

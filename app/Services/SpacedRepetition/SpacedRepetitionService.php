@@ -286,7 +286,7 @@ class SpacedRepetitionService
             'total_due_today' => $formatted->count(),
             'estimated_minutes' => max(3, (int) ceil($formatted->count() * 0.8)),
             'stats' => $stats,
-            'items' => $formatted->all(),
+            'items' => $formatted->values()->all(),
         ];
     }
 

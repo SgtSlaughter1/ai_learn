@@ -24,6 +24,7 @@ return new class extends Migration
             $table->index('type');
             $table->index('difficulty');
             $table->index('status');
+            $table->index(['topic_id', 'status', 'school_id']);
         });
     }
 

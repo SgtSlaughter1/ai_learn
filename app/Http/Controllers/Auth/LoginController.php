@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,12 +19,9 @@ class LoginController extends Controller
         return Inertia::render('auth/Login');
     }
 
-    public function store(Request $request): RedirectResponse|JsonResponse
+    public function store(LoginRequest $request): RedirectResponse|JsonResponse
     {
-        $credentials = $request->validate([
-            'email' => ['required', 'string', 'email'],
-            'password' => ['required', 'string'],
-        ]);
+        $credentials = $request->validated();
 
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
             $request->session()->regenerate();
@@ -36,12 +34,7 @@ class LoginController extends Controller
                 return response()->json([
                     'status' => 'success',
                     'token' => session()->getId(),
-                    'user' => [
-                        'id' => $user->id,
-                        'name' => $user->name,
-                        'email' => $user->email,
-                        'role' => $role,
-                    ],
+                    'user' => $this->formatUserResponse($user),
                     'redirect' => $redirectPath,
                 ]);
             }
@@ -60,7 +53,7 @@ class LoginController extends Controller
         ]);
     }
 
-    public function login(Request $request): JsonResponse|RedirectResponse
+    public function login(LoginRequest $request): JsonResponse|RedirectResponse
     {
         return $this->store($request);
     }
@@ -77,7 +70,7 @@ class LoginController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-                'role' => $user->role?->value ?? $user->role ?? 'learner',
+                'role' => $user->role instanceof \BackedEnum ? $user->role->value : ($user->role ?? 'learner'),
             ],
         ]);
     }
@@ -112,17 +105,32 @@ class LoginController extends Controller
         }
 
         $request->session()->regenerate();
-        $role = $user->role?->value ?? $user->role;
 
         return response()->json([
             'status' => 'success',
             'token' => session()->getId(),
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $role ?? 'learner',
-            ],
+            'user' => $this->formatUserResponse($user),
         ]);
+    }
+
+    protected function formatUserResponse(\App\Models\User $user): array
+    {
+        $role = $user->role instanceof \BackedEnum ? $user->role->value : ($user->role ?? 'learner');
+        $school = $user->primarySchool();
+
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $role,
+            'school' => $school ? [
+                'id' => $school->id,
+                'name' => $school->name,
+                'category' => $school->category,
+                'allowed_grade_levels' => $school->allowed_grade_levels,
+            ] : null,
+            'allowed_grade_levels' => $user->allowedGradeLevels(),
+            'grade_options' => $user->gradeOptions(),
+        ];
     }
 }

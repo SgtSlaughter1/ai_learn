@@ -5,9 +5,10 @@ interface ClassCardProps {
     onViewRoster: (cls: ClassItem) => void;
     onEdit: (cls: ClassItem) => void;
     onDelete: (cls: ClassItem) => void;
+    isDeleting?: boolean;
 }
 
-export default function ClassCard({ classItem: cls, onViewRoster, onEdit, onDelete }: ClassCardProps) {
+export default function ClassCard({ classItem: cls, onViewRoster, onEdit, onDelete, isDeleting = false }: ClassCardProps) {
     return (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-5 shadow-sm flex flex-col justify-between hover:border-[var(--color-primary)]/50 transition-colors">
             <div>
@@ -63,7 +64,8 @@ export default function ClassCard({ classItem: cls, onViewRoster, onEdit, onDele
                     <button
                         type="button"
                         onClick={() => onEdit(cls)}
-                        className="p-1.5 hover:bg-[var(--color-primary-5)] text-[var(--color-muted)] hover:text-[var(--color-primary)] rounded-lg text-xs font-bold transition-colors cursor-pointer active:scale-[0.98]"
+                        disabled={isDeleting}
+                        className="p-1.5 hover:bg-[var(--color-primary-5)] text-[var(--color-muted)] hover:text-[var(--color-primary)] rounded-lg text-xs font-bold transition-colors cursor-pointer active:scale-[0.98] disabled:opacity-50"
                         title="Edit Class"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -78,17 +80,22 @@ export default function ClassCard({ classItem: cls, onViewRoster, onEdit, onDele
                     <button
                         type="button"
                         onClick={() => onDelete(cls)}
-                        className="p-1.5 hover:bg-[var(--color-error-5)] text-[var(--color-muted)] hover:text-[var(--color-error)] rounded-lg text-xs font-bold transition-colors cursor-pointer active:scale-[0.98]"
+                        disabled={isDeleting}
+                        className="p-1.5 hover:bg-[var(--color-error-5)] text-[var(--color-muted)] hover:text-[var(--color-error)] rounded-lg text-xs font-bold transition-colors cursor-pointer active:scale-[0.98] disabled:opacity-50"
                         title="Delete Class"
                     >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
-                        </svg>
+                        {isDeleting ? (
+                            <span className="w-4 h-4 border-2 border-[var(--color-error)]/30 border-t-[var(--color-error)] rounded-full animate-spin inline-block"></span>
+                        ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                            </svg>
+                        )}
                     </button>
                 </div>
             </div>

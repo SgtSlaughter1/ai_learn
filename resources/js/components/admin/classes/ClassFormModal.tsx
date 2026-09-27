@@ -20,6 +20,7 @@ interface ClassFormModalProps {
     setForm: React.Dispatch<React.SetStateAction<ClassFormData>>;
     schools: SchoolItem[];
     onSubmit: (e: React.FormEvent) => void;
+    isSubmitting?: boolean;
 }
 
 export default function ClassFormModal({
@@ -30,6 +31,7 @@ export default function ClassFormModal({
     setForm,
     schools,
     onSubmit,
+    isSubmitting = false,
 }: ClassFormModalProps) {
     if (!isOpen) return null;
 
@@ -158,15 +160,24 @@ export default function ClassFormModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-5 py-2.5 text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] cursor-pointer active:scale-[0.98] transition-all duration-200"
+                            disabled={isSubmitting}
+                            className="px-5 py-2.5 text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-50 cursor-pointer active:scale-[0.98] transition-all duration-200"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
-                            className="px-6 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs font-bold rounded-xl shadow-sm cursor-pointer active:scale-[0.98] transition-all duration-200"
+                            disabled={isSubmitting}
+                            className="px-6 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-sm cursor-pointer active:scale-[0.98] transition-all duration-200 flex items-center gap-2"
                         >
-                            {editingClass ? 'Update Class' : 'Create Class'}
+                            {isSubmitting ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    <span>{editingClass ? 'Updating Class...' : 'Saving Class...'}</span>
+                                </>
+                            ) : (
+                                <span>{editingClass ? 'Update Class' : 'Create Class'}</span>
+                            )}
                         </button>
                     </div>
                 </form>

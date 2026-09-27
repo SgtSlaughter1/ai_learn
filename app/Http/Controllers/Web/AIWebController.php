@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AI\ChatAIRequest;
+use App\Http\Requests\AI\ExplainQuestionRequest;
 use App\Models\Question;
 use App\Services\AIService;
 use Illuminate\Http\JsonResponse;
@@ -17,15 +19,11 @@ class AIWebController extends Controller
     /**
      * Get an AI tutor explanation for a specific question choice.
      */
-    public function explain(Request $request): JsonResponse
+    public function explain(ExplainQuestionRequest $request): JsonResponse
     {
-        $request->validate([
-            'question_id'        => ['required', 'integer', 'exists:questions,id'],
-            'selected_option_id' => ['nullable', 'integer', 'exists:question_options,id'],
-        ]);
-
-        $question = Question::findOrFail($request->input('question_id'));
-        $selectedOptionId = $request->input('selected_option_id');
+        $validated = $request->validated();
+        $question = Question::findOrFail($validated['question_id']);
+        $selectedOptionId = $validated['selected_option_id'] ?? null;
 
         $explanation = $this->aiService->explainAnswer($question, $selectedOptionId);
 
@@ -114,16 +112,12 @@ class AIWebController extends Controller
     /**
      * Chat with the personal AI companion.
      */
-    public function chat(Request $request): JsonResponse
+    public function chat(ChatAIRequest $request): JsonResponse
     {
-        $request->validate([
-            'message' => ['required', 'string'],
-            'history' => ['nullable', 'array'],
-        ]);
-
+        $validated = $request->validated();
         $user = $request->user() ?? \Illuminate\Support\Facades\Auth::user() ?? \App\Models\User::where('role', 'school_admin')->first() ?? \App\Models\User::first();
-        $message = $request->input('message');
-        $history = $request->input('history', []);
+        $message = $validated['message'];
+        $history = $validated['history'] ?? [];
 
         $response = $this->aiService->generateChatResponse($user, $message, $history);
 

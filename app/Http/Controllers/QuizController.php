@@ -10,7 +10,10 @@ use Illuminate\Support\Facades\Gate;
 
 class QuizController extends Controller
 {
-    public function show(Request $request, Quiz $quiz): JsonResponse
+    /**
+     * Show quiz details and question structure for API consumers.
+     */
+    public function showQuizDetails(Request $request, Quiz $quiz): JsonResponse
     {
         // Authorize user access to the quiz using model policies
         Gate::authorize('view', $quiz);
@@ -34,5 +37,13 @@ class QuizController extends Controller
             // QuestionResource handles hiding correct answers and explanations
             'questions' => QuestionResource::collection($quiz->questions),
         ]);
+    }
+
+    /**
+     * Backward-compatible alias for showQuizDetails.
+     */
+    public function show(Request $request, Quiz $quiz): JsonResponse
+    {
+        return $this->showQuizDetails($request, $quiz);
     }
 }

@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { SchoolAdminItem, SchoolItem } from '@/types/admin';
 import { executeAdminAction } from '@/services/AdminOfflineService';
+import Pagination from '@/components/common/Pagination';
+import { SkeletonTable } from '@/components/common/Skeleton';
 
 interface SchoolAdminsTabProps {
     admins: SchoolAdminItem[];
@@ -19,6 +21,23 @@ export default function SchoolAdminsTab({
 }: SchoolAdminsTabProps) {
     const [search, setSearch] = useState('');
     const [schoolFilter, setSchoolFilter] = useState<string>('');
+    const [page, setPage] = useState(1);
+    const [openActionDropdownId, setOpenActionDropdownId] = useState<string | number | null>(null);
+    const [dropdownCoords, setDropdownCoords] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
+
+    useEffect(() => {
+        if (!openActionDropdownId) return;
+        const handleClose = () => {
+            setOpenActionDropdownId(null);
+            setDropdownCoords(null);
+        };
+        window.addEventListener('scroll', handleClose, true);
+        window.addEventListener('resize', handleClose);
+        return () => {
+            window.removeEventListener('scroll', handleClose, true);
+            window.removeEventListener('resize', handleClose);
+        };
+    }, [openActionDropdownId]);
 
     // Modals
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -127,6 +146,11 @@ export default function SchoolAdminsTab({
         }
     };
 
+    // Reset to page 1 on filter changes
+    useEffect(() => {
+        setPage(1);
+    }, [search, schoolFilter]);
+
     const filteredAdmins = admins.filter((a) => {
         const matchesSearch =
             a.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -139,6 +163,8 @@ export default function SchoolAdminsTab({
 
         return matchesSearch && matchesSchool;
     });
+
+    const paginatedAdmins = filteredAdmins.slice((page - 1) * 50, page * 50);
 
     const assignedCount = admins.filter(a => !!a.administered_school || !!a.school_id).length;
     const unassignedCount = admins.length - assignedCount;
@@ -210,10 +236,7 @@ export default function SchoolAdminsTab({
 
             {/* Admin Table / List */}
             {loading ? (
-                <div className="p-12 text-center bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl">
-                    <div className="w-8 h-8 border-3 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                    <p className="text-sm font-medium text-[var(--color-muted)]">Loading school administrators...</p>
-                </div>
+                <SkeletonTable rows={5} columns={4} />
             ) : filteredAdmins.length === 0 ? (
                 <div className="p-12 text-center bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl">
                     <div className="w-12 h-12 rounded-2xl bg-[var(--color-primary-5)] text-[var(--color-primary)] flex items-center justify-center mx-auto mb-3 border border-[var(--color-border)]">
@@ -241,12 +264,12 @@ export default function SchoolAdminsTab({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--color-border)]">
-                                {filteredAdmins.map((admin) => {
+                                {paginatedAdmins.map((admin) => {
                                     const schoolName = admin.administered_school?.name ||
                                         schools.find(s => s.id === admin.school_id)?.name;
 
                                     return (
-                                        <tr key={admin.id} className="hover:bg-[var(--color-surface-hover)] transition-colors">
+                                        <tr key={admin.id} className={`hover:bg-[var(--color-surface-hover)] transition-colors ${openActionDropdownId === admin.id ? 'relative z-30' : ''}`}>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-9 h-9 rounded-full bg-[var(--color-primary-10)] text-[var(--color-primary)] border border-[var(--color-primary-20)] flex items-center justify-center font-bold text-xs uppercase">
@@ -300,19 +323,112 @@ export default function SchoolAdminsTab({
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-2">
+                                                <div className="relative inline-block text-left">
                                                     <button
-                                                        onClick={() => openEditModal(admin)}
-                                                        className="px-3 py-1.5 text-xs font-semibold bg-[var(--color-background)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text)] border border-[var(--color-border)] rounded-lg transition-colors cursor-pointer active:scale-[0.98]"
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (openActionDropdownId === admin.id) {
+                                                                setOpenActionDropdownId(null);
+                                                                setDropdownCoords(null);
+                                                                return;
+                                                            }
+                                                            const rect = e.currentTarget.getBoundingClientRect();
+                                                            const spaceBelow = window.innerHeight - rect.bottom;
+                                                            const openUp = spaceBelow < 180;
+
+                                                            setDropdownCoords({
+                                                                top: openUp ? undefined : rect.bottom + 6,
+                                                                bottom: openUp ? window.innerHeight - rect.top + 6 : undefined,
+                                                                right: window.innerWidth - rect.right,
+                                                            });
+                                                            setOpenActionDropdownId(admin.id);
+                                                        }}
+                                                        className={`p-2 rounded-xl border transition-all duration-150 cursor-pointer inline-flex items-center gap-1.5 shadow-2xs active:scale-95 ${
+                                                            openActionDropdownId === admin.id
+                                                                ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-xs'
+                                                                : 'bg-[var(--color-surface)] hover:bg-[var(--color-primary-10)] text-[var(--color-text)] border-[var(--color-border)] hover:border-[var(--color-primary-20)] hover:text-[var(--color-primary-light)]'
+                                                        }`}
+                                                        title="Admin Actions"
                                                     >
-                                                        Edit
+                                                        {/* 3x3 Grid Icon */}
+                                                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                                            <rect x="4" y="4" width="4" height="4" rx="1" />
+                                                            <rect x="10" y="4" width="4" height="4" rx="1" />
+                                                            <rect x="16" y="4" width="4" height="4" rx="1" />
+                                                            <rect x="4" y="10" width="4" height="4" rx="1" />
+                                                            <rect x="10" y="10" width="4" height="4" rx="1" />
+                                                            <rect x="16" y="10" width="4" height="4" rx="1" />
+                                                            <rect x="4" y="16" width="4" height="4" rx="1" />
+                                                            <rect x="10" y="16" width="4" height="4" rx="1" />
+                                                            <rect x="16" y="16" width="4" height="4" rx="1" />
+                                                        </svg>
+                                                        <svg
+                                                            className={`w-3 h-3 transition-transform duration-200 ${
+                                                                openActionDropdownId === admin.id ? 'rotate-180' : ''
+                                                            }`}
+                                                            fill="none"
+                                                            viewBox="0 0 24 24"
+                                                            stroke="currentColor"
+                                                        >
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                                        </svg>
                                                     </button>
-                                                    <button
-                                                        onClick={() => setDeletingAdmin(admin)}
-                                                        className="px-3 py-1.5 text-xs font-semibold text-[var(--color-error)] hover:bg-[var(--color-error-5)] border border-transparent hover:border-[var(--color-error-20)] rounded-lg transition-colors cursor-pointer active:scale-[0.98]"
-                                                    >
-                                                        Delete
-                                                    </button>
+
+                                                    {openActionDropdownId === admin.id && dropdownCoords && (
+                                                        <>
+                                                            <div
+                                                                className="fixed inset-0 z-[9998]"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setOpenActionDropdownId(null);
+                                                                    setDropdownCoords(null);
+                                                                }}
+                                                            />
+                                                            <div
+                                                                style={{
+                                                                    position: 'fixed',
+                                                                    top: dropdownCoords.top !== undefined ? `${dropdownCoords.top}px` : 'auto',
+                                                                    bottom: dropdownCoords.bottom !== undefined ? `${dropdownCoords.bottom}px` : 'auto',
+                                                                    right: `${dropdownCoords.right}px`,
+                                                                }}
+                                                                className="w-40 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-2xl z-[9999] p-1.5 text-left animate-in fade-in zoom-in-95 duration-100 backdrop-blur-md"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setOpenActionDropdownId(null);
+                                                                        setDropdownCoords(null);
+                                                                        openEditModal(admin);
+                                                                    }}
+                                                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-primary-10)] hover:text-[var(--color-primary-light)] transition-colors cursor-pointer text-left"
+                                                                >
+                                                                    <svg className="w-3.5 h-3.5 text-[var(--color-primary-light)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                    </svg>
+                                                                    <span>Edit Admin</span>
+                                                                </button>
+
+                                                                <div className="h-px bg-[var(--color-border)] my-1" />
+
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setOpenActionDropdownId(null);
+                                                                        setDropdownCoords(null);
+                                                                        setDeletingAdmin(admin);
+                                                                    }}
+                                                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[var(--color-error)] hover:bg-[var(--color-error-10)] transition-colors cursor-pointer text-left"
+                                                                >
+                                                                    <svg className="w-3.5 h-3.5 text-[var(--color-error)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                    </svg>
+                                                                    <span>Delete Admin</span>
+                                                                </button>
+                                                            </div>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -321,6 +437,14 @@ export default function SchoolAdminsTab({
                             </tbody>
                         </table>
                     </div>
+
+                    <Pagination
+                        currentPage={page}
+                        totalItems={filteredAdmins.length}
+                        itemsPerPage={50}
+                        onPageChange={setPage}
+                        itemLabel="admins"
+                    />
                 </div>
             )}
 
@@ -421,9 +545,15 @@ export default function SchoolAdminsTab({
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="px-5 py-2 text-sm font-semibold bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] rounded-xl transition-all duration-200 cursor-pointer active:scale-[0.98] disabled:opacity-50"
+                                    className="px-5 py-2 text-sm font-semibold bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] rounded-xl transition-all duration-200 cursor-pointer active:scale-[0.98] disabled:opacity-50 flex items-center gap-2"
                                 >
-                                    {submitting ? 'Saving...' : editingAdmin ? 'Update School Admin' : 'Create School Admin'}
+                                    {submitting && (
+                                        <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                        </svg>
+                                    )}
+                                    <span>{submitting ? 'Saving...' : editingAdmin ? 'Update School Admin' : 'Create School Admin'}</span>
                                 </button>
                             </div>
                         </form>
@@ -456,9 +586,15 @@ export default function SchoolAdminsTab({
                             <button
                                 onClick={handleDeleteAdmin}
                                 disabled={submitting}
-                                className="px-5 py-2 text-sm font-semibold bg-[var(--color-error)] text-white hover:opacity-90 rounded-xl transition-all duration-200 cursor-pointer active:scale-[0.98] disabled:opacity-50"
+                                className="px-5 py-2 text-sm font-semibold bg-[var(--color-error)] text-white hover:opacity-90 rounded-xl transition-all duration-200 cursor-pointer active:scale-[0.98] disabled:opacity-50 flex items-center gap-2"
                             >
-                                {submitting ? 'Deleting...' : 'Confirm Remove'}
+                                {submitting && (
+                                    <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                    </svg>
+                                )}
+                                <span>{submitting ? 'Deleting...' : 'Confirm Remove'}</span>
                             </button>
                         </div>
                     </div>

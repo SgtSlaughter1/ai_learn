@@ -213,4 +213,152 @@ class User extends Authenticatable
             ->pluck('id')
             ->all();
     }
+
+    protected ?array $memoizedAllowedGradeLevels = null;
+    protected ?array $memoizedGradeOptions = null;
+
+    /**
+     * Compute allowed grade levels strictly based on the user's role, school, and assigned classes.
+     * Includes in-memory memoization and eager loading awareness for zero N+1 queries.
+     */
+    public function allowedGradeLevels(): array
+    {
+        if ($this->memoizedAllowedGradeLevels !== null) {
+            return $this->memoizedAllowedGradeLevels;
+        }
+
+        if ($this->isPlatformAdmin()) {
+            return $this->memoizedAllowedGradeLevels = School::allowedGradeLevelsForCategory(null);
+        }
+
+        $school = $this->primarySchool();
+        $schoolAllowed = $school ? $school->allowedGradeLevels() : School::allowedGradeLevelsForCategory(null);
+
+        if ($this->isTeacher()) {
+            if ($this->relationLoaded('classes')) {
+                $teacherClassGrades = $this->classes
+                    ->where('is_active', true)
+                    ->pluck('grade_level')
+                    ->filter()
+                    ->map(fn ($g) => strtoupper(str_replace(' ', '', (string) $g)))
+                    ->unique()
+                    ->values()
+                    ->toArray();
+            } else {
+                $teacherClassGrades = $this->classes()
+                    ->where('classes.is_active', true)
+                    ->pluck('grade_level')
+                    ->filter()
+                    ->map(fn ($g) => strtoupper(str_replace(' ', '', (string) $g)))
+                    ->unique()
+                    ->values()
+                    ->toArray();
+            }
+
+            if (empty($teacherClassGrades)) {
+                return $this->memoizedAllowedGradeLevels = [];
+            }
+
+            return $this->memoizedAllowedGradeLevels = array_values(array_intersect($teacherClassGrades, $schoolAllowed));
+        }
+
+        if ($this->isSchoolAdmin()) {
+            return $this->memoizedAllowedGradeLevels = $schoolAllowed;
+        }
+
+        if ($this->isLearner()) {
+            $class = $this->primaryClass();
+            $grade = $class?->grade_level ? strtoupper(str_replace(' ', '', (string) $class->grade_level)) : null;
+            return $this->memoizedAllowedGradeLevels = ($grade ? [$grade] : []);
+        }
+
+        return $this->memoizedAllowedGradeLevels = $schoolAllowed;
+    }
+
+    /**
+     * Compute structured grade options for the user with request-level memoization.
+     */
+    public function gradeOptions(): array
+    {
+        if ($this->memoizedGradeOptions !== null) {
+            return $this->memoizedGradeOptions;
+        }
+
+        return $this->memoizedGradeOptions = School::filterGradeOptions($this->allowedGradeLevels());
+    }
+
+    /**
+     * Check if user has permission for a specific grade level.
+     */
+    public function supportsGradeLevel(?string $gradeLevel): bool
+    {
+        if (!$gradeLevel) {
+            return false;
+        }
+        $normalized = strtoupper(str_replace(' ', '', $gradeLevel));
+        return in_array($normalized, $this->allowedGradeLevels(), true);
+    }
+
+    /**
+     * Check if user can manage a given class.
+     */
+    public function canManageClass(?int $classId): bool
+    {
+        if (!$classId) {
+            return false;
+        }
+        if ($this->isPlatformAdmin()) {
+            return true;
+        }
+        if ($this->isSchoolAdmin()) {
+            $schoolId = $this->primarySchool()?->id;
+            return ClassModel::where('id', $classId)->where('school_id', $schoolId)->exists();
+        }
+        if ($this->isTeacher()) {
+            return $this->classes()->where('classes.id', $classId)->where('classes.is_active', true)->exists();
+        }
+        return false;
+    }
+
+    /**
+     * Check if user can manage a given subject.
+     */
+    public function canManageSubject(?Subject $subject): bool
+    {
+        if (!$subject) {
+            return false;
+        }
+        if ($this->isPlatformAdmin()) {
+            return true;
+        }
+        if ($this->isSchoolAdmin()) {
+            $schoolId = $this->primarySchool()?->id;
+            return $subject->school_id === $schoolId || is_null($subject->school_id);
+        }
+        if ($this->isTeacher()) {
+            return $subject->class_id && $this->classes()->where('classes.id', $subject->class_id)->where('classes.is_active', true)->exists();
+        }
+        return false;
+    }
+
+    /**
+     * Check if user can manage a given topic.
+     */
+    public function canManageTopic(?Topic $topic): bool
+    {
+        if (!$topic) {
+            return false;
+        }
+        if ($this->isPlatformAdmin()) {
+            return true;
+        }
+        $subject = $topic->subject ?? Subject::find($topic->subject_id);
+        if (!$this->canManageSubject($subject)) {
+            return false;
+        }
+        if ($topic->level && !$this->supportsGradeLevel($topic->level)) {
+            return false;
+        }
+        return true;
+    }
 }

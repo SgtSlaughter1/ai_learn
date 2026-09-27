@@ -117,6 +117,44 @@ export function getGradeLevelsForSchool(
 }
 
 /**
+ * Returns grade levels accessible to a teacher, strictly bounded by:
+ * 1. The grade level(s) of the classes they are attached to in their school.
+ * 2. If no classes with specific grade levels are attached, fallback to the grades in their school.
+ */
+export function getGradeLevelsForTeacher(
+    classes?: { grade_level?: string | null }[] | null,
+    school?: { category?: string | null; category_ids?: number[] | null; allowed_grade_levels?: string[] | null } | null
+): GradeGroup[] {
+    const schoolGroups = getGradeLevelsForSchool(school);
+    const schoolGradeSet = new Set(
+        schoolGroups.flatMap((g) => g.options.map((o) => o.value.toUpperCase()))
+    );
+
+    if (classes && classes.length > 0) {
+        const teacherClassGrades = new Set(
+            classes
+                .map((c) => c.grade_level?.toUpperCase())
+                .filter(Boolean) as string[]
+        );
+
+        if (teacherClassGrades.size > 0) {
+            const allowedSet = schoolGradeSet.size > 0
+                ? new Set([...teacherClassGrades].filter((g) => schoolGradeSet.has(g)))
+                : teacherClassGrades;
+
+            const filtered = ALL_GRADE_GROUPS.map((grp) => ({
+                ...grp,
+                options: grp.options.filter((opt) => allowedSet.has(opt.value.toUpperCase())),
+            })).filter((grp) => grp.options.length > 0);
+
+            if (filtered.length > 0) return filtered;
+        }
+    }
+
+    return schoolGroups;
+}
+
+/**
  * Returns formatted human readable badge/label for school category or category_ids.
  */
 export function formatSchoolCategoryLabel(school?: { category?: string | null; category_ids?: number[] | null; category_type_label?: string } | null): string {

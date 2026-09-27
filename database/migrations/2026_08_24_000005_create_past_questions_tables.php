@@ -33,6 +33,7 @@ return new class extends Migration
 
             $table->index(['exam_code', 'exam_year']);
             $table->index(['exam_code', 'subject_id']);
+            $table->index(['exam_code', 'subject_id', 'exam_year']);
         });
 
         Schema::create('past_question_options', function (Blueprint $table) {

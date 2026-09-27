@@ -23,6 +23,7 @@ return new class extends Migration
             $table->index('user_id');
             $table->index('topic_id');
             $table->index('mastery_score');
+            $table->index(['user_id', 'mastery_score']);
         });
     }
 

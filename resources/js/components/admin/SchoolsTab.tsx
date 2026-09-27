@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { SchoolItem } from '@/types/admin';
 import { executeAdminAction } from '@/services/AdminOfflineService';
 import SchoolMetrics from './schools/SchoolMetrics';
@@ -6,6 +6,8 @@ import SchoolFilterBar from './schools/SchoolFilterBar';
 import SchoolCard from './schools/SchoolCard';
 import SchoolFormModal, { type SchoolFormData } from './schools/SchoolFormModal';
 import SchoolDeleteModal from './schools/SchoolDeleteModal';
+import Pagination from '@/components/common/Pagination';
+import { SkeletonCardGrid } from '@/components/common/Skeleton';
 
 interface SchoolsTabProps {
     schools: SchoolItem[];
@@ -24,6 +26,7 @@ export default function SchoolsTab({
     const [categoryFilter, setCategoryFilter] = useState('');
     const [cityFilter, setCityFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
+    const [page, setPage] = useState(1);
 
     // Modals
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -161,6 +164,11 @@ export default function SchoolsTab({
 
     const cities = Array.from(new Set(schools.map((s) => s.city).filter(Boolean))) as string[];
 
+    // Reset to page 1 on filter changes
+    useEffect(() => {
+        setPage(1);
+    }, [search, categoryFilter, cityFilter, statusFilter]);
+
     const filteredSchools = schools.filter((s) => {
         const matchesSearch =
             s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -185,6 +193,8 @@ export default function SchoolsTab({
 
         return matchesSearch && matchesCity && matchesCategory && matchesStatus;
     });
+
+    const paginatedSchools = filteredSchools.slice((page - 1) * 50, page * 50);
 
     const activeCount = schools.filter((s) => s.is_active !== false).length;
     const assignedAdminCount = schools.filter((s) => !!s.admin).length;
@@ -217,10 +227,7 @@ export default function SchoolsTab({
 
             {/* Schools Grid / List */}
             {loading ? (
-                <div className="p-12 text-center bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl">
-                    <div className="w-8 h-8 border-3 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                    <p className="text-sm font-medium text-[var(--color-muted)]">Loading registered schools...</p>
-                </div>
+                <SkeletonCardGrid count={6} />
             ) : filteredSchools.length === 0 ? (
                 <div className="p-12 text-center bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl">
                     <div className="w-12 h-12 rounded-2xl bg-[var(--color-primary-5)] text-[var(--color-primary)] flex items-center justify-center mx-auto mb-3 border border-[var(--color-border)]">
@@ -236,15 +243,27 @@ export default function SchoolsTab({
                     </p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredSchools.map((school) => (
-                        <SchoolCard
-                            key={school.id}
-                            school={school}
-                            onEdit={openEditModal}
-                            onDelete={(s) => setDeletingSchool(s)}
+                <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {paginatedSchools.map((school) => (
+                            <SchoolCard
+                                key={school.id}
+                                school={school}
+                                onEdit={openEditModal}
+                                onDelete={(s) => setDeletingSchool(s)}
+                            />
+                        ))}
+                    </div>
+
+                    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl overflow-hidden">
+                        <Pagination
+                            currentPage={page}
+                            totalItems={filteredSchools.length}
+                            itemsPerPage={50}
+                            onPageChange={setPage}
+                            itemLabel="schools"
                         />
-                    ))}
+                    </div>
                 </div>
             )}
 

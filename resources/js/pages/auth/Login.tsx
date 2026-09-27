@@ -1,6 +1,6 @@
 import { Head, Link, useForm } from '@inertiajs/react';
 import { useState, FormEvent } from 'react';
-import { Eye, EyeOff, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, CheckCircle2, Sparkles, BookOpen, WifiOff, Award } from 'lucide-react';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 
 interface LoginProps {
@@ -24,60 +24,133 @@ export default function Login({ status }: LoginProps) {
     };
 
     return (
-        <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex flex-col items-center justify-center px-4 py-8 sm:p-6 relative overflow-hidden">
-            {/* Background decorative shapes */}
-            <div className="absolute top-1/4 left-1/4 w-72 sm:w-96 h-72 sm:h-96 bg-[var(--color-primary)]/5 rounded-full blur-3xl -z-10 pointer-events-none" />
-            <div className="absolute bottom-1/4 right-1/4 w-72 sm:w-96 h-72 sm:h-96 bg-[var(--color-accent)]/5 rounded-full blur-3xl -z-10 pointer-events-none" />
-
+        <div className="h-screen w-full bg-[var(--color-background)] text-[var(--color-text)] flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
             <Head>
-                <title>Sign In | AceDrill Portal</title>
-                <meta name="description" content="Sign in to your AceDrill account to access your offline-first secondary curriculum, quizzes, and personalized AI tutor." />
+                <title>Sign In | AceDrill</title>
+                <meta name="description" content="Sign in to your AceDrill portal to access offline learning materials and practice questions." />
             </Head>
 
-            <div className="w-full max-w-md space-y-6 sm:space-y-8">
-                {/* Back to Home Navigation */}
-                <div className="flex items-center justify-between">
+            {/* ═══════════════════════════════════════════════════════════
+               LEFT COLUMN: Brand Hero (Uses AceDrill Theme Colors)
+               ═══════════════════════════════════════════════════════════ */}
+            <div className="relative lg:w-5/12 xl:w-1/2 bg-[var(--color-primary)] text-white p-6 sm:p-8 lg:p-10 xl:p-14 flex flex-col justify-between shrink-0 lg:h-full overflow-hidden">
+                {/* Subtle organic background gradients */}
+                <div className="absolute -top-20 -left-20 w-80 h-80 bg-[var(--color-accent)]/15 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+
+                {/* Top Nav: Back to Home */}
+                <div className="relative z-10 flex items-center justify-between">
                     <Link
                         href="/"
-                        className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors p-1 -ml-1 rounded-lg hover:bg-[var(--color-surface)]"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold backdrop-blur-sm border border-white/15 transition-colors"
                     >
-                        <ArrowLeft className="w-4 h-4" />
+                        <ArrowLeft className="w-3.5 h-3.5" />
                         <span>Back to Home</span>
                     </Link>
+
+                    <div className="lg:hidden">
+                        <ThemeToggle />
+                    </div>
+                </div>
+
+                {/* Main Hero Content */}
+                <div className="relative z-10 my-6 lg:my-auto space-y-6 max-w-md">
+                    {/* Brand Emblem */}
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-[var(--color-accent)] text-[var(--color-primary)] flex items-center justify-center font-black shadow-md">
+                            <BookOpen className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <span className="text-xl font-black tracking-tight text-white">AceDrill</span>
+                            <span className="block text-[10px] uppercase font-bold tracking-widest text-white/70">Learning Portal</span>
+                        </div>
+                    </div>
+
+                    {/* Headline & Description */}
+                    <div className="space-y-2.5">
+                        <h1 className="text-2xl sm:text-3xl xl:text-4xl font-extrabold tracking-tight leading-tight text-white">
+                            Smarter learning, <br />
+                            <span className="text-[var(--color-accent)]">anywhere, offline.</span>
+                        </h1>
+                        <p className="text-xs sm:text-sm text-white/80 leading-relaxed">
+                            Access curriculum-aligned lessons, past questions, and personalized AI tutoring without needing an internet connection.
+                        </p>
+                    </div>
+
+                    {/* Compact Feature Highlights */}
+                    <div className="space-y-2.5 pt-1">
+                        <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
+                            <div className="w-8 h-8 rounded-lg bg-[var(--color-accent)]/20 text-[var(--color-accent)] flex items-center justify-center shrink-0">
+                                <WifiOff className="w-4 h-4" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-white leading-tight">100% Offline Ready</p>
+                                <p className="text-[11px] text-white/70">Study and practice quizzes without data.</p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
+                            <div className="w-8 h-8 rounded-lg bg-emerald-400/20 text-emerald-300 flex items-center justify-center shrink-0">
+                                <Sparkles className="w-4 h-4" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-white leading-tight">AI-Powered Explanations</p>
+                                <p className="text-[11px] text-white/70">Step-by-step guidance tailored to your pace.</p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
+                            <div className="w-8 h-8 rounded-lg bg-white/15 text-white flex items-center justify-center shrink-0">
+                                <Award className="w-4 h-4" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-white leading-tight">WAEC &amp; JAMB Past Questions</p>
+                                <p className="text-[11px] text-white/70">Timed simulations and instant performance feedback.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer Note */}
+                <div className="relative z-10 pt-3 text-[11px] text-white/60 border-t border-white/10 hidden lg:block">
+                    AceDrill Offline Learning Environment
+                </div>
+            </div>
+
+            {/* ═══════════════════════════════════════════════════════════
+               RIGHT COLUMN: Authentication Form (Direct, Clean, Viewport Fit)
+               ═══════════════════════════════════════════════════════════ */}
+            <div className="lg:w-7/12 xl:w-1/2 flex flex-col justify-between p-6 sm:p-8 lg:p-10 xl:p-14 lg:h-full overflow-y-auto">
+                {/* Top Bar with Theme Toggle */}
+                <div className="hidden lg:flex items-center justify-end w-full">
                     <ThemeToggle />
                 </div>
 
-                {/* Brand Header */}
-                <div className="text-center space-y-3">
-                    <div className="w-12 h-12 rounded-2xl bg-[var(--color-primary)] text-white mx-auto flex items-center justify-center shadow-lg shadow-[var(--color-primary)]/20">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                        </svg>
-                    </div>
-                    <div>
-                        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--color-primary)]">
-                            Welcome Back
-                        </h1>
-                        <p className="text-xs sm:text-sm text-[var(--color-muted)] mt-1">
-                            Sign in to continue your adaptive learning journey.
+                {/* Centered Form Wrapper */}
+                <div className="w-full max-w-sm mx-auto my-auto py-4 space-y-5">
+                    {/* Header */}
+                    <div className="space-y-1">
+                        <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--color-text)]">
+                            Sign In
+                        </h2>
+                        <p className="text-xs sm:text-sm text-[var(--color-muted)]">
+                            Enter your credentials to access your account.
                         </p>
                     </div>
-                </div>
 
-                {/* Status Message Banner */}
-                {status && (
-                    <div className="p-3.5 sm:p-4 rounded-2xl bg-[var(--color-success)]/10 border border-[var(--color-success)]/20 text-[var(--color-success)] text-xs sm:text-sm flex items-start gap-3 shadow-xs">
-                        <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 mt-0.5" />
-                        <span>{status}</span>
-                    </div>
-                )}
+                    {/* Status Message */}
+                    {status && (
+                        <div className="p-3 rounded-xl bg-[var(--color-success)]/10 border border-[var(--color-success)]/20 text-[var(--color-success)] text-xs flex items-start gap-2.5">
+                            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                            <span>{status}</span>
+                        </div>
+                    )}
 
-                {/* Login Card */}
-                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] p-6 sm:p-8 rounded-2xl sm:rounded-3xl shadow-xl shadow-[var(--color-primary)]/5">
-                    <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
+                    {/* Form */}
+                    <form onSubmit={handleSubmit} className="space-y-4">
                         {/* Email Input */}
-                        <div className="space-y-1.5 sm:space-y-2">
-                            <label htmlFor="email" className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">
+                        <div className="space-y-1">
+                            <label htmlFor="email" className="block text-[11px] font-bold uppercase tracking-wider text-[var(--color-muted)]">
                                 Email Address
                             </label>
                             <input
@@ -87,7 +160,7 @@ export default function Login({ status }: LoginProps) {
                                 value={data.email}
                                 onChange={(e) => setData('email', e.target.value)}
                                 className="input-field text-xs sm:text-sm"
-                                placeholder="learner@example.com"
+                                placeholder="name@example.com"
                                 required
                                 autoComplete="username"
                             />
@@ -97,9 +170,9 @@ export default function Login({ status }: LoginProps) {
                         </div>
 
                         {/* Password Input */}
-                        <div className="space-y-1.5 sm:space-y-2">
+                        <div className="space-y-1">
                             <div className="flex items-center justify-between">
-                                <label htmlFor="password" className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">
+                                <label htmlFor="password" className="block text-[11px] font-bold uppercase tracking-wider text-[var(--color-muted)]">
                                     Password
                                 </label>
                                 <Link
@@ -116,7 +189,7 @@ export default function Login({ status }: LoginProps) {
                                     name="password"
                                     value={data.password}
                                     onChange={(e) => setData('password', e.target.value)}
-                                    className="input-field pr-12 text-xs sm:text-sm"
+                                    className="input-field pr-11 text-xs sm:text-sm"
                                     placeholder="••••••••"
                                     required
                                     autoComplete="current-password"
@@ -126,13 +199,8 @@ export default function Login({ status }: LoginProps) {
                                     onClick={() => setShowPassword(!showPassword)}
                                     className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors focus:outline-none cursor-pointer"
                                     aria-label={showPassword ? 'Hide password' : 'Show password'}
-                                    title={showPassword ? 'Hide password' : 'Show password'}
                                 >
-                                    {showPassword ? (
-                                        <EyeOff className="w-4 h-4" />
-                                    ) : (
-                                        <Eye className="w-4 h-4" />
-                                    )}
+                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                 </button>
                             </div>
                             {errors.password && (
@@ -140,17 +208,17 @@ export default function Login({ status }: LoginProps) {
                             )}
                         </div>
 
-                        {/* Remember Me Checkbox */}
-                        <div className="flex items-center">
-                            <label className="flex items-center space-x-2.5 text-xs sm:text-sm text-[var(--color-muted)] cursor-pointer select-none">
+                        {/* Remember Me */}
+                        <div className="flex items-center pt-0.5">
+                            <label className="flex items-center space-x-2 text-xs text-[var(--color-muted)] cursor-pointer select-none">
                                 <input
                                     type="checkbox"
                                     name="remember"
                                     checked={data.remember}
                                     onChange={(e) => setData('remember', e.target.checked)}
-                                    className="h-4 w-4 rounded border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] focus:ring-[var(--color-primary)]/20 focus:ring-offset-0 focus:outline-none cursor-pointer"
+                                    className="h-4 w-4 rounded border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] focus:ring-[var(--color-primary)]/20 cursor-pointer"
                                 />
-                                <span>Remember my login on this device</span>
+                                <span>Remember my login</span>
                             </label>
                         </div>
 
@@ -158,11 +226,11 @@ export default function Login({ status }: LoginProps) {
                         <button
                             type="submit"
                             disabled={processing}
-                            className="w-full btn-primary py-3.5 text-sm sm:text-base font-bold shadow-md hover:shadow-lg active:scale-[0.99] transition-all cursor-pointer"
+                            className="w-full btn-primary py-3 text-sm font-bold shadow-md hover:shadow-lg active:scale-[0.99] transition-all cursor-pointer mt-2"
                         >
                             {processing ? (
                                 <div className="flex items-center justify-center space-x-2">
-                                    <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                                    <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                                     </svg>
@@ -175,10 +243,10 @@ export default function Login({ status }: LoginProps) {
                     </form>
                 </div>
 
-                {/* Footer Security Note */}
-                {/* <div className="text-center text-[11px] sm:text-xs text-[var(--color-muted)]">
-                    Protected by offline-first local encryption.
-                </div> */}
+                {/* Footer Note */}
+                <div className="text-center text-[11px] text-[var(--color-muted)] pt-2">
+                    Protected by offline-first encryption.
+                </div>
             </div>
         </div>
     );

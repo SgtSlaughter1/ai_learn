@@ -17,6 +17,7 @@ import {
     getCachedAdminQuestions,
     cacheAdminTopics,
     getCachedAdminTopics,
+    getAdminAuthHeaders,
     ADMIN_DATA_CHANGED_EVENT,
 } from '@/services/AdminOfflineService';
 import TeachersTab from '@/components/admin/TeachersTab';
@@ -24,6 +25,7 @@ import ClassesTab from '@/components/admin/ClassesTab';
 import LearnersTab from '@/components/admin/LearnersTab';
 import SubjectsTab from '@/components/admin/SubjectsTab';
 import QuestionBankTab from '@/components/admin/QuestionBankTab';
+import { Skeleton } from '@/components/common/Skeleton';
 
 export default function SchoolAdminDashboard() {
     const { auth } = usePage<{ auth: { user: { id: number; name: string; email: string; role: string } } }>().props;
@@ -65,7 +67,10 @@ export default function SchoolAdminDashboard() {
     const fetchStats = async () => {
         setLoadingStats(true);
         try {
-            const res = await fetch('/api/v1/admin/stats');
+            const res = await fetch('/api/v1/admin/stats', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 if (data.status === 'success') {
@@ -96,7 +101,10 @@ export default function SchoolAdminDashboard() {
                 setSchools(cached);
                 return;
             }
-            const res = await fetch('/api/v1/admin/schools');
+            const res = await fetch('/api/v1/admin/schools', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const serverSchools: SchoolItem[] = data.schools || data.data || [];
@@ -123,7 +131,10 @@ export default function SchoolAdminDashboard() {
                 setTeachers(cached);
                 return;
             }
-            const res = await fetch('/api/v1/admin/teachers');
+            const res = await fetch('/api/v1/admin/teachers', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const serverTeachers = data.teachers || data.data || [];
@@ -150,7 +161,10 @@ export default function SchoolAdminDashboard() {
                 setClasses(cached);
                 return;
             }
-            const res = await fetch('/api/v1/admin/classes');
+            const res = await fetch('/api/v1/admin/classes', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const serverClasses = data.classes || data.data || [];
@@ -177,7 +191,10 @@ export default function SchoolAdminDashboard() {
                 setLearners(cached);
                 return;
             }
-            const res = await fetch('/api/v1/admin/learners');
+            const res = await fetch('/api/v1/admin/learners', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const serverLearners = data.learners || data.data || [];
@@ -206,7 +223,10 @@ export default function SchoolAdminDashboard() {
                 setAllTopics(cachedTops);
                 return;
             }
-            const res = await fetch('/api/v1/admin/subjects');
+            const res = await fetch('/api/v1/admin/subjects', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const serverSubjects: SubjectItem[] = data.subjects || data.data || [];
@@ -239,7 +259,10 @@ export default function SchoolAdminDashboard() {
                 setQuestions(cached);
                 return;
             }
-            const res = await fetch('/api/v1/admin/questions');
+            const res = await fetch('/api/v1/admin/questions', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const serverQuestions = data.questions || data.data || [];
@@ -576,6 +599,7 @@ export default function SchoolAdminDashboard() {
                     <SubjectsTab
                         subjects={subjects}
                         classes={classes}
+                        school={schools[0] || (stats as any)?.school || null}
                         loading={loadingSubjects}
                         onRefresh={fetchSubjects}
                         showToast={showToast}
@@ -601,6 +625,7 @@ export default function SchoolAdminDashboard() {
 }
 
 function StatCard({ label, value, subtitle, icon }: { label: string; value: string | number; subtitle: string; icon: React.ReactNode }) {
+    const isLoading = value === '...';
     return (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-5 shadow-xs flex flex-col justify-between">
             <div className="flex items-center justify-between mb-2">
@@ -609,7 +634,11 @@ function StatCard({ label, value, subtitle, icon }: { label: string; value: stri
                 </div>
             </div>
             <div>
-                <p className="text-2xl font-black text-[var(--color-text)]">{value}</p>
+                {isLoading ? (
+                    <Skeleton variant="rounded" className="h-8 w-16 rounded-lg my-0.5" />
+                ) : (
+                    <p className="text-2xl font-black text-[var(--color-text)]">{value}</p>
+                )}
                 <p className="text-xs font-bold text-[var(--color-text)] mt-1">{label}</p>
                 <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{subtitle}</p>
             </div>

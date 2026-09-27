@@ -8,9 +8,10 @@ interface QuestionListItemProps {
     question: QuestionItem;
     onEdit: (q: QuestionItem) => void;
     onDelete: (q: QuestionItem) => void;
+    isDeleting?: boolean;
 }
 
-export default function QuestionListItem({ question: q, onEdit, onDelete }: QuestionListItemProps) {
+export default function QuestionListItem({ question: q, onEdit, onDelete, isDeleting = false }: QuestionListItemProps) {
     return (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-5 shadow-sm space-y-4 hover:border-[var(--color-primary)]/40 transition-colors">
             <div className="flex items-start justify-between gap-4">
@@ -48,16 +49,25 @@ export default function QuestionListItem({ question: q, onEdit, onDelete }: Ques
                     <button
                         type="button"
                         onClick={() => onEdit(q)}
-                        className="px-3 py-1.5 text-xs font-bold text-[var(--color-primary)] hover:bg-[var(--color-primary-5)] active:scale-[0.98] cursor-pointer rounded-lg transition-all border border-[var(--color-border)]"
+                        disabled={isDeleting}
+                        className="px-3 py-1.5 text-xs font-bold text-[var(--color-primary)] hover:bg-[var(--color-primary-5)] active:scale-[0.98] disabled:opacity-50 cursor-pointer rounded-lg transition-all border border-[var(--color-border)]"
                     >
                         Edit
                     </button>
                     <button
                         type="button"
                         onClick={() => onDelete(q)}
-                        className="px-3 py-1.5 text-xs font-bold text-[var(--color-error)] hover:bg-[var(--color-error-5)] active:scale-[0.98] cursor-pointer rounded-lg transition-all"
+                        disabled={isDeleting}
+                        className="px-3 py-1.5 text-xs font-bold text-[var(--color-error)] hover:bg-[var(--color-error-5)] active:scale-[0.98] disabled:opacity-50 cursor-pointer rounded-lg transition-all flex items-center gap-1.5"
                     >
-                        Delete
+                        {isDeleting ? (
+                            <>
+                                <span className="w-3 h-3 border-2 border-[var(--color-error)]/30 border-t-[var(--color-error)] rounded-full animate-spin"></span>
+                                <span>Deleting...</span>
+                            </>
+                        ) : (
+                            <span>Delete</span>
+                        )}
                     </button>
                 </div>
             </div>

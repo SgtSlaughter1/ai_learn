@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\PasswordResetLinkRequest;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Inertia\Inertia;
@@ -27,13 +27,10 @@ class PasswordResetLinkController extends Controller
     /**
      * Handle an incoming password reset link request.
      */
-    public function store(Request $request): RedirectResponse|JsonResponse
+    public function store(PasswordResetLinkRequest $request): RedirectResponse|JsonResponse
     {
-        $request->validate([
-            'email' => ['required', 'email'],
-        ]);
-
-        $email = $request->input('email');
+        $validated = $request->validated();
+        $email = $validated['email'];
         $user = User::where('email', $email)->first();
 
         if ($user) {

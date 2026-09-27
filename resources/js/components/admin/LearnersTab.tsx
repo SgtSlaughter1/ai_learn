@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Learner, SchoolItem, ClassItem } from '@/types/admin';
 import { executeAdminAction } from '@/services/AdminOfflineService';
 import { getGradeLevelsForSchool, formatClassOptionLabel } from '@/utils/format';
+import Pagination from '@/components/common/Pagination';
+import { Skeleton } from '@/components/common/Skeleton';
 
 interface Props {
     learners: Learner[];
@@ -17,8 +19,27 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
     const [learnerGradeFilter, setLearnerGradeFilter] = useState('');
     const [learnerSchoolFilter, setLearnerSchoolFilter] = useState('');
     const [learnerClassFilter, setLearnerClassFilter] = useState('');
+    const [page, setPage] = useState(1);
+    const [openActionDropdownId, setOpenActionDropdownId] = useState<string | number | null>(null);
+    const [dropdownCoords, setDropdownCoords] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
+
+    useEffect(() => {
+        if (!openActionDropdownId) return;
+        const handleClose = () => {
+            setOpenActionDropdownId(null);
+            setDropdownCoords(null);
+        };
+        window.addEventListener('scroll', handleClose, true);
+        window.addEventListener('resize', handleClose);
+        return () => {
+            window.removeEventListener('scroll', handleClose, true);
+            window.removeEventListener('resize', handleClose);
+        };
+    }, [openActionDropdownId]);
     const [isLearnerModalOpen, setIsLearnerModalOpen] = useState(false);
     const [editingLearner, setEditingLearner] = useState<Learner | null>(null);
+    const [isSavingLearner, setIsSavingLearner] = useState(false);
+    const [deletingLearnerId, setDeletingLearnerId] = useState<string | number | null>(null);
     const [learnerForm, setLearnerForm] = useState({
         name: '',
         email: '',
@@ -31,70 +52,86 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
 
     const handleSaveLearner = async (e: React.FormEvent) => {
         e.preventDefault();
-        const endpoint = editingLearner ? `/api/v1/admin/learners/${editingLearner.id}` : '/api/v1/admin/learners';
-        const method = editingLearner ? 'PUT' : 'POST';
-        const tempId = editingLearner ? editingLearner.id : `temp_lrn_${Date.now()}`;
+        if (isSavingLearner) return;
+        setIsSavingLearner(true);
 
-        const selectedSchool = schools.find((s) => String(s.id) === String(learnerForm.school_id));
-        const selectedClass = classes.find((c) => String(c.id) === String(learnerForm.class_id));
+        try {
+            const endpoint = editingLearner ? `/api/v1/admin/learners/${editingLearner.id}` : '/api/v1/admin/learners';
+            const method = editingLearner ? 'PUT' : 'POST';
+            const tempId = editingLearner ? editingLearner.id : `temp_lrn_${Date.now()}`;
 
-        const optimisticLearner: Learner = {
-            id: tempId,
-            name: learnerForm.name,
-            email: learnerForm.email,
-            learner_profile: {
-                id: Date.now(),
-                school_id: learnerForm.school_id ? Number(learnerForm.school_id) : null,
-                student_id: learnerForm.student_id || null,
-                grade_level: learnerForm.grade_level || selectedClass?.grade_level || 'SS1',
-                is_active: true,
-                school: selectedSchool ? { id: selectedSchool.id, name: selectedSchool.name } : undefined,
-            },
-            classes: selectedClass ? [{ id: selectedClass.id, name: selectedClass.name }] : [],
-            gamification: {
-                total_xp: 0,
-                level: 1,
-                tier: 'Newcomer',
-            },
-            _pendingSync: true,
-        };
+            const selectedSchool = schools.find((s) => String(s.id) === String(learnerForm.school_id));
+            const selectedClass = classes.find((c) => String(c.id) === String(learnerForm.class_id));
 
-        const res = await executeAdminAction({
-            table: 'adminLearners',
-            action: editingLearner ? 'update' : 'insert',
-            recordId: tempId,
-            endpoint,
-            method,
-            payload: learnerForm,
-            optimisticRecord: optimisticLearner,
-        });
+            const optimisticLearner: Learner = {
+                id: tempId,
+                name: learnerForm.name,
+                email: learnerForm.email,
+                learner_profile: {
+                    id: Date.now(),
+                    school_id: learnerForm.school_id ? Number(learnerForm.school_id) : null,
+                    student_id: learnerForm.student_id || null,
+                    grade_level: learnerForm.grade_level || selectedClass?.grade_level || 'SS1',
+                    is_active: true,
+                    school: selectedSchool ? { id: selectedSchool.id, name: selectedSchool.name } : undefined,
+                },
+                classes: selectedClass ? [{ id: selectedClass.id, name: selectedClass.name }] : [],
+                gamification: {
+                    total_xp: 0,
+                    level: 1,
+                    tier: 'Newcomer',
+                },
+                _pendingSync: true,
+            };
 
-        if (res.success) {
-            showToast(res.message || (res.offline ? 'Saved offline. Changes will sync when online.' : 'Learner saved successfully'), 'success');
-            setIsLearnerModalOpen(false);
-            setEditingLearner(null);
-            setLearnerForm({ name: '', email: '', password: '', school_id: '', grade_level: 'SS1', student_id: '', class_id: '' });
-            onRefresh();
-        } else {
-            showToast(res.error || 'Failed to save learner', 'error');
+            const res = await executeAdminAction({
+                table: 'adminLearners',
+                action: editingLearner ? 'update' : 'insert',
+                recordId: tempId,
+                endpoint,
+                method,
+                payload: learnerForm,
+                optimisticRecord: optimisticLearner,
+            });
+
+            if (res.success) {
+                showToast(res.message || (res.offline ? 'Learner saved locally (Pending Sync)' : 'Learner saved successfully'), 'success');
+                setIsLearnerModalOpen(false);
+                setEditingLearner(null);
+                setLearnerForm({ name: '', email: '', password: '', school_id: '', grade_level: 'SS1', student_id: '', class_id: '' });
+                onRefresh();
+            } else {
+                showToast(res.error || 'Failed to save learner', 'error');
+            }
+        } catch (err: any) {
+            showToast(err?.message || 'Error saving learner', 'error');
+        } finally {
+            setIsSavingLearner(false);
         }
     };
 
     const handleDeleteLearner = async (learner: Learner) => {
         if (!confirm(`Are you sure you want to delete learner ${learner.name}?`)) return;
-        const res = await executeAdminAction({
-            table: 'adminLearners',
-            action: 'delete',
-            recordId: learner.id,
-            endpoint: `/api/v1/admin/learners/${learner.id}`,
-            method: 'DELETE',
-        });
+        setDeletingLearnerId(learner.id);
+        try {
+            const res = await executeAdminAction({
+                table: 'adminLearners',
+                action: 'delete',
+                recordId: learner.id,
+                endpoint: `/api/v1/admin/learners/${learner.id}`,
+                method: 'DELETE',
+            });
 
-        if (res.success) {
-            showToast(res.message || (res.offline ? 'Learner deleted offline (pending sync)' : 'Learner deleted'), 'success');
-            onRefresh();
-        } else {
-            showToast(res.error || 'Failed to delete learner', 'error');
+            if (res.success) {
+                showToast(res.message || (res.offline ? 'Learner deleted locally (Pending Sync)' : 'Learner deleted'), 'success');
+                onRefresh();
+            } else {
+                showToast(res.error || 'Failed to delete learner', 'error');
+            }
+        } catch (err: any) {
+            showToast(err?.message || 'Error deleting learner', 'error');
+        } finally {
+            setDeletingLearnerId(null);
         }
     };
 
@@ -119,6 +156,12 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
         }
         return true;
     });
+
+    useEffect(() => {
+        setPage(1);
+    }, [learnerSearch, learnerGradeFilter, learnerSchoolFilter, learnerClassFilter]);
+
+    const paginatedLearners = filteredLearners.slice((page - 1) * 50, page * 50);
 
     // Available classes in modal based on selected school and selected grade
     const modalAvailableClasses = classes.filter((c) => {
@@ -230,22 +273,49 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
                         </thead>
                         <tbody className="divide-y divide-[var(--color-border)]">
                             {loading ? (
-                                [1, 2, 3, 4].map((n) => (
-                                    <tr key={n}>
-                                        <td colSpan={5} className="py-4 px-4">
-                                            <div className="h-6 bg-[var(--color-primary-5)] rounded animate-pulse" />
+                                [1, 2, 3, 4, 5].map((n) => (
+                                    <tr key={n} className="hover:bg-[var(--color-primary-5)]/10">
+                                        <td className="py-3.5 px-4">
+                                            <div className="flex items-center gap-2.5">
+                                                <Skeleton variant="circular" className="w-8 h-8 shrink-0" />
+                                                <div className="space-y-1.5 flex-1">
+                                                    <Skeleton variant="text" className="h-3.5 w-32" />
+                                                    <Skeleton variant="text" className="h-2.5 w-24" />
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="py-3.5 px-4">
+                                            <div className="space-y-1">
+                                                <Skeleton variant="rounded" className="h-5 w-16 rounded-md" />
+                                                <Skeleton variant="text" className="h-2.5 w-20" />
+                                            </div>
+                                        </td>
+                                        <td className="py-3.5 px-4">
+                                            <Skeleton variant="text" className="h-3.5 w-28" />
+                                        </td>
+                                        <td className="py-3.5 px-4">
+                                            <div className="space-y-1">
+                                                <Skeleton variant="rounded" className="h-5 w-20 rounded-full" />
+                                                <Skeleton variant="text" className="h-2.5 w-14" />
+                                            </div>
+                                        </td>
+                                        <td className="py-3.5 px-4 text-right">
+                                            <div className="flex items-center justify-end gap-1.5">
+                                                <Skeleton variant="rounded" className="w-7 h-7 rounded-lg" />
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
-                            ) : filteredLearners.length === 0 ? (
+                            ) : paginatedLearners.length === 0 ? (
                                 <tr>
                                     <td colSpan={5} className="py-12 text-center text-[var(--color-muted)] text-sm">
                                         No learners found. Click "Add New Learner" to provision students.
                                     </td>
                                 </tr>
                             ) : (
-                                filteredLearners.map((learner) => (
-                                    <tr key={learner.id} className="hover:bg-[var(--color-primary-5)]/20 transition-colors">
+                                paginatedLearners.map((learner) => {
+                                    return (
+                                    <tr key={learner.id} className={`hover:bg-[var(--color-primary-5)]/20 transition-colors ${openActionDropdownId === learner.id ? 'relative z-30' : ''}`}>
                                         <td className="py-3.5 px-4">
                                             <div className="flex items-center gap-2">
                                                 <p className="font-bold text-[var(--color-text)]">{learner.name}</p>
@@ -285,39 +355,146 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
                                             </div>
                                         </td>
                                         <td className="py-3.5 px-4 text-right">
-                                            <div className="flex items-center justify-end gap-2">
+                                            <div className="relative inline-block text-left">
                                                 <button
-                                                    onClick={() => {
-                                                        setEditingLearner(learner);
-                                                        setLearnerForm({
-                                                            name: learner.name,
-                                                            email: learner.email,
-                                                            password: '',
-                                                            school_id: learner.learner_profile?.school_id ? String(learner.learner_profile.school_id) : '',
-                                                            grade_level: learner.learner_profile?.grade_level || 'SS1',
-                                                            student_id: learner.learner_profile?.student_id || '',
-                                                            class_id: learner.classes?.[0]?.id ? String(learner.classes[0].id) : '',
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (openActionDropdownId === learner.id) {
+                                                            setOpenActionDropdownId(null);
+                                                            setDropdownCoords(null);
+                                                            return;
+                                                        }
+                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                        const spaceBelow = window.innerHeight - rect.bottom;
+                                                        const openUp = spaceBelow < 180;
+
+                                                        setDropdownCoords({
+                                                            top: openUp ? undefined : rect.bottom + 6,
+                                                            bottom: openUp ? window.innerHeight - rect.top + 6 : undefined,
+                                                            right: window.innerWidth - rect.right,
                                                         });
-                                                        setIsLearnerModalOpen(true);
+                                                        setOpenActionDropdownId(learner.id);
                                                     }}
-                                                    className="px-2.5 py-1 text-xs font-bold text-[var(--color-primary)] hover:bg-[var(--color-primary-5)] rounded-lg transition-all duration-200 cursor-pointer active:scale-[0.98]"
+                                                    className={`p-2 rounded-xl border transition-all duration-150 cursor-pointer inline-flex items-center gap-1.5 shadow-2xs active:scale-95 ${
+                                                        openActionDropdownId === learner.id
+                                                            ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-xs'
+                                                            : 'bg-[var(--color-surface)] hover:bg-[var(--color-primary-10)] text-[var(--color-text)] border-[var(--color-border)] hover:border-[var(--color-primary-20)] hover:text-[var(--color-primary-light)]'
+                                                    }`}
+                                                    title="Learner Actions"
                                                 >
-                                                    Edit
+                                                    {/* 3x3 Grid Icon */}
+                                                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                                        <rect x="4" y="4" width="4" height="4" rx="1" />
+                                                        <rect x="10" y="4" width="4" height="4" rx="1" />
+                                                        <rect x="16" y="4" width="4" height="4" rx="1" />
+                                                        <rect x="4" y="10" width="4" height="4" rx="1" />
+                                                        <rect x="10" y="10" width="4" height="4" rx="1" />
+                                                        <rect x="16" y="10" width="4" height="4" rx="1" />
+                                                        <rect x="4" y="16" width="4" height="4" rx="1" />
+                                                        <rect x="10" y="16" width="4" height="4" rx="1" />
+                                                        <rect x="16" y="16" width="4" height="4" rx="1" />
+                                                    </svg>
+                                                    <svg
+                                                        className={`w-3 h-3 transition-transform duration-200 ${
+                                                            openActionDropdownId === learner.id ? 'rotate-180' : ''
+                                                        }`}
+                                                        fill="none"
+                                                        viewBox="0 0 24 24"
+                                                        stroke="currentColor"
+                                                    >
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                                    </svg>
                                                 </button>
-                                                <button
-                                                    onClick={() => handleDeleteLearner(learner)}
-                                                    className="px-2.5 py-1 text-xs font-bold text-[var(--color-error)] hover:bg-[var(--color-error-5)] rounded-lg transition-all duration-200 cursor-pointer active:scale-[0.98]"
-                                                >
-                                                    Delete
-                                                </button>
+
+                                                {openActionDropdownId === learner.id && dropdownCoords && (
+                                                    <>
+                                                        <div
+                                                            className="fixed inset-0 z-[9998]"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setOpenActionDropdownId(null);
+                                                                setDropdownCoords(null);
+                                                            }}
+                                                        />
+                                                        <div
+                                                            style={{
+                                                                position: 'fixed',
+                                                                top: dropdownCoords.top !== undefined ? `${dropdownCoords.top}px` : 'auto',
+                                                                bottom: dropdownCoords.bottom !== undefined ? `${dropdownCoords.bottom}px` : 'auto',
+                                                                right: `${dropdownCoords.right}px`,
+                                                            }}
+                                                            className="w-40 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-2xl z-[9999] p-1.5 text-left animate-in fade-in zoom-in-95 duration-100 backdrop-blur-md"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setOpenActionDropdownId(null);
+                                                                    setDropdownCoords(null);
+                                                                    setEditingLearner(learner);
+                                                                    setLearnerForm({
+                                                                        name: learner.name,
+                                                                        email: learner.email,
+                                                                        password: '',
+                                                                        school_id: learner.learner_profile?.school_id ? String(learner.learner_profile.school_id) : '',
+                                                                        grade_level: learner.learner_profile?.grade_level || 'SS1',
+                                                                        student_id: learner.learner_profile?.student_id || '',
+                                                                        class_id: learner.classes?.[0]?.id ? String(learner.classes[0].id) : '',
+                                                                    });
+                                                                    setIsLearnerModalOpen(true);
+                                                                }}
+                                                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-primary-10)] hover:text-[var(--color-primary-light)] transition-colors cursor-pointer text-left"
+                                                            >
+                                                                <svg className="w-3.5 h-3.5 text-[var(--color-primary-light)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                </svg>
+                                                                <span>Edit Profile</span>
+                                                            </button>
+
+                                                            <div className="h-px bg-[var(--color-border)] my-1" />
+
+                                                            <button
+                                                                type="button"
+                                                                disabled={deletingLearnerId === learner.id}
+                                                                onClick={() => {
+                                                                    setOpenActionDropdownId(null);
+                                                                    setDropdownCoords(null);
+                                                                    handleDeleteLearner(learner);
+                                                                }}
+                                                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[var(--color-error)] hover:bg-[var(--color-error-10)] transition-colors cursor-pointer text-left disabled:opacity-50"
+                                                            >
+                                                                {deletingLearnerId === learner.id ? (
+                                                                    <svg className="w-3.5 h-3.5 animate-spin text-[var(--color-error)]" fill="none" viewBox="0 0 24 24">
+                                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                                                    </svg>
+                                                                ) : (
+                                                                    <svg className="w-3.5 h-3.5 text-[var(--color-error)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                    </svg>
+                                                                )}
+                                                                <span>{deletingLearnerId === learner.id ? 'Deleting...' : 'Delete Learner'}</span>
+                                                            </button>
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
-                                ))
+                                );
+                            })
                             )}
                         </tbody>
                     </table>
                 </div>
+                <Pagination
+                    currentPage={page}
+                    totalItems={filteredLearners.length}
+                    itemsPerPage={50}
+                    onPageChange={setPage}
+                    itemLabel="learners"
+                />
             </div>
 
             {/* Modal: Learner Create / Edit */}
@@ -465,9 +642,27 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
                             </div>
 
                             <div className="pt-4 flex items-center justify-end gap-3 border-t border-[var(--color-border)]">
-                                <button type="button" onClick={() => setIsLearnerModalOpen(false)} className="px-5 py-2.5 text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] rounded-xl transition-colors cursor-pointer">Cancel</button>
-                                <button type="submit" className="px-6 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs font-bold rounded-xl shadow-md transition-all duration-200 cursor-pointer active:scale-[0.98]">
-                                    {editingLearner ? 'Update Learner' : 'Add Learner'}
+                                <button
+                                    type="button"
+                                    onClick={() => setIsLearnerModalOpen(false)}
+                                    disabled={isSavingLearner}
+                                    className="px-5 py-2.5 text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50 rounded-xl transition-colors cursor-pointer"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSavingLearner}
+                                    className="px-6 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-md transition-all duration-200 cursor-pointer active:scale-[0.98] flex items-center gap-2"
+                                >
+                                    {isSavingLearner ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            <span>{editingLearner ? 'Updating Learner...' : 'Saving Learner...'}</span>
+                                        </>
+                                    ) : (
+                                        <span>{editingLearner ? 'Update Learner' : 'Add Learner'}</span>
+                                    )}
                                 </button>
                             </div>
                         </form>

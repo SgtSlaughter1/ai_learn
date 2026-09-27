@@ -142,7 +142,7 @@ async function syncAdminQueue(): Promise<number> {
                 const res = await fetch(item.endpoint, {
                     method: item.method,
                     headers: getAdminAuthHeaders(),
-                    credentials: 'same-origin',
+                    credentials: 'include',
                     body: item.payload && item.payload !== '{}' ? item.payload : undefined,
                 });
 
@@ -153,7 +153,7 @@ async function syncAdminQueue(): Promise<number> {
                         if (tableObj) {
                             if (item.action === 'insert' && item.record_id.startsWith('temp_')) {
                                 await tableObj.delete(item.record_id);
-                                const saved = data.learner || data.subject || data.question || data.class || data.school || data.admin;
+                                const saved = data.learner || data.subject || data.question || data.class || data.school || data.admin || data.teacher || data.topic || data.data;
                                 if (saved) {
                                     await tableObj.put(saved);
                                 }
@@ -161,7 +161,7 @@ async function syncAdminQueue(): Promise<number> {
                                 const key = isNaN(Number(item.record_id)) ? item.record_id : Number(item.record_id);
                                 await tableObj.delete(key);
                             } else if (item.action === 'update') {
-                                const saved = data.learner || data.subject || data.question || data.class || data.school || data.admin;
+                                const saved = data.learner || data.subject || data.question || data.class || data.school || data.admin || data.teacher || data.topic || data.data;
                                 if (saved) {
                                     await tableObj.put({ ...saved, _pendingSync: false });
                                 }
@@ -176,7 +176,7 @@ async function syncAdminQueue(): Promise<number> {
                     }
                     syncedCount++;
                     console.log(`[SyncService] Successfully synced queued admin action ${item.action} on ${item.table_name}`);
-                } else if (res.status === 404 || res.status === 422 || res.status === 400) {
+                } else if ((res.status >= 400 && res.status < 500) || (item.retries && item.retries >= 3)) {
                     if (item.id) {
                         await db.syncQueue.delete(item.id);
                     }

@@ -249,17 +249,36 @@ TEXT;
             'is_correct' => false,
         ]);
 
-        config(['services.gemini.api_key' => null]);
-        $aiService = new AIService();
-        $response = $aiService->generateChatResponse(
-            $this->adminUser,
-            'Draft 5 WAEC exam questions for Mathematics',
-            []
-        );
+        $prevProvider = $_ENV['AI_PROVIDER'] ?? getenv('AI_PROVIDER');
+        $prevGeminiKey = $_ENV['GEMINI_API_KEY'] ?? getenv('GEMINI_API_KEY');
+        $prevGoogleKey = $_ENV['GOOGLE_API_KEY'] ?? getenv('GOOGLE_API_KEY');
 
-        // Verify that the custom uploaded question is dynamically included in the response
-        $this->assertStringContainsString('Custom Uploaded: What is the factored form of 2x^2 + 4x?', $response);
-        $this->assertStringContainsString('2x(x + 2)', $response);
-        $this->assertStringContainsString('Factor out 2x to get 2x(x + 2)', $response);
+        putenv('AI_PROVIDER=local');
+        putenv('GEMINI_API_KEY=');
+        putenv('GOOGLE_API_KEY=');
+        $_ENV['AI_PROVIDER'] = 'local';
+        $_ENV['GEMINI_API_KEY'] = '';
+        $_ENV['GOOGLE_API_KEY'] = '';
+
+        try {
+            $aiService = new AIService('local', '');
+            $response = $aiService->generateChatResponse(
+                $this->adminUser,
+                'Draft 5 WAEC exam questions for Mathematics',
+                []
+            );
+
+            // Verify that the custom uploaded question is dynamically included in the response
+            $this->assertStringContainsString('Custom Uploaded: What is the factored form of 2x^2 + 4x?', $response);
+            $this->assertStringContainsString('2x(x + 2)', $response);
+            $this->assertStringContainsString('Factor out 2x to get 2x(x + 2)', $response);
+        } finally {
+            putenv('AI_PROVIDER=' . ($prevProvider !== false && $prevProvider !== null ? $prevProvider : ''));
+            putenv('GEMINI_API_KEY=' . ($prevGeminiKey !== false && $prevGeminiKey !== null ? $prevGeminiKey : ''));
+            putenv('GOOGLE_API_KEY=' . ($prevGoogleKey !== false && $prevGoogleKey !== null ? $prevGoogleKey : ''));
+            if ($prevProvider !== null && $prevProvider !== false) $_ENV['AI_PROVIDER'] = $prevProvider; else unset($_ENV['AI_PROVIDER']);
+            if ($prevGeminiKey !== null && $prevGeminiKey !== false) $_ENV['GEMINI_API_KEY'] = $prevGeminiKey; else unset($_ENV['GEMINI_API_KEY']);
+            if ($prevGoogleKey !== null && $prevGoogleKey !== false) $_ENV['GOOGLE_API_KEY'] = $prevGoogleKey; else unset($_ENV['GOOGLE_API_KEY']);
+        }
     }
 }

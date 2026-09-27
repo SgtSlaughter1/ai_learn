@@ -27,6 +27,7 @@ return new class extends Migration
             $table->index('arm');
             $table->index(['school_id', 'grade_level']);
             $table->index(['school_id', 'program_id']);
+            $table->index(['school_id', 'is_active', 'grade_level']);
         });
     }
 

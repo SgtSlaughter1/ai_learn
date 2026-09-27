@@ -5,6 +5,7 @@ import { db } from '@/db/database';
 import { LevelFilterTabs } from '@/components/subjects/LevelFilterTabs';
 import { TopicCard, SubjectTopic } from '@/components/subjects/TopicCard';
 import { SubjectQuizCard, SubjectQuiz } from '@/components/subjects/SubjectQuizCard';
+import { Skeleton } from '@/components/common/Skeleton';
 
 interface Subject {
     id: number;
@@ -152,8 +153,8 @@ export default function Show({ slug }: Props) {
                 <div className="space-y-3">
                     {loading ? (
                         <div className="space-y-2.5">
-                            <div className="h-8 bg-[var(--color-surface)] rounded w-1/4 animate-pulse" />
-                            <div className="h-4 bg-[var(--color-surface)] rounded w-1/2 animate-pulse" />
+                            <Skeleton variant="text" className="h-8 w-1/3" />
+                            <Skeleton variant="text" className="h-4 w-2/3" />
                         </div>
                     ) : (
                         <>
@@ -206,17 +207,19 @@ export default function Show({ slug }: Props) {
 
                     {loading ? (
                         <div className="space-y-4">
-                            {[1, 2].map((n) => (
+                            {[1, 2, 3, 4].map((n) => (
                                 <div
                                     key={n}
-                                    className="bg-[var(--color-surface)] backdrop-blur-md border border-[var(--color-border)] rounded-2xl p-6 h-[110px] animate-pulse flex items-center justify-between"
+                                    className="bg-[var(--color-surface)] backdrop-blur-md border border-[var(--color-border)] rounded-2xl p-6 h-[110px] flex items-center justify-between shadow-xs"
                                 >
-                                    <div className="space-y-2.5 flex-1">
-                                        <div className="h-4 bg-[var(--color-background)]/80 rounded w-12" />
-                                        <div className="h-5 bg-[var(--color-background)]/80 rounded w-1/3" />
-                                        <div className="h-4 bg-[var(--color-background)]/80 rounded w-2/3" />
+                                    <div className="space-y-2.5 flex-1 mr-4">
+                                        <div className="flex items-center gap-2">
+                                            <Skeleton variant="rounded" className="h-4 w-12 rounded-md" />
+                                            <Skeleton variant="text" className="h-5 w-1/3" />
+                                        </div>
+                                        <Skeleton variant="text" className="h-4 w-2/3" />
                                     </div>
-                                    <div className="h-10 bg-[var(--color-background)]/80 rounded-xl w-32 shrink-0" />
+                                    <Skeleton variant="rounded" className="h-10 w-32 rounded-xl shrink-0" />
                                 </div>
                             ))}
                         </div>
@@ -253,13 +256,16 @@ export default function Show({ slug }: Props) {
                             {[1, 2].map((n) => (
                                 <div
                                     key={n}
-                                    className="bg-[var(--color-surface)] backdrop-blur-md border border-[var(--color-border)] p-6 h-[140px] rounded-2xl animate-pulse flex flex-col justify-between"
+                                    className="bg-[var(--color-surface)] backdrop-blur-md border border-[var(--color-border)] p-6 rounded-2xl flex flex-col justify-between shadow-xs space-y-4"
                                 >
                                     <div className="space-y-2">
-                                        <div className="h-5 bg-[var(--color-background)]/80 rounded w-1/2" />
-                                        <div className="h-4 bg-[var(--color-background)]/80 rounded w-5/6" />
+                                        <Skeleton variant="text" className="h-5 w-3/5" />
+                                        <Skeleton variant="text" className="h-4 w-4/5" />
                                     </div>
-                                    <div className="h-8 bg-[var(--color-background)]/80 rounded-xl w-24 align-self-end mt-4" />
+                                    <div className="flex justify-between items-center pt-2">
+                                        <Skeleton variant="rounded" className="h-4 w-20 rounded-md" />
+                                        <Skeleton variant="rounded" className="h-9 w-28 rounded-xl" />
+                                    </div>
                                 </div>
                             ))}
                         </div>

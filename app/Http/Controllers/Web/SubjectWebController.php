@@ -9,15 +9,21 @@ use App\Models\LearnerProgress;
 use App\Models\Quiz;
 use App\Models\School;
 use App\Models\Subject;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class SubjectWebController extends Controller
 {
-    public function index(Request $request): mixed
+    /**
+     * Render the subjects catalog page.
+     */
+    public function showSubjectsPage(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
         if ($user?->isAdmin()) {
@@ -26,7 +32,18 @@ class SubjectWebController extends Controller
         return Inertia::render('Subjects/Index');
     }
 
-    public function generalKnowledge(Request $request): mixed
+    /**
+     * Backward-compatible alias for showSubjectsPage.
+     */
+    public function index(Request $request): Response|RedirectResponse
+    {
+        return $this->showSubjectsPage($request);
+    }
+
+    /**
+     * Render the General Knowledge subjects catalog page.
+     */
+    public function showGeneralKnowledgePage(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
         if ($user?->isAdmin()) {
@@ -35,7 +52,18 @@ class SubjectWebController extends Controller
         return Inertia::render('GeneralKnowledge/Index');
     }
 
-    public function show(Request $request, string $slug): mixed
+    /**
+     * Backward-compatible alias for showGeneralKnowledgePage.
+     */
+    public function generalKnowledge(Request $request): Response|RedirectResponse
+    {
+        return $this->showGeneralKnowledgePage($request);
+    }
+
+    /**
+     * Render the single subject details and topics view.
+     */
+    public function showSubject(Request $request, string $slug): Response|RedirectResponse
     {
         $user = $request->user();
         if ($user?->isAdmin()) {
@@ -46,6 +74,14 @@ class SubjectWebController extends Controller
         ]);
     }
 
+    /**
+     * Backward-compatible alias for showSubject.
+     */
+    public function show(Request $request, string $slug): Response|RedirectResponse
+    {
+        return $this->showSubject($request, $slug);
+    }
+
     public function getSubjects(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -53,90 +89,13 @@ class SubjectWebController extends Controller
         $gradeLevel = $request->get('grade_level') ?? $request->get('level');
         $scope = $request->get('scope', 'school'); // 'school' | 'general'
 
-        // Determine user school and enrolled class
-        $userSchoolId = null;
-        $userSchoolName = null;
-        $userClassId = null;
-        $userClassWindowIds = [];
-        $userGradeLevels = [];
-
-        if ($user) {
-            if ($user->learnerProfile && $user->learnerProfile->school_id) {
-                $userSchoolId = $user->learnerProfile->school_id;
-                $userSchoolName = $user->learnerProfile->school?->name;
-            } elseif ($user->isSchoolAdmin()) {
-                $school = $user->primarySchool();
-                $userSchoolId = $school?->id;
-                $userSchoolName = $school?->name;
-            }
-
-            // If user is a learner, retrieve enrolled class and compute 3-class progression window
-            if ($user->isLearner()) {
-                $enrolledClass = DB::table('class_memberships as cm')
-                    ->join('classes as c', 'c.id', '=', 'cm.class_id')
-                    ->leftJoin('programs as p', 'p.id', '=', 'c.program_id')
-                    ->where('cm.user_id', $user->id)
-                    ->where('cm.role', 'learner')
-                    ->where('c.is_active', true)
-                    ->select(['c.id', 'c.school_id', 'c.name', 'c.grade_level', 'c.arm', 'c.section', 'c.program_id', 'p.name as program_name', 'p.code as program_code'])
-                    ->first();
-
-                if ($enrolledClass) {
-                    $userClassId = $enrolledClass->id;
-                    if (!$userSchoolId) {
-                        $userSchoolId = $enrolledClass->school_id;
-                    }
-
-                    // Order active classes in school logically by grade level progression (CRECHE -> SS3)
-                    $gradeOrder = [
-                        'CRECHE' => 1, 'KG1' => 2, 'KG2' => 3, 'NUR1' => 4, 'NUR2' => 5,
-                        'PRI1' => 6, 'PRI2' => 7, 'PRI3' => 8, 'PRI4' => 9, 'PRI5' => 10, 'PRI6' => 11,
-                        'JSS1' => 12, 'JSS2' => 13, 'JSS3' => 14, 'SS1' => 15, 'SS2' => 16, 'SS3' => 17,
-                    ];
-
-                    $schoolClasses = DB::table('classes as c')
-                        ->leftJoin('programs as p', 'p.id', '=', 'c.program_id')
-                        ->where('c.school_id', $enrolledClass->school_id)
-                        ->where('c.is_active', true)
-                        ->when($enrolledClass->program_id, function ($q, $programId) {
-                            $q->where(function ($sub) use ($programId) {
-                                $sub->where('c.program_id', $programId)
-                                    ->orWhereNull('c.program_id');
-                            });
-                        }, function ($q) {
-                            $q->whereNull('c.program_id');
-                        })
-                        ->orderBy('c.id')
-                        ->select(['c.id', 'c.school_id', 'c.name', 'c.grade_level', 'c.arm', 'c.section', 'c.program_id', 'p.name as program_name', 'p.code as program_code'])
-                        ->get()
-                        ->sortBy(fn ($c) => $gradeOrder[strtoupper($c->grade_level ?? '')] ?? 99)
-                        ->values();
-
-                    // 1. Program Track (e.g. SS1-SS3 Science / Business / Humanities)
-                    if ($enrolledClass->program_id) {
-                        $progressionClasses = $schoolClasses->where('program_id', $enrolledClass->program_id);
-                    } elseif (in_array(strtoupper($enrolledClass->grade_level ?? ''), ['JSS1', 'JSS2', 'JSS3'])) {
-                        // 2. Junior Secondary section (JSS1 - JSS3)
-                        $progressionClasses = $schoolClasses->filter(fn ($c) => in_array(strtoupper($c->grade_level ?? ''), ['JSS1', 'JSS2', 'JSS3']));
-                    } elseif (in_array(strtoupper($enrolledClass->grade_level ?? ''), ['PRI1', 'PRI2', 'PRI3', 'PRI4', 'PRI5', 'PRI6'])) {
-                        // 3. Primary section (PRI1 - PRI6)
-                        $progressionClasses = $schoolClasses->filter(fn ($c) => in_array(strtoupper($c->grade_level ?? ''), ['PRI1', 'PRI2', 'PRI3', 'PRI4', 'PRI5', 'PRI6']));
-                    } else {
-                        $progressionClasses = $schoolClasses;
-                    }
-
-                    if ($progressionClasses->isNotEmpty()) {
-                        $userClassWindowIds = $progressionClasses->pluck('id')->all();
-                        $userGradeLevels = $progressionClasses->pluck('grade_level')->filter()->unique()->map(fn ($g) => strtolower($g))->all();
-                    } else {
-                        $userClassWindowIds = [$enrolledClass->id];
-                        if ($enrolledClass->grade_level) {
-                            $userGradeLevels = [strtolower($enrolledClass->grade_level)];
-                        }
-                    }
-                }
-            }
-        }
+        [
+            $userSchoolId,
+            $userSchoolName,
+            $userClassId,
+            $userClassWindowIds,
+            $userGradeLevels
+        ] = $this->resolveUserSchoolAndProgression($user);
 
         // If user has no school assigned, default scope to 'general'
         if (!$userSchoolId && $scope === 'school') {
@@ -153,7 +112,124 @@ class SubjectWebController extends Controller
 
         $level = $gradeLevel ? strtolower($gradeLevel) : null;
 
-        // 1. Topics Summary with Progress using explicit join
+        $topicsSummary = $this->fetchTopicsSummary($level, $scope, $userGradeLevels, $user);
+        $subjects = $this->fetchScopeSubjects(
+            $scope,
+            $userSchoolId,
+            $classId ? (int) $classId : null,
+            $userClassWindowIds,
+            $level,
+            $userGradeLevels,
+            $topicsSummary,
+            $userClassId
+        );
+        $classes = $this->fetchCohortClasses($request->boolean('include_classes', false), $user, $userSchoolId, $userClassWindowIds);
+
+        return response()->json([
+            'scope' => $scope,
+            'user_school' => $userSchoolId ? [
+                'id' => $userSchoolId,
+                'name' => $userSchoolName,
+            ] : null,
+            'subjects' => $subjects,
+            'classes' => $classes,
+            'selected_class' => $selectedClass ? [
+                'id' => $selectedClass->id,
+                'name' => $selectedClass->name,
+                'grade_level' => $selectedClass->grade_level,
+            ] : null,
+            'selected_level' => $level,
+        ]);
+    }
+
+    private function resolveUserSchoolAndProgression(?User $user): array
+    {
+        $userSchoolId = null;
+        $userSchoolName = null;
+        $userClassId = null;
+        $userClassWindowIds = [];
+        $userGradeLevels = [];
+
+        if (!$user) {
+            return [$userSchoolId, $userSchoolName, $userClassId, $userClassWindowIds, $userGradeLevels];
+        }
+
+        if ($user->learnerProfile && $user->learnerProfile->school_id) {
+            $userSchoolId = $user->learnerProfile->school_id;
+            $userSchoolName = $user->learnerProfile->school?->name;
+        } elseif ($user->isSchoolAdmin()) {
+            $school = $user->primarySchool();
+            $userSchoolId = $school?->id;
+            $userSchoolName = $school?->name;
+        }
+
+        if ($user->isLearner()) {
+            $enrolledClass = DB::table('class_memberships as cm')
+                ->join('classes as c', 'c.id', '=', 'cm.class_id')
+                ->leftJoin('programs as p', 'p.id', '=', 'c.program_id')
+                ->where('cm.user_id', $user->id)
+                ->where('cm.role', 'learner')
+                ->where('c.is_active', true)
+                ->select(['c.id', 'c.school_id', 'c.name', 'c.grade_level', 'c.arm', 'c.section', 'c.program_id', 'p.name as program_name', 'p.code as program_code'])
+                ->first();
+
+            if ($enrolledClass) {
+                $userClassId = $enrolledClass->id;
+                if (!$userSchoolId) {
+                    $userSchoolId = $enrolledClass->school_id;
+                }
+
+                $gradeOrder = [
+                    'CRECHE' => 1, 'KG1' => 2, 'KG2' => 3, 'NUR1' => 4, 'NUR2' => 5,
+                    'PRI1' => 6, 'PRI2' => 7, 'PRI3' => 8, 'PRI4' => 9, 'PRI5' => 10, 'PRI6' => 11,
+                    'JSS1' => 12, 'JSS2' => 13, 'JSS3' => 14, 'SS1' => 15, 'SS2' => 16, 'SS3' => 17,
+                ];
+
+                $schoolClasses = DB::table('classes as c')
+                    ->leftJoin('programs as p', 'p.id', '=', 'c.program_id')
+                    ->where('c.school_id', $enrolledClass->school_id)
+                    ->where('c.is_active', true)
+                    ->when($enrolledClass->program_id, function ($q, $programId) {
+                        $q->where(function ($sub) use ($programId) {
+                            $sub->where('c.program_id', $programId)
+                                ->orWhereNull('c.program_id');
+                        });
+                    }, function ($q) {
+                        $q->whereNull('c.program_id');
+                    })
+                    ->orderBy('c.id')
+                    ->select(['c.id', 'c.school_id', 'c.name', 'c.grade_level', 'c.arm', 'c.section', 'c.program_id', 'p.name as program_name', 'p.code as program_code'])
+                    ->get()
+                    ->sortBy(fn ($c) => $gradeOrder[strtoupper($c->grade_level ?? '')] ?? 99)
+                    ->values();
+
+                if ($enrolledClass->program_id) {
+                    $progressionClasses = $schoolClasses->where('program_id', $enrolledClass->program_id);
+                } elseif (in_array(strtoupper($enrolledClass->grade_level ?? ''), ['JSS1', 'JSS2', 'JSS3'])) {
+                    $progressionClasses = $schoolClasses->filter(fn ($c) => in_array(strtoupper($c->grade_level ?? ''), ['JSS1', 'JSS2', 'JSS3']));
+                } elseif (in_array(strtoupper($enrolledClass->grade_level ?? ''), ['PRI1', 'PRI2', 'PRI3', 'PRI4', 'PRI5', 'PRI6'])) {
+                    $progressionClasses = $schoolClasses->filter(fn ($c) => in_array(strtoupper($c->grade_level ?? ''), ['PRI1', 'PRI2', 'PRI3', 'PRI4', 'PRI5', 'PRI6']));
+                } else {
+                    $progressionClasses = $schoolClasses;
+                }
+
+                if ($progressionClasses->isNotEmpty()) {
+                    $userClassWindowIds = $progressionClasses->pluck('id')->all();
+                    $userGradeLevels = $progressionClasses->pluck('grade_level')->filter()->unique()->map(fn ($g) => strtolower($g))->all();
+                } else {
+                    $userClassWindowIds = [$enrolledClass->id];
+                    if ($enrolledClass->grade_level) {
+                        $userGradeLevels = [strtolower($enrolledClass->grade_level)];
+                    }
+                }
+            }
+        }
+
+        return [$userSchoolId, $userSchoolName, $userClassId, $userClassWindowIds, $userGradeLevels];
+    }
+
+    private function fetchTopicsSummary(?string $level, string $scope, array $userGradeLevels, ?User $user): Collection
+    {
         $topicsSummaryQuery = DB::table('topics as t')
             ->leftJoin('learner_progress as lp', function ($join) use ($user) {
                 $join->on('lp.topic_id', '=', 't.id');
@@ -172,7 +248,7 @@ class SubjectWebController extends Controller
             });
         }
 
-        $topicsSummary = $topicsSummaryQuery
+        return $topicsSummaryQuery
             ->groupBy('t.subject_id')
             ->selectRaw('
                 t.subject_id,
@@ -181,8 +257,18 @@ class SubjectWebController extends Controller
             ')
             ->get()
             ->keyBy('subject_id');
+    }
 
-        // 2. Query Subjects with explicit joins and column projections
+    private function fetchScopeSubjects(
+        string $scope,
+        ?int $userSchoolId,
+        ?int $classId,
+        array $userClassWindowIds,
+        ?string $level,
+        array $userGradeLevels,
+        Collection $topicsSummary,
+        ?int $userClassId
+    ): array {
         $subjectsQuery = DB::table('subjects as s')
             ->leftJoin('schools as sc', 'sc.id', '=', 's.school_id')
             ->leftJoin('classes as c', 'c.id', '=', 's.class_id')
@@ -198,27 +284,31 @@ class SubjectWebController extends Controller
                       ->orWhereNull('s.class_id');
                 });
             } elseif (!empty($userClassWindowIds)) {
-                // 3-Class Progression Window for school scope
                 $subjectsQuery->where(function ($q) use ($userClassWindowIds) {
                     $q->whereIn('s.class_id', $userClassWindowIds)
                       ->orWhereNull('s.class_id');
                 });
             }
         } elseif ($scope === 'general') {
-            // General Knowledge: global open curriculum
             $subjectsQuery->whereNull('s.school_id');
 
             if ($level) {
-                $subjectsQuery->whereIn('s.id', $topicsSummary->keys());
+                if ($topicsSummary->isNotEmpty()) {
+                    $subjectsQuery->whereIn('s.id', $topicsSummary->keys());
+                } else {
+                    return [];
+                }
             } elseif (!empty($userGradeLevels)) {
                 $subjectsQuery->where(function ($q) use ($topicsSummary, $userGradeLevels) {
-                    $q->whereIn('s.id', $topicsSummary->keys())
-                      ->orWhereNull('s.class_id');
+                    if ($topicsSummary->isNotEmpty()) {
+                        $q->whereIn('s.id', $topicsSummary->keys());
+                    }
+                    $q->orWhereNull('s.class_id');
                 });
             }
         }
 
-        $subjects = $subjectsQuery
+        return $subjectsQuery
             ->select([
                 's.id',
                 's.school_id',
@@ -257,67 +347,59 @@ class SubjectWebController extends Controller
                     'progress_percent' => $totalTopics > 0 ? (int) round(($completedTopics / $totalTopics) * 100) : 0,
                     'topics_count' => $totalTopics,
                 ];
-            });
+            })
+            ->values()
+            ->all();
+    }
 
-        // Classes for cohort switcher (respecting progression window for learners)
+    private function fetchCohortClasses(bool $includeClasses, ?User $user, ?int $userSchoolId, array $userClassWindowIds): array
+    {
+        if (!$includeClasses || !$user) {
+            return [];
+        }
+
         $gradeOrder = [
             'CRECHE' => 1, 'KG1' => 2, 'KG2' => 3, 'NUR1' => 4, 'NUR2' => 5,
             'PRI1' => 6, 'PRI2' => 7, 'PRI3' => 8, 'PRI4' => 9, 'PRI5' => 10, 'PRI6' => 11,
             'JSS1' => 12, 'JSS2' => 13, 'JSS3' => 14, 'SS1' => 15, 'SS2' => 16, 'SS3' => 17,
         ];
-        $classes = $request->boolean('include_classes', false) && $user
-            ? DB::table('classes as c')
-                ->leftJoin('programs as p', 'p.id', '=', 'c.program_id')
-                ->where('c.is_active', true)
-                ->when($userSchoolId, fn ($q) => $q->where('c.school_id', $userSchoolId))
-                ->when(!empty($userClassWindowIds), fn ($q) => $q->whereIn('c.id', $userClassWindowIds))
-                ->select([
-                    'c.id',
-                    'c.school_id',
-                    'c.name',
-                    'c.grade_level',
-                    'c.arm',
-                    'c.section',
-                    'c.program_id',
-                    'p.name as program_name',
-                    'p.code as program_code',
-                ])
-                ->orderBy('c.id')
-                ->get()
-                ->sortBy(fn ($c) => $gradeOrder[strtoupper($c->grade_level ?? '')] ?? 99)
-                ->map(fn ($c) => [
-                    'id' => (int) $c->id,
-                    'school_id' => $c->school_id ? (int) $c->school_id : null,
-                    'name' => $c->name,
-                    'grade_level' => $c->grade_level,
-                    'arm' => $c->arm,
-                    'section' => $c->section,
-                    'school_class_arm' => $c->arm ?? $c->section,
-                    'program_id' => $c->program_id ? (int) $c->program_id : null,
-                    'program' => $c->program_id ? [
-                        'id' => (int) $c->program_id,
-                        'name' => $c->program_name,
-                        'code' => $c->program_code,
-                    ] : null,
-                ])
-                ->values()
-            : [];
 
-        return response()->json([
-            'scope' => $scope,
-            'user_school' => $userSchoolId ? [
-                'id' => $userSchoolId,
-                'name' => $userSchoolName,
-            ] : null,
-            'subjects' => $subjects,
-            'classes' => $classes,
-            'selected_class' => $selectedClass ? [
-                'id' => $selectedClass->id,
-                'name' => $selectedClass->name,
-                'grade_level' => $selectedClass->grade_level,
-            ] : null,
-            'selected_level' => $level,
-        ]);
+        return DB::table('classes as c')
+            ->leftJoin('programs as p', 'p.id', '=', 'c.program_id')
+            ->where('c.is_active', true)
+            ->when($userSchoolId, fn ($q) => $q->where('c.school_id', $userSchoolId))
+            ->when(!empty($userClassWindowIds), fn ($q) => $q->whereIn('c.id', $userClassWindowIds))
+            ->select([
+                'c.id',
+                'c.school_id',
+                'c.name',
+                'c.grade_level',
+                'c.arm',
+                'c.section',
+                'c.program_id',
+                'p.name as program_name',
+                'p.code as program_code',
+            ])
+            ->orderBy('c.id')
+            ->get()
+            ->sortBy(fn ($c) => $gradeOrder[strtoupper($c->grade_level ?? '')] ?? 99)
+            ->map(fn ($c) => [
+                'id' => (int) $c->id,
+                'school_id' => $c->school_id ? (int) $c->school_id : null,
+                'name' => $c->name,
+                'grade_level' => $c->grade_level,
+                'arm' => $c->arm,
+                'section' => $c->section,
+                'school_class_arm' => $c->arm ?? $c->section,
+                'program_id' => $c->program_id ? (int) $c->program_id : null,
+                'program' => $c->program_id ? [
+                    'id' => (int) $c->program_id,
+                    'name' => $c->program_name,
+                    'code' => $c->program_code,
+                ] : null,
+            ])
+            ->values()
+            ->all();
     }
 
     public function getClasses(Request $request): JsonResponse
@@ -433,6 +515,8 @@ class SubjectWebController extends Controller
 
         return response()->json([
             'classes' => $sortedClasses,
+            'grade_options' => $user ? $user->gradeOptions() : [],
+            'allowed_grade_levels' => $user ? $user->allowedGradeLevels() : [],
         ]);
     }
 
@@ -512,7 +596,9 @@ class SubjectWebController extends Controller
                         'mastery_score' => (int) $t->mastery_score,
                     ] : null,
                 ];
-            });
+            })
+            ->values()
+            ->all();
 
         // 2. Quizzes query (supports school-specific and general knowledge quizzes)
         $quizQuery = DB::table('quizzes as q')
@@ -632,7 +718,9 @@ class SubjectWebController extends Controller
         $topics = $sub->topics()
             ->where('status', 'active')
             ->orderBy('sort_order')
-            ->get(['id', 'subject_id', 'name', 'slug', 'level', 'description', 'sort_order']);
+            ->get(['id', 'subject_id', 'name', 'slug', 'level', 'description', 'sort_order'])
+            ->values()
+            ->all();
 
         return response()->json([
             'topics' => $topics,

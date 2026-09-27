@@ -202,7 +202,7 @@ export interface TopicItem {
     status: string;
     sort_order: number;
     questions_count?: number;
-    subject?: { id: number; name: string; slug: string };
+    subject?: { id: number; name: string; slug: string; class_id?: number | null };
     _pendingSync?: boolean;
     _offlineDeleted?: boolean;
 }

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Quiz\SubmitQuizAttemptRequest;
+use App\Http\Requests\Quiz\SyncQuizAttemptRequest;
 use App\Models\LearnerProgress;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
@@ -19,7 +21,10 @@ use App\Services\Gamification\GamificationService;
 
 class QuizWebController extends Controller
 {
-    public function show(Request $request, Quiz $quiz): mixed
+    /**
+     * Render the student quiz taking interface.
+     */
+    public function showQuiz(Request $request, Quiz $quiz): Response|RedirectResponse
     {
         $user = $request->user();
         if ($user?->isAdmin()) {
@@ -28,6 +33,14 @@ class QuizWebController extends Controller
         return Inertia::render('quizzes/Show', [
             'quizId' => $quiz->id,
         ]);
+    }
+
+    /**
+     * Backward-compatible alias for showQuiz.
+     */
+    public function show(Request $request, Quiz $quiz): Response|RedirectResponse
+    {
+        return $this->showQuiz($request, $quiz);
     }
 
     public function getQuizData(Quiz $quiz): JsonResponse
@@ -44,13 +57,19 @@ class QuizWebController extends Controller
             }
         ]);
 
+        $questions = $quiz->questions;
+        // School curriculum & topic practice: deliver 10 random questions per try if the question bank has more
+        if ($questions->count() > 10) {
+            $questions = $questions->shuffle()->take(10)->values();
+        }
+
         return response()->json([
             'quiz' => [
                 'id' => $quiz->id,
                 'title' => $quiz->title,
                 'description' => $quiz->description,
                 'time_limit_minutes' => $quiz->time_limit_minutes,
-                'questions' => $quiz->questions->map(function ($q) {
+                'questions' => $questions->map(function ($q) {
                     return [
                         'id' => $q->id,
                         'topic_id' => $q->topic_id,
@@ -67,21 +86,32 @@ class QuizWebController extends Controller
                                 // Server-side grading in submit() is still the authoritative source of truth.
                                 'is_correct' => (bool) $o->is_correct,
                             ];
-                        })
+                        })->values()->all(),
                     ];
-                })
+                })->values()->all(),
             ]
         ]);
     }
 
-    public function submit(Request $request, Quiz $quiz): RedirectResponse|JsonResponse
+    /**
+     * Submit and grade a standard or practice quiz attempt.
+     */
+    public function submitQuizAttempt(SubmitQuizAttemptRequest $request, Quiz $quiz): JsonResponse|RedirectResponse
     {
-        $request->validate([
-            'answers' => ['required', 'array'],
-        ]);
-
         $user = auth()->user();
-        $submittedAnswers = $request->input('answers'); // array mapping question_id -> selected_option_id
+        $rawAnswers = $request->validated('answers');
+
+        // Normalize answers whether sent as an associative map {qId: optId} or array of [{question_id, selected_option_id}]
+        $submittedAnswers = [];
+        if (is_array($rawAnswers)) {
+            foreach ($rawAnswers as $key => $val) {
+                if (is_array($val) && isset($val['question_id'])) {
+                    $submittedAnswers[$val['question_id']] = $val['selected_option_id'] ?? null;
+                } else {
+                    $submittedAnswers[$key] = $val;
+                }
+            }
+        }
 
         // Load quiz questions and options with correctness criteria authoritatively on the server
         $quiz->load([
@@ -90,6 +120,15 @@ class QuizWebController extends Controller
             },
             'questions.options'
         ]);
+
+        $submittedQuestionIds = array_keys($submittedAnswers);
+        $questionsToGrade = !empty($submittedQuestionIds)
+            ? $quiz->questions->whereIn('id', $submittedQuestionIds)
+            : $quiz->questions;
+
+        if ($questionsToGrade->isEmpty()) {
+            $questionsToGrade = $quiz->questions->take(10);
+        }
 
         $score = 0;
         $totalMarks = 0;
@@ -101,7 +140,7 @@ class QuizWebController extends Controller
             $answersToInsert = [];
             $topicIdsEvaluated = [];
 
-            foreach ($quiz->questions as $question) {
+            foreach ($questionsToGrade as $question) {
                 $questionId = $question->id;
                 $pivotMarks = $question->pivot->marks ?? 1;
                 $totalMarks += $pivotMarks;
@@ -224,7 +263,18 @@ class QuizWebController extends Controller
         return redirect("/quizzes/attempts/{$attemptId}");
     }
 
-    public function result(QuizAttempt $attempt): Response
+    /**
+     * Backward-compatible alias for submitQuizAttempt.
+     */
+    public function submit(SubmitQuizAttemptRequest $request, Quiz $quiz): JsonResponse|RedirectResponse
+    {
+        return $this->submitQuizAttempt($request, $quiz);
+    }
+
+    /**
+     * Render the student quiz attempt result view.
+     */
+    public function showQuizResult(QuizAttempt $attempt): Response
     {
         // Authorize access
         if ($attempt->user_id !== auth()->id()) {
@@ -237,17 +287,20 @@ class QuizWebController extends Controller
     }
 
     /**
+     * Backward-compatible alias for showQuizResult.
+     */
+    public function result(QuizAttempt $attempt): Response
+    {
+        return $this->showQuizResult($attempt);
+    }
+
+    /**
      * Sync an offline quiz attempt that was completed without internet.
      * Called by SyncService.ts when the user comes back online.
      */
-    public function syncAttempt(Request $request, string $attemptId): JsonResponse
+    public function syncQuizAttempt(SyncQuizAttemptRequest $request, string $attemptId): JsonResponse
     {
-        $request->validate([
-            'quiz_id'          => ['required', 'integer', 'exists:quizzes,id'],
-            'answers'          => ['required', 'array'],
-            'duration_seconds' => ['nullable', 'integer'],
-        ]);
-
+        $validated = $request->validated();
         $user = auth()->user();
 
         // Idempotency: if already synced, return the existing attempt
@@ -264,6 +317,18 @@ class QuizWebController extends Controller
             'questions.options',
         ])->findOrFail($request->quiz_id);
 
+        $submittedQuestionIds = collect($request->answers)->map(function ($val, $key) {
+            return is_array($val) && isset($val['question_id']) ? $val['question_id'] : $key;
+        })->filter()->values()->all();
+
+        $questionsToGrade = !empty($submittedQuestionIds)
+            ? $quiz->questions->whereIn('id', $submittedQuestionIds)
+            : $quiz->questions;
+
+        if ($questionsToGrade->isEmpty()) {
+            $questionsToGrade = $quiz->questions;
+        }
+
         $score      = 0;
         $totalMarks = 0;
         $answersToInsert    = [];
@@ -272,13 +337,17 @@ class QuizWebController extends Controller
         DB::beginTransaction();
 
         try {
-            foreach ($quiz->questions as $question) {
+            foreach ($questionsToGrade as $question) {
                 $pivotMarks = $question->pivot->marks ?? 1;
                 $totalMarks += $pivotMarks;
 
-                // SyncService sends answers keyed by question_id
+                // SyncService sends answers keyed by question_id or in array
                 $submittedAnswer = collect($request->answers)
                     ->firstWhere('question_id', $question->id);
+
+                if (!$submittedAnswer && isset($request->answers[$question->id])) {
+                    $submittedAnswer = ['selected_option_id' => $request->answers[$question->id]];
+                }
 
                 $selectedOptionId = $submittedAnswer['selected_option_id'] ?? null;
                 $isCorrect        = false;
@@ -367,7 +436,18 @@ class QuizWebController extends Controller
         return response()->json(['success' => true, 'attempt_id' => $attemptId]);
     }
 
-    public function getAttemptData(QuizAttempt $attempt): JsonResponse
+    /**
+     * Backward-compatible alias for syncQuizAttempt.
+     */
+    public function syncAttempt(SyncQuizAttemptRequest $request, string $attemptId): JsonResponse
+    {
+        return $this->syncQuizAttempt($request, $attemptId);
+    }
+
+    /**
+     * Get details and answered breakdown for a completed quiz attempt.
+     */
+    public function getQuizAttemptData(QuizAttempt $attempt): JsonResponse
     {
         // Authorize access
         if ($attempt->user_id !== auth()->id()) {
@@ -410,5 +490,13 @@ class QuizWebController extends Controller
                 'answers' => $answersMapped,
             ]
         ]);
+    }
+
+    /**
+     * Backward-compatible alias for getQuizAttemptData.
+     */
+    public function getAttemptData(QuizAttempt $attempt): JsonResponse
+    {
+        return $this->getQuizAttemptData($attempt);
     }
 }

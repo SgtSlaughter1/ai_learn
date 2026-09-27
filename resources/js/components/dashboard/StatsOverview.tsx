@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { BookOpen, CheckCircle2, Zap, Trophy } from 'lucide-react';
+import { Skeleton } from '@/components/common/Skeleton';
 
 interface StatsOverviewProps {
     loading: boolean;
@@ -34,13 +35,13 @@ export function StatsOverview({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <StatCard
                 label="Active Subjects"
-                value={loading ? '...' : currentStats?.totalSubjects ?? 0}
+                value={currentStats?.totalSubjects ?? 0}
                 icon={<BookOpen className="w-5 h-5" />}
                 loading={loading}
             />
             <StatCard
                 label="Questions Solved"
-                value={loading ? '...' : currentStats?.questionsAttempted ?? 0}
+                value={currentStats?.questionsAttempted ?? 0}
                 subtitle={
                     currentStats
                         ? `${currentStats.questionsCorrect ?? 0} correct answers`
@@ -51,14 +52,14 @@ export function StatsOverview({
             />
             <StatCard
                 label="Avg. Accuracy"
-                value={loading ? '...' : `${accuracy}%`}
+                value={`${accuracy}%`}
                 subtitle="Based on quiz attempts"
                 icon={<Zap className="w-5 h-5" />}
                 loading={loading}
             />
             <StatCard
                 label="Mastered Topics"
-                value={loading ? '...' : currentStats?.completedTopics ?? 0}
+                value={currentStats?.completedTopics ?? 0}
                 subtitle=">= 80% mastery level"
                 icon={<Trophy className="w-5 h-5" />}
                 loading={loading}
@@ -90,7 +91,10 @@ function StatCard({
             </div>
             <div className="mt-4">
                 {loading ? (
-                    <div className="h-9 w-12 bg-[var(--color-background)] rounded-lg animate-pulse" />
+                    <div className="space-y-2">
+                        <Skeleton variant="rounded" className="h-8 w-16 rounded-lg" animate="wave" />
+                        <Skeleton variant="text" className="h-3 w-28" animate="wave" />
+                    </div>
                 ) : (
                     <>
                         <span className="text-3xl font-bold text-[var(--color-text)]">{value}</span>

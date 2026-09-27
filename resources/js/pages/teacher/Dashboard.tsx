@@ -11,10 +11,19 @@ import {
     getCachedAdminTopics,
     executeAdminAction,
     getCachedAdminLearners,
+    getAdminAuthHeaders,
     ADMIN_DATA_CHANGED_EVENT,
 } from '@/services/AdminOfflineService';
 import QuestionBankTab from '@/components/admin/QuestionBankTab';
-import { getGradeLevelsForSchool } from '@/utils/format';
+import Pagination from '@/components/common/Pagination';
+import { getGradeLevelsForTeacher } from '@/utils/format';
+import {
+    Skeleton,
+    SkeletonStatGrid,
+    SkeletonLeaderboard,
+    SkeletonDistribution,
+    SkeletonTable,
+} from '@/components/common/Skeleton';
 
 export interface DiagnosticTopic {
     id: number;
@@ -44,6 +53,7 @@ export interface LearnerDiagnostic {
     level: number;
     tier: string;
     avg_mastery: number;
+    has_assessment_data?: boolean;
     subject_name: string;
     topics: DiagnosticTopic[];
     recommended_intervention: RecommendedIntervention | null;
@@ -104,8 +114,29 @@ interface Props {
     selectedClass: number | null;
 }
 
+const defaultStats: Stats = {
+    overview: {
+        total_learners: 0,
+        total_attempted: 0,
+        total_correct: 0,
+        avg_mastery: 0,
+        total_attempts: 0,
+        avg_score: 0,
+        best_score: 0,
+    },
+    top_performers: [],
+    struggling_learners: [],
+    classes: [],
+};
+
+const toArray = <T,>(val: any): T[] => {
+    if (Array.isArray(val)) return val;
+    if (val && typeof val === 'object') return Object.values(val) as T[];
+    return [];
+};
+
 export default function Dashboard({ school, classes, selectedClass }: Props) {
-    const [stats, setStats] = useState<Stats | null>(null);
+    const [stats, setStats] = useState<Stats>(defaultStats);
     const [loading, setLoading] = useState(true);
     const [showLearnerModal, setShowLearnerModal] = useState(false);
     const [learnerForm, setLearnerForm] = useState({
@@ -119,6 +150,11 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
     });
     const [savingLearner, setSavingLearner] = useState(false);
     const [activeTab, setActiveTab] = useState<'overview' | 'learners' | 'top' | 'struggling' | 'questions'>('overview');
+    const [strugglingPage, setStrugglingPage] = useState(1);
+
+    // Safe normalized arrays
+    const topPerformers = useMemo(() => toArray<Learner>(stats?.top_performers), [stats?.top_performers]);
+    const strugglingLearners = useMemo(() => toArray<LearnerDiagnostic>(stats?.struggling_learners), [stats?.struggling_learners]);
 
     // Question Bank States
     const [questions, setQuestions] = useState<QuestionItem[]>([]);
@@ -132,43 +168,90 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
     const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
     const [selectedLearnerDiagnostic, setSelectedLearnerDiagnostic] = useState<LearnerDiagnostic | null>(null);
     const [openDropdownLearnerId, setOpenDropdownLearnerId] = useState<string | null>(null);
+    const [dropdownCoords, setDropdownCoords] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
 
-    const teacherClassIds = useMemo(() => new Set(classes.map((c) => c.id)), [classes]);
+    useEffect(() => {
+        if (!openDropdownLearnerId) return;
+        const handleClose = () => {
+            setOpenDropdownLearnerId(null);
+            setDropdownCoords(null);
+        };
+        window.addEventListener('scroll', handleClose, true);
+        window.addEventListener('resize', handleClose);
+        return () => {
+            window.removeEventListener('scroll', handleClose, true);
+            window.removeEventListener('resize', handleClose);
+        };
+    }, [openDropdownLearnerId]);
 
     const teacherSubjects = useMemo(() => {
-        if (classes.length === 0) return [];
-        return subjects.filter((s) => s.class_id && teacherClassIds.has(s.class_id));
-    }, [subjects, teacherClassIds, classes.length]);
+        if (!selectedClass) return subjects;
+        return subjects.filter((s) => s.class_id === selectedClass);
+    }, [subjects, selectedClass]);
 
     const teacherTopics = useMemo(() => {
-        if (classes.length === 0) return [];
+        if (!selectedClass) return allTopics;
         return allTopics.filter((t) => {
             const sub = subjects.find((s) => s.id === t.subject_id);
-            return sub?.class_id && teacherClassIds.has(sub.class_id);
+            return (sub?.class_id === selectedClass) || (t.subject?.class_id === selectedClass);
         });
-    }, [allTopics, subjects, teacherClassIds, classes.length]);
+    }, [allTopics, subjects, selectedClass]);
 
     const teacherQuestions = useMemo(() => {
-        if (classes.length === 0) return [];
+        if (!selectedClass) return questions;
         return questions.filter((q) => {
             const matchingSubj = subjects.find((s) => s.id === q.topic?.subject?.id);
             const subjClassId = q.topic?.subject?.class_id ?? matchingSubj?.class_id;
-            return subjClassId && teacherClassIds.has(subjClassId);
+            return subjClassId === selectedClass;
         });
-    }, [questions, subjects, teacherClassIds, classes.length]);
+    }, [questions, subjects, selectedClass]);
 
-    const fetchStats = async () => {
-        setLoading(true);
+    const paginatedStrugglingLearners = useMemo(() => {
+        return strugglingLearners.slice((strugglingPage - 1) * 50, strugglingPage * 50);
+    }, [strugglingLearners, strugglingPage]);
+
+    const [refreshing, setRefreshing] = useState(false);
+
+    const fetchStats = async (forceRefresh = false) => {
+        if (forceRefresh) {
+            setRefreshing(true);
+        } else {
+            setLoading(true);
+        }
         try {
-            const params = selectedClass ? `?class_id=${selectedClass}` : '';
-            const res = await fetch(`/api/v1/teacher/stats${params}`);
-            const data = await res.json();
-            setStats(data);
+            const params = new URLSearchParams();
+            if (selectedClass) params.set('class_id', String(selectedClass));
+            if (forceRefresh) params.set('refresh', '1');
+            const qs = params.toString() ? `?${params.toString()}` : '';
+            const res = await fetch(`/api/v1/teacher/stats${qs}`, {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.overview) {
+                    setStats({
+                        ...data,
+                        top_performers: toArray<Learner>(data.top_performers),
+                        struggling_learners: toArray<LearnerDiagnostic>(data.struggling_learners),
+                        classes: toArray<AdminClassItem>(data.classes),
+                    });
+                }
+            }
         } catch (e) {
             console.error('Failed to load teacher stats', e);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
+    };
+
+    const handleManualRefresh = async () => {
+        await fetchStats(true);
+        setToastMessage({
+            text: 'Dashboard statistics refreshed with live data!',
+            type: 'success',
+        });
     };
 
     const fetchSubjects = async () => {
@@ -181,7 +264,10 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                 setAllTopics(cachedTops);
                 return;
             }
-            const res = await fetch('/api/v1/admin/subjects');
+            const res = await fetch('/api/v1/admin/subjects', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const serverSubjects: SubjectItem[] = data.subjects || data.data || [];
@@ -213,7 +299,10 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                 setQuestions(cached);
                 return;
             }
-            const res = await fetch('/api/v1/admin/questions');
+            const res = await fetch('/api/v1/admin/questions', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const serverQuestions = data.questions || data.data || [];
@@ -232,6 +321,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
     };
 
     useEffect(() => {
+        setStrugglingPage(1);
         fetchStats();
         fetchSubjects();
         fetchQuestions();
@@ -319,7 +409,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                     type: 'success',
                 });
                 setShowLearnerModal(false);
-                fetchStats();
+                fetchStats(true);
             } else {
                 setToastMessage({
                     text: res.error || 'Failed to enroll learner',
@@ -378,8 +468,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
     };
 
     const handleAssignAllInterventions = async () => {
-        if (!stats?.struggling_learners) return;
-        const candidates = stats.struggling_learners.filter((l) => l.recommended_intervention);
+        const candidates = strugglingLearners.filter((l) => l.recommended_intervention);
         if (candidates.length === 0) return;
 
         for (const learner of candidates) {
@@ -472,9 +561,22 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
             )}
 
             {loading ? (
-                <div className="text-center py-16">
-                    <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-primary)] border-r-transparent"></div>
-                    <p className="text-[var(--color-muted)] mt-3">Loading diagnostic dashboard...</p>
+                <div className="space-y-6">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <Skeleton variant="rounded" className="h-10 w-72 rounded-2xl" />
+                        <Skeleton variant="rounded" className="h-10 w-48 rounded-xl" />
+                    </div>
+                    <SkeletonStatGrid count={4} cols="grid-cols-2 lg:grid-cols-4" />
+                    <div className="grid lg:grid-cols-3 gap-6">
+                        <div className="lg:col-span-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 shadow-sm space-y-4">
+                            <Skeleton variant="text" className="h-5 w-48" />
+                            <SkeletonDistribution count={4} />
+                        </div>
+                        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 shadow-sm space-y-4">
+                            <Skeleton variant="text" className="h-5 w-40" />
+                            <SkeletonLeaderboard count={3} />
+                        </div>
+                    </div>
                 </div>
             ) : stats ? (
                 <>
@@ -548,26 +650,47 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                             ))}
                         </div>
 
-                        {/* Class Selector Dropdown */}
-                        <div className="flex items-center gap-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl px-3.5 py-1.5 shadow-xs shrink-0 w-fit">
-                            <svg className="w-4 h-4 text-[var(--color-primary)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                            </svg>
-                            <span className="text-xs font-bold text-[var(--color-muted)]">Class:</span>
-                            <select
-                                value={selectedClass || ''}
-                                onChange={(e) => selectClass(e.target.value ? Number(e.target.value) : null)}
-                                className="bg-transparent text-xs font-bold text-[var(--color-text)] focus:outline-none cursor-pointer py-1 pr-2"
+                        {/* Right Controls: Refresh Live Data Button & Class Selector Dropdown */}
+                        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                            <button
+                                type="button"
+                                onClick={handleManualRefresh}
+                                disabled={refreshing || loading}
+                                className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-[var(--color-surface)] hover:bg-[var(--color-primary-10)] text-[var(--color-text)] hover:text-[var(--color-primary-light)] border border-[var(--color-border)] hover:border-[var(--color-primary-20)] text-xs font-bold shadow-xs transition-all duration-150 cursor-pointer disabled:opacity-50 active:scale-95"
+                                title="Refresh live statistics directly from server"
                             >
-                                <option value="" className="bg-[var(--color-surface)] text-[var(--color-text)]">
-                                    All Classes ({stats.overview.total_learners})
-                                </option>
-                                {classes.map((cls) => (
-                                    <option key={cls.id} value={cls.id} className="bg-[var(--color-surface)] text-[var(--color-text)]">
-                                        {cls.name} ({cls.learner_count})
+                                <svg
+                                    className={`w-3.5 h-3.5 text-[var(--color-primary)] ${refreshing ? 'animate-spin' : ''}`}
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                >
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                {/* <span>{refreshing ? 'Refreshing...' : 'Refresh Live'}</span> */}
+                            </button>
+
+                            {/* Class Selector Dropdown */}
+                            <div className="flex items-center gap-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl px-3.5 py-1.5 shadow-xs shrink-0 w-fit">
+                                <svg className="w-4 h-4 text-[var(--color-primary)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                </svg>
+                                <span className="text-xs font-bold text-[var(--color-muted)]">Class:</span>
+                                <select
+                                    value={selectedClass || ''}
+                                    onChange={(e) => selectClass(e.target.value ? Number(e.target.value) : null)}
+                                    className="bg-transparent text-xs font-bold text-[var(--color-text)] focus:outline-none cursor-pointer py-1 pr-2"
+                                >
+                                    <option value="" className="bg-[var(--color-surface)] text-[var(--color-text)]">
+                                        All Classes ({stats.overview.total_learners})
                                     </option>
-                                ))}
-                            </select>
+                                    {classes.map((cls) => (
+                                        <option key={cls.id} value={cls.id} className="bg-[var(--color-surface)] text-[var(--color-text)]">
+                                            {cls.name} ({cls.learner_count})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -618,7 +741,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                     {activeTab === 'overview' && (
                         <div className="space-y-6">
                             {/* Targeted Practice Highlight Banner */}
-                            {stats.struggling_learners.length > 0 && (
+                            {strugglingLearners.length > 0 && (
                                 <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 shadow-sm relative overflow-hidden">
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                         <div className="space-y-1">
@@ -627,7 +750,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                                     Diagnostic Recommendations
                                                 </span>
                                                 <span className="text-xs text-[var(--color-muted)]">
-                                                    {stats.struggling_learners.length} students recommended for targeted practice
+                                                    {strugglingLearners.length} students recommended for targeted practice
                                                 </span>
                                             </div>
                                             <h2 className="text-lg font-black text-[var(--color-text)]">
@@ -643,7 +766,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                                 className="px-4 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-2"
                                                 title="Send 10 targeted practice questions on focus topics to all students"
                                             >
-                                                <span>Send Practice to All ({stats.struggling_learners.length})</span>
+                                                <span>Send Practice to All ({strugglingLearners.length})</span>
                                             </button>
                                             <button
                                                 onClick={() => setActiveTab('struggling')}
@@ -665,11 +788,11 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                         </svg>
                                         <span>Top Performers</span>
                                     </h3>
-                                    {stats.top_performers.length === 0 ? (
+                                    {topPerformers.length === 0 ? (
                                         <p className="text-[var(--color-muted)] text-sm">No learner XP data yet</p>
                                     ) : (
                                         <div className="space-y-3">
-                                            {stats.top_performers.slice(0, 5).map((p, i) => (
+                                            {topPerformers.slice(0, 5).map((p, i) => (
                                                 <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-[var(--color-background)] transition-colors">
                                                     <span className="w-6 h-6 rounded-full bg-[var(--color-primary-5)] border border-[var(--color-border)] text-xs font-bold text-[var(--color-text)] flex items-center justify-center">
                                                         {i + 1}
@@ -700,16 +823,16 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                             onClick={() => setActiveTab('struggling')}
                                             className="text-xs text-[var(--color-primary)] hover:underline font-semibold"
                                         >
-                                            Review All ({stats.struggling_learners.length})
+                                            Review All ({strugglingLearners.length})
                                         </button>
                                     </div>
-                                    {stats.struggling_learners.length === 0 ? (
+                                    {strugglingLearners.length === 0 ? (
                                         <div className="p-6 text-center text-sm text-emerald-400 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
                                             All learners are on track and performing well.
                                         </div>
                                     ) : (
                                         <div className="space-y-3">
-                                            {stats.struggling_learners.slice(0, 3).map((learner) => {
+                                            {strugglingLearners.slice(0, 3).map((learner) => {
                                                 const intervention = learner.recommended_intervention;
                                                 const key = `${learner.id}-${intervention?.topic_id}`;
                                                 const isAssigned = assigningMap[key] === 'assigned';
@@ -724,13 +847,27 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                                             <div>
                                                                 <p className="text-sm font-bold text-[var(--color-text)]">{learner.name}</p>
                                                                 <p className="text-xs text-[var(--color-muted)]">
-                                                                    {learner.subject_name} • <span className="text-[var(--color-primary)] font-semibold">{intervention?.topic_name} ({intervention?.mastery_score}%)</span>
+                                                                    {learner.subject_name} •{' '}
+                                                                    {learner.has_assessment_data === false || learner.topics.length === 0 ? (
+                                                                        <span className="text-[var(--color-muted)] italic">No assessment data yet</span>
+                                                                    ) : (
+                                                                        <span className="text-[var(--color-primary)] font-semibold">
+                                                                            {intervention?.topic_name} ({intervention?.mastery_score}%)
+                                                                        </span>
+                                                                    )}
                                                                 </p>
                                                             </div>
-                                                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-bold rounded-md bg-[var(--color-primary-10)] text-[var(--color-primary)] border border-[var(--color-primary-20)]">
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                                                                <span>{learner.avg_mastery}% Avg</span>
-                                                            </span>
+                                                            {learner.has_assessment_data === false || (learner.topics.length === 0 && learner.avg_mastery === 0) ? (
+                                                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-bold rounded-md bg-slate-500/10 text-slate-400 border border-slate-500/20">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                                                    <span>Awaiting Assessment</span>
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-bold rounded-md bg-[var(--color-primary-10)] text-[var(--color-primary)] border border-[var(--color-primary-20)]">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                                                    <span>{learner.avg_mastery}% Avg</span>
+                                                                </span>
+                                                            )}
                                                         </div>
 
                                                         {intervention && (
@@ -781,14 +918,14 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                             <span>Targeted Practice Recommendations</span>
                                         </h3>
                                         <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[var(--color-primary-10)] text-[var(--color-primary)] border border-[var(--color-primary-20)]">
-                                            {stats.struggling_learners.length} Students Active
+                                            {strugglingLearners.length} Students Active
                                         </span>
                                     </div>
                                     <p className="text-xs text-[var(--color-muted)] max-w-2xl">
                                         Calculated from student question responses. Sending practice queues 10 targeted review questions on focus topics into each student's daily revision deck.
                                     </p>
                                 </div>
-                                {stats.struggling_learners.length > 0 && (
+                                {strugglingLearners.length > 0 && (
                                     <button
                                         onClick={handleAssignAllInterventions}
                                         className="px-4 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap"
@@ -797,12 +934,12 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
                                         </svg>
-                                        <span>Send Practice to All ({stats.struggling_learners.length} Students)</span>
+                                        <span>Send Practice to All ({strugglingLearners.length} Students)</span>
                                     </button>
                                 )}
                             </div>
 
-                            {stats.struggling_learners.length === 0 ? (
+                            {strugglingLearners.length === 0 ? (
                                 <div className="text-center py-16 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-8">
                                     <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto mb-4 border border-emerald-500/20">
                                         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -817,8 +954,8 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                     </p>
                                 </div>
                             ) : (
-                                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-xs min-h-[300px]">
-                                    <div className="overflow-x-auto pb-20">
+                                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-xs">
+                                    <div className="overflow-x-auto">
                                         <table className="w-full text-left text-xs">
                                             <thead>
                                                 <tr className="border-b border-[var(--color-border)] bg-[var(--color-background)]/50 text-[var(--color-muted)] font-bold uppercase tracking-wider">
@@ -831,7 +968,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-[var(--color-border)]">
-                                                {stats.struggling_learners.map((learner) => {
+                                                {paginatedStrugglingLearners.map((learner) => {
                                                     const intervention = learner.recommended_intervention;
                                                     const assignKey = intervention ? `${learner.id}-${intervention.topic_id}` : '';
                                                     const isAssigned = assigningMap[assignKey] === 'assigned';
@@ -845,7 +982,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                                         .slice(0, 2);
 
                                                     return (
-                                                        <tr key={learner.id} className="hover:bg-[var(--color-primary-5)]/30 transition-colors group">
+                                                        <tr key={learner.id} className={`hover:bg-[var(--color-primary-5)]/30 transition-colors group ${openDropdownLearnerId === learner.id ? 'relative z-30' : ''}`}>
                                                             {/* Student Name & Level */}
                                                             <td className="py-4 px-4 align-top">
                                                                 <div className="flex items-center gap-3">
@@ -877,45 +1014,58 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
 
                                                             {/* Average Mastery */}
                                                             <td className="py-4 px-4 align-top whitespace-nowrap">
-                                                                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black ${
-                                                                    learner.avg_mastery >= 75
-                                                                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                                                                        : learner.avg_mastery >= 50
-                                                                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
-                                                                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
-                                                                }`}>
-                                                                    <span className={`w-1.5 h-1.5 rounded-full ${
-                                                                        learner.avg_mastery >= 75 ? 'bg-emerald-500' : learner.avg_mastery >= 50 ? 'bg-amber-500' : 'bg-rose-500'
-                                                                    }`} />
-                                                                    {learner.avg_mastery}%
-                                                                </span>
+                                                                {learner.has_assessment_data === false || (learner.topics.length === 0 && learner.avg_mastery === 0) ? (
+                                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-500/10 text-slate-400 border border-slate-500/20">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" />
+                                                                        Awaiting Assessment (0%)
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black ${
+                                                                        learner.avg_mastery >= 75
+                                                                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                                                            : learner.avg_mastery >= 50
+                                                                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                                                            : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                                                                    }`}>
+                                                                        <span className={`w-1.5 h-1.5 rounded-full ${
+                                                                            learner.avg_mastery >= 75 ? 'bg-emerald-500' : learner.avg_mastery >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+                                                                        }`} />
+                                                                        {learner.avg_mastery}%
+                                                                    </span>
+                                                                )}
                                                             </td>
 
                                                             {/* Identified Weak Topics */}
                                                             <td className="py-4 px-4 align-top">
-                                                                <div className="flex flex-wrap gap-1.5 max-w-sm">
-                                                                    {learner.topics.slice(0, 3).map((topic) => (
-                                                                        <span
-                                                                            key={topic.id}
-                                                                            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[var(--color-background)] border border-[var(--color-border)] text-[11px] font-medium text-[var(--color-text)]"
-                                                                            title={`${topic.name}: ${topic.mastery_score}% mastery`}
-                                                                        >
-                                                                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                                                                topic.mastery_score >= 75 ? 'bg-emerald-500' : topic.mastery_score >= 50 ? 'bg-amber-500' : 'bg-rose-500'
-                                                                            }`} />
-                                                                            <span className="truncate max-w-[130px]">{topic.name}</span>
-                                                                            <span className="font-bold shrink-0">{topic.mastery_score}%</span>
-                                                                        </span>
-                                                                    ))}
-                                                                    {learner.topics.length > 3 && (
-                                                                        <button
-                                                                            onClick={() => setSelectedLearnerDiagnostic(learner)}
-                                                                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold text-[var(--color-primary)] hover:underline cursor-pointer"
-                                                                        >
-                                                                            +{learner.topics.length - 3} more
-                                                                        </button>
-                                                                    )}
-                                                                </div>
+                                                                {learner.has_assessment_data === false || learner.topics.length === 0 ? (
+                                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[var(--color-background)] border border-[var(--color-border)] text-[11px] text-[var(--color-muted)] italic">
+                                                                        No assessment data yet
+                                                                    </span>
+                                                                ) : (
+                                                                    <div className="flex flex-wrap gap-1.5 max-w-sm">
+                                                                        {learner.topics.slice(0, 3).map((topic) => (
+                                                                            <span
+                                                                                key={topic.id}
+                                                                                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[var(--color-background)] border border-[var(--color-border)] text-[11px] font-medium text-[var(--color-text)]"
+                                                                                title={`${topic.name}: ${topic.mastery_score}% mastery`}
+                                                                            >
+                                                                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                                                                    topic.mastery_score >= 75 ? 'bg-emerald-500' : topic.mastery_score >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+                                                                                }`} />
+                                                                                <span className="truncate max-w-[130px]">{topic.name}</span>
+                                                                                <span className="font-bold shrink-0">{topic.mastery_score}%</span>
+                                                                            </span>
+                                                                        ))}
+                                                                        {learner.topics.length > 3 && (
+                                                                            <button
+                                                                                onClick={() => setSelectedLearnerDiagnostic(learner)}
+                                                                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold text-[var(--color-primary)] hover:underline cursor-pointer"
+                                                                            >
+                                                                                +{learner.topics.length - 3} more
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                )}
                                                             </td>
 
                                                             {/* Recommended Practice Set */}
@@ -926,7 +1076,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                                                             {intervention.topic_name}
                                                                         </p>
                                                                         <p className="text-[11px] text-[var(--color-muted)]">
-                                                                            {intervention.question_count || 10} practice questions
+                                                                            {learner.has_assessment_data === false ? 'Diagnostic Quiz' : `${intervention.question_count || 10} practice questions`}
                                                                         </p>
                                                                     </div>
                                                                 ) : (
@@ -941,12 +1091,26 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                                                         type="button"
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
-                                                                            setOpenDropdownLearnerId(openDropdownLearnerId === learner.id ? null : learner.id);
+                                                                            if (openDropdownLearnerId === learner.id) {
+                                                                                setOpenDropdownLearnerId(null);
+                                                                                setDropdownCoords(null);
+                                                                                return;
+                                                                            }
+                                                                            const rect = e.currentTarget.getBoundingClientRect();
+                                                                            const spaceBelow = window.innerHeight - rect.bottom;
+                                                                            const openUp = spaceBelow < 220;
+
+                                                                            setDropdownCoords({
+                                                                                top: openUp ? undefined : rect.bottom + 6,
+                                                                                bottom: openUp ? window.innerHeight - rect.top + 6 : undefined,
+                                                                                right: window.innerWidth - rect.right,
+                                                                            });
+                                                                            setOpenDropdownLearnerId(learner.id);
                                                                         }}
-                                                                        className={`p-2 rounded-xl border transition-all cursor-pointer inline-flex items-center gap-1.5 ${
+                                                                        className={`p-2 rounded-xl border transition-all duration-150 cursor-pointer inline-flex items-center gap-1.5 shadow-2xs active:scale-95 ${
                                                                             openDropdownLearnerId === learner.id
-                                                                                ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-sm'
-                                                                                : 'bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text)] border-[var(--color-border)] hover:border-[var(--color-primary-30)] shadow-2xs'
+                                                                                ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-xs'
+                                                                                : 'bg-[var(--color-surface)] hover:bg-[var(--color-primary-10)] text-[var(--color-text)] border-[var(--color-border)] hover:border-[var(--color-primary-20)] hover:text-[var(--color-primary-light)]'
                                                                         }`}
                                                                         title="Learner Actions"
                                                                     >
@@ -974,17 +1138,26 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                                                         </svg>
                                                                     </button>
 
-                                                                    {openDropdownLearnerId === learner.id && (
+                                                                    {openDropdownLearnerId === learner.id && dropdownCoords && (
                                                                         <>
                                                                             {/* Backdrop to dismiss on outside click */}
                                                                             <div
-                                                                                className="fixed inset-0 z-40"
-                                                                                onClick={() => setOpenDropdownLearnerId(null)}
+                                                                                className="fixed inset-0 z-[9998]"
+                                                                                onClick={() => {
+                                                                                    setOpenDropdownLearnerId(null);
+                                                                                    setDropdownCoords(null);
+                                                                                }}
                                                                             />
 
-                                                                            {/* Dropdown Menu */}
+                                                                            {/* Dropdown Menu - Fixed positioning breaks out of all table/scroll bounds */}
                                                                             <div
-                                                                                className="absolute right-0 mt-2 w-64 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-xl z-50 py-1.5 overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-left"
+                                                                                style={{
+                                                                                    position: 'fixed',
+                                                                                    top: dropdownCoords.top !== undefined ? `${dropdownCoords.top}px` : 'auto',
+                                                                                    bottom: dropdownCoords.bottom !== undefined ? `${dropdownCoords.bottom}px` : 'auto',
+                                                                                    right: `${dropdownCoords.right}px`,
+                                                                                }}
+                                                                                className="w-64 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-2xl z-[9999] py-1.5 overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-left"
                                                                                 onClick={(e) => e.stopPropagation()}
                                                                             >
                                                                                 <div className="px-3.5 py-2.5 border-b border-[var(--color-border)] bg-[var(--color-background)]/50">
@@ -999,6 +1172,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                                                                         onClick={() => {
                                                                                             setSelectedLearnerDiagnostic(learner);
                                                                                             setOpenDropdownLearnerId(null);
+                                                                                            setDropdownCoords(null);
                                                                                         }}
                                                                                         className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] flex items-center gap-2.5 transition-colors cursor-pointer group/item"
                                                                                     >
@@ -1021,7 +1195,10 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                                                                             disabled={isLoading || isAssigned}
                                                                                             onClick={() => {
                                                                                                 handleAssignIntervention(learner.id, intervention.topic_id, intervention.question_count || 10);
-                                                                                                if (!isLoading) setOpenDropdownLearnerId(null);
+                                                                                                if (!isLoading) {
+                                                                                                    setOpenDropdownLearnerId(null);
+                                                                                                    setDropdownCoords(null);
+                                                                                                }
                                                                                             }}
                                                                                             className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-colors cursor-pointer group/item ${
                                                                                                 isAssigned
@@ -1068,6 +1245,18 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                             </tbody>
                                         </table>
                                     </div>
+
+                                    {strugglingLearners.length > 0 && (
+                                        <div className="border-t border-[var(--color-border)]">
+                                            <Pagination
+                                                currentPage={strugglingPage}
+                                                totalItems={strugglingLearners.length}
+                                                itemsPerPage={50}
+                                                onPageChange={setStrugglingPage}
+                                                itemLabel="students"
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -1080,10 +1269,11 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                             getTierColor={getTierColor}
                             getMasteryColor={getMasteryColor}
                             onSelectDiagnostic={(learnerId) => {
-                                const found = stats.struggling_learners.find((s) => s.id === learnerId);
+                                const found = strugglingLearners.find((s) => s.id === learnerId);
                                 if (found) setSelectedLearnerDiagnostic(found);
                             }}
                             onAddLearner={handleOpenAddLearner}
+                            refreshTrigger={stats}
                         />
                     )}
 
@@ -1096,11 +1286,11 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                 </svg>
                                 <span>Class Leaderboard & XP Milestones</span>
                             </h3>
-                            {stats.top_performers.length === 0 ? (
+                            {topPerformers.length === 0 ? (
                                 <p className="text-[var(--color-muted)] text-sm text-center py-8">No learners have earned XP yet</p>
                             ) : (
                                 <div className="space-y-3">
-                                    {stats.top_performers.map((p, i) => (
+                                    {topPerformers.map((p, i) => (
                                         <div
                                             key={p.id}
                                             className={`flex items-center gap-4 p-4 rounded-xl border ${
@@ -1144,6 +1334,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                             classes={classes as unknown as AdminClassItem[]}
                             allTopics={teacherTopics}
                             school={school}
+                            isTeacher={true}
                             loading={loadingQuestions || loadingSubjects}
                             onRefresh={() => {
                                 fetchQuestions();
@@ -1168,9 +1359,15 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                     Lv.{selectedLearnerDiagnostic.level} {selectedLearnerDiagnostic.tier} • {selectedLearnerDiagnostic.subject_name}
                                 </p>
                             </div>
-                            <span className={`px-3 py-1 text-xs font-black rounded-full border ${getMasteryColor(selectedLearnerDiagnostic.avg_mastery)}`}>
-                                {selectedLearnerDiagnostic.avg_mastery}% Overall
-                            </span>
+                            {selectedLearnerDiagnostic.has_assessment_data === false || (selectedLearnerDiagnostic.topics.length === 0 && selectedLearnerDiagnostic.avg_mastery === 0) ? (
+                                <span className="px-3 py-1 text-xs font-bold rounded-full bg-slate-500/10 text-slate-400 border border-slate-500/20">
+                                    Awaiting Assessment (0%)
+                                </span>
+                            ) : (
+                                <span className={`px-3 py-1 text-xs font-black rounded-full border ${getMasteryColor(selectedLearnerDiagnostic.avg_mastery)}`}>
+                                    {selectedLearnerDiagnostic.avg_mastery}% Overall
+                                </span>
+                            )}
                         </div>
 
                         {/* Topics Breakdown */}
@@ -1178,40 +1375,48 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                             <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-2">
                                 Topic Breakdown
                             </p>
-                            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                                {selectedLearnerDiagnostic.topics.map((t) => (
-                                    <div key={t.id} className="p-2.5 bg-[var(--color-background)] rounded-xl border border-[var(--color-border)]">
-                                        <div className="flex items-center justify-between mb-1 text-xs">
-                                            <span className="font-semibold text-[var(--color-text)] flex items-center gap-1.5">
-                                                <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${t.mastery_score >= 75 ? 'bg-emerald-500' : t.mastery_score >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`} />
-                                                <span>{t.name}</span>
-                                            </span>
-                                            <span className="font-bold text-[var(--color-text)]">{t.mastery_score}%</span>
+                            {selectedLearnerDiagnostic.topics.length === 0 ? (
+                                <div className="p-4 text-center text-xs text-[var(--color-muted)] bg-[var(--color-background)] rounded-xl border border-[var(--color-border)] italic">
+                                    No assessment data yet. Student has not completed any quizzes or practice sessions.
+                                </div>
+                            ) : (
+                                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                    {selectedLearnerDiagnostic.topics.map((t) => (
+                                        <div key={t.id} className="p-2.5 bg-[var(--color-background)] rounded-xl border border-[var(--color-border)]">
+                                            <div className="flex items-center justify-between mb-1 text-xs">
+                                                <span className="font-semibold text-[var(--color-text)] flex items-center gap-1.5">
+                                                    <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${t.mastery_score >= 75 ? 'bg-emerald-500' : t.mastery_score >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                                                    <span>{t.name}</span>
+                                                </span>
+                                                <span className="font-bold text-[var(--color-text)]">{t.mastery_score}%</span>
+                                            </div>
+                                            <div className="w-full bg-[var(--color-surface)] h-1.5 rounded-full overflow-hidden">
+                                                <div
+                                                    className={`h-full rounded-full ${
+                                                        t.mastery_score >= 75 ? 'bg-emerald-500' : t.mastery_score >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+                                                    }`}
+                                                    style={{ width: `${t.mastery_score}%` }}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="w-full bg-[var(--color-surface)] h-1.5 rounded-full overflow-hidden">
-                                            <div
-                                                className={`h-full rounded-full ${
-                                                    t.mastery_score >= 75 ? 'bg-emerald-500' : t.mastery_score >= 50 ? 'bg-amber-500' : 'bg-rose-500'
-                                                }`}
-                                                style={{ width: `${t.mastery_score}%` }}
-                                            />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* Intervention Action */}
                         {selectedLearnerDiagnostic.recommended_intervention && (
                             <div className="p-4 rounded-2xl bg-[var(--color-background)] border border-[var(--color-border)]">
                                 <p className="text-xs font-bold text-[var(--color-primary)] uppercase tracking-wider mb-1">
-                                    Recommended Practice Set
+                                    {selectedLearnerDiagnostic.has_assessment_data === false ? 'Diagnostic Assessment' : 'Recommended Practice Set'}
                                 </p>
                                 <p className="text-sm font-extrabold text-[var(--color-text)]">
                                     {selectedLearnerDiagnostic.recommended_intervention.topic_name}
                                 </p>
                                 <p className="text-xs text-[var(--color-muted)] mt-1 mb-3">
-                                    Send {selectedLearnerDiagnostic.recommended_intervention.question_count} targeted practice questions into the student's daily revision deck.
+                                    {selectedLearnerDiagnostic.has_assessment_data === false
+                                        ? `Send a 10-question baseline diagnostic assessment into the student's study deck.`
+                                        : `Send ${selectedLearnerDiagnostic.recommended_intervention.question_count} targeted practice questions into the student's daily revision deck.`}
                                 </p>
                                 <button
                                     onClick={() => {
@@ -1226,7 +1431,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                     }}
                                     className="w-full py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
                                 >
-                                    Send Practice Questions
+                                    {selectedLearnerDiagnostic.has_assessment_data === false ? 'Send Diagnostic Assessment' : 'Send Practice Questions'}
                                 </button>
                             </div>
                         )}
@@ -1299,7 +1504,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                                     className="w-full px-3 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] text-sm font-semibold focus:outline-none focus:border-[var(--color-primary)] cursor-pointer"
                                 >
                                     {(() => {
-                                        const groups = getGradeLevelsForSchool(school);
+                                        const groups = getGradeLevelsForTeacher(classes, school);
                                         return groups.map((grp) => (
                                             <optgroup key={grp.group} label={grp.group} className="bg-[var(--color-surface)] text-[var(--color-text)]">
                                                 {grp.options.map((opt) => (
@@ -1430,28 +1635,24 @@ function ClassLearnersPanel({
     getMasteryColor,
     onSelectDiagnostic,
     onAddLearner,
+    refreshTrigger,
 }: {
     selectedClass: number | null;
     getTierColor: (level: number) => string;
     getMasteryColor: (score: number) => string;
     onSelectDiagnostic?: (learnerId: string) => void;
     onAddLearner?: () => void;
+    refreshTrigger?: any;
 }) {
     const [learners, setLearners] = useState<Learner[]>([]);
     const [className, setClassName] = useState('');
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    const [page, setPage] = useState(1);
 
-    const getAuthHeaders = () => {
-        const token = localStorage.getItem('auth_token');
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-        };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-        return headers;
-    };
+    useEffect(() => {
+        setPage(1);
+    }, [search, selectedClass]);
 
     useEffect(() => {
         if (!selectedClass) {
@@ -1470,7 +1671,8 @@ function ClassLearnersPanel({
                     return;
                 }
                 const res = await fetch(`/api/v1/teacher/classes/${selectedClass}/learners`, {
-                    headers: getAuthHeaders(),
+                    headers: getAdminAuthHeaders(),
+                    credentials: 'include',
                 });
                 if (res.ok) {
                     const data = await res.json();
@@ -1498,7 +1700,7 @@ function ClassLearnersPanel({
 
         window.addEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
         return () => window.removeEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
-    }, [selectedClass]);
+    }, [selectedClass, refreshTrigger]);
 
     if (!selectedClass) {
         return (
@@ -1522,6 +1724,8 @@ function ClassLearnersPanel({
     const filtered = learners.filter(
         (l) => l.name.toLowerCase().includes(search.toLowerCase()) || l.email.toLowerCase().includes(search.toLowerCase())
     );
+
+    const paginated = filtered.slice((page - 1) * 50, page * 50);
 
     return (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 shadow-xs">
@@ -1562,77 +1766,95 @@ function ClassLearnersPanel({
             </div>
 
             {loading ? (
-                <div className="text-center py-8">
-                    <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[var(--color-primary)] border-r-transparent"></div>
+                <div className="py-2">
+                    <SkeletonTable rows={4} columns={6} hasHeader={false} />
                 </div>
             ) : filtered.length === 0 ? (
                 <p className="text-[var(--color-muted)] text-xs text-center py-8">
                     {learners.length === 0 ? 'No learners enrolled yet. Click "+ Add Learner" to add one.' : 'No learners match your search.'}
                 </p>
             ) : (
-                <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left">
-                        <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)] font-bold uppercase tracking-wider">
-                            <tr>
-                                <th className="pb-3">Name</th>
-                                <th className="pb-3">Level</th>
-                                <th className="pb-3">XP</th>
-                                <th className="pb-3">Streak</th>
-                                <th className="pb-3">Mastery</th>
-                                <th className="pb-3">Accuracy</th>
-                                <th className="pb-3 text-right">Diagnostic</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--color-border)]">
-                            {filtered.map((l) => (
-                                <tr key={l.id} className="hover:bg-[var(--color-background)] transition-colors">
-                                    <td className="py-3">
-                                        <p className="font-bold text-[var(--color-text)]">{l.name}</p>
-                                        <p className="text-[11px] text-[var(--color-muted)]">{l.email}</p>
-                                    </td>
-                                    <td className="py-3">
-                                        <span className={`font-bold ${getTierColor(l.level)}`}>Lv.{l.level}</span>
-                                        <span className="text-[11px] text-[var(--color-muted)] ml-1">{l.tier}</span>
-                                    </td>
-                                    <td className="py-3 font-bold text-amber-400">{l.total_xp}</td>
-                                    <td className="py-3">
-                                        {l.streak > 0 ? (
-                                            <span className="text-amber-400 font-bold flex items-center gap-1">
-                                                <svg className="w-3.5 h-3.5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fillRule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.527.82-1.17 1.95-1.17 3.952 0 .57.065 1.05.158 1.474-.298-.242-.647-.532-.977-.866a1 1 0 00-1.44.095c-.822 1.002-1.394 2.37-1.394 3.791 0 3.314 2.686 6 6 6s6-2.686 6-6c0-2.434-1.206-4.524-2.355-5.941z" clipRule="evenodd" />
-                                                </svg>
-                                                <span>{l.streak}d</span>
-                                            </span>
-                                        ) : (
-                                            <span className="text-[var(--color-muted)]">-</span>
-                                        )}
-                                    </td>
-                                    <td className="py-3">
-                                        <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full border ${getMasteryColor(l.avg_mastery)}`}>
-                                            {l.avg_mastery}%
-                                        </span>
-                                    </td>
-                                    <td className="py-3">
-                                        <span className="text-[var(--color-muted)] font-medium">
-                                            {l.total_attempted > 0
-                                                ? `${Math.round((l.total_correct / l.total_attempted) * 100)}%`
-                                                : '-'}
-                                        </span>
-                                    </td>
-                                    <td className="py-3 text-right">
-                                        {onSelectDiagnostic && (
-                                            <button
-                                                onClick={() => onSelectDiagnostic(l.id)}
-                                                className="px-2.5 py-1 bg-[var(--color-primary-5)] hover:bg-[var(--color-primary)] hover:text-white text-[var(--color-primary)] font-bold text-[11px] rounded-lg border border-[var(--color-primary-10)] transition-colors cursor-pointer"
-                                            >
-                                                View Diagnostic
-                                            </button>
-                                        )}
-                                    </td>
+                <div className="space-y-4">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-xs text-left">
+                            <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)] font-bold uppercase tracking-wider">
+                                <tr>
+                                    <th className="pb-3">Name</th>
+                                    <th className="pb-3">Level</th>
+                                    <th className="pb-3">XP</th>
+                                    <th className="pb-3">Streak</th>
+                                    <th className="pb-3">Mastery</th>
+                                    <th className="pb-3">Accuracy</th>
+                                    <th className="pb-3 text-right">Diagnostic</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="divide-y divide-[var(--color-border)]">
+                                {paginated.map((l) => (
+                                    <tr key={l.id} className="hover:bg-[var(--color-background)] transition-colors">
+                                        <td className="py-3">
+                                            <p className="font-bold text-[var(--color-text)]">{l.name}</p>
+                                            <p className="text-[11px] text-[var(--color-muted)]">{l.email}</p>
+                                        </td>
+                                        <td className="py-3">
+                                            <span className={`font-bold ${getTierColor(l.level)}`}>Lv.{l.level}</span>
+                                            <span className="text-[11px] text-[var(--color-muted)] ml-1">{l.tier}</span>
+                                        </td>
+                                        <td className="py-3 font-bold text-amber-400">{l.total_xp}</td>
+                                        <td className="py-3">
+                                            {l.streak > 0 ? (
+                                                <span className="text-amber-400 font-bold flex items-center gap-1">
+                                                    <svg className="w-3.5 h-3.5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fillRule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.527.82-1.17 1.95-1.17 3.952 0 .57.065 1.05.158 1.474-.298-.242-.647-.532-.977-.866a1 1 0 00-1.44.095c-.822 1.002-1.394 2.37-1.394 3.791 0 3.314 2.686 6 6 6s6-2.686 6-6c0-2.434-1.206-4.524-2.355-5.941z" clipRule="evenodd" />
+                                                    </svg>
+                                                    <span>{l.streak}d</span>
+                                                </span>
+                                            ) : (
+                                                <span className="text-[var(--color-muted)]">-</span>
+                                            )}
+                                        </td>
+                                        <td className="py-3">
+                                            {l.total_attempted > 0 ? (
+                                                <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full border ${getMasteryColor(l.avg_mastery)}`}>
+                                                    {l.avg_mastery}%
+                                                </span>
+                                            ) : (
+                                                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-500/10 text-slate-400 border border-slate-500/20">
+                                                    Awaiting Assessment
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="py-3">
+                                            <span className="text-[var(--color-muted)] font-medium">
+                                                {l.total_attempted > 0
+                                                    ? `${Math.round((l.total_correct / l.total_attempted) * 100)}%`
+                                                    : '-'}
+                                            </span>
+                                        </td>
+                                        <td className="py-3 text-right">
+                                            {onSelectDiagnostic && (
+                                                <button
+                                                    onClick={() => onSelectDiagnostic(l.id)}
+                                                    className="px-2.5 py-1 bg-[var(--color-primary-5)] hover:bg-[var(--color-primary)] hover:text-white text-[var(--color-primary)] font-bold text-[11px] rounded-lg border border-[var(--color-primary-10)] transition-colors cursor-pointer"
+                                                >
+                                                    View Diagnostic
+                                                </button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="border-t border-[var(--color-border)] pt-2">
+                        <Pagination
+                            currentPage={page}
+                            totalItems={filtered.length}
+                            itemsPerPage={50}
+                            onPageChange={setPage}
+                            itemLabel="learners"
+                        />
+                    </div>
                 </div>
             )}
         </div>

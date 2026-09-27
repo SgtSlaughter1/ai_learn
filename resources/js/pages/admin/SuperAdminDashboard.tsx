@@ -13,12 +13,14 @@ import {
     getCachedAdminQuestions,
     cacheAdminTopics,
     getCachedAdminTopics,
+    getAdminAuthHeaders,
     ADMIN_DATA_CHANGED_EVENT,
 } from '@/services/AdminOfflineService';
 import SchoolsTab from '@/components/admin/SchoolsTab';
 import SchoolAdminsTab from '@/components/admin/SchoolAdminsTab';
 import SubjectsTab from '@/components/admin/SubjectsTab';
 import QuestionBankTab from '@/components/admin/QuestionBankTab';
+import { Skeleton } from '@/components/common/Skeleton';
 
 export default function SuperAdminDashboard() {
     const { auth } = usePage<{ auth: { user: { id: number; name: string; email: string; role: string } } }>().props;
@@ -54,7 +56,10 @@ export default function SuperAdminDashboard() {
     const fetchStats = async () => {
         setLoadingStats(true);
         try {
-            const res = await fetch('/api/v1/admin/stats');
+            const res = await fetch('/api/v1/admin/stats', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 if (data.status === 'success') {
@@ -85,7 +90,10 @@ export default function SuperAdminDashboard() {
                 setSchools(cached);
                 return;
             }
-            const res = await fetch('/api/v1/admin/schools');
+            const res = await fetch('/api/v1/admin/schools', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const serverSchools = data.schools || data.data || [];
@@ -112,7 +120,10 @@ export default function SuperAdminDashboard() {
                 setSchoolAdmins(cached);
                 return;
             }
-            const res = await fetch('/api/v1/admin/school-admins');
+            const res = await fetch('/api/v1/admin/school-admins', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const serverAdmins = data.school_admins || data.data || [];
@@ -141,7 +152,10 @@ export default function SuperAdminDashboard() {
                 setAllTopics(cachedTops);
                 return;
             }
-            const res = await fetch('/api/v1/admin/subjects');
+            const res = await fetch('/api/v1/admin/subjects', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const serverSubjects: SubjectItem[] = data.subjects || data.data || [];
@@ -174,7 +188,10 @@ export default function SuperAdminDashboard() {
                 setQuestions(cached);
                 return;
             }
-            const res = await fetch('/api/v1/admin/questions');
+            const res = await fetch('/api/v1/admin/questions', {
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 const serverQuestions = data.questions || data.data || [];
@@ -507,6 +524,7 @@ export default function SuperAdminDashboard() {
 }
 
 function StatCard({ label, value, subtitle, icon }: { label: string; value: string | number; subtitle: string; icon: React.ReactNode }) {
+    const isLoading = value === '...';
     return (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-5 shadow-xs flex flex-col justify-between">
             <div className="flex items-center justify-between mb-2">
@@ -515,7 +533,11 @@ function StatCard({ label, value, subtitle, icon }: { label: string; value: stri
                 </div>
             </div>
             <div>
-                <p className="text-2xl font-black text-[var(--color-text)]">{value}</p>
+                {isLoading ? (
+                    <Skeleton variant="rounded" className="h-8 w-16 rounded-lg my-0.5" />
+                ) : (
+                    <p className="text-2xl font-black text-[var(--color-text)]">{value}</p>
+                )}
                 <p className="text-xs font-bold text-[var(--color-text)] mt-1">{label}</p>
                 <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{subtitle}</p>
             </div>

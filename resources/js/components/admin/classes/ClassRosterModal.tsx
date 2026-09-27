@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { ClassItem, ClassLearner } from '@/types/admin';
+import Pagination from '@/components/common/Pagination';
 
 interface ClassRosterModalProps {
     isOpen: boolean;
@@ -29,12 +30,17 @@ export default function ClassRosterModal({
     onRemoveLearner,
 }: ClassRosterModalProps) {
     const [actionTab, setActionTab] = useState<'enroll' | 'create'>('enroll');
+    const [rosterPage, setRosterPage] = useState(1);
     const [newLearner, setNewLearner] = useState({
         name: '',
         email: '',
         password: '',
         student_id: '',
     });
+
+    useEffect(() => {
+        setRosterPage(1);
+    }, [selectedClass?.id]);
 
     if (!isOpen || !selectedClass) return null;
 
@@ -45,6 +51,8 @@ export default function ClassRosterModal({
             setNewLearner({ name: '', email: '', password: '', student_id: '' });
         }
     };
+
+    const paginatedLearners = classLearners.slice((rosterPage - 1) * 50, rosterPage * 50);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
@@ -183,7 +191,7 @@ export default function ClassRosterModal({
                 )}
 
                 {/* Roster Table */}
-                <div className="flex-1 overflow-y-auto border border-[var(--color-border)] rounded-2xl">
+                <div className="flex-1 overflow-y-auto border border-[var(--color-border)] rounded-2xl flex flex-col justify-between">
                     <table className="w-full text-left text-xs">
                         <thead>
                             <tr className="border-b border-[var(--color-border)] bg-[var(--color-primary-5)] text-[var(--color-muted)] uppercase tracking-wider font-bold sticky top-0 bg-[var(--color-surface)]">
@@ -211,7 +219,7 @@ export default function ClassRosterModal({
                                     </td>
                                 </tr>
                             ) : (
-                                classLearners.map((lrn) => (
+                                paginatedLearners.map((lrn) => (
                                     <tr key={lrn.id} className="hover:bg-[var(--color-primary-5)] transition-colors">
                                         <td className="py-3 px-4">
                                             <p className="font-bold text-[var(--color-text)]">{lrn.name}</p>
@@ -257,6 +265,18 @@ export default function ClassRosterModal({
                             )}
                         </tbody>
                     </table>
+
+                    {classLearners.length > 0 && (
+                        <div className="border-t border-[var(--color-border)]">
+                            <Pagination
+                                currentPage={rosterPage}
+                                totalItems={classLearners.length}
+                                itemsPerPage={50}
+                                onPageChange={setRosterPage}
+                                itemLabel="learners"
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

@@ -3,6 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\PastQuestion\ExplainPastQuestionRequest;
+use App\Http\Requests\PastQuestion\StartExamSimulationRequest;
+use App\Http\Requests\PastQuestion\SubmitExamSimulationRequest;
+use App\Http\Requests\PastQuestion\VerifyPastQuestionAnswerRequest;
 use App\Models\ExamSimulation;
 use App\Models\LearnerProgress;
 use App\Models\PastQuestion;
@@ -13,6 +17,7 @@ use App\Services\AIService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class PastQuestionController extends Controller
@@ -23,6 +28,7 @@ class PastQuestionController extends Controller
 
     /**
      * Get metadata for past questions (available exams, subjects, years, and stats).
+     * Cached on backend for 5 minutes.
      */
     public function getMeta(Request $request): JsonResponse
     {
@@ -30,139 +36,146 @@ class PastQuestionController extends Controller
         $user = Auth::user() ?? $request->user();
         $isGuest = !$user;
 
-        // Available standard exams
-        $examsConfig = [
-            [
-                'code' => 'jamb',
-                'name' => 'JAMB (UTME)',
-                'fullName' => 'Joint Admissions and Matriculation Board - Unified Tertiary Matriculation Examination',
-                'description' => 'Computer-Based Test simulation for university, polytechnic, and college admissions across Nigeria.',
-                'badge' => 'Tertiary Entrance',
-                'color' => 'primary',
-                'defaultDurationMinutes' => 40,
-                'defaultQuestionCount' => 40,
-            ],
-            [
-                'code' => 'waec',
-                'name' => 'WAEC (WASSCE)',
-                'fullName' => 'West African Examinations Council - Senior School Certificate Examination',
-                'description' => 'Comprehensive Senior Secondary Certificate Examination past papers with step-by-step working.',
-                'badge' => 'Senior Secondary',
-                'color' => 'primary-light',
-                'defaultDurationMinutes' => 45,
-                'defaultQuestionCount' => 50,
-            ],
-            [
-                'code' => 'neco',
-                'name' => 'NECO (SSCE)',
-                'fullName' => 'National Examinations Council - Senior School Certificate Examination',
-                'description' => 'Authentic National Senior School Certificate Examination papers and theoretical reviews.',
-                'badge' => 'Senior Secondary',
-                'color' => 'accent',
-                'defaultDurationMinutes' => 45,
-                'defaultQuestionCount' => 40,
-            ],
-            [
-                'code' => 'post_utme',
-                'name' => 'Post-UTME',
-                'fullName' => 'Post-UTME University Screening Examinations',
-                'description' => 'University screening CBT questions for Nigerian federal and state universities.',
-                'badge' => 'Screening',
-                'color' => 'warning',
-                'defaultDurationMinutes' => 30,
-                'defaultQuestionCount' => 30,
-            ],
-            [
-                'code' => 'bece',
-                'name' => 'BECE (Junior WAEC)',
-                'fullName' => 'Basic Education Certificate Examination (JSS3 / Grade 9 Transition)',
-                'description' => 'Junior Secondary transitional exam questions for Junior WAEC and state-level exams.',
-                'badge' => 'Junior Secondary',
-                'color' => 'success',
-                'defaultDurationMinutes' => 30,
-                'defaultQuestionCount' => 30,
-            ],
-        ];
+        $cacheKey = 'past_questions:meta:v1' . ($schoolId ? ":{$schoolId}" : '');
 
-        // Query counts per exam from dedicated past_questions table
-        $examCounts = PastQuestion::select('exam_code', DB::raw('count(*) as count'))
-            ->groupBy('exam_code')
-            ->pluck('count', 'exam_code')
-            ->all();
+        $cachedMeta = Cache::remember($cacheKey, now()->addMinutes(5), function () {
+            // Available standard exams
+            $examsConfig = [
+                [
+                    'code' => 'jamb',
+                    'name' => 'JAMB (UTME)',
+                    'fullName' => 'Joint Admissions and Matriculation Board - Unified Tertiary Matriculation Examination',
+                    'description' => 'Computer-Based Test simulation for university, polytechnic, and college admissions across Nigeria.',
+                    'badge' => 'Tertiary Entrance',
+                    'color' => 'primary',
+                    'defaultDurationMinutes' => 40,
+                    'defaultQuestionCount' => 40,
+                ],
+                [
+                    'code' => 'waec',
+                    'name' => 'WAEC (WASSCE)',
+                    'fullName' => 'West African Examinations Council - Senior School Certificate Examination',
+                    'description' => 'Comprehensive Senior Secondary Certificate Examination past papers with step-by-step working.',
+                    'badge' => 'Senior Secondary',
+                    'color' => 'primary-light',
+                    'defaultDurationMinutes' => 45,
+                    'defaultQuestionCount' => 50,
+                ],
+                [
+                    'code' => 'neco',
+                    'name' => 'NECO (SSCE)',
+                    'fullName' => 'National Examinations Council - Senior School Certificate Examination',
+                    'description' => 'Authentic National Senior School Certificate Examination papers and theoretical reviews.',
+                    'badge' => 'Senior Secondary',
+                    'color' => 'accent',
+                    'defaultDurationMinutes' => 45,
+                    'defaultQuestionCount' => 40,
+                ],
+                [
+                    'code' => 'post_utme',
+                    'name' => 'Post-UTME',
+                    'fullName' => 'Post-UTME University Screening Examinations',
+                    'description' => 'University screening CBT questions for Nigerian federal and state universities.',
+                    'badge' => 'Screening',
+                    'color' => 'warning',
+                    'defaultDurationMinutes' => 30,
+                    'defaultQuestionCount' => 30,
+                ],
+                [
+                    'code' => 'bece',
+                    'name' => 'BECE (Junior WAEC)',
+                    'fullName' => 'Basic Education Certificate Examination (JSS3 / Grade 9 Transition)',
+                    'description' => 'Junior Secondary transitional exam questions for Junior WAEC and state-level exams.',
+                    'badge' => 'Junior Secondary',
+                    'color' => 'success',
+                    'defaultDurationMinutes' => 30,
+                    'defaultQuestionCount' => 30,
+                ],
+            ];
 
-        // Distinct years grouped by exam_code
-        $yearsByExam = PastQuestion::whereNotNull('exam_year')
-            ->select('exam_code', 'exam_year')
-            ->distinct()
-            ->orderBy('exam_year', 'desc')
-            ->get()
-            ->groupBy('exam_code')
-            ->map(fn ($rows) => $rows->pluck('exam_year')->values()->all());
+            // Query counts per exam from dedicated past_questions table
+            $examCounts = PastQuestion::select('exam_code', DB::raw('count(*) as count'))
+                ->groupBy('exam_code')
+                ->pluck('count', 'exam_code')
+                ->all();
 
-        $exams = array_map(function ($exam) use ($examCounts, $yearsByExam) {
-            $code = $exam['code'];
-            $exam['questionCount'] = $examCounts[$code] ?? 0;
-            $exam['available_years'] = $yearsByExam->get($code, []);
-            return $exam;
-        }, $examsConfig);
+            // Distinct years grouped by exam_code
+            $yearsByExam = PastQuestion::whereNotNull('exam_year')
+                ->select('exam_code', 'exam_year')
+                ->distinct()
+                ->orderBy('exam_year', 'desc')
+                ->get()
+                ->groupBy('exam_code')
+                ->map(fn ($rows) => $rows->pluck('exam_year')->values()->all());
 
-        // Distinct years across all
-        $years = PastQuestion::whereNotNull('exam_year')
-            ->distinct()
-            ->orderBy('exam_year', 'desc')
-            ->pluck('exam_year');
+            $exams = array_map(function ($exam) use ($examCounts, $yearsByExam) {
+                $code = $exam['code'];
+                $exam['questionCount'] = $examCounts[$code] ?? 0;
+                $exam['available_years'] = $yearsByExam->get($code, []);
+                return $exam;
+            }, $examsConfig);
 
-        // Available subjects with past questions & per-exam breakdown
-        $subjectsWithQuestions = Subject::whereHas('pastQuestions')
-            ->withCount('pastQuestions as questions_count')
-            ->orderBy('name')
-            ->get(['id', 'name', 'slug']);
+            // Distinct years across all
+            $years = PastQuestion::whereNotNull('exam_year')
+                ->distinct()
+                ->orderBy('exam_year', 'desc')
+                ->pluck('exam_year');
 
-        // Attach available exam codes and available years map for each subject
-        $subjectExamRows = PastQuestion::whereNotNull('exam_year')
-            ->select('subject_id', 'exam_code', 'exam_year')
-            ->distinct()
-            ->orderBy('exam_year', 'desc')
-            ->get();
+            // Available subjects with past questions & per-exam breakdown
+            $subjectsWithQuestions = Subject::whereHas('pastQuestions')
+                ->withCount('pastQuestions as questions_count')
+                ->orderBy('name')
+                ->get(['id', 'name', 'slug']);
 
-        $subjectExamMap = $subjectExamRows->groupBy('subject_id')
-            ->map(fn ($rows) => $rows->pluck('exam_code')->unique()->values()->all());
+            // Attach available exam codes and available years map for each subject
+            $subjectExamRows = PastQuestion::whereNotNull('exam_year')
+                ->select('subject_id', 'exam_code', 'exam_year')
+                ->distinct()
+                ->orderBy('exam_year', 'desc')
+                ->get();
 
-        $subjectYearsByExamMap = $subjectExamRows->groupBy('subject_id')
-            ->map(function ($rows) {
-                return $rows->groupBy('exam_code')
-                    ->map(fn ($group) => $group->pluck('exam_year')->unique()->values()->all());
-            });
+            $subjectExamMap = $subjectExamRows->groupBy('subject_id')
+                ->map(fn ($rows) => $rows->pluck('exam_code')->unique()->values()->all());
 
-        $subjectExamCounts = PastQuestion::select('subject_id', 'exam_code', DB::raw('count(*) as count'))
-            ->groupBy('subject_id', 'exam_code')
-            ->get()
-            ->groupBy('subject_id')
-            ->map(fn ($rows) => $rows->pluck('count', 'exam_code')->all());
+            $subjectYearsByExamMap = $subjectExamRows->groupBy('subject_id')
+                ->map(function ($rows) {
+                    return $rows->groupBy('exam_code')
+                        ->map(fn ($group) => $group->pluck('exam_year')->unique()->values()->all());
+                });
 
-        $subjectsData = $subjectsWithQuestions->map(function ($s) use ($subjectExamMap, $subjectYearsByExamMap, $subjectExamCounts) {
-            $sArray = $s->toArray();
-            $sArray['available_exams'] = $subjectExamMap->get($s->id, []);
-            $sArray['available_years_by_exam'] = $subjectYearsByExamMap->get($s->id, []);
-            $sArray['counts_by_exam'] = $subjectExamCounts->get($s->id, []);
-            return $sArray;
-        });
+            $subjectExamCounts = PastQuestion::select('subject_id', 'exam_code', DB::raw('count(*) as count'))
+                ->groupBy('subject_id', 'exam_code')
+                ->get()
+                ->groupBy('subject_id')
+                ->map(fn ($rows) => $rows->pluck('count', 'exam_code')->all());
 
-        $totalQuestions = PastQuestion::count();
+            $subjectsData = $subjectsWithQuestions->map(function ($s) use ($subjectExamMap, $subjectYearsByExamMap, $subjectExamCounts) {
+                $sArray = $s->toArray();
+                $sArray['available_exams'] = $subjectExamMap->get($s->id, []);
+                $sArray['available_years_by_exam'] = $subjectYearsByExamMap->get($s->id, []);
+                $sArray['counts_by_exam'] = $subjectExamCounts->get($s->id, []);
+                return $sArray;
+            })->values()->all();
 
-        return response()->json([
-            'success' => true,
-            'is_guest' => $isGuest,
-            'guest_question_limit' => 20,
-            'data' => [
+            $totalQuestions = PastQuestion::count();
+
+            return [
                 'exams' => $exams,
                 'years' => $years,
                 'years_by_exam' => $yearsByExam,
                 'subjects' => $subjectsData,
                 'total_questions' => $totalQuestions,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'is_guest' => $isGuest,
+            'guest_question_limit' => 20,
+            'data' => array_merge($cachedMeta, [
                 'is_guest' => $isGuest,
                 'guest_question_limit' => 20,
-            ],
+            ]),
         ]);
     }
 
@@ -268,13 +281,13 @@ class PastQuestionController extends Controller
                         $optData['is_correct'] = (bool) $opt->is_correct;
                     }
                     return $optData;
-                }),
+                })->values()->all(),
             ];
-        });
+        })->values()->all();
 
         return response()->json([
             'success' => true,
-            'count' => $formatted->count(),
+            'count' => count($formatted),
             'is_guest' => $isGuest,
             'guest_limit' => 20,
             'data' => $formatted,
@@ -285,12 +298,9 @@ class PastQuestionController extends Controller
      * Verify a learner's answer for a single past question during interactive practice.
      * Evaluates securely server-side so answers are never sent with the question.
      */
-    public function verifyAnswer(Request $request): JsonResponse
+    public function verifyAnswer(VerifyPastQuestionAnswerRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'question_id' => 'required|integer|exists:past_questions,id',
-            'selected_option_id' => 'required|integer',
-        ]);
+        $validated = $request->validated();
 
         $question = PastQuestion::with('options')->findOrFail($validated['question_id']);
         $correctOption = $question->options->firstWhere('is_correct', true);
@@ -309,16 +319,9 @@ class PastQuestionController extends Controller
     /**
      * Start an exam simulation session (or Practice session).
      */
-    public function startSimulation(Request $request): JsonResponse
+    public function startSimulation(StartExamSimulationRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'exam_code' => 'required|string|max:30',
-            'exam_year' => 'nullable|integer',
-            'subject_ids' => 'nullable|array',
-            'mode' => 'nullable|in:simulation,practice',
-            'duration_seconds' => 'nullable|integer',
-            'total_questions' => 'nullable|integer',
-        ]);
+        $validated = $request->validated();
 
         $user = Auth::user() ?? $request->user();
         $isGuest = !$user;
@@ -360,16 +363,9 @@ class PastQuestionController extends Controller
     /**
      * Submit an exam simulation, compute score, and update topic mastery.
      */
-    public function submitSimulation(Request $request): JsonResponse
+    public function submitSimulation(SubmitExamSimulationRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'simulation_id' => 'nullable|integer',
-            'exam_code' => 'required|string',
-            'exam_year' => 'nullable|integer',
-            'time_spent_seconds' => 'nullable|integer',
-            'answers' => 'nullable|array', // [question_id => selected_option_id]
-            'question_ids' => 'nullable|array', // all question IDs in the exam session
-        ]);
+        $validated = $request->validated();
 
         $user = Auth::user() ?? $request->user();
         $answers = $validated['answers'] ?? [];
@@ -560,15 +556,11 @@ class PastQuestionController extends Controller
     /**
      * Get an AI tutor explanation for a specific past question.
      */
-    public function explain(Request $request): JsonResponse
+    public function explain(ExplainPastQuestionRequest $request): JsonResponse
     {
-        $request->validate([
-            'past_question_id' => ['required', 'integer', 'exists:past_questions,id'],
-            'selected_option_id' => ['nullable', 'integer'],
-        ]);
-
-        $pastQuestion = PastQuestion::with(['options', 'subject', 'topic'])->findOrFail($request->input('past_question_id'));
-        $selectedOptionId = $request->input('selected_option_id');
+        $validated = $request->validated();
+        $pastQuestion = PastQuestion::with(['options', 'subject', 'topic'])->findOrFail($validated['past_question_id']);
+        $selectedOptionId = $validated['selected_option_id'] ?? null;
 
         $explanation = $this->aiService->explainPastQuestion($pastQuestion, $selectedOptionId);
 

@@ -28,9 +28,9 @@ class AdaptiveService
     private const K_FACTOR = 32;
 
     /**
-     * Maximum questions per adaptive quiz session.
+     * Maximum questions per adaptive quiz session (10 questions per attempt).
      */
-    private const MAX_QUESTIONS = 15;
+    private const MAX_QUESTIONS = 10;
 
     /**
      * Start a new adaptive quiz session.

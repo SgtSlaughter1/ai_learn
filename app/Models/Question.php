@@ -40,4 +40,54 @@ class Question extends Model
     {
         return $this->options->firstWhere('is_correct', true);
     }
+
+    /**
+     * Scope questions query based on the authenticated user's role, school, and grade permissions.
+     */
+    public function scopeForUser($query, ?User $user)
+    {
+        if (!$user) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($user->isPlatformAdmin()) {
+            return $query;
+        }
+
+        $allowedGrades = $user->allowedGradeLevels();
+        $allowedVariants = School::gradeLevelVariants($allowedGrades);
+
+        if ($user->isSchoolAdmin()) {
+            $schoolId = $user->primarySchool()?->id;
+            return $query->where(function ($q) use ($schoolId) {
+                $q->where('school_id', $schoolId)->orWhereNull('school_id');
+            })->when(!empty($allowedVariants), function ($q) use ($allowedVariants) {
+                $q->whereHas('topic', function ($tq) use ($allowedVariants) {
+                    $tq->whereIn('level', $allowedVariants)->orWhereNull('level');
+                });
+            });
+        }
+
+        if ($user->isTeacher()) {
+            if ($user->relationLoaded('classes')) {
+                $teacherClassIds = $user->classes->pluck('id')->all();
+            } else {
+                $teacherClassIds = $user->classes()->pluck('classes.id')->all();
+            }
+
+            if (empty($teacherClassIds)) {
+                return $query->whereRaw('1 = 0');
+            }
+
+            return $query->whereHas('topic.subject', function ($sub) use ($teacherClassIds) {
+                $sub->whereIn('class_id', $teacherClassIds);
+            })->when(!empty($allowedVariants), function ($q) use ($allowedVariants) {
+                $q->whereHas('topic', function ($tq) use ($allowedVariants) {
+                    $tq->whereIn('level', $allowedVariants)->orWhereNull('level');
+                });
+            });
+        }
+
+        return $query;
+    }
 }
