@@ -24,16 +24,16 @@ export default function Login({ status }: LoginProps) {
     };
 
     return (
-        <div className="h-screen w-full bg-[var(--color-background)] text-[var(--color-text)] flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
+        <div className="min-h-screen lg:h-screen w-full bg-[var(--color-background)] text-[var(--color-text)] flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
             <Head>
                 <title>Sign In | AceDrill</title>
                 <meta name="description" content="Sign in to your AceDrill portal to access offline learning materials and practice questions." />
             </Head>
 
             {/* ═══════════════════════════════════════════════════════════
-               LEFT COLUMN: Brand Hero (Uses AceDrill Theme Colors)
+               LEFT COLUMN: Brand Hero (Desktop Only, Hidden on Mobile)
                ═══════════════════════════════════════════════════════════ */}
-            <div className="relative lg:w-5/12 xl:w-1/2 bg-[var(--color-primary)] text-white p-6 sm:p-8 lg:p-10 xl:p-14 flex flex-col justify-between shrink-0 lg:h-full overflow-hidden">
+            <div className="hidden lg:flex relative lg:w-5/12 xl:w-1/2 bg-[var(--color-primary)] text-white p-8 lg:p-10 xl:p-14 flex-col justify-between shrink-0 lg:h-full overflow-hidden">
                 {/* Subtle organic background gradients */}
                 <div className="absolute -top-20 -left-20 w-80 h-80 bg-[var(--color-accent)]/15 rounded-full blur-3xl pointer-events-none" />
                 <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-white/10 rounded-full blur-3xl pointer-events-none" />
@@ -42,19 +42,15 @@ export default function Login({ status }: LoginProps) {
                 <div className="relative z-10 flex items-center justify-between">
                     <Link
                         href="/"
-                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold backdrop-blur-sm border border-white/15 transition-colors"
+                        className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold backdrop-blur-xs border border-white/15 transition-colors"
                     >
                         <ArrowLeft className="w-3.5 h-3.5" />
                         <span>Back to Home</span>
                     </Link>
-
-                    <div className="lg:hidden">
-                        <ThemeToggle />
-                    </div>
                 </div>
 
                 {/* Main Hero Content */}
-                <div className="relative z-10 my-6 lg:my-auto space-y-6 max-w-md">
+                <div className="relative z-10 my-auto space-y-6 max-w-md">
                     {/* Brand Emblem */}
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-[var(--color-accent)] text-[var(--color-primary)] flex items-center justify-center font-black shadow-md">
@@ -112,22 +108,43 @@ export default function Login({ status }: LoginProps) {
                 </div>
 
                 {/* Footer Note */}
-                <div className="relative z-10 pt-3 text-[11px] text-white/60 border-t border-white/10 hidden lg:block">
+                <div className="relative z-10 pt-3 text-[11px] text-white/60 border-t border-white/10">
                     AceDrill Offline Learning Environment
                 </div>
             </div>
 
             {/* ═══════════════════════════════════════════════════════════
-               RIGHT COLUMN: Authentication Form (Direct, Clean, Viewport Fit)
+               RIGHT COLUMN: Authentication Form Alone (Maintained on Mobile)
                ═══════════════════════════════════════════════════════════ */}
-            <div className="lg:w-7/12 xl:w-1/2 flex flex-col justify-between p-6 sm:p-8 lg:p-10 xl:p-14 lg:h-full overflow-y-auto">
-                {/* Top Bar with Theme Toggle */}
-                <div className="hidden lg:flex items-center justify-end w-full">
-                    <ThemeToggle />
+            <div className="w-full lg:w-7/12 xl:w-1/2 flex flex-col justify-between p-5 sm:p-8 lg:p-10 xl:p-14 min-h-screen lg:min-h-0 lg:h-full overflow-y-auto">
+                {/* Top Nav: Back to Home & Theme Toggle */}
+                <div className="flex items-center justify-between w-full mb-6 sm:mb-8 lg:mb-0">
+                    <Link
+                        href="/"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] text-xs font-semibold transition-colors shadow-xs"
+                    >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Home</span>
+                    </Link>
+
+                    <div className="ml-auto">
+                        <ThemeToggle />
+                    </div>
                 </div>
 
                 {/* Centered Form Wrapper */}
-                <div className="w-full max-w-sm mx-auto my-auto py-4 space-y-5">
+                <div className="w-full max-w-sm mx-auto my-auto py-2 sm:py-4 space-y-5">
+                    {/* Brand Emblem (Mobile Only) */}
+                    <div className="lg:hidden flex items-center gap-2.5 mb-1">
+                        <div className="w-9 h-9 rounded-xl bg-[var(--color-primary)] text-white flex items-center justify-center font-bold shadow-xs">
+                            <BookOpen className="w-4 h-4" />
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-lg font-black tracking-tight text-[var(--color-primary)] leading-none">AceDrill</span>
+                            <span className="text-[10px] font-semibold text-[var(--color-muted)]">Learning Portal</span>
+                        </div>
+                    </div>
+
                     {/* Header */}
                     <div className="space-y-1">
                         <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--color-text)]">
@@ -244,7 +261,7 @@ export default function Login({ status }: LoginProps) {
                 </div>
 
                 {/* Footer Note */}
-                <div className="text-center text-[11px] text-[var(--color-muted)] pt-2">
+                <div className="text-center text-[11px] text-[var(--color-muted)] pt-4">
                     Protected by offline-first encryption.
                 </div>
             </div>

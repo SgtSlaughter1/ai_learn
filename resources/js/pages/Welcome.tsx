@@ -187,17 +187,17 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
             <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] font-sans antialiased">
                 {/* ── 1. NAVBAR (CLEAN & UNCONGESTED) ─────────────── */}
                 <header className="sticky top-0 z-50 w-full px-4 sm:px-6 pt-3 pb-2">
-                    <nav className="max-w-6xl mx-auto px-5 py-3 rounded-2xl bg-[var(--color-surface)]/95 backdrop-blur-md border border-[var(--color-border)] shadow-sm flex items-center justify-between gap-4">
+                    <nav className="max-w-6xl mx-auto px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-2xl bg-[var(--color-surface)]/95 backdrop-blur-md border border-[var(--color-border)] shadow-sm flex items-center justify-between gap-2 sm:gap-4">
                         {/* Brand Logo */}
-                        <Link href="/" className="flex items-center gap-2.5 shrink-0">
-                            <div className="w-9 h-9 rounded-xl bg-[var(--color-primary)] flex items-center justify-center text-white shadow-xs">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <Link href="/" className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+                            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[var(--color-primary)] flex items-center justify-center text-white shadow-xs">
+                                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                                 </svg>
                             </div>
                             <div className="flex flex-col">
-                                <span className="text-lg font-black tracking-tight text-[var(--color-primary)] leading-none">AceDrill</span>
-                                <span className="text-[10px] font-semibold text-[var(--color-muted)]">Offline Learning</span>
+                                <span className="text-base sm:text-lg font-black tracking-tight text-[var(--color-primary)] leading-none">AceDrill</span>
+                                <span className="text-[9px] sm:text-[10px] font-semibold text-[var(--color-muted)]">Offline Learning</span>
                             </div>
                         </Link>
 
@@ -218,19 +218,20 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
                         </div>
 
                         {/* Right Actions */}
-                        <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
                             <ThemeToggle />
                             <Link
                                 href="/login"
-                                className="px-3.5 py-2 text-xs sm:text-sm font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
+                                className="hidden sm:inline-block px-3 py-1.5 text-xs sm:text-sm font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors whitespace-nowrap"
                             >
                                 Sign In
                             </Link>
                             <Link
                                 href="/login"
-                                className="px-4 py-2 text-xs sm:text-sm font-bold text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] rounded-xl shadow-xs transition-colors"
+                                className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] rounded-xl shadow-xs transition-colors whitespace-nowrap shrink-0"
                             >
-                                Get Started Free
+                                <span className="sm:hidden">Get Started</span>
+                                <span className="hidden sm:inline">Get Started Free</span>
                             </Link>
                         </div>
                     </nav>
