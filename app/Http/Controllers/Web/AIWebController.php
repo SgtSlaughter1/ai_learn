@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\AI\ChatAIRequest;
 use App\Http\Requests\AI\ExplainQuestionRequest;
 use App\Models\Question;
+use App\Services\AI\AiInputSanitizer;
 use App\Services\AIService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,7 +14,8 @@ use Illuminate\Http\Request;
 class AIWebController extends Controller
 {
     public function __construct(
-        protected AIService $aiService
+        protected AIService $aiService,
+        protected AiInputSanitizer $sanitizer
     ) {}
 
     /**
@@ -53,7 +55,7 @@ class AIWebController extends Controller
 
         $query = Question::with(['options', 'topic.subject']);
 
-        if (!empty($excludeIds)) {
+        if (! empty($excludeIds)) {
             $query->whereNotIn('id', array_unique($excludeIds));
         }
 
@@ -68,16 +70,16 @@ class AIWebController extends Controller
         $question = (clone $query)->inRandomOrder()->first();
 
         // Fallback to subject if no more questions in specific topic
-        if (!$question && $subjectId && $topicId) {
+        if (! $question && $subjectId && $topicId) {
             $fallbackQuery = Question::with(['options', 'topic.subject'])
-                ->whereHas('topic', fn($q) => $q->where('subject_id', $subjectId));
-            if (!empty($excludeIds)) {
+                ->whereHas('topic', fn ($q) => $q->where('subject_id', $subjectId));
+            if (! empty($excludeIds)) {
                 $fallbackQuery->whereNotIn('id', array_unique($excludeIds));
             }
             $question = $fallbackQuery->inRandomOrder()->first();
         }
 
-        if (!$question) {
+        if (! $question) {
             return response()->json([
                 'success' => false,
                 'message' => 'No additional practice questions found for this topic.',
@@ -99,7 +101,7 @@ class AIWebController extends Controller
                     'id' => $question->topic?->subject?->id,
                     'name' => $question->topic?->subject?->name,
                 ],
-                'options' => $question->options->map(fn($o, $idx) => [
+                'options' => $question->options->map(fn ($o, $idx) => [
                     'id' => $o->id,
                     'label' => chr(65 + $idx),
                     'option_text' => $o->option_text,
@@ -111,13 +113,34 @@ class AIWebController extends Controller
 
     /**
      * Chat with the personal AI companion.
+     *
+     * Security: strictly authenticated, read-only, and every user-supplied string
+     * is sanitized before it can reach the AI prompt or any query layer.
      */
     public function chat(ChatAIRequest $request): JsonResponse
     {
+        $user = $request->user();
+
+        if (! $user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthenticated.',
+            ], 401);
+        }
+
         $validated = $request->validated();
-        $user = $request->user() ?? \Illuminate\Support\Facades\Auth::user() ?? \App\Models\User::where('role', 'school_admin')->first() ?? \App\Models\User::first();
-        $message = $validated['message'];
-        $history = $validated['history'] ?? [];
+
+        // Defense in depth: sanitize even though FormRequest validation capped lengths.
+        $message = $this->sanitizer->sanitizeMessage($validated['message']);
+        $history = $this->sanitizer->sanitizeHistory($validated['history'] ?? []);
+
+        // A message that is empty after sanitization carried no legitimate content.
+        if ($message === '') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your message could not be processed. Please rephrase your question.',
+            ], 422);
+        }
 
         $response = $this->aiService->generateChatResponse($user, $message, $history);
 

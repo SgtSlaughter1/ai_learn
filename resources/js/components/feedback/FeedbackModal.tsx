@@ -171,12 +171,12 @@ export default function FeedbackModal({
                                 </label>
                                 <textarea
                                     id="modal-feedback-message"
-                                    rows={4}
+                                    rows={5}
                                     required
                                     value={message}
                                     onChange={(e) => setMessage(e.target.value)}
                                     placeholder="What went well or what can we improve?"
-                                    className="w-full px-3.5 py-2.5 rounded-xl text-sm bg-[var(--color-background)] border border-[var(--color-border)] focus:border-[var(--color-primary)] focus:outline-none text-[var(--color-text)] resize-y min-h-[100px]"
+                                    className="w-full px-3.5 py-2.5 rounded-xl text-sm bg-[var(--color-background)] border border-[var(--color-border)] focus:border-[var(--color-primary)] focus:outline-none text-[var(--color-text)] resize-none h-32 overflow-y-auto"
                                 />
                             </div>
 

@@ -173,12 +173,12 @@ export default function FeedbackSection() {
                                 </label>
                                 <textarea
                                     id="feedback-message"
-                                    rows={4}
+                                    rows={5}
                                     required
                                     value={form.message}
                                     onChange={(e) => setForm({ ...form, message: e.target.value })}
                                     placeholder="Write your feedback, question, or suggestion here..."
-                                    className="w-full px-3.5 py-2.5 rounded-xl text-sm bg-[var(--color-surface)] border border-[var(--color-border)] focus:border-[var(--color-primary)] focus:outline-none text-[var(--color-text)] transition-colors resize-y min-h-[100px]"
+                                    className="w-full px-3.5 py-2.5 rounded-xl text-sm bg-[var(--color-surface)] border border-[var(--color-border)] focus:border-[var(--color-primary)] focus:outline-none text-[var(--color-text)] transition-colors resize-none h-32 overflow-y-auto"
                                 />
                             </div>
 
