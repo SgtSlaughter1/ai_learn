@@ -757,122 +757,80 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
                 {/* ── 10. FEEDBACK SECTION (CLEAN & SIMPLE) ───────── */}
                 <FeedbackSection />
 
-                {/* ── 11. FINAL CTA ─────────────────────────────── */}
-                <section className="py-16 sm:py-20 bg-[var(--color-primary)] text-white text-center">
-                    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
-                        <h2 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
-                            Start Learning and Practicing Offline Today
+                {/* ── 11. FINAL CTA & BRAND HORIZON (FREEBUFF-INSPIRED) ── */}
+                <section className="relative overflow-hidden pt-20 sm:pt-28 pb-10 bg-[#0B130E] text-white border-t border-white/10">
+                    {/* Subtle Atmospheric Gradient & Glow */}
+                    <div className="absolute inset-0 pointer-events-none">
+                        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] bg-emerald-600/15 rounded-full blur-[120px]" />
+                        <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-[900px] h-[250px] bg-emerald-900/20 rounded-full blur-[100px]" />
+                    </div>
+
+                    <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6">
+                        <h2 className="text-2xl sm:text-4xl md:text-5xl font-black tracking-tight leading-tight text-white">
+                            Master School & National Exams, Even Without Internet.
                         </h2>
 
-                        <p className="text-sm sm:text-base text-white/80 max-w-xl mx-auto leading-relaxed">
-                            Join thousands of secondary school students and schools across Nigeria preparing for exams with AceDrill.
+                        <p className="text-sm sm:text-base text-gray-400 max-w-xl mx-auto leading-relaxed">
+                            Curriculum-aligned topics, active recall flashcards, and authentic past questions on any device without data fees.
                         </p>
 
                         <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3.5 max-w-md sm:max-w-none mx-auto">
                             <Link
                                 href="/login"
-                                className="w-full sm:w-auto px-7 py-3.5 text-sm font-bold text-[var(--color-primary)] bg-white hover:bg-gray-100 rounded-xl shadow-md transition-colors"
+                                className="w-full sm:w-auto px-8 py-3.5 text-sm font-bold text-[#0B130E] bg-white hover:bg-gray-100 rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5"
                             >
-                                Start Learning Free
+                                Start Learning Free →
                             </Link>
 
                             <Link
                                 href="/past-questions"
-                                className="w-full sm:w-auto px-7 py-3.5 text-sm font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl transition-colors"
+                                className="w-full sm:w-auto px-8 py-3.5 text-sm font-bold text-white bg-white/10 hover:bg-white/15 border border-white/15 rounded-xl transition-all"
                             >
                                 Practice Past Questions
                             </Link>
                         </div>
                     </div>
-                </section>
 
-                {/* ── 12. COMPREHENSIVE FOOTER ──────────────────── */}
-                <footer className="bg-[var(--color-surface)] border-t border-[var(--color-border)] pt-12 pb-10">
-                    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 pb-10 border-b border-[var(--color-border)]">
-                            {/* Col 1: Brand Info */}
-                            <div className="col-span-2 md:col-span-1 space-y-3">
-                                <Link href="/" className="flex items-center gap-2">
-                                    <div className="w-8 h-8 rounded-lg bg-[var(--color-primary)] flex items-center justify-center text-white">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                                        </svg>
-                                    </div>
-                                    <span className="text-lg font-black text-[var(--color-primary)]">AceDrill</span>
-                                </Link>
-
-                                <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-                                    Offline-first learning platform for secondary school students and schools across Nigeria.
-                                </p>
-                            </div>
-
-                            {/* Col 2: Learning Tools */}
-                            <div className="space-y-2.5">
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text)]">
-                                    Learning Tools
-                                </h4>
-                                <ul className="space-y-1.5 text-xs text-[var(--color-muted)]">
-                                    <li><Link href="/past-questions" className="hover:text-[var(--color-primary)] transition-colors">Past Questions CBT</Link></li>
-                                    <li><Link href="/login" className="hover:text-[var(--color-primary)] transition-colors">AI Step by Step Tutor</Link></li>
-                                    <li><Link href="/login" className="hover:text-[var(--color-primary)] transition-colors">Flashcards Deck</Link></li>
-                                    <li><Link href="/login" className="hover:text-[var(--color-primary)] transition-colors">Topic Quizzes</Link></li>
-                                </ul>
-                            </div>
-
-                            {/* Col 3: Exams */}
-                            <div className="space-y-2.5">
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text)]">
-                                    National Exams
-                                </h4>
-                                <ul className="space-y-1.5 text-xs text-[var(--color-muted)]">
-                                    <li><Link href="/past-questions?exam=jamb" className="hover:text-[var(--color-primary)] transition-colors">JAMB (UTME)</Link></li>
-                                    <li><Link href="/past-questions?exam=waec" className="hover:text-[var(--color-primary)] transition-colors">WAEC (WASSCE)</Link></li>
-                                    <li><Link href="/past-questions?exam=neco" className="hover:text-[var(--color-primary)] transition-colors">NECO (SSCE)</Link></li>
-                                    <li><Link href="/past-questions?exam=post_utme" className="hover:text-[var(--color-primary)] transition-colors">Post-UTME</Link></li>
-                                </ul>
-                            </div>
-
-                            {/* Col 4: Portals */}
-                            <div className="space-y-2.5">
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text)]">
-                                    Portals & Feedback
-                                </h4>
-                                <ul className="space-y-1.5 text-xs text-[var(--color-muted)]">
-                                    <li><Link href="/login" className="hover:text-[var(--color-primary)] transition-colors">Student Login</Link></li>
-                                    <li><Link href="/login" className="hover:text-[var(--color-primary)] transition-colors">Teacher Portal</Link></li>
-                                    <li><Link href="/login" className="hover:text-[var(--color-primary)] transition-colors">School Admin</Link></li>
-                                    <li>
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsFeedbackModalOpen(true)}
-                                            className="text-left hover:text-[var(--color-primary)] transition-colors cursor-pointer"
-                                        >
-                                            Send Feedback
-                                        </button>
-                                    </li>
-                                </ul>
-                            </div>
+                    {/* Massive Brand Watermark Horizon */}
+                    <div className="relative mt-16 sm:mt-24 mb-2 sm:mb-4 select-none pointer-events-none flex justify-center items-center overflow-hidden">
+                        <div className="text-center font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white/35 via-white/15 to-transparent text-[16vw] sm:text-[15vw] md:text-[14vw] lg:text-[13rem] xl:text-[15rem] leading-none uppercase scale-y-95">
+                            AceDrill
                         </div>
+                    </div>
 
-                        {/* Bottom Row */}
-                        <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[var(--color-muted)]">
-                            <p>
-                                © {new Date().getFullYear()} AceDrill. All rights reserved.
-                            </p>
-                            <div className="flex items-center gap-5">
-                                <Link href="/login" className="hover:text-[var(--color-text)] transition-colors">Privacy Policy</Link>
-                                <Link href="/login" className="hover:text-[var(--color-text)] transition-colors">Terms of Service</Link>
+                    {/* Sleek Minimalist Footer Bar */}
+                    <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 border-t border-white/10">
+                        <div className="flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-gray-400">
+                            {/* Left: Navigation Links */}
+                            <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-6 gap-y-2">
+                                <a href="#features" className="hover:text-white transition-colors">Features</a>
+                                <Link href="/past-questions" className="hover:text-white transition-colors">Past Questions</Link>
+                                <Link href="/past-questions?exam=waec" className="hover:text-white transition-colors">WAEC</Link>
+                                <Link href="/past-questions?exam=jamb" className="hover:text-white transition-colors">JAMB</Link>
+                                <Link href="/past-questions?exam=neco" className="hover:text-white transition-colors">NECO</Link>
                                 <button
                                     type="button"
                                     onClick={() => setIsFeedbackModalOpen(true)}
-                                    className="hover:text-[var(--color-primary)] transition-colors cursor-pointer"
+                                    className="hover:text-white transition-colors cursor-pointer"
                                 >
                                     Feedback
                                 </button>
+                                <Link href="/login" className="hover:text-white transition-colors">Privacy Policy</Link>
+                                <Link href="/login" className="hover:text-white transition-colors">Terms of Service</Link>
+                            </div>
+
+                            {/* Right: Copyright & Status */}
+                            <div className="flex items-center gap-4 text-gray-400 shrink-0">
+                                <span>© {new Date().getFullYear()} AceDrill. All rights reserved.</span>
+                                <span className="hidden sm:inline-block text-white/20">|</span>
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] text-gray-300">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                    Offline Ready
+                                </span>
                             </div>
                         </div>
                     </div>
-                </footer>
+                </section>
 
                 {/* Floating Feedback Launcher Button (Clean, no emoji) */}
                 <div className="fixed bottom-6 right-6 z-40">
