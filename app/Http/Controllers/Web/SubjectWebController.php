@@ -29,6 +29,9 @@ class SubjectWebController extends Controller
         if ($user?->isAdmin()) {
             return redirect('/admin/dashboard');
         }
+        if ($user && $user->isLearner() && !$user->hasSchoolAccess()) {
+            return redirect('/general-knowledge');
+        }
         return Inertia::render('Subjects/Index');
     }
 

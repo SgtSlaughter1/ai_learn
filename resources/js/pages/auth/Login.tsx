@@ -258,6 +258,19 @@ export default function Login({ status }: LoginProps) {
                             )}
                         </button>
                     </form>
+
+                    {/* Sign Up Link */}
+                    <div className="text-center pt-2">
+                        <p className="text-xs text-[var(--color-muted)]">
+                            Don&apos;t have an account?{' '}
+                            <Link
+                                href="/register"
+                                className="font-bold text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] hover:underline"
+                            >
+                                Sign Up
+                            </Link>
+                        </p>
+                    </div>
                 </div>
 
                 {/* Footer Note */}

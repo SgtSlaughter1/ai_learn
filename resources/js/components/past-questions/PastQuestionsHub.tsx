@@ -9,12 +9,16 @@ import { ExamPracticeModal } from './ExamPracticeModal';
 import { ExamSimulationModal } from './ExamSimulationModal';
 import { ExamResultModal } from './ExamResultModal';
 import { BookOpen, Timer, Lock, ArrowRight } from 'lucide-react';
+import { usePage } from '@inertiajs/react';
 
 export const PastQuestionsHub: React.FC = () => {
+    const pageProps = usePage<any>().props;
+    const initialIsGuest = !pageProps?.auth?.user;
+
     const [exams, setExams] = useState<ExamMeta[]>([]);
     const [subjects, setSubjects] = useState<PastQuestionSubject[]>([]);
     const [totalQuestions, setTotalQuestions] = useState<number>(0);
-    const [isGuest, setIsGuest] = useState<boolean>(true);
+    const [isGuest, setIsGuest] = useState<boolean>(initialIsGuest);
 
     // Active Selection State
     const [selectedExam, setSelectedExam] = useState<string>('jamb');
@@ -40,7 +44,11 @@ export const PastQuestionsHub: React.FC = () => {
                 setExams(data.data.exams || []);
                 setSubjects(data.data.subjects || []);
                 setTotalQuestions(data.data.total_questions || 0);
-                setIsGuest(data.data.is_guest ?? data.is_guest ?? true);
+                if (pageProps?.auth?.user) {
+                    setIsGuest(false);
+                } else {
+                    setIsGuest(data.data.is_guest ?? data.is_guest ?? true);
+                }
 
                 if (data.data.exams?.length > 0) {
                     setSelectedExam(data.data.exams[0].code);

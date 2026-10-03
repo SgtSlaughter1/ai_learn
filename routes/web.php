@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Web\DashboardController;
@@ -95,6 +96,10 @@ Route::get('/llms-full.txt', function () {
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'show'])->name('login');
     Route::post('/login', [LoginController::class, 'store']);
+    Route::get('/register', [RegisterController::class, 'show'])->name('register');
+    Route::post('/register', [RegisterController::class, 'store']);
+    Route::get('/signup', [RegisterController::class, 'show'])->name('signup');
+    Route::post('/signup', [RegisterController::class, 'store']);
     Route::get('/forgot-password', [PasswordResetLinkController::class, 'show'])->name('password.request');
     Route::post('/forgot-password', [PasswordResetLinkController::class, 'store'])->name('password.email');
     Route::get('/reset-password/{token}', [NewPasswordController::class, 'show'])->name('password.reset');
@@ -105,6 +110,7 @@ Route::post('/logout', [LoginController::class, 'destroy']);
 // Standalone API Auth Endpoints
 Route::prefix('api/v1/auth')->group(function () {
     Route::post('/login', [LoginController::class, 'login']);
+    Route::post('/register', [RegisterController::class, 'store']);
     Route::get('/user', [LoginController::class, 'getUser']);
     Route::post('/logout', [LoginController::class, 'logout']);
     Route::post('/refresh', [LoginController::class, 'refresh']);

@@ -40,6 +40,7 @@ class HandleInertiaRequests extends Middleware
                     'name' => $request->user()->name,
                     'email' => $request->user()->email,
                     'role' => $request->user()->role instanceof \BackedEnum ? $request->user()->role->value : ($request->user()->role ?? 'learner'),
+                    'has_school_access' => $request->user()->hasSchoolAccess(),
                 ] : null,
             ],
         ]);

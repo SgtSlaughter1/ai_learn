@@ -147,6 +147,28 @@ class User extends Authenticatable
     }
 
     /**
+     * Whether this user is attached to a school (profile, roster or administered school).
+     * Independent (self-signup) learners have none and are scoped to general-knowledge content.
+     */
+    public function hasSchoolAccess(): bool
+    {
+        if ($this->isPlatformAdmin()) {
+            return true;
+        }
+        if ($this->isSchoolAdmin()) {
+            return true;
+        }
+        if ($this->isTeacher()) {
+            return (bool) $this->teacherProfile()->first()?->school_id;
+        }
+        if ($this->isLearner()) {
+            return (bool) ($this->learnerProfile()->first()?->school_id
+                ?? $this->classes()->where('classes.is_active', true)->first()?->school_id);
+        }
+        return false;
+    }
+
+    /**
      * Get primary enrolled class for this learner.
      */
     public function primaryClass(): ?ClassModel

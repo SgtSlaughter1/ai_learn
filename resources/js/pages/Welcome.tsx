@@ -227,7 +227,7 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
                                 Sign In
                             </Link>
                             <Link
-                                href="/login"
+                                href="/register"
                                 className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] rounded-xl shadow-xs transition-colors whitespace-nowrap shrink-0"
                             >
                                 <span className="sm:hidden">Get Started</span>
@@ -254,7 +254,7 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
                         {/* CTAs */}
                         <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3.5 max-w-md sm:max-w-none mx-auto">
                             <Link
-                                href="/login"
+                                href="/register"
                                 className="w-full sm:w-auto px-7 py-3.5 text-sm font-bold text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
                             >
                                 <span>Start Learning Free</span>
@@ -776,7 +776,7 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
 
                         <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3.5 max-w-md sm:max-w-none mx-auto">
                             <Link
-                                href="/login"
+                                href="/register"
                                 className="w-full sm:w-auto px-8 py-3.5 text-sm font-bold text-[#0B130E] bg-white hover:bg-gray-100 rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5"
                             >
                                 Start Learning Free →

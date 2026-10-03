@@ -10,6 +10,7 @@ interface User {
     name: string;
     email: string;
     role: string;
+    has_school_access?: boolean;
 }
 
 interface PageProps {
@@ -63,6 +64,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
     const isSchoolAdmin = auth?.user?.role === 'school_admin';
     const isTeacher = auth?.user?.role === 'teacher';
     const isAdmin = isSuperAdmin || isSchoolAdmin;
+    const hasSchool = auth?.user?.has_school_access !== false;
 
     return (
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex flex-col relative">
@@ -173,16 +175,18 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                                     Dashboard
                                 </Link>
 
-                                <Link
-                                    href="/subjects"
-                                    className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/subjects')}`}
-                                    onClick={() => setIsMobileMenuOpen(false)}
-                                >
-                                    <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                                    </svg>
-                                    Curriculum
-                                </Link>
+                                {hasSchool && (
+                                    <Link
+                                        href="/subjects"
+                                        className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/subjects')}`}
+                                        onClick={() => setIsMobileMenuOpen(false)}
+                                    >
+                                        <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                        </svg>
+                                        Curriculum
+                                    </Link>
+                                )}
 
                                 <Link
                                     href="/general-knowledge"

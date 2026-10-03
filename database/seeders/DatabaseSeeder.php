@@ -16,7 +16,6 @@ class DatabaseSeeder extends Seeder
     {
         // Call modular seeders
         $this->call([
-            RoleSeeder::class,
             UserSeeder::class,
             CategorySeeder::class,
             SchoolSeeder::class,
