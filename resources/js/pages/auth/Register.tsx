@@ -116,11 +116,11 @@ export default function Register() {
                RIGHT COLUMN: Registration Form Alone (Maintained on Mobile)
                ═══════════════════════════════════════════════════════════ */}
             <div className="w-full lg:w-7/12 xl:w-1/2 flex flex-col justify-between p-5 sm:p-8 lg:p-10 xl:p-14 min-h-screen lg:min-h-0 lg:h-full overflow-y-auto">
-                {/* Top Nav: Back to Home & Theme Toggle */}
+                {/* Top Nav: Back to Home (Mobile only) & Theme Toggle */}
                 <div className="flex items-center justify-between w-full mb-6 sm:mb-8 lg:mb-0">
                     <Link
                         href="/"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] text-xs font-semibold transition-colors shadow-xs"
+                        className="lg:hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] text-xs font-semibold transition-colors shadow-xs"
                     >
                         <ArrowLeft className="w-3.5 h-3.5" />
                         <span>Home</span>
