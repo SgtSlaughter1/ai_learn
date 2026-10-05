@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('feedbacks', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->uuid('user_id')->nullable()->index();
             $table->string('name')->nullable();
             $table->string('email')->nullable();
             $table->string('role')->nullable(); // learner, teacher, school_admin, parent, visitor

@@ -16,7 +16,10 @@ return new class extends Migration
             $table->string('tier')->default('Newcomer');
             $table->integer('current_streak')->default(0);
             $table->integer('longest_streak')->default(0);
+            $table->integer('streak_freeze_count')->default(1);
             $table->date('last_active_date')->nullable();
+            $table->date('last_streak_penalty_at')->nullable();
+            $table->date('streak_shield_used_at')->nullable();
             $table->timestamps();
 
             $table->unique('user_id');

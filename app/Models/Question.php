@@ -88,6 +88,36 @@ class Question extends Model
             });
         }
 
+        if ($user->isLearner()) {
+            $schoolId = $user->primarySchool()?->id;
+            $classId = $user->primaryClass()?->id;
+
+            return $query->where(function ($q) use ($schoolId) {
+                if ($schoolId) {
+                    $q->where('school_id', $schoolId)->orWhereNull('school_id');
+                } else {
+                    $q->whereNull('school_id');
+                }
+            })->whereHas('topic.subject', function ($subQuery) use ($classId, $schoolId) {
+                if ($classId) {
+                    $subQuery->where('class_id', $classId)
+                        ->orWhere(function ($sq) use ($schoolId) {
+                            if ($schoolId) {
+                                $sq->where('school_id', $schoolId)->whereNull('class_id');
+                            } else {
+                                $sq->whereNull('school_id')->whereNull('class_id');
+                            }
+                        });
+                } else {
+                    $subQuery->whereNull('class_id');
+                }
+            })->when(!empty($allowedVariants), function ($q) use ($allowedVariants) {
+                $q->whereHas('topic', function ($tq) use ($allowedVariants) {
+                    $tq->whereIn('level', $allowedVariants)->orWhereNull('level');
+                });
+            });
+        }
+
         return $query;
     }
 }

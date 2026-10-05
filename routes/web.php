@@ -371,6 +371,8 @@ Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
             '2026_08_24_000001_create_achievements_table',
             '2026_08_24_000004_create_exam_simulations_table',
             '2026_08_24_000005_create_past_questions_tables',
+            '2026_09_24_000001_create_spaced_repetition_items_table',
+            '2026_09_27_000001_create_feedbacks_table',
         ];
 
         // Auto-purge only known old/stale merged migration files from server disk

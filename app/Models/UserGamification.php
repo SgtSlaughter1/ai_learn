@@ -17,7 +17,10 @@ class UserGamification extends Model
     protected function casts(): array
     {
         return [
-            'last_active_date' => 'date',
+            'last_active_date'        => 'date',
+            'last_streak_penalty_at'  => 'date',
+            'streak_shield_used_at'   => 'date',
+            'streak_freeze_count'     => 'integer',
         ];
     }
 

@@ -9,6 +9,7 @@ import { LevelProgressBar, GamificationData } from '@/components/dashboard/Level
 import { AchievementsGrid } from '@/components/dashboard/AchievementsGrid';
 import { RecentAttemptsList, DashboardAttempt } from '@/components/dashboard/RecentAttemptsList';
 import { DashboardRevisionCard } from '@/components/dashboard/DashboardRevisionCard';
+import { MilestoneRoadmapModal } from '@/components/dashboard/MilestoneRoadmapModal';
 import 'katex/dist/katex.min.css';
 
 const LEVEL_THRESHOLDS = [0, 0, 100, 250, 450, 700, 1000, 1400, 1900, 2500, 3200];
@@ -27,6 +28,7 @@ export default function LearnerDashboard() {
     const [gamification, setGamification] = useState<GamificationData | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [showXpGuide, setShowXpGuide] = useState<boolean>(false);
+    const [isMilestonesOpen, setIsMilestonesOpen] = useState<boolean>(false);
     const [offlineStats, setOfflineStats] = useState<DashboardStats | null>(null);
     const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
     const { isOnline } = useNetworkStatus();
@@ -80,6 +82,7 @@ export default function LearnerDashboard() {
                             tier: gamData.tier || 'Newcomer',
                             current_streak: gamData.current_streak,
                             longest_streak: gamData.longest_streak,
+                            streak_freeze_count: gamData.streak_freeze_count ?? 1,
                             last_active_date: new Date().toISOString().split('T')[0],
                             synced: true,
                         });
@@ -161,6 +164,7 @@ export default function LearnerDashboard() {
                                 tier_color: fullGamification.tier_color || '#94a3b8',
                                 current_streak: gamCache.current_streak || fullGamification.current_streak,
                                 longest_streak: Math.max(gamCache.longest_streak || 0, fullGamification.longest_streak),
+                                streak_freeze_count: gamCache.streak_freeze_count ?? fullGamification.streak_freeze_count,
                                 xp_progress_percent: progressPercent,
                                 xp_into_level: xpIntoLevel,
                                 xp_for_next_level: xpForNext,
@@ -183,6 +187,7 @@ export default function LearnerDashboard() {
                             tier_color: '#94a3b8',
                             current_streak: gamCache.current_streak || 0,
                             longest_streak: gamCache.longest_streak || 0,
+                            streak_freeze_count: gamCache.streak_freeze_count ?? 1,
                             xp_progress_percent: progressPercent,
                             xp_into_level: xpIntoLevel,
                             xp_for_next_level: xpForNext,
@@ -298,9 +303,11 @@ export default function LearnerDashboard() {
             </Head>
 
             <div className="space-y-8 relative">
-                {/* Daily 5-Minute Spaced Repetition Hero Card */}
+                {/* 🔥 Unified Daily Memory Boost & Streak Protection Hero Card */}
                 {isOnline && (
                     <DashboardRevisionCard
+                        gamification={gamification}
+                        onOpenMilestones={() => setIsMilestonesOpen(true)}
                         onSessionCompleted={() => {
                             fetch('/api/v1/gamification/profile')
                                 .then((r) => r.json())
@@ -347,6 +354,14 @@ export default function LearnerDashboard() {
                     averageMastery={avgMasteryScore}
                 />
             </div>
+
+            {/* Streak Milestone Roadmap & Shield Vault Modal */}
+            <MilestoneRoadmapModal
+                isOpen={isMilestonesOpen}
+                onClose={() => setIsMilestonesOpen(false)}
+                gamification={gamification}
+            />
         </AuthenticatedLayout>
     );
 }
+

@@ -341,22 +341,30 @@ class GamificationService
         $tier      = $profile->tier ?? 'Newcomer';
         $tierColor = $this->getTierColor($profile->level);
 
+        $streakInfo = $this->calculateStreakDetails($profile);
+
         return [
-            'total_xp'            => $profile->total_xp,
-            'level'               => $profile->level,
-            'tier'                => $tier,
-            'tier_color'          => $tierColor,
-            'current_streak'      => $profile->current_streak,
-            'longest_streak'      => $profile->longest_streak,
-            'xp_progress_percent' => $xpProgressPercent,
-            'xp_into_level'       => $xpIntoLevel,
-            'xp_for_next_level'   => $xpForNextLevel,
-            'next_level'          => $nextLevelThreshold !== null ? $profile->level + 1 : null,
-            'recent_xp'           => $recentXp->values()->all(),
-            'achievements'        => $achievements->values()->all(),
-            'locked_achievements' => $lockedAchievements->values()->all(),
-            'total_achievements'  => count($allAchievements),
-            'earned_achievements' => count($achievements),
+            'total_xp'               => $profile->total_xp,
+            'level'                  => $profile->level,
+            'tier'                   => $tier,
+            'tier_color'             => $tierColor,
+            'current_streak'         => $profile->current_streak,
+            'longest_streak'         => $profile->longest_streak,
+            'streak_freeze_count'    => $profile->streak_freeze_count ?? 1,
+            'streak_status'          => $streakInfo['status'],
+            'streak_title'           => $streakInfo['title'],
+            'next_milestone'         => $streakInfo['next_milestone'],
+            'is_protected_today'     => $streakInfo['is_protected_today'],
+            'hours_remaining_today'  => $streakInfo['hours_remaining_today'],
+            'xp_progress_percent'    => $xpProgressPercent,
+            'xp_into_level'          => $xpIntoLevel,
+            'xp_for_next_level'      => $xpForNextLevel,
+            'next_level'             => $nextLevelThreshold !== null ? $profile->level + 1 : null,
+            'recent_xp'              => $recentXp->values()->all(),
+            'achievements'           => $achievements->values()->all(),
+            'locked_achievements'    => $lockedAchievements->values()->all(),
+            'total_achievements'     => count($allAchievements),
+            'earned_achievements'    => count($achievements),
         ];
     }
 
@@ -459,6 +467,102 @@ class GamificationService
 
     /**
      * Update user daily activity streak based on the last recorded date.
+    /**
+     * Calculate comprehensive streak status and milestone details.
+     *
+     * @param  UserGamification  $profile
+     * @return array
+     */
+    public function calculateStreakDetails(UserGamification $profile): array
+    {
+        $today = Carbon::today();
+        $lastActive = $profile->last_active_date ? Carbon::parse($profile->last_active_date) : null;
+        $streak = (int) $profile->current_streak;
+
+        $hoursRemaining = max(1, (int) Carbon::now()->diffInHours(Carbon::tomorrow()));
+
+        if ($lastActive === null) {
+            $status = 'inactive';
+            $isProtected = false;
+        } else {
+            $diffDays = $lastActive->diffInDays($today);
+
+            if ($diffDays === 0) {
+                $status = 'active_today';
+                $isProtected = true;
+            } elseif ($diffDays === 1) {
+                $status = 'at_risk';
+                $isProtected = false;
+            } else {
+                // If they have a shield and only missed 1 day
+                if (($profile->streak_freeze_count ?? 0) > 0 && $diffDays === 2) {
+                    $status = 'shield_armed';
+                } else {
+                    $status = 'broken';
+                }
+                $isProtected = false;
+            }
+        }
+
+        return [
+            'status'                => $status,
+            'title'                 => $this->getStreakTitle($streak),
+            'next_milestone'        => $this->getNextMilestone($streak),
+            'is_protected_today'    => $isProtected,
+            'hours_remaining_today' => $hoursRemaining,
+        ];
+    }
+
+    /**
+     * Get milestone title based on streak count.
+     */
+    public function getStreakTitle(int $streak): string
+    {
+        return match (true) {
+            $streak >= 30 => 'Master Scholar',
+            $streak >= 14 => 'Exam Champion',
+            $streak >= 7  => 'Unstoppable',
+            $streak >= 3  => 'Curious Thinker',
+            $streak >= 1  => 'Rising Star',
+            default       => 'Beginner',
+        };
+    }
+
+    /**
+     * Get next milestone target and progress.
+     */
+    public function getNextMilestone(int $streak): array
+    {
+        if ($streak < 3) {
+            $target = 3;
+            $title = 'Curious Thinker';
+        } elseif ($streak < 7) {
+            $target = 7;
+            $title = 'Unstoppable';
+        } elseif ($streak < 14) {
+            $target = 14;
+            $title = 'Exam Champion';
+        } elseif ($streak < 30) {
+            $target = 30;
+            $title = 'Master Scholar';
+        } else {
+            $target = (int) (ceil(($streak + 1) / 10) * 10);
+            $title = 'Streak Legend';
+        }
+
+        $daysRemaining = max(0, $target - $streak);
+        $percent = $target > 0 ? min(100, round(($streak / $target) * 100)) : 100;
+
+        return [
+            'target_days'    => $target,
+            'title'          => $title,
+            'days_remaining' => $daysRemaining,
+            'percent'        => $percent,
+        ];
+    }
+
+    /**
+     * Record daily activity to maintain user streak, applying shields or penalties as appropriate.
      *
      * @param  User  $user
      * @return void
@@ -468,7 +572,7 @@ class GamificationService
         $profile = $this->getProfile($user);
         $today   = Carbon::today();
         /** @var Carbon|null $lastActive */
-        $lastActive = $profile->last_active_date;
+        $lastActive = $profile->last_active_date ? Carbon::parse($profile->last_active_date) : null;
 
         if ($lastActive === null) {
             $profile->update([
@@ -487,22 +591,65 @@ class GamificationService
 
         if ($daysSinceLastActive === 1) {
             $newStreak = $profile->current_streak + 1;
-            $profile->update([
+            $updates = [
                 'current_streak'   => $newStreak,
                 'longest_streak'   => max($profile->longest_streak, $newStreak),
                 'last_active_date' => $today,
-            ]);
+            ];
 
-            // Award weekly milestone streak bonus
+            // Reward a Streak Freeze shield on 7-day and 14-day milestones (max 2)
+            if ($newStreak === 7 || $newStreak === 14 || $newStreak === 30) {
+                if (($profile->streak_freeze_count ?? 0) < 2) {
+                    $updates['streak_freeze_count'] = ($profile->streak_freeze_count ?? 0) + 1;
+                }
+            }
+
+            $profile->update($updates);
+
+            // Award weekly milestone streak bonus XP
             if ($newStreak % 7 === 0) {
                 $bonusXp = (int) (self::XP_STREAK_DAILY_BONUS * ($newStreak / 7));
-                $this->awardXp($user, $bonusXp, 'streak_bonus', "{$newStreak}-day streak bonus!");
+                $this->awardXp($user, $bonusXp, 'streak_bonus', "{$newStreak}-day streak milestone bonus!");
             }
-        } else {
+        } elseif ($daysSinceLastActive === 2 && ($profile->streak_freeze_count ?? 0) > 0) {
+            // Shield auto-deployed! Preserves the streak!
+            $newStreak = $profile->current_streak + 1;
             $profile->update([
-                'current_streak'   => 1,
-                'last_active_date' => $today,
+                'current_streak'        => $newStreak,
+                'longest_streak'        => max($profile->longest_streak, $newStreak),
+                'streak_freeze_count'   => max(0, $profile->streak_freeze_count - 1),
+                'streak_shield_used_at' => $today,
+                'last_active_date'      => $today,
             ]);
+
+            XpTransaction::create([
+                'user_id'     => $user->id,
+                'amount'      => 0,
+                'source'      => 'streak_freeze',
+                'description' => "🛡️ Streak Freeze Shield auto-deployed! Your {$newStreak}-day streak was saved.",
+            ]);
+        } else {
+            // Missed streak without shield: apply a minor XP penalty & reset streak to 1
+            $penaltyXp = 15;
+            $newTotalXp = max(0, $profile->total_xp - $penaltyXp);
+            $deductedAmount = $profile->total_xp - $newTotalXp;
+
+            $profile->update([
+                'current_streak'         => 1,
+                'total_xp'               => $newTotalXp,
+                'last_active_date'       => $today,
+                'last_streak_penalty_at' => $today,
+            ]);
+
+            if ($deductedAmount > 0) {
+                XpTransaction::create([
+                    'user_id'     => $user->id,
+                    'amount'      => -$deductedAmount,
+                    'source'      => 'streak_penalty',
+                    'description' => "Missed daily streak (-{$deductedAmount} XP). Rebuild your momentum today!",
+                ]);
+            }
+            $this->recalculateLevel($profile);
         }
     }
 

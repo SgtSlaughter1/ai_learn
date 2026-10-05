@@ -9,6 +9,17 @@ export interface GamificationData {
     tier_color: string;
     current_streak: number;
     longest_streak: number;
+    streak_freeze_count?: number;
+    streak_status?: 'active_today' | 'at_risk' | 'shield_armed' | 'broken' | 'inactive';
+    streak_title?: string;
+    next_milestone?: {
+        target_days: number;
+        title: string;
+        days_remaining: number;
+        percent: number;
+    };
+    is_protected_today?: boolean;
+    hours_remaining_today?: number;
     xp_progress_percent: number;
     xp_into_level: number;
     xp_for_next_level: number;

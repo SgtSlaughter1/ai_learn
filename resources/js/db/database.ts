@@ -114,6 +114,7 @@ export interface LocalGamification {
     tier?: string;
     current_streak: number;
     longest_streak: number;
+    streak_freeze_count?: number;
     last_active_date: string | null;
     synced: boolean;
 }
