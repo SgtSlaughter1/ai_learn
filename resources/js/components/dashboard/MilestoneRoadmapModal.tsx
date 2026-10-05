@@ -6,7 +6,6 @@ import {
     Trophy,
     CheckCircle2,
     X,
-    AlertTriangle,
     Check,
 } from 'lucide-react';
 import { GamificationData } from './LevelProgressBar';

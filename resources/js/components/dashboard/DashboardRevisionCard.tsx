@@ -4,16 +4,13 @@ import { DailyRevisionModal } from '../revision/DailyRevisionModal';
 import { GamificationData } from './LevelProgressBar';
 import {
     Zap,
-    Clock,
     CheckCircle2,
     ArrowRight,
     Brain,
-    Sparkles,
     Flame,
     Shield,
     Trophy,
     AlertTriangle,
-    Layers,
 } from 'lucide-react';
 
 interface Props {
@@ -32,7 +29,6 @@ export const DashboardRevisionCard: React.FC<Props> = ({
     const [showRevisionModal, setShowRevisionModal] = useState<boolean>(false);
     const [activeModalItems, setActiveModalItems] = useState<RevisionQueueItem[]>([]);
     const [hasCompletedToday, setHasCompletedToday] = useState<boolean>(false);
-    const [lastResult, setLastResult] = useState<RevisionSessionCompleteResult | null>(null);
 
     const streak = gamification?.current_streak ?? 0;
     const streakStatus = gamification?.streak_status ?? (streak > 0 ? 'at_risk' : 'inactive');
@@ -67,7 +63,6 @@ export const DashboardRevisionCard: React.FC<Props> = ({
 
     const handleComplete = (result: RevisionSessionCompleteResult) => {
         setHasCompletedToday(true);
-        setLastResult(result);
         onSessionCompleted?.(result);
         fetchQueue();
     };
