@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AiExtractQuestionsRequest;
+use App\Http\Requests\Admin\AiGenerateQuestionsRequest;
 use App\Http\Requests\Admin\BulkSaveQuestionsRequest;
 use App\Http\Requests\Admin\EnrollClassLearnerRequest;
 use App\Http\Requests\Admin\SaveClassRequest;
@@ -1437,23 +1438,33 @@ class AdminDashboardController extends Controller
             $query->where('question_text', 'like', "%{$search}%");
         }
 
-        $questions = $query->orderByDesc('id')->paginate($request->get('per_page', 50));
+        if ($request->filled('per_page') && is_numeric($request->per_page)) {
+            $perPage = max(1, (int)$request->per_page);
+            $questions = $query->orderByDesc('id')->paginate($perPage);
+            $items = $questions->items();
+            $total = $questions->total();
+            $meta = [
+                'current_page' => $questions->currentPage(),
+                'last_page' => $questions->lastPage(),
+                'per_page' => $questions->perPage(),
+                'total' => $total,
+            ];
+        } else {
+            $items = $query->orderByDesc('id')->get()->values()->all();
+            $total = count($items);
+            $meta = [
+                'current_page' => 1,
+                'last_page' => 1,
+                'per_page' => $total,
+                'total' => $total,
+            ];
+        }
 
         return response()->json([
-            'questions' => $questions->items(),
-            'data' => $questions->items(),
-            'pagination' => [
-                'total' => $questions->total(),
-                'per_page' => $questions->perPage(),
-                'current_page' => $questions->currentPage(),
-                'last_page' => $questions->lastPage(),
-            ],
-            'meta' => [
-                'current_page' => $questions->currentPage(),
-                'last_page' => $questions->lastPage(),
-                'per_page' => $questions->perPage(),
-                'total' => $questions->total(),
-            ],
+            'questions' => $items,
+            'data' => $items,
+            'pagination' => $meta,
+            'meta' => $meta,
         ]);
     }
 
@@ -1556,6 +1567,53 @@ class AdminDashboardController extends Controller
         return response()->json([
             'count' => count($extracted),
             'questions' => $extracted,
+        ]);
+    }
+
+    public function aiGenerateQuestions(AiGenerateQuestionsRequest $request): JsonResponse
+    {
+        $this->authorizeAdminOrTeacher($request);
+
+        $validated = $request->validated();
+
+        $topic = Topic::with('subject')->findOrFail($validated['topic_id']);
+        $topicName = $topic->name;
+
+        $subjectName = null;
+        if (!empty($validated['subject_id'])) {
+            $subject = Subject::find($validated['subject_id']);
+            $subjectName = $subject?->name;
+        }
+        if (!$subjectName && $topic->subject) {
+            $subjectName = $topic->subject->name;
+        }
+
+        $className = null;
+        if (!empty($validated['class_id'])) {
+            $class = \App\Models\ClassModel::find($validated['class_id']);
+            $className = $class?->name;
+        }
+
+        $gradeLevel = $validated['grade_level'] ?? $topic->level ?? null;
+        $count = $validated['count'] ?? 10;
+
+        $aiService = app(\App\Services\AIService::class);
+        $generated = $aiService->generateQuestionsForTopic(
+            topicName: $topicName,
+            subjectName: $subjectName,
+            className: $className,
+            gradeLevel: $gradeLevel,
+            count: $count
+        );
+
+        return response()->json([
+            'count' => count($generated),
+            'questions' => $generated,
+            'topic' => [
+                'id' => $topic->id,
+                'name' => $topic->name,
+                'subject_id' => $topic->subject_id,
+            ],
         ]);
     }
 

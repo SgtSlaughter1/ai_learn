@@ -51,6 +51,7 @@ Route::prefix('v1/admin')->middleware('auth:sanctum')->group(function () {
     Route::get('/questions', [\App\Http\Controllers\Web\AdminDashboardController::class, 'getQuestions']);
     Route::post('/questions', [\App\Http\Controllers\Web\AdminDashboardController::class, 'saveQuestion']);
     Route::post('/questions/ai-extract', [\App\Http\Controllers\Web\AdminDashboardController::class, 'aiExtractQuestions']);
+    Route::post('/questions/ai-generate', [\App\Http\Controllers\Web\AdminDashboardController::class, 'aiGenerateQuestions']);
     Route::post('/questions/bulk', [\App\Http\Controllers\Web\AdminDashboardController::class, 'bulkSaveQuestions']);
     Route::put('/questions/{id}', [\App\Http\Controllers\Web\AdminDashboardController::class, 'updateQuestion']);
     Route::delete('/questions/{id}', [\App\Http\Controllers\Web\AdminDashboardController::class, 'deleteQuestion']);

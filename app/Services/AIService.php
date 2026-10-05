@@ -954,6 +954,242 @@ You MUST return ONLY a valid JSON array matching this exact schema:
     }
 
     /**
+     * Generate N (default 10) high-quality multiple choice assessment questions for a specific topic.
+     */
+    public function generateQuestionsForTopic(
+        string $topicName,
+        ?string $subjectName = null,
+        ?string $className = null,
+        ?string $gradeLevel = null,
+        int $count = 10
+    ): array {
+        $count = max(1, min($count, 25));
+        $contextLines = [];
+        if ($subjectName) $contextLines[] = "Subject: {$subjectName}";
+        if ($topicName) $contextLines[] = "Topic: {$topicName}";
+        if ($className) $contextLines[] = "Target Class: {$className}";
+        if ($gradeLevel) $contextLines[] = "Grade Level: {$gradeLevel}";
+        $contextStr = implode("\n", $contextLines);
+
+        $prompt = "You are an expert curriculum designer and exam question author for secondary schools.
+Generate exactly {$count} distinct, high-quality multiple-choice assessment questions for the following curriculum topic:
+
+{$contextStr}
+
+Guidelines & Requirements:
+1. Generate exactly {$count} questions covering core concepts, terminology, problem solving, analysis, and practical applications of '{$topicName}'.
+2. Provide 4 realistic options (A, B, C, D) for each question.
+3. Exactly ONE option MUST have \"is_correct\": true, and the other 3 MUST have \"is_correct\": false.
+4. Include a balanced mix of difficulty levels ('easy', 'medium', 'hard').
+5. Provide a clear, educational step-by-step explanation (1-2 sentences) in simple, easy-to-understand language explaining why that choice is correct.
+6. Set \"type\": \"multiple_choice\".
+7. Do not include leading question numbers (e.g. '1.', 'Q1:') in \"question_text\".
+8. Do not include leading letters (e.g. 'A.', 'B)') in \"option_text\".
+9. If math or chemical equations are needed, enclose math expressions in dollar signs ($...$ for inline math).
+
+You MUST return ONLY a valid JSON array matching this exact schema:
+[
+  {
+    \"question_text\": \"Question string\",
+    \"type\": \"multiple_choice\",
+    \"difficulty\": \"easy\" | \"medium\" | \"hard\",
+    \"explanation\": \"Step-by-step or clear reason why this answer is correct.\",
+    \"options\": [
+      { \"option_text\": \"Option A text\", \"is_correct\": false },
+      { \"option_text\": \"Option B text\", \"is_correct\": true },
+      { \"option_text\": \"Option C text\", \"is_correct\": false },
+      { \"option_text\": \"Option D text\", \"is_correct\": false }
+    ]
+  }
+]";
+
+        if ($this->apiKey && ($this->provider === 'gemini')) {
+            $modelsToTry = array_unique([$this->modelName, 'gemini-3.1-flash-lite', 'gemini-flash-lite-latest', 'gemini-flash-latest', 'gemma-4-31b-it', 'gemini-3.8-flash']);
+            foreach ($modelsToTry as $model) {
+                try {
+                    $response = Http::timeout(25)
+                        ->withHeaders(['Content-Type' => 'application/json'])
+                        ->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$this->apiKey}", [
+                            'contents' => [
+                                ['parts' => [['text' => $prompt]]]
+                            ],
+                            'generationConfig' => [
+                                'response_mime_type' => 'application/json',
+                            ]
+                        ]);
+
+                    if ($response->successful()) {
+                        $body = $response->json();
+                        $text = $body['candidates'][0]['content']['parts'][0]['text'] ?? null;
+                        if ($text) {
+                            $parsed = json_decode($text, true);
+                            if (is_array($parsed) && !empty($parsed)) {
+                                $sanitized = $this->sanitizeExtractedQuestions($parsed);
+                                if (!empty($sanitized)) {
+                                    return array_slice($sanitized, 0, $count);
+                                }
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    // Try next model or fallback
+                }
+            }
+        }
+
+        return $this->generateHeuristicTopicQuestions($topicName, $subjectName, $gradeLevel, $count);
+    }
+
+    /**
+     * Fallback heuristic generator when offline or AI provider is unavailable.
+     */
+    private function generateHeuristicTopicQuestions(
+        string $topicName,
+        ?string $subjectName = null,
+        ?string $gradeLevel = null,
+        int $count = 10
+    ): array {
+        $subj = $subjectName ?? 'General Studies';
+        $level = $gradeLevel ?? 'Secondary';
+        $templates = [
+            [
+                'q' => "What is the primary definition or fundamental concept of {$topicName} in {$subj}?",
+                'correct' => "The core principle governing {$topicName} and its systematic applications.",
+                'distractors' => [
+                    "A secondary factor that only applies in extreme conditions.",
+                    "An obsolete method no longer recognized in modern {$subj}.",
+                    "A purely theoretical model with no practical relevance.",
+                ],
+                'diff' => 'easy',
+                'exp' => "Understanding {$topicName} begins with its foundational definition and core principles in {$subj}."
+            ],
+            [
+                'q' => "Which of the following best describes the key function or significance of {$topicName}?",
+                'correct' => "It enables systematic analysis, structure, and problem solving within {$subj}.",
+                'distractors' => [
+                    "It replaces all fundamental principles of the subject entirely.",
+                    "It serves only as a temporary decorative element.",
+                    "It prevents further experimentation and analysis.",
+                ],
+                'diff' => 'easy',
+                'exp' => "{$topicName} is essential because it provides structured methodology and reliable outcomes in {$subj}."
+            ],
+            [
+                'q' => "When analyzing a standard problem related to {$topicName}, which step should be performed first?",
+                'correct' => "Identify the given data, known parameters, and underlying laws of {$topicName}.",
+                'distractors' => [
+                    "Immediately guess the final numerical or logical result without verification.",
+                    "Disregard the given conditions and apply an arbitrary formula.",
+                    "Convert all values into unrelated units before analyzing.",
+                ],
+                'diff' => 'medium',
+                'exp' => "Systematic problem solving in {$topicName} always begins with identifying given parameters and relevant principles."
+            ],
+            [
+                'q' => "Which of the following is a common error or misconception when studying {$topicName}?",
+                'correct' => "Failing to account for standard conditions, units, and baseline assumptions.",
+                'distractors' => [
+                    "Following standard definitions and step-by-step procedures.",
+                    "Verifying calculations against established formulas.",
+                    "Checking the logical consistency of the solution.",
+                ],
+                'diff' => 'medium',
+                'exp' => "Overlooking initial assumptions and unit consistency is a frequent source of error in {$topicName}."
+            ],
+            [
+                'q' => "In {$subj}, what is a direct real-world application of {$topicName}?",
+                'correct' => "Solving practical {$subj} challenges and optimizing real-world processes.",
+                'distractors' => [
+                    "Generating random, non-reproducible outcomes.",
+                    "Restricting observations to laboratory simulations only.",
+                    "Eliminating the need for measurement and calculation.",
+                ],
+                'diff' => 'medium',
+                'exp' => "{$topicName} provides practical tools that bridge academic theory and real-world practical applications."
+            ],
+            [
+                'q' => "How does an increase in the main variable impact the behavior of {$topicName} under standard conditions?",
+                'correct' => "It produces a proportional or predictable change according to the governing principles of {$topicName}.",
+                'distractors' => [
+                    "It causes the system to stop functioning completely without reason.",
+                    "It has zero mathematical or physical effect on any parameter.",
+                    "It always reduces every dependent value to absolute zero.",
+                ],
+                'diff' => 'medium',
+                'exp' => "Governing laws in {$topicName} determine how dependent variables respond to changes in main inputs."
+            ],
+            [
+                'q' => "Which tool, instrument, or analytical method is most commonly utilized when investigating {$topicName}?",
+                'correct' => "Standard measurement, calculation models, and structured observation methods.",
+                'distractors' => [
+                    "Arbitrary guesswork without structured recording.",
+                    "Uncalibrated subjective estimations alone.",
+                    "Methods that explicitly reject data collection.",
+                ],
+                'diff' => 'medium',
+                'exp' => "Structured measurement and scientific models are standard for exploring {$topicName}."
+            ],
+            [
+                'q' => "Under what specific condition would the standard formula or law for {$topicName} require modification?",
+                'correct' => "When extreme boundary conditions, non-standard variables, or external constraints are present.",
+                'distractors' => [
+                    "Whenever the experiment is conducted during daytime hours.",
+                    "Only when using modern digital calculators.",
+                    "Never, because all formulas apply universally without any constraints.",
+                ],
+                'diff' => 'hard',
+                'exp' => "Complex systems in {$topicName} have boundary conditions where advanced or modified formulations become necessary."
+            ],
+            [
+                'q' => "Which of the following statements accurately distinguishes {$topicName} from related concepts in {$subj}?",
+                'correct' => "{$topicName} focuses on specific operational relationships and quantitative/qualitative properties.",
+                'distractors' => [
+                    "{$topicName} is completely identical to every other topic in {$subj}.",
+                    "{$topicName} cannot be categorized or studied scientifically.",
+                    "{$topicName} only applies to fictional or non-existent phenomena.",
+                ],
+                'diff' => 'hard',
+                'exp' => "Every distinct topic in {$subj} possesses unique characteristic properties that differentiate its scope."
+            ],
+            [
+                'q' => "What is the expected outcome when standard evaluation criteria for {$topicName} are rigorously met?",
+                'correct' => "Accurate, verifiable, and reproducible results that validate the solution.",
+                'distractors' => [
+                    "Unpredictable inconsistencies that cannot be reproduced.",
+                    "Complete failure of the underlying mathematical or physical system.",
+                    "An automatic disqualification of all collected data.",
+                ],
+                'diff' => 'hard',
+                'exp' => "Rigorous adherence to {$topicName} standards ensures high accuracy and reproducibility in {$subj}."
+            ],
+        ];
+
+        $results = [];
+        $selectedTemplates = array_slice($templates, 0, $count);
+
+        foreach ($selectedTemplates as $index => $t) {
+            $options = [
+                ['option_text' => $t['correct'], 'is_correct' => true],
+                ['option_text' => $t['distractors'][0], 'is_correct' => false],
+                ['option_text' => $t['distractors'][1], 'is_correct' => false],
+                ['option_text' => $t['distractors'][2], 'is_correct' => false],
+            ];
+            // Shuffle options deterministically
+            shuffle($options);
+
+            $results[] = [
+                'question_text' => $t['q'],
+                'type' => 'multiple_choice',
+                'difficulty' => $t['diff'],
+                'explanation' => $t['exp'],
+                'options' => $options,
+            ];
+        }
+
+        return $results;
+    }
+
+    /**
      * Sanitize and validate extracted questions format.
      */
     private function sanitizeExtractedQuestions(array $questions): array

@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { QuestionItem, SubjectItem, TopicItem, ClassItem } from '@/types/admin';
 import { executeAdminAction, getAdminAuthHeaders } from '@/services/AdminOfflineService';
-import { parseQuestionsOffline, type ExtractedQuestion } from '@/utils/questionParser';
+import { parseQuestionsOffline, generateOfflineQuestionsForTopic, type ExtractedQuestion } from '@/utils/questionParser';
 import QuestionFilterBar from './question-bank/QuestionFilterBar';
 import QuestionListItem from './question-bank/QuestionListItem';
 import QuestionFormModal, { type QuestionFormData } from './question-bank/QuestionFormModal';
 import AIBulkImportModal from './question-bank/AIBulkImportModal';
 import { Skeleton, SkeletonText } from '@/components/common/Skeleton';
+import Pagination from '@/components/common/Pagination';
 
 interface Props {
     questions: QuestionItem[];
@@ -33,7 +34,8 @@ export default function QuestionBankTab({
     allowedGradeLevels,
     isTeacher,
 }: Props) {
-    // ── Filter State ──
+    // ── Filter & Pagination State ──
+    const [page, setPage] = useState(1);
     const [questionGradeFilter, setQuestionGradeFilter] = useState('');
     const [questionClassFilter, setQuestionClassFilter] = useState('');
     const [questionSubjectFilter, setQuestionSubjectFilter] = useState('');
@@ -69,6 +71,7 @@ export default function QuestionBankTab({
     const [bulkTopicId, setBulkTopicId] = useState('');
     const [bulkRawText, setBulkRawText] = useState('');
     const [bulkLoading, setBulkLoading] = useState(false);
+    const [isGeneratingBulkAI, setIsGeneratingBulkAI] = useState(false);
     const [extractedQuestions, setExtractedQuestions] = useState<ExtractedQuestion[]>([]);
     const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
 
@@ -76,10 +79,23 @@ export default function QuestionBankTab({
         setBulkStep('input');
         setExtractedQuestions([]);
         setBulkRawText('');
-        if (allTopics.length > 0 && !bulkTopicId) {
-            setBulkTopicId(String(allTopics[0].id));
-            if (allTopics[0].subject_id) {
-                setBulkSubjectId(String(allTopics[0].subject_id));
+        if (questionClassFilter) {
+            setBulkClassId(questionClassFilter);
+        }
+        if (questionSubjectFilter) {
+            setBulkSubjectId(questionSubjectFilter);
+        }
+        if (questionTopicFilter) {
+            setBulkTopicId(questionTopicFilter);
+        } else if (allTopics.length > 0 && !bulkTopicId) {
+            const matchedTopics = questionSubjectFilter
+                ? allTopics.filter((t) => String(t.subject_id) === questionSubjectFilter)
+                : allTopics;
+            if (matchedTopics.length > 0) {
+                setBulkTopicId(String(matchedTopics[0].id));
+                if (matchedTopics[0].subject_id && !bulkSubjectId) {
+                    setBulkSubjectId(String(matchedTopics[0].subject_id));
+                }
             }
         }
         setIsBulkModalOpen(true);
@@ -117,6 +133,63 @@ export default function QuestionBankTab({
             })),
         });
         setIsQuestionModalOpen(true);
+    };
+
+    const handleGenerateWithAI = async (modalGradeLevel?: string) => {
+        if (!bulkTopicId) {
+            showToast('Please select a target topic to generate questions', 'error');
+            return;
+        }
+
+        setIsGeneratingBulkAI(true);
+        const selectedClass = classes.find((c) => String(c.id) === String(bulkClassId));
+        const selectedSubject = subjects.find((s) => String(s.id) === String(bulkSubjectId));
+        const selectedTopic = allTopics.find((t) => String(t.id) === String(bulkTopicId));
+        const grade = modalGradeLevel || selectedClass?.grade_level || selectedTopic?.level || questionGradeFilter || undefined;
+
+        try {
+            const res = await fetch('/api/v1/admin/questions/ai-generate', {
+                method: 'POST',
+                headers: getAdminAuthHeaders(),
+                credentials: 'include',
+                body: JSON.stringify({
+                    topic_id: Number(bulkTopicId),
+                    subject_id: bulkSubjectId ? Number(bulkSubjectId) : (selectedTopic?.subject_id || undefined),
+                    class_id: bulkClassId ? Number(bulkClassId) : undefined,
+                    grade_level: grade,
+                    count: 10,
+                }),
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.questions && data.questions.length > 0) {
+                    setExtractedQuestions(data.questions);
+                    setBulkStep('review');
+                    showToast(`Generated ${data.questions.length} questions on "${selectedTopic?.name || 'Topic'}" with AI`, 'success');
+                    setIsGeneratingBulkAI(false);
+                    return;
+                }
+            }
+        } catch (err) {
+            console.warn('Backend AI generation unavailable, falling back to local curriculum generator...', err);
+        }
+
+        // Offline Client-Side Fallback Generator
+        const offlineGenerated = generateOfflineQuestionsForTopic(
+            selectedTopic?.name || 'Curriculum Concept',
+            selectedSubject?.name || 'General Subject',
+            10
+        );
+
+        if (offlineGenerated.length > 0) {
+            setExtractedQuestions(offlineGenerated);
+            setBulkStep('review');
+            showToast(`Generated ${offlineGenerated.length} questions using offline generator`, 'success');
+        } else {
+            showToast('Could not generate questions for this topic. Please try again.', 'error');
+        }
+        setIsGeneratingBulkAI(false);
     };
 
     const handleExtractWithAI = async () => {
@@ -398,6 +471,24 @@ export default function QuestionBankTab({
         return true;
     });
 
+    // Reset page to 1 whenever filters change
+    useEffect(() => {
+        setPage(1);
+    }, [
+        questionGradeFilter,
+        questionClassFilter,
+        questionSubjectFilter,
+        questionTopicFilter,
+        questionDifficultyFilter,
+        questionSearch,
+    ]);
+
+    const itemsPerPage = 50;
+    const paginatedQuestions = useMemo(() => {
+        const start = (page - 1) * itemsPerPage;
+        return filteredQuestions.slice(start, start + itemsPerPage);
+    }, [filteredQuestions, page, itemsPerPage]);
+
     return (
         <div className="space-y-6">
             <QuestionFilterBar
@@ -463,7 +554,7 @@ export default function QuestionBankTab({
                 </div>
             ) : (
                 <div className="space-y-4">
-                    {filteredQuestions.map((q) => (
+                    {paginatedQuestions.map((q) => (
                         <QuestionListItem
                             key={q.id}
                             question={q}
@@ -472,6 +563,14 @@ export default function QuestionBankTab({
                             isDeleting={deletingQuestionId === q.id}
                         />
                     ))}
+
+                    <Pagination
+                        currentPage={page}
+                        totalItems={filteredQuestions.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setPage}
+                        itemLabel="questions"
+                    />
                 </div>
             )}
 
@@ -517,6 +616,8 @@ export default function QuestionBankTab({
                 allowedGradeLevels={allowedGradeLevels}
                 isTeacher={isTeacher}
                 onExtract={handleExtractWithAI}
+                onGenerate={handleGenerateWithAI}
+                isGenerating={isGeneratingBulkAI}
                 onSave={handleSaveBulkQuestions}
                 showToast={showToast}
             />

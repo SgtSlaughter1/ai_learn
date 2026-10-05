@@ -201,3 +201,144 @@ export function parseQuestionsOffline(rawText: string): ExtractedQuestion[] {
 
     return results;
 }
+
+export function generateOfflineQuestionsForTopic(
+    topicName: string,
+    subjectName: string = 'General Studies',
+    count: number = 10
+): ExtractedQuestion[] {
+    const templates = [
+        {
+            q: `What is the foundational concept or primary definition of ${topicName} in ${subjectName}?`,
+            correct: `The core scientific principle and systematic methodology of ${topicName}.`,
+            distractors: [
+                `An incidental condition that only applies in isolated scenarios.`,
+                `An obsolete theoretical framework no longer recognized in ${subjectName}.`,
+                `A subjective viewpoint without empirical or mathematical basis.`,
+            ],
+            diff: 'easy',
+            exp: `Mastering ${topicName} begins with understanding its core definition and standard principles in ${subjectName}.`,
+        },
+        {
+            q: `Which of the following best summarizes the primary importance or role of ${topicName}?`,
+            correct: `It facilitates structured problem analysis and reproducible outcomes in ${subjectName}.`,
+            distractors: [
+                `It replaces all baseline definitions across the entire curriculum.`,
+                `It is applied only when standard procedures fail unexpectedly.`,
+                `It eliminates the need to verify experimental or numerical results.`,
+            ],
+            diff: 'easy',
+            exp: `${topicName} provides students with the critical structural foundation needed to solve complex problems.`,
+        },
+        {
+            q: `When approaching an assessment problem on ${topicName}, what is the recommended first step?`,
+            correct: `Identify all given parameters, boundary conditions, and governing laws of ${topicName}.`,
+            distractors: [
+                `Select the largest available number from the multiple choices immediately.`,
+                `Ignore the stated conditions and proceed with an arbitrary formula.`,
+                `Skip writing out the working or mathematical rationale.`,
+            ],
+            diff: 'medium',
+            exp: `Effective problem solving in ${topicName} requires listing given data and selecting the correct governing relationship.`,
+        },
+        {
+            q: `Which of the following is a key distinguishing characteristic of ${topicName}?`,
+            correct: `Its specific operational properties and measurable relationships within ${subjectName}.`,
+            distractors: [
+                `It has zero distinctive properties compared to other topics.`,
+                `It cannot be described through mathematical or empirical means.`,
+                `It only applies in non-physical hypothetical models.`,
+            ],
+            diff: 'medium',
+            exp: `Each topic in ${subjectName} exhibits defined characteristics that separate it from related concepts.`,
+        },
+        {
+            q: `In practical applications of ${subjectName}, how is ${topicName} most commonly implemented?`,
+            correct: `To solve real-world challenges and optimize analytical processes.`,
+            distractors: [
+                `To generate random and uncontrolled data variations.`,
+                `To restrict applications strictly to theoretical textbook problems.`,
+                `To bypass standard unit measurements and conversions.`,
+            ],
+            diff: 'medium',
+            exp: `${topicName} connects classroom theory to practical technology, engineering, and scientific applications.`,
+        },
+        {
+            q: `What is a common trap or misconception students encounter when working on ${topicName}?`,
+            correct: `Neglecting baseline assumptions, standard unit conversions, or sign conventions.`,
+            distractors: [
+                `Verifying the calculation using alternative methods.`,
+                `Following standard definitions step-by-step.`,
+                `Checking the logical consistency of the derived answer.`,
+            ],
+            diff: 'medium',
+            exp: `Unit inconsistencies and sign errors represent the most common pitfalls when solving ${topicName} questions.`,
+        },
+        {
+            q: `How does modifying the primary independent variable affect ${topicName} under standard conditions?`,
+            correct: `It leads to a predictable, governed change in the dependent variables of ${topicName}.`,
+            distractors: [
+                `It causes an immediate catastrophic collapse of the mathematical system.`,
+                `It produces completely random outputs with no mathematical correlation.`,
+                `It causes every dependent parameter to become zero instantly.`,
+            ],
+            diff: 'medium',
+            exp: `Physical and mathematical relationships in ${topicName} define predictable responses to variable changes.`,
+        },
+        {
+            q: `Under which of the following circumstances must standard rules for ${topicName} be adapted?`,
+            correct: `When operating at extreme limits, boundary constraints, or non-ideal conditions.`,
+            distractors: [
+                `Whenever calculations are performed during morning hours.`,
+                `Only when using manual paper methods instead of computers.`,
+                `Never, since all elementary formulas apply universally without boundary limits.`,
+            ],
+            diff: 'hard',
+            exp: `Advanced scenarios in ${topicName} introduce boundary conditions requiring adapted or higher-order formulas.`,
+        },
+        {
+            q: `Which instrument or analytical technique is most appropriate for studying ${topicName}?`,
+            correct: `Standard calibrated tools, structured tables, and mathematical models.`,
+            distractors: [
+                `Uncalibrated estimations without reference standards.`,
+                `Guesswork without systematic note-taking.`,
+                `Techniques that intentionally discard measurement accuracy.`,
+            ],
+            diff: 'hard',
+            exp: `Scientific exploration of ${topicName} relies on standardized tools and reproducible analytical methods.`,
+        },
+        {
+            q: `What outcome confirms that a comprehensive solution for ${topicName} is correct?`,
+            correct: `The final solution satisfies all boundary conditions and unit dimensions consistently.`,
+            distractors: [
+                `The result contradicts all fundamental laws of ${subjectName}.`,
+                `The units do not match the expected dimensional quantity.`,
+                `The solution cannot be replicated under identical test conditions.`,
+            ],
+            diff: 'hard',
+            exp: `Dimensional consistency and boundary validation prove the correctness of any ${topicName} solution.`,
+        },
+    ];
+
+    const targetList = templates.slice(0, Math.max(1, Math.min(count, templates.length)));
+
+    return targetList.map((t) => {
+        const rawOptions = [
+            { option_text: t.correct, is_correct: true },
+            { option_text: t.distractors[0], is_correct: false },
+            { option_text: t.distractors[1], is_correct: false },
+            { option_text: t.distractors[2], is_correct: false },
+        ];
+        // Shuffle options
+        const options = rawOptions.sort(() => Math.random() - 0.5);
+
+        return {
+            question_text: t.q,
+            type: 'multiple_choice',
+            difficulty: t.diff,
+            explanation: t.exp,
+            options,
+        };
+    });
+}
+

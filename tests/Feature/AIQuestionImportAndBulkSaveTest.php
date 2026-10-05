@@ -281,4 +281,66 @@ TEXT;
             if ($prevGoogleKey !== null && $prevGoogleKey !== false) $_ENV['GOOGLE_API_KEY'] = $prevGoogleKey; else unset($_ENV['GOOGLE_API_KEY']);
         }
     }
+
+    public function test_ai_service_generates_questions_for_topic(): void
+    {
+        $aiService = app(AIService::class);
+        $questions = $aiService->generateQuestionsForTopic(
+            topicName: $this->topic->name,
+            subjectName: $this->subject->name,
+            count: 10
+        );
+
+        $this->assertCount(10, $questions);
+        foreach ($questions as $q) {
+            $this->assertArrayHasKey('question_text', $q);
+            $this->assertNotEmpty($q['question_text']);
+            $this->assertArrayHasKey('type', $q);
+            $this->assertArrayHasKey('difficulty', $q);
+            $this->assertArrayHasKey('explanation', $q);
+            $this->assertArrayHasKey('options', $q);
+            $this->assertCount(4, $q['options']);
+
+            $correctOpts = array_filter($q['options'], fn($o) => !empty($o['is_correct']));
+            $this->assertCount(1, $correctOpts, 'Each generated question must have exactly one correct option.');
+        }
+    }
+
+    public function test_ai_generate_endpoint_returns_questions_successfully(): void
+    {
+        $response = $this->actingAs($this->adminUser)
+            ->postJson('/api/v1/admin/questions/ai-generate', [
+                'topic_id' => $this->topic->id,
+                'subject_id' => $this->subject->id,
+                'count' => 10,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'count',
+                'questions' => [
+                    '*' => [
+                        'question_text',
+                        'type',
+                        'difficulty',
+                        'explanation',
+                        'options' => [
+                            '*' => [
+                                'option_text',
+                                'is_correct',
+                            ]
+                        ]
+                    ]
+                ],
+                'topic' => [
+                    'id',
+                    'name',
+                    'subject_id',
+                ]
+            ]);
+
+        $data = $response->json();
+        $this->assertEquals(10, $data['count']);
+        $this->assertCount(10, $data['questions']);
+    }
 }
