@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Head, Link } from '@inertiajs/react';
+import { Globe, ArrowRight } from 'lucide-react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { db } from '@/db/database';
@@ -291,9 +292,18 @@ export default function LearnerDashboard() {
                             </span>
                         )}
                     </div>
-                    <Link href="/subjects" className="btn-primary">
-                        Browse Subjects
-                    </Link>
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                        <Link
+                            href="/general-knowledge"
+                            className="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[var(--color-surface)] border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text)] flex items-center gap-2 transition-all shadow-xs active:scale-98"
+                        >
+                            <Globe className="w-4 h-4 text-[var(--color-primary)]" />
+                            <span>General Knowledge</span>
+                        </Link>
+                        <Link href="/subjects" className="btn-primary">
+                            Browse Curriculum
+                        </Link>
+                    </div>
                 </div>
             }
         >
@@ -303,19 +313,62 @@ export default function LearnerDashboard() {
             </Head>
 
             <div className="space-y-8 relative">
-                {/* 🔥 Unified Daily Memory Boost & Streak Protection Hero Card */}
-                {isOnline && (
-                    <DashboardRevisionCard
-                        gamification={gamification}
-                        onOpenMilestones={() => setIsMilestonesOpen(true)}
-                        onSessionCompleted={() => {
-                            fetch('/api/v1/gamification/profile')
-                                .then((r) => r.json())
-                                .then((d) => setGamification(d))
-                                .catch(() => {});
-                        }}
-                    />
-                )}
+                {/* 🎯 AI-Curated Next 15-Minute Mission & Daily Streak Defense Card */}
+                <DashboardRevisionCard
+                    gamification={gamification}
+                    onOpenMilestones={() => setIsMilestonesOpen(true)}
+                    onSessionCompleted={() => {
+                        fetch('/api/v1/gamification/profile')
+                            .then((r) => r.json())
+                            .then((d) => setGamification(d))
+                            .catch(() => {});
+                    }}
+                />
+
+                {/* 🌍 General Knowledge & Global Discovery Spotlight Card */}
+                <div className="relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:p-6 shadow-xs hover:border-[var(--color-primary-30)] transition-all">
+                    <div className="absolute top-0 right-0 -mt-8 -mr-8 w-40 h-40 bg-[var(--color-primary-5)] rounded-full blur-2xl pointer-events-none" />
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative z-10">
+                        <div className="flex items-start gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-[var(--color-primary-10)] text-[var(--color-primary)] flex items-center justify-center shrink-0 border border-[var(--color-primary-20)] shadow-xs">
+                                <Globe className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <h3 className="text-base sm:text-lg font-bold text-[var(--color-text)]">
+                                        General Knowledge & Global Hub
+                                    </h3>
+                                    <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                                        Offline Ready
+                                    </span>
+                                </div>
+                                <p className="text-xs sm:text-sm text-[var(--color-muted)] mt-1 max-w-xl leading-relaxed">
+                                    Expand your horizons beyond the school curriculum. Explore world affairs, history, civics, general sciences, and culture anytime.
+                                </p>
+                                <div className="flex items-center gap-2 mt-3 flex-wrap">
+                                    <span className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-[var(--color-background)] border border-[var(--color-border)] text-[var(--color-muted)]">
+                                        🌍 World Affairs
+                                    </span>
+                                    <span className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-[var(--color-background)] border border-[var(--color-border)] text-[var(--color-muted)]">
+                                        🏛️ Civics & History
+                                    </span>
+                                    <span className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-[var(--color-background)] border border-[var(--color-border)] text-[var(--color-muted)]">
+                                        💡 Science & Tech
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="sm:self-center shrink-0">
+                            <Link
+                                href="/general-knowledge"
+                                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[var(--color-primary)] text-white hover:opacity-95 shadow-xs transition-all w-full sm:w-auto active:scale-98"
+                            >
+                                <span>Explore Knowledge</span>
+                                <ArrowRight className="w-4 h-4" />
+                            </Link>
+                        </div>
+                    </div>
+                </div>
 
                 {/* 4 Summary Stats Cards */}
                 <StatsOverview
@@ -326,33 +379,39 @@ export default function LearnerDashboard() {
                     accuracy={accuracy}
                 />
 
-                {/* Gamification Level & XP Banner */}
-                {!loading && gamification && (
-                    <LevelProgressBar
-                        gamification={gamification}
-                        activeTooltip={activeTooltip}
-                        onToggleTooltip={setActiveTooltip}
-                        showXpGuide={showXpGuide}
-                        onToggleXpGuide={() => setShowXpGuide(!showXpGuide)}
-                    />
-                )}
+                {/* Responsive 2-Column Split: Active Learning (Left) vs. Gamification & Progression (Right) */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                    {/* Left Column (Operational Mastery & Recent Quizzes) */}
+                    <div className="lg:col-span-7 xl:col-span-8 space-y-8">
+                        <RecentAttemptsList
+                            loading={loading}
+                            isOnline={isOnline}
+                            attempts={recentAttempts}
+                            averageMastery={avgMasteryScore}
+                        />
+                    </div>
 
-                {/* Achievements Grid */}
-                {!loading && gamification && gamification.achievements && gamification.achievements.length > 0 && (
-                    <AchievementsGrid
-                        achievements={gamification.achievements}
-                        activeTooltip={activeTooltip}
-                        onToggleTooltip={setActiveTooltip}
-                    />
-                )}
+                    {/* Right Column (Gamification Level, XP & Badges) */}
+                    <div className="lg:col-span-5 xl:col-span-4 space-y-8">
+                        {!loading && gamification && (
+                            <LevelProgressBar
+                                gamification={gamification}
+                                activeTooltip={activeTooltip}
+                                onToggleTooltip={setActiveTooltip}
+                                showXpGuide={showXpGuide}
+                                onToggleXpGuide={() => setShowXpGuide(!showXpGuide)}
+                            />
+                        )}
 
-                {/* Mastery Circle & Recent Quiz Activity List */}
-                <RecentAttemptsList
-                    loading={loading}
-                    isOnline={isOnline}
-                    attempts={recentAttempts}
-                    averageMastery={avgMasteryScore}
-                />
+                        {!loading && gamification && gamification.achievements && gamification.achievements.length > 0 && (
+                            <AchievementsGrid
+                                achievements={gamification.achievements}
+                                activeTooltip={activeTooltip}
+                                onToggleTooltip={setActiveTooltip}
+                            />
+                        )}
+                    </div>
+                </div>
             </div>
 
             {/* Streak Milestone Roadmap & Shield Vault Modal */}

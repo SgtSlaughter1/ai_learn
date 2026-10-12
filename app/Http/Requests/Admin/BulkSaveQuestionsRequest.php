@@ -19,6 +19,7 @@ class BulkSaveQuestionsRequest extends FormRequest
             'school_id' => ['nullable', 'exists:schools,id'],
             'questions' => ['required', 'array', 'min:1'],
             'questions.*.question_text' => ['required', 'string'],
+            'questions.*.image_url' => ['nullable', 'string', 'max:500'],
             'questions.*.type' => ['nullable', 'string', 'in:multiple_choice,short_answer,essay,true_false'],
             'questions.*.difficulty' => ['nullable', 'string', 'in:easy,medium,hard'],
             'questions.*.explanation' => ['nullable', 'string'],

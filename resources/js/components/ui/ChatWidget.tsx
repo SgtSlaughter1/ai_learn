@@ -645,25 +645,51 @@ export default function ChatWidget() {
         "Summarize class scores"
     ];
 
-    const learnerQuickPrompts = [
-        "What should I study next?",
-        "Explain a difficult concept",
-        "Give me a practice problem"
-    ];
+    const quickPrompts = isSchoolAdmin
+        ? adminQuickPrompts
+        : isTeacher
+        ? teacherQuickPrompts
+        : [
+            "Explain this topic simply",
+            "Show me a practice question",
+            "Give me a formula summary",
+            "How do I solve this?",
+        ];
 
-    const quickPrompts = isSchoolAdmin ? adminQuickPrompts : isTeacher ? teacherQuickPrompts : learnerQuickPrompts;
+    const [isAnyModalOpen, setIsAnyModalOpen] = useState(false);
+
+    // Auto-hide floating bubble on mobile when full-screen practice/editing modals are active (Casey protection)
+    useEffect(() => {
+        const checkModal = () => {
+            const hasModal = Boolean(
+                document.querySelector('.fixed.inset-0.z-50') ||
+                document.querySelector('[role="dialog"]') ||
+                document.querySelector('[aria-modal="true"]') ||
+                document.querySelector('.fixed.inset-0')
+            );
+            setIsAnyModalOpen(hasModal);
+        };
+
+        checkModal();
+        const observer = new MutationObserver(checkModal);
+        observer.observe(document.body, { childList: true, subtree: true });
+        return () => observer.disconnect();
+    }, []);
 
     return (
-        <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex flex-col items-end">
+        <div className={`fixed bottom-20 md:bottom-6 right-4 md:right-6 z-40 flex-col items-end transition-all ${isAnyModalOpen ? 'hidden md:flex' : 'flex'}`}>
             {/* Chat Panel Box */}
             {chatOpen && (
-                <div className="mb-3 w-[calc(100vw-2rem)] sm:w-[480px] md:w-[500px] max-h-[85vh] h-[580px] bg-[var(--color-surface)]/95 border border-[var(--color-border)] rounded-3xl shadow-2xl backdrop-blur-xl flex flex-col overflow-hidden animate-fade-in">
+                <div className="mb-3 w-[calc(100vw-2rem)] sm:w-[480px] md:w-[500px] max-h-[calc(100vh-6.5rem)] sm:max-h-[85vh] h-[560px] bg-[var(--color-surface)]/98 border border-[var(--color-border)] rounded-3xl shadow-2xl backdrop-blur-xl flex flex-col overflow-hidden animate-fade-in transition-all">
                     {/* Header */}
-                    <div className="p-4 bg-[var(--color-background)]/60 border-b border-[var(--color-border)] flex items-center justify-between">
+                    <div className="p-4 bg-[var(--color-surface-hover)] border-b border-[var(--color-border)] flex items-center justify-between">
                         <div className="flex items-center space-x-2.5">
-                            <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping" />
+                            <div className="relative flex h-2.5 w-2.5 items-center justify-center">
+                                <span className="absolute inline-flex h-full w-full rounded-full bg-[var(--color-success)] opacity-60 animate-ping motion-reduce:hidden" />
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--color-success)]" />
+                            </div>
                             <div>
-                                <h4 className="text-sm font-extrabold text-[var(--color-text)]">
+                                <h4 className="text-sm font-extrabold text-[var(--color-text)] tracking-tight">
                                     {isSchoolAdmin ? 'AI School Copilot' : isTeacher ? 'AI Educator Copilot' : 'AI Study Companion'}
                                 </h4>
                                 <span className="text-[10px] text-[var(--color-muted)] block font-semibold">
@@ -673,7 +699,7 @@ export default function ChatWidget() {
                         </div>
                         <button
                             onClick={() => setChatOpen(false)}
-                            className="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-primary-5)] rounded-lg transition-colors cursor-pointer min-h-[32px] flex items-center justify-center"
+                            className="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-primary-5)] rounded-lg transition-colors cursor-pointer min-h-[32px] min-w-[32px] flex items-center justify-center"
                             aria-label="Close Chat"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -684,7 +710,7 @@ export default function ChatWidget() {
 
                     {/* Quick Suggestion Chips (shown when few messages) */}
                     {messages.length <= 2 && (
-                        <div className="px-3.5 py-2.5 bg-[var(--color-background)]/40 border-b border-[var(--color-border)] flex flex-wrap gap-1.5">
+                        <div className="px-3.5 py-2.5 bg-[var(--color-background)]/50 border-b border-[var(--color-border)] flex flex-wrap gap-1.5">
                             {quickPrompts.map((prompt, idx) => (
                                 <button
                                     key={idx}
@@ -705,7 +731,7 @@ export default function ChatWidget() {
                                 key={idx}
                                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                             >
-                                <div className={msg.role === 'user' ? 'chat-bubble-user font-medium p-3.5 text-xs leading-relaxed max-w-[90%] break-words' : 'bg-[var(--color-background)]/60 text-[var(--color-text)] border border-[var(--color-border)] rounded-2xl rounded-tl-none p-3.5 text-xs leading-relaxed max-w-[92%] font-medium break-words overflow-x-auto min-w-0'}>
+                                <div className={msg.role === 'user' ? 'chat-bubble-user font-medium p-3.5 text-xs leading-relaxed max-w-[90%] break-words' : 'bg-[var(--color-surface-hover)] text-[var(--color-text)] border border-[var(--color-border)] rounded-2xl rounded-tl-none p-3.5 text-xs leading-relaxed max-w-[92%] font-medium break-words overflow-x-auto min-w-0 shadow-xs'}>
                                     <Markdown
                                         remarkPlugins={[remarkMath]}
                                         rehypePlugins={[rehypeKatex]}
@@ -728,7 +754,7 @@ export default function ChatWidget() {
                         ))}
                         {chatLoading && (
                             <div className="flex justify-start">
-                                <div className="bg-[var(--color-background)]/50 text-[var(--color-muted)] border border-[var(--color-border)] rounded-2xl rounded-tl-none p-3.5 text-xs animate-pulse font-semibold">
+                                <div className="bg-[var(--color-surface-hover)] text-[var(--color-muted)] border border-[var(--color-border)] rounded-2xl rounded-tl-none p-3.5 text-xs animate-pulse font-semibold">
                                     {isStaffOrEducator ? 'AI Copilot is analyzing...' : 'Tutor is thinking...'}
                                 </div>
                             </div>
@@ -737,19 +763,19 @@ export default function ChatWidget() {
                     </div>
 
                     {/* Input Area */}
-                    <form onSubmit={handleFormSubmit} className="p-3 bg-[var(--color-background)]/40 border-t border-[var(--color-border)] flex gap-2">
+                    <form onSubmit={handleFormSubmit} className="p-3 bg-[var(--color-surface-hover)] border-t border-[var(--color-border)] flex gap-2">
                         <input
                             type="text"
                             value={chatInput}
                             onChange={(e) => setChatInput(e.target.value)}
                             placeholder={isStaffOrEducator ? "Ask AI Copilot about lesson plans, mastery, questions..." : "Ask AI anything..."}
                             disabled={chatLoading}
-                            className="flex-1 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-xs text-[var(--color-text)] placeholder-[var(--color-muted)] focus:outline-none focus:border-teal-500 min-h-[38px]"
+                            className="flex-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl px-3 py-2 text-xs text-[var(--color-text)] placeholder-[var(--color-muted)] focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary-10)] min-h-[38px] transition-all"
                         />
                         <button
                             type="submit"
                             disabled={chatLoading || !chatInput.trim()}
-                            className="px-3.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary)] disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all min-h-[38px] flex items-center justify-center cursor-pointer"
+                            className="px-4 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-95 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all min-h-[38px] flex items-center justify-center cursor-pointer shadow-sm"
                         >
                             Send
                         </button>
@@ -760,15 +786,16 @@ export default function ChatWidget() {
             {/* Floating Bubble Button */}
             <button
                 onClick={() => setChatOpen(!chatOpen)}
-                className="h-14 w-14 rounded-full bg-[var(--color-primary)] hover:bg-[var(--color-primary)] text-white flex items-center justify-center shadow-lg hover:shadow-teal-500/20 shadow-teal-600/30 transition-transform active:scale-95 cursor-pointer focus:outline-none"
+                className="group h-14 w-14 rounded-full bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white flex items-center justify-center shadow-[0_8px_24px_rgba(24,59,43,0.35)] dark:shadow-[0_8px_24px_rgba(46,125,82,0.4)] hover:shadow-[0_12px_28px_rgba(24,59,43,0.45)] hover:scale-105 active:scale-95 transition-all duration-300 motion-reduce:transform-none cursor-pointer focus:outline-none focus:ring-4 focus:ring-[var(--color-primary-20)]"
                 title={isStaffOrEducator ? (isTeacher ? "Open AI Educator Copilot" : "Open AI School Copilot") : "Open AI Study Companion"}
+                aria-label="Toggle AI Study Assistant"
             >
                 {chatOpen ? (
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-6 h-6 transition-transform duration-200 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                 ) : (
-                    <svg className="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-6 h-6 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
                 )}

@@ -1492,6 +1492,7 @@ class AdminDashboardController extends Controller
                 'topic_id' => $validated['topic_id'],
                 'school_id' => $assignedSchoolId,
                 'question_text' => $validated['question_text'],
+                'image_url' => $validated['image_url'] ?? null,
                 'type' => $validated['type'] ?? 'multiple_choice',
                 'difficulty' => $validated['difficulty'] ?? 'medium',
                 'explanation' => $validated['explanation'] ?? null,
@@ -1661,6 +1662,7 @@ class AdminDashboardController extends Controller
                     'topic_id' => $validated['topic_id'],
                     'school_id' => $assignedSchoolId,
                     'question_text' => $qData['question_text'],
+                    'image_url' => $qData['image_url'] ?? null,
                     'type' => $qData['type'] ?? 'multiple_choice',
                     'difficulty' => $qData['difficulty'] ?? 'medium',
                     'explanation' => $qData['explanation'] ?? null,
@@ -1727,6 +1729,7 @@ class AdminDashboardController extends Controller
                 'topic_id' => $validated['topic_id'],
                 'school_id' => $assignedSchoolId,
                 'question_text' => $validated['question_text'],
+                'image_url' => array_key_exists('image_url', $validated) ? $validated['image_url'] : $question->image_url,
                 'type' => $validated['type'] ?? $question->type,
                 'difficulty' => $validated['difficulty'] ?? $question->difficulty,
                 'explanation' => $validated['explanation'] ?? null,
@@ -1772,6 +1775,28 @@ class AdminDashboardController extends Controller
         return response()->json([
             'message' => 'Question updated successfully',
             'question' => $question->fresh(['options', 'topic.subject:id,name', 'school:id,name']),
+        ]);
+    }
+
+    public function uploadQuestionImage(Request $request): JsonResponse
+    {
+        $this->authorizeAdminOrTeacher($request);
+
+        $request->validate([
+            'image' => ['required', 'image', 'mimes:jpeg,png,jpg,webp,svg,gif', 'max:5120'],
+        ]);
+
+        $file = $request->file('image');
+        $filename = 'q_' . time() . '_' . Str::random(10) . '.' . $file->getClientOriginalExtension();
+        $path = $file->storeAs('questions', $filename, 'public');
+
+        $url = asset('storage/' . $path);
+
+        return response()->json([
+            'success' => true,
+            'url' => $url,
+            'path' => $path,
+            'filename' => $filename,
         ]);
     }
 

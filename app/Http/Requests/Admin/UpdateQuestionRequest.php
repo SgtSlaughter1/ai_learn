@@ -16,6 +16,7 @@ class UpdateQuestionRequest extends FormRequest
         return [
             'topic_id' => ['required', 'exists:topics,id'],
             'question_text' => ['required', 'string'],
+            'image_url' => ['nullable', 'string', 'max:500'],
             'type' => ['nullable', 'string', 'in:multiple_choice,short_answer,essay,true_false'],
             'difficulty' => ['nullable', 'string', 'in:easy,medium,hard'],
             'explanation' => ['nullable', 'string'],

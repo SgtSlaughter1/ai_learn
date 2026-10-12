@@ -5,7 +5,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { PastQuestionItem, ExamSimulationResult } from '../../types/past-questions';
 import { formatMathText, extractLiteratureContext } from '../../utils/mathFormatter';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, Monitor, Keyboard } from 'lucide-react';
 
 interface Props {
     questions: PastQuestionItem[];
@@ -40,6 +40,25 @@ export const ExamSimulationModal: React.FC<Props> = ({
     const [calcDisplay, setCalcDisplay] = useState<string>('0');
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+    // Official JAMB Center View Toggle (High-contrast authentic test center layout)
+    const [isJambView, setIsJambView] = useState<boolean>(() => {
+        try {
+            return localStorage.getItem('acedrill_cbt_jamb_view') === 'true';
+        } catch {
+            return false;
+        }
+    });
+
+    const toggleJambView = () => {
+        setIsJambView(prev => {
+            const next = !prev;
+            try {
+                localStorage.setItem('acedrill_cbt_jamb_view', String(next));
+            } catch {}
+            return next;
+        });
+    };
+
     const totalSeconds = durationMinutes * 60;
     const timeSpentSeconds = totalSeconds - secondsRemaining;
 
@@ -56,13 +75,63 @@ export const ExamSimulationModal: React.FC<Props> = ({
         return () => clearInterval(timer);
     }, [secondsRemaining]);
 
+    const currentQ = questions[currentIndex];
+
+    // Authentic CBT Test Center Keyboard Navigation (A, B, C, D, N, P, R, S, Esc)
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+                return;
+            }
+
+            const key = e.key.toUpperCase();
+
+            if (key === 'A' || key === '1') {
+                e.preventDefault();
+                if (currentQ?.options[0]) handleSelectOption(currentQ.options[0].id);
+            } else if (key === 'B' || key === '2') {
+                e.preventDefault();
+                if (currentQ?.options[1]) handleSelectOption(currentQ.options[1].id);
+            } else if (key === 'C' && !e.ctrlKey && !e.metaKey) {
+                if (currentQ?.options[2]) {
+                    e.preventDefault();
+                    handleSelectOption(currentQ.options[2].id);
+                }
+            } else if (key === 'D' || key === '4') {
+                e.preventDefault();
+                if (currentQ?.options[3]) handleSelectOption(currentQ.options[3].id);
+            } else if (key === 'E' || key === '5') {
+                e.preventDefault();
+                if (currentQ?.options[4]) handleSelectOption(currentQ.options[4].id);
+            } else if (key === 'N' || key === 'ARROWRIGHT') {
+                e.preventDefault();
+                setCurrentIndex(prev => Math.min(questions.length - 1, prev + 1));
+            } else if (key === 'P' || key === 'ARROWLEFT') {
+                e.preventDefault();
+                setCurrentIndex(prev => Math.max(0, prev - 1));
+            } else if (key === 'R') {
+                e.preventDefault();
+                toggleFlag();
+            } else if (key === 'S' && (e.ctrlKey || e.metaKey || isJambView)) {
+                e.preventDefault();
+                setShowSubmitConfirm(true);
+            } else if (key === 'ESCAPE') {
+                e.preventDefault();
+                if (showSubmitConfirm) setShowSubmitConfirm(false);
+                else if (showCalculator) setShowCalculator(false);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [currentIndex, currentQ, questions.length, showSubmitConfirm, showCalculator, isJambView]);
+
     const formatTime = (secs: number) => {
         const m = Math.floor(secs / 60);
         const s = secs % 60;
         return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     };
 
-    const currentQ = questions[currentIndex];
     const answeredCount = Object.keys(selectedAnswers).length;
     const flaggedCount = Object.values(flagged).filter(Boolean).length;
     const unansweredCount = questions.length - answeredCount;
@@ -198,6 +267,21 @@ export const ExamSimulationModal: React.FC<Props> = ({
                         <span className="hidden md:inline">Calculator</span>
                     </button>
 
+                    {/* Official JAMB Center View Toggle */}
+                    <button
+                        onClick={toggleJambView}
+                        className={`px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                            isJambView
+                                ? 'bg-[#0f2e1e] text-emerald-300 border-emerald-500 shadow-sm ring-1 ring-emerald-500/30'
+                                : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] bg-[var(--color-surface)]'
+                        }`}
+                        title="Toggle Official JAMB Test Center High-Contrast Mode"
+                    >
+                        <Monitor className="w-3.5 h-3.5 shrink-0" />
+                        <span className="hidden lg:inline">{isJambView ? 'Official JAMB Center: ON' : 'JAMB Center View'}</span>
+                        <span className="lg:hidden">JAMB View</span>
+                    </button>
+
                     {/* Submit Button */}
                     <button
                         onClick={() => setShowSubmitConfirm(true)}
@@ -218,6 +302,22 @@ export const ExamSimulationModal: React.FC<Props> = ({
                     </button>
                 </div>
             </header>
+
+            {/* Authentic JAMB Institutional Banner when JAMB Center View is active */}
+            {isJambView && (
+                <div className="bg-[#0b1b13] border-b border-emerald-800/40 text-emerald-200 px-3 sm:px-8 py-1.5 text-[10px] sm:text-xs font-mono font-bold flex flex-wrap items-center justify-between shrink-0 shadow-inner">
+                    <div className="flex items-center gap-2">
+                        <span className="text-emerald-400 font-black">FEDERAL REPUBLIC OF NIGERIA</span>
+                        <span className="text-emerald-600">•</span>
+                        <span className="text-slate-200">JOINT ADMISSIONS AND MATRICULATION BOARD (JAMB CBT)</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-emerald-300/90 text-[10px]">
+                        <span>CANDIDATE: ACE-2026-ONLINE</span>
+                        <span>REG: 20268849CA</span>
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 font-black">TERMINAL #14</span>
+                    </div>
+                </div>
+            )}
 
             {/* Main Area */}
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
@@ -333,18 +433,53 @@ export const ExamSimulationModal: React.FC<Props> = ({
                             <button
                                 disabled={currentIndex === 0}
                                 onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
-                                className="px-6 py-2.5 rounded-xl border border-[var(--color-border)] font-bold text-sm text-[var(--color-text)] hover:bg-[var(--color-surface)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all"
+                                className="px-6 py-2.5 rounded-xl border border-[var(--color-border)] font-bold text-sm text-[var(--color-text)] hover:bg-[var(--color-surface)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all flex items-center gap-1.5"
                             >
-                                ← Previous
+                                <span>← Previous</span>
+                                <kbd className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[10px] font-mono text-[var(--color-muted)]">P</kbd>
                             </button>
 
                             <button
                                 disabled={currentIndex === questions.length - 1}
                                 onClick={() => setCurrentIndex(prev => Math.min(questions.length - 1, prev + 1))}
-                                className="px-8 py-2.5 rounded-xl bg-[var(--color-primary)] text-white font-bold text-sm hover:bg-[var(--color-primary-hover)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all shadow-md"
+                                className="px-8 py-2.5 rounded-xl bg-[var(--color-primary)] text-white font-bold text-sm hover:bg-[var(--color-primary-hover)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all shadow-md flex items-center gap-1.5"
                             >
-                                Next →
+                                <span>Next →</span>
+                                <kbd className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-black/20 border border-white/30 text-[10px] font-mono text-white/90">N</kbd>
                             </button>
+                        </div>
+
+                        {/* Real CBT Keyboard Shortcut Ribbon */}
+                        <div className="p-3 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-between gap-2 flex-wrap text-[11px] text-[var(--color-muted)] font-medium">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                <Keyboard className="w-3.5 h-3.5 text-[var(--color-primary)] shrink-0" />
+                                <span className="font-bold text-[var(--color-text)]">CBT Hotkeys:</span>
+                                <div className="inline-flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 rounded bg-[var(--color-surface-hover)] border border-[var(--color-border)] font-mono text-[10px] font-bold">A</kbd>
+                                    <kbd className="px-1.5 py-0.5 rounded bg-[var(--color-surface-hover)] border border-[var(--color-border)] font-mono text-[10px] font-bold">B</kbd>
+                                    <kbd className="px-1.5 py-0.5 rounded bg-[var(--color-surface-hover)] border border-[var(--color-border)] font-mono text-[10px] font-bold">C</kbd>
+                                    <kbd className="px-1.5 py-0.5 rounded bg-[var(--color-surface-hover)] border border-[var(--color-border)] font-mono text-[10px] font-bold">D</kbd>
+                                    <span>Select Option</span>
+                                </div>
+                                <span className="text-[var(--color-muted)]">•</span>
+                                <div className="inline-flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 rounded bg-[var(--color-surface-hover)] border border-[var(--color-border)] font-mono text-[10px] font-bold">N</kbd>
+                                    <span>Next</span>
+                                </div>
+                                <span className="text-[var(--color-muted)]">•</span>
+                                <div className="inline-flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 rounded bg-[var(--color-surface-hover)] border border-[var(--color-border)] font-mono text-[10px] font-bold">P</kbd>
+                                    <span>Prev</span>
+                                </div>
+                                <span className="text-[var(--color-muted)]">•</span>
+                                <div className="inline-flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 rounded bg-[var(--color-surface-hover)] border border-[var(--color-border)] font-mono text-[10px] font-bold">R</kbd>
+                                    <span>Flag</span>
+                                </div>
+                            </div>
+                            <span className="text-[10px] text-[var(--color-muted)] hidden md:inline">
+                                Realistic JAMB Test-Center controls
+                            </span>
                         </div>
                     </div>
                 </main>
@@ -433,16 +568,16 @@ export const ExamSimulationModal: React.FC<Props> = ({
 
             {/* Submit Confirmation Dialog */}
             {showSubmitConfirm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)] backdrop-blur-md p-4 animate-fade-in">
-                    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl text-center space-y-5">
-                        <div className="w-14 h-14 rounded-2xl bg-[var(--color-accent-10)] text-[var(--color-accent)] border border-[var(--color-accent-20)] flex items-center justify-center mx-auto">
-                            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)] backdrop-blur-md p-3 sm:p-4 animate-fade-in">
+                    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8 max-w-md w-full shadow-2xl text-center space-y-4 sm:space-y-5 max-h-[92vh] overflow-y-auto">
+                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[var(--color-accent-10)] text-[var(--color-accent)] border border-[var(--color-accent-20)] flex items-center justify-center mx-auto">
+                            <svg className="w-6 h-6 sm:w-7 sm:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                             </svg>
                         </div>
 
                         <div>
-                            <h3 className="text-lg font-bold text-[var(--color-text)]">Submit Examination?</h3>
+                            <h3 className="text-base sm:text-lg font-bold text-[var(--color-text)]">Submit Examination?</h3>
                             <p className="text-xs text-[var(--color-muted)] mt-1">
                                 Are you sure you want to end this test simulation?
                             </p>
@@ -467,17 +602,17 @@ export const ExamSimulationModal: React.FC<Props> = ({
                             </div>
                         </div>
 
-                        <div className="flex gap-3 pt-2">
+                        <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-2">
                             <button
                                 onClick={() => setShowSubmitConfirm(false)}
-                                className="flex-1 py-2.5 rounded-xl border border-[var(--color-border)] text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] cursor-pointer"
+                                className="w-full sm:flex-1 py-2.5 rounded-xl border border-[var(--color-border)] text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] cursor-pointer text-center"
                             >
                                 Return to Exam
                             </button>
                             <button
                                 disabled={isSubmitting}
                                 onClick={handleFinalSubmit}
-                                className="flex-1 py-2.5 rounded-xl bg-[var(--color-success)] text-white text-xs font-bold hover:opacity-90 disabled:opacity-50 cursor-pointer shadow-sm"
+                                className="w-full sm:flex-1 py-2.5 rounded-xl bg-[var(--color-success)] text-white text-xs font-bold hover:opacity-90 disabled:opacity-50 cursor-pointer shadow-sm text-center"
                             >
                                 {isSubmitting ? 'Grading...' : 'Yes, Submit'}
                             </button>

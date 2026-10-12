@@ -51,6 +51,7 @@ export default function QuestionBankTab({
     const [questionForm, setQuestionForm] = useState<QuestionFormData>({
         topic_id: '',
         question_text: '',
+        image_url: '',
         type: 'multiple_choice',
         difficulty: 'medium',
         explanation: '',
@@ -105,6 +106,7 @@ export default function QuestionBankTab({
         setQuestionForm({
             topic_id: allTopics[0]?.id ? String(allTopics[0].id) : '',
             question_text: '',
+            image_url: '',
             type: 'multiple_choice',
             difficulty: 'medium',
             explanation: '',
@@ -123,6 +125,7 @@ export default function QuestionBankTab({
         setQuestionForm({
             topic_id: String(q.topic_id),
             question_text: q.question_text,
+            image_url: q.image_url || '',
             type: q.type,
             difficulty: q.difficulty,
             explanation: q.explanation || '',
@@ -255,6 +258,7 @@ export default function QuestionBankTab({
                     topic_id: Number(bulkTopicId),
                     questions: extractedQuestions.map((q) => ({
                         question_text: q.question_text,
+                        image_url: q.image_url || null,
                         type: q.type || 'multiple_choice',
                         difficulty: q.difficulty || 'medium',
                         explanation: q.explanation || null,
@@ -287,6 +291,7 @@ export default function QuestionBankTab({
                         id: Date.now() + Math.floor(Math.random() * 1000),
                         topic_id: Number(bulkTopicId),
                         question_text: q.question_text,
+                        image_url: q.image_url || null,
                         type: q.type || 'multiple_choice',
                         difficulty: q.difficulty || 'medium',
                         explanation: q.explanation || null,
@@ -315,6 +320,7 @@ export default function QuestionBankTab({
                         payload: {
                             topic_id: Number(bulkTopicId),
                             question_text: q.question_text,
+                            image_url: q.image_url || null,
                             type: q.type || 'multiple_choice',
                             difficulty: q.difficulty || 'medium',
                             explanation: q.explanation || null,
@@ -341,8 +347,10 @@ export default function QuestionBankTab({
         }
     };
 
-    const handleSaveQuestion = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSaveQuestion = async (e?: React.FormEvent, stayOpenAndAddNext: boolean = false) => {
+        if (e && typeof e.preventDefault === 'function') {
+            e.preventDefault();
+        }
         if (isSavingQuestion) return;
         setIsSavingQuestion(true);
 
@@ -356,6 +364,7 @@ export default function QuestionBankTab({
                 id: editingQuestion ? editingQuestion.id : Date.now(),
                 topic_id: Number(questionForm.topic_id),
                 question_text: questionForm.question_text,
+                image_url: questionForm.image_url || null,
                 type: questionForm.type,
                 difficulty: questionForm.difficulty,
                 explanation: questionForm.explanation || null,
@@ -386,10 +395,30 @@ export default function QuestionBankTab({
             });
 
             if (res.success) {
-                showToast(res.message || (res.offline ? 'Question saved locally (Pending Sync)' : 'Question saved successfully'), 'success');
-                setIsQuestionModalOpen(false);
-                setEditingQuestion(null);
-                resetQuestionForm();
+                if (stayOpenAndAddNext && !editingQuestion) {
+                    showToast(
+                        res.message || (res.offline ? 'Question saved locally! Ready for next question.' : 'Question saved! Ready for next question.'),
+                        'success'
+                    );
+                    // Reset text and options but keep topic_id, difficulty, and type intact for rapid entry
+                    setQuestionForm((prev) => ({
+                        ...prev,
+                        question_text: '',
+                        image_url: '',
+                        explanation: '',
+                        options: [
+                            { option_text: '', is_correct: true },
+                            { option_text: '', is_correct: false },
+                            { option_text: '', is_correct: false },
+                            { option_text: '', is_correct: false },
+                        ],
+                    }));
+                } else {
+                    showToast(res.message || (res.offline ? 'Question saved locally (Pending Sync)' : 'Question saved successfully'), 'success');
+                    setIsQuestionModalOpen(false);
+                    setEditingQuestion(null);
+                    resetQuestionForm();
+                }
                 onRefresh();
             } else {
                 showToast(res.error || 'Failed to save question', 'error');
@@ -587,8 +616,10 @@ export default function QuestionBankTab({
                 school={school}
                 allowedGradeLevels={allowedGradeLevels}
                 isTeacher={isTeacher}
-                onSubmit={handleSaveQuestion}
+                onSubmit={(e) => handleSaveQuestion(e, false)}
+                onSaveAndAddNext={(e) => handleSaveQuestion(e, true)}
                 isSubmitting={isSavingQuestion}
+                showToast={showToast}
             />
 
             {/* Modal: AI Bulk Import */}

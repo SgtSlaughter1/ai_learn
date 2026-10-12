@@ -344,3 +344,53 @@ export function extractLiteratureContext(explanation?: string | null): string | 
     }
     return null;
 }
+
+/**
+ * Translates common LaTeX and mathematical notations into a clean, human-readable
+ * aria string for screen readers (Sam: low-vision / screen-reader accessibility).
+ */
+export function generateAccessibleMathLabel(mathText: string): string {
+    if (!mathText) return '';
+    let speech = mathText;
+
+    // Fractions: \frac{a}{b} -> "fraction a over b"
+    speech = speech.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, 'fraction $1 over $2');
+    speech = speech.replace(/\\dfrac\{([^}]+)\}\{([^}]+)\}/g, 'fraction $1 over $2');
+
+    // Square roots: \sqrt{x} -> "square root of x", \sqrt[n]{x} -> "n-th root of x"
+    speech = speech.replace(/\\sqrt\[([^\]]+)\]\{([^}]+)\}/g, '$1-th root of $2');
+    speech = speech.replace(/\\sqrt\{([^}]+)\}/g, 'square root of $1');
+
+    // Powers and subscripts: x^{2} -> "x squared", x^{3} -> "x cubed", x^{n} -> "x to the power of n"
+    speech = speech.replace(/\^\{2\}/g, ' squared');
+    speech = speech.replace(/\^\{3\}/g, ' cubed');
+    speech = speech.replace(/\^\{([^}]+)\}/g, ' to the power of $1');
+    speech = speech.replace(/_\{([^}]+)\}/g, ' sub $1');
+
+    // Greek letters
+    speech = speech.replace(/\\alpha/g, 'alpha');
+    speech = speech.replace(/\\beta/g, 'beta');
+    speech = speech.replace(/\\gamma/g, 'gamma');
+    speech = speech.replace(/\\theta/g, 'theta');
+    speech = speech.replace(/\\pi/g, 'pi');
+    speech = speech.replace(/\\lambda/g, 'lambda');
+    speech = speech.replace(/\\mu/g, 'mu');
+
+    // Operators and symbols
+    speech = speech.replace(/\\pm/g, 'plus or minus');
+    speech = speech.replace(/\\times/g, 'times');
+    speech = speech.replace(/\\div/g, 'divided by');
+    speech = speech.replace(/\\le/g, 'less than or equal to');
+    speech = speech.replace(/\\ge/g, 'greater than or equal to');
+    speech = speech.replace(/\\neq/g, 'not equal to');
+    speech = speech.replace(/\\approx/g, 'approximately equal to');
+    speech = speech.replace(/\\infty/g, 'infinity');
+    speech = speech.replace(/\^{\\circ}/g, ' degrees');
+
+    // Clean any remaining TeX backslashes, braces and dollar signs
+    speech = speech.replace(/[\$\{\}]/g, '');
+    speech = speech.replace(/\\[a-zA-Z]+/g, ' ');
+    speech = speech.replace(/\s+/g, ' ').trim();
+
+    return speech;
+}

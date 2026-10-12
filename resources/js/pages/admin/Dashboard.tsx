@@ -33,7 +33,45 @@ import QuestionBankTab from '@/components/admin/QuestionBankTab';
 
 export default function Dashboard() {
     const { auth } = usePage<{ auth: { user: { id: number; name: string; email: string; role: string } } }>().props;
-    const [activeTab, setActiveTab] = useState<'overview' | 'schools' | 'school_admins' | 'teachers' | 'classes' | 'learners' | 'subjects' | 'questions'>('overview');
+    const { url } = usePage();
+
+    const parseTabFromUrl = (targetUrl?: string): 'overview' | 'schools' | 'school_admins' | 'teachers' | 'classes' | 'learners' | 'subjects' | 'questions' => {
+        if (typeof window === 'undefined') return 'overview';
+        const rawSearch = targetUrl && targetUrl.includes('?') ? targetUrl.split('?')[1] : window.location.search;
+        const tab = new URLSearchParams(rawSearch).get('tab');
+        if (tab && ['overview', 'schools', 'school_admins', 'teachers', 'classes', 'learners', 'subjects', 'questions'].includes(tab)) {
+            return tab as any;
+        }
+        return 'overview';
+    };
+
+    const [activeTab, setActiveTab] = useState<'overview' | 'schools' | 'school_admins' | 'teachers' | 'classes' | 'learners' | 'subjects' | 'questions'>(() => parseTabFromUrl());
+
+    useEffect(() => {
+        setActiveTab(parseTabFromUrl(url));
+    }, [url]);
+
+    useEffect(() => {
+        const handlePopState = () => {
+            setActiveTab(parseTabFromUrl());
+        };
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
+
+    const handleTabChange = (key: 'overview' | 'schools' | 'school_admins' | 'teachers' | 'classes' | 'learners' | 'subjects' | 'questions') => {
+        setActiveTab(key);
+        if (typeof window !== 'undefined') {
+            const urlObj = new URL(window.location.href);
+            if (key === 'overview') {
+                urlObj.searchParams.delete('tab');
+            } else {
+                urlObj.searchParams.set('tab', key);
+            }
+            window.history.replaceState({}, '', urlObj.toString());
+            window.dispatchEvent(new Event('urlchange'));
+        }
+    };
     
     // Data States
     const [stats, setStats] = useState<Stats | null>(null);
@@ -494,8 +532,8 @@ export default function Dashboard() {
                     {visibleTabs.map((tab) => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 cursor-pointer active:scale-[0.98] whitespace-nowrap ${
+                            onClick={() => handleTabChange(tab.id as any)}
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 cursor-pointer active:scale-[0.98] whitespace-nowrap shrink-0 ${
                                 activeTab === tab.id
                                     ? 'bg-[var(--color-primary)] text-white shadow-sm'
                                     : 'text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'

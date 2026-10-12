@@ -11,6 +11,7 @@ export interface QuizQuestion {
     id: number;
     topic_id?: number;
     question_text: string;
+    image_url?: string | null;
     type: string;
     difficulty?: string;
     explanation?: string;
@@ -60,6 +61,19 @@ export function QuestionCard({
                         </span>
                     )}
                 </div>
+
+                {/* Attached Diagram / Image */}
+                {question.image_url && (
+                    <div className="flex justify-center my-3">
+                        <img
+                            src={question.image_url}
+                            alt="Question diagram"
+                            className="max-h-64 max-w-full rounded-2xl border border-[var(--color-border)] shadow-sm object-contain bg-[var(--color-background)]"
+                            loading="lazy"
+                        />
+                    </div>
+                )}
+
                 <div className="chat-markdown text-lg md:text-xl font-bold leading-relaxed text-[var(--color-text)]">
                     <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                         {question.question_text}

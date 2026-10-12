@@ -29,7 +29,45 @@ import { Skeleton } from '@/components/common/Skeleton';
 
 export default function SchoolAdminDashboard() {
     const { auth } = usePage<{ auth: { user: { id: number; name: string; email: string; role: string } } }>().props;
-    const [activeTab, setActiveTab] = useState<'overview' | 'teachers' | 'classes' | 'learners' | 'subjects' | 'questions'>('overview');
+    const { url } = usePage();
+
+    const parseTabFromUrl = (targetUrl?: string): 'overview' | 'teachers' | 'classes' | 'learners' | 'subjects' | 'questions' => {
+        if (typeof window === 'undefined') return 'overview';
+        const rawSearch = targetUrl && targetUrl.includes('?') ? targetUrl.split('?')[1] : window.location.search;
+        const tab = new URLSearchParams(rawSearch).get('tab');
+        if (tab && ['overview', 'teachers', 'classes', 'learners', 'subjects', 'questions'].includes(tab)) {
+            return tab as any;
+        }
+        return 'overview';
+    };
+
+    const [activeTab, setActiveTab] = useState<'overview' | 'teachers' | 'classes' | 'learners' | 'subjects' | 'questions'>(() => parseTabFromUrl());
+
+    useEffect(() => {
+        setActiveTab(parseTabFromUrl(url));
+    }, [url]);
+
+    useEffect(() => {
+        const handlePopState = () => {
+            setActiveTab(parseTabFromUrl());
+        };
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
+
+    const handleTabChange = (key: 'overview' | 'teachers' | 'classes' | 'learners' | 'subjects' | 'questions') => {
+        setActiveTab(key);
+        if (typeof window !== 'undefined') {
+            const urlObj = new URL(window.location.href);
+            if (key === 'overview') {
+                urlObj.searchParams.delete('tab');
+            } else {
+                urlObj.searchParams.set('tab', key);
+            }
+            window.history.replaceState({}, '', urlObj.toString());
+            window.dispatchEvent(new Event('urlchange'));
+        }
+    };
 
     // Data States
     const [stats, setStats] = useState<Stats | null>(null);
@@ -434,8 +472,8 @@ export default function SchoolAdminDashboard() {
                     ].map((tab) => (
                         <button
                             key={tab.key}
-                            onClick={() => setActiveTab(tab.key)}
-                            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+                            onClick={() => handleTabChange(tab.key)}
+                            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 ${
                                 activeTab === tab.key
                                     ? 'bg-[var(--color-primary)] text-white shadow-xs'
                                     : 'text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] bg-[var(--color-surface)] border border-[var(--color-border)]'

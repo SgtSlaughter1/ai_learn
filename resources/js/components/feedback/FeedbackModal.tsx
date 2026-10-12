@@ -87,8 +87,8 @@ export default function FeedbackModal({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl max-w-lg w-full p-6 sm:p-7 shadow-2xl relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl max-w-lg w-full p-5 sm:p-7 shadow-2xl relative max-h-[92vh] overflow-y-auto">
                 <button
                     type="button"
                     onClick={handleClose}
@@ -116,7 +116,7 @@ export default function FeedbackModal({
                         <button
                             type="button"
                             onClick={handleClose}
-                            className="px-6 py-2.5 text-xs font-bold text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] rounded-xl transition-all cursor-pointer"
+                            className="w-full sm:w-auto px-6 py-2.5 text-xs font-bold text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] rounded-xl transition-all cursor-pointer text-center"
                         >
                             Close
                         </button>
@@ -180,18 +180,18 @@ export default function FeedbackModal({
                                 />
                             </div>
 
-                            <div className="pt-2 flex items-center justify-end gap-3">
+                            <div className="pt-2 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5">
                                 <button
                                     type="button"
                                     onClick={handleClose}
-                                    className="px-4 py-2 text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-xl transition-colors cursor-pointer"
+                                    className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-xl transition-colors cursor-pointer text-center"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={submitting || !message.trim()}
-                                    className="px-6 py-2.5 text-xs font-bold text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] rounded-xl transition-all disabled:opacity-50 cursor-pointer"
+                                    className="w-full sm:w-auto justify-center px-6 py-2.5 text-xs font-bold text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] rounded-xl transition-all disabled:opacity-50 cursor-pointer flex items-center"
                                 >
                                     {submitting ? 'Sending...' : 'Send Feedback'}
                                 </button>

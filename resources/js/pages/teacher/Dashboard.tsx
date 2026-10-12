@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import type { QuestionItem, SubjectItem, TopicItem, ClassItem as AdminClassItem } from '@/types/admin';
 import {
@@ -149,7 +149,47 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
         grade_level: '',
     });
     const [savingLearner, setSavingLearner] = useState(false);
-    const [activeTab, setActiveTab] = useState<'overview' | 'learners' | 'top' | 'struggling' | 'questions'>('overview');
+
+    const { url } = usePage();
+
+    const parseTabFromUrl = (targetUrl?: string): 'overview' | 'learners' | 'top' | 'struggling' | 'questions' => {
+        if (typeof window === 'undefined') return 'overview';
+        const rawSearch = targetUrl && targetUrl.includes('?') ? targetUrl.split('?')[1] : window.location.search;
+        const tab = new URLSearchParams(rawSearch).get('tab');
+        if (tab && ['overview', 'learners', 'top', 'struggling', 'questions'].includes(tab)) {
+            return tab as any;
+        }
+        return 'overview';
+    };
+
+    const [activeTab, setActiveTab] = useState<'overview' | 'learners' | 'top' | 'struggling' | 'questions'>(() => parseTabFromUrl());
+
+    useEffect(() => {
+        setActiveTab(parseTabFromUrl(url));
+    }, [url]);
+
+    useEffect(() => {
+        const handlePopState = () => {
+            setActiveTab(parseTabFromUrl());
+        };
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
+
+    const handleTabChange = (key: 'overview' | 'learners' | 'top' | 'struggling' | 'questions') => {
+        setActiveTab(key);
+        if (typeof window !== 'undefined') {
+            const urlObj = new URL(window.location.href);
+            if (key === 'overview') {
+                urlObj.searchParams.delete('tab');
+            } else {
+                urlObj.searchParams.set('tab', key);
+            }
+            window.history.replaceState({}, '', urlObj.toString());
+            window.dispatchEvent(new Event('urlchange'));
+        }
+    };
+
     const [strugglingPage, setStrugglingPage] = useState(1);
 
     // Safe normalized arrays
@@ -583,14 +623,14 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                     {/* Single Unified Navigation & Class Filter Bar */}
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
                         {/* Navigation Tabs */}
-                        <div className="flex flex-wrap items-center gap-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-1.5 shadow-xs w-fit">
+                        <div className="flex items-center gap-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-1.5 shadow-xs overflow-x-auto max-w-full no-scrollbar">
                             {[
                                 {
                                     key: 'overview' as const,
                                     label: 'Overview',
                                     icon: (
                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                         </svg>
                                     ),
                                 },
@@ -634,8 +674,8 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                             ].map((tab) => (
                                 <button
                                     key={tab.key}
-                                    onClick={() => setActiveTab(tab.key)}
-                                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                                    onClick={() => handleTabChange(tab.key)}
+                                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
                                         activeTab === tab.key
                                             ? 'bg-[var(--color-primary)] text-white shadow-xs'
                                             : 'text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
@@ -671,15 +711,15 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                             </button>
 
                             {/* Class Selector Dropdown */}
-                            <div className="flex items-center gap-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl px-3.5 py-1.5 shadow-xs shrink-0 w-fit">
+                            <div className="flex items-center gap-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl px-3.5 py-1.5 shadow-xs shrink-0 max-w-full">
                                 <svg className="w-4 h-4 text-[var(--color-primary)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                                 </svg>
-                                <span className="text-xs font-bold text-[var(--color-muted)]">Class:</span>
+                                <span className="text-xs font-bold text-[var(--color-muted)] shrink-0">Class:</span>
                                 <select
                                     value={selectedClass || ''}
                                     onChange={(e) => selectClass(e.target.value ? Number(e.target.value) : null)}
-                                    className="bg-transparent text-xs font-bold text-[var(--color-text)] focus:outline-none cursor-pointer py-1 pr-2"
+                                    className="bg-transparent text-xs font-bold text-[var(--color-text)] focus:outline-none cursor-pointer py-1 pr-2 max-w-[160px] sm:max-w-none truncate"
                                 >
                                     <option value="" className="bg-[var(--color-surface)] text-[var(--color-text)]">
                                         All Classes ({stats.overview.total_learners})
@@ -956,7 +996,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                             ) : (
                                 <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-xs">
                                     <div className="overflow-x-auto">
-                                        <table className="w-full text-left text-xs">
+                                        <table className="w-full text-left text-xs min-w-[760px]">
                                             <thead>
                                                 <tr className="border-b border-[var(--color-border)] bg-[var(--color-background)]/50 text-[var(--color-muted)] font-bold uppercase tracking-wider">
                                                     <th className="py-3.5 px-4">Student</th>
@@ -1728,22 +1768,22 @@ function ClassLearnersPanel({
     const paginated = filtered.slice((page - 1) * 50, page * 50);
 
     return (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-6 shadow-xs">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <h3 className="text-base font-bold text-[var(--color-text)] flex items-center gap-2">
-                    <svg className="w-5 h-5 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-4 sm:p-6 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-5 sm:mb-6">
+                <h3 className="text-sm sm:text-base font-bold text-[var(--color-text)] flex items-center gap-2">
+                    <svg className="w-5 h-5 text-[var(--color-primary)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                     </svg>
-                    <span>{className} ({learners.length} Enrolled Learners)</span>
+                    <span className="truncate">{className} ({learners.length} Enrolled Learners)</span>
                 </h3>
-                <div className="flex items-center gap-3">
-                    <div className="relative">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
+                    <div className="relative w-full sm:w-56">
                         <input
                             type="text"
                             placeholder="Search learners..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="pl-9 pr-4 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] w-56 focus:outline-none focus:border-[var(--color-primary)]"
+                            className="w-full pl-9 pr-4 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
                         />
                         <span className="absolute left-3 top-2.5 text-[var(--color-muted)]">
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1754,7 +1794,7 @@ function ClassLearnersPanel({
                     {onAddLearner && (
                         <button
                             onClick={onAddLearner}
-                            className="px-3.5 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                            className="w-full sm:w-auto justify-center px-3.5 py-2.5 sm:py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
                         >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -1775,32 +1815,93 @@ function ClassLearnersPanel({
                 </p>
             ) : (
                 <div className="space-y-4">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-xs text-left">
+                    {/* Mobile Card List (< sm screens) */}
+                    <div className="sm:hidden space-y-3">
+                        {paginated.map((l) => (
+                            <div
+                                key={l.id}
+                                className="p-3.5 bg-[var(--color-background)]/70 border border-[var(--color-border)] rounded-xl space-y-3"
+                            >
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                        <p className="font-bold text-sm text-[var(--color-text)] truncate">{l.name}</p>
+                                        <p className="text-[11px] text-[var(--color-muted)] truncate">{l.email}</p>
+                                    </div>
+                                    <div className="shrink-0 text-right">
+                                        <span className={`font-bold text-xs ${getTierColor(l.level)}`}>Lv.{l.level}</span>
+                                        <span className="text-[10px] text-[var(--color-muted)] block">{l.tier}</span>
+                                    </div>
+                                </div>
+
+                                {/* 3-Stat Summary Pills */}
+                                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[var(--color-border)]/60 text-center">
+                                    <div className="bg-[var(--color-surface)] p-2 rounded-lg border border-[var(--color-border)]/40">
+                                        <span className="text-[10px] text-[var(--color-muted)] block font-semibold uppercase">XP</span>
+                                        <span className="text-xs font-bold text-amber-400">⚡ {l.total_xp}</span>
+                                    </div>
+                                    <div className="bg-[var(--color-surface)] p-2 rounded-lg border border-[var(--color-border)]/40">
+                                        <span className="text-[10px] text-[var(--color-muted)] block font-semibold uppercase">Streak</span>
+                                        <span className="text-xs font-bold text-amber-400">
+                                            {l.streak > 0 ? `🔥 ${l.streak}d` : '-'}
+                                        </span>
+                                    </div>
+                                    <div className="bg-[var(--color-surface)] p-2 rounded-lg border border-[var(--color-border)]/40">
+                                        <span className="text-[10px] text-[var(--color-muted)] block font-semibold uppercase">Mastery</span>
+                                        {l.total_attempted > 0 ? (
+                                            <span className={`text-[11px] font-bold ${getMasteryColor(l.avg_mastery)}`}>
+                                                {l.avg_mastery}%
+                                            </span>
+                                        ) : (
+                                            <span className="text-[10px] text-[var(--color-muted)] font-medium">New</span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Bottom Row: Accuracy and Diagnostic Action */}
+                                <div className="flex items-center justify-between pt-1 gap-2">
+                                    <div className="text-[11px] text-[var(--color-muted)]">
+                                        Accuracy: <span className="font-bold text-[var(--color-text)]">{l.total_attempted > 0 ? `${Math.round((l.total_correct / l.total_attempted) * 100)}%` : '-'}</span>
+                                    </div>
+                                    {onSelectDiagnostic && (
+                                        <button
+                                            onClick={() => onSelectDiagnostic(l.id)}
+                                            className="px-3 py-1.5 bg-[var(--color-primary-5)] hover:bg-[var(--color-primary)] hover:text-white text-[var(--color-primary)] font-bold text-xs rounded-lg border border-[var(--color-primary-10)] transition-colors cursor-pointer"
+                                        >
+                                            Diagnostic Report →
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Desktop / Tablet Table (>= sm screens) */}
+                    <div className="hidden sm:block overflow-x-auto">
+                        <table className="w-full text-xs text-left min-w-[640px]">
                             <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)] font-bold uppercase tracking-wider">
                                 <tr>
-                                    <th className="pb-3">Name</th>
-                                    <th className="pb-3">Level</th>
-                                    <th className="pb-3">XP</th>
-                                    <th className="pb-3">Streak</th>
-                                    <th className="pb-3">Mastery</th>
-                                    <th className="pb-3">Accuracy</th>
-                                    <th className="pb-3 text-right">Diagnostic</th>
+                                    <th className="pb-3 pr-3">Name</th>
+                                    <th className="pb-3 px-3">Level</th>
+                                    <th className="pb-3 px-3">XP</th>
+                                    <th className="pb-3 px-3">Streak</th>
+                                    <th className="pb-3 px-3">Mastery</th>
+                                    <th className="pb-3 px-3">Accuracy</th>
+                                    <th className="pb-3 pl-3 text-right">Diagnostic</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--color-border)]">
                                 {paginated.map((l) => (
                                     <tr key={l.id} className="hover:bg-[var(--color-background)] transition-colors">
-                                        <td className="py-3">
+                                        <td className="py-3 pr-3 min-w-[160px]">
                                             <p className="font-bold text-[var(--color-text)]">{l.name}</p>
                                             <p className="text-[11px] text-[var(--color-muted)]">{l.email}</p>
                                         </td>
-                                        <td className="py-3">
+                                        <td className="py-3 px-3 whitespace-nowrap">
                                             <span className={`font-bold ${getTierColor(l.level)}`}>Lv.{l.level}</span>
                                             <span className="text-[11px] text-[var(--color-muted)] ml-1">{l.tier}</span>
                                         </td>
-                                        <td className="py-3 font-bold text-amber-400">{l.total_xp}</td>
-                                        <td className="py-3">
+                                        <td className="py-3 px-3 font-bold text-amber-400 whitespace-nowrap">{l.total_xp}</td>
+                                        <td className="py-3 px-3 whitespace-nowrap">
                                             {l.streak > 0 ? (
                                                 <span className="text-amber-400 font-bold flex items-center gap-1">
                                                     <svg className="w-3.5 h-3.5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
@@ -1812,7 +1913,7 @@ function ClassLearnersPanel({
                                                 <span className="text-[var(--color-muted)]">-</span>
                                             )}
                                         </td>
-                                        <td className="py-3">
+                                        <td className="py-3 px-3 whitespace-nowrap">
                                             {l.total_attempted > 0 ? (
                                                 <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full border ${getMasteryColor(l.avg_mastery)}`}>
                                                     {l.avg_mastery}%
@@ -1823,14 +1924,14 @@ function ClassLearnersPanel({
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="py-3">
+                                        <td className="py-3 px-3 whitespace-nowrap">
                                             <span className="text-[var(--color-muted)] font-medium">
                                                 {l.total_attempted > 0
                                                     ? `${Math.round((l.total_correct / l.total_attempted) * 100)}%`
                                                     : '-'}
                                             </span>
                                         </td>
-                                        <td className="py-3 text-right">
+                                        <td className="py-3 pl-3 text-right whitespace-nowrap">
                                             {onSelectDiagnostic && (
                                                 <button
                                                     onClick={() => onSelectDiagnostic(l.id)}

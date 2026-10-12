@@ -6,6 +6,7 @@ export interface ExtractedOption {
 
 export interface ExtractedQuestion {
     question_text: string;
+    image_url?: string | null;
     type: string;
     difficulty: string;
     explanation: string | null;

@@ -13,6 +13,7 @@ return new class extends Migration
             $table->foreignId('school_id')->nullable()->constrained('schools')->nullOnDelete();
             $table->foreignId('topic_id')->constrained()->cascadeOnDelete();
             $table->text('question_text');
+            $table->string('image_url', 500)->nullable();
             $table->string('type')->default('multiple_choice');
             $table->string('difficulty')->default('medium');
             $table->text('explanation')->nullable();

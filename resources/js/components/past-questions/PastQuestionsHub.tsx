@@ -8,7 +8,7 @@ import {
 import { ExamPracticeModal } from './ExamPracticeModal';
 import { ExamSimulationModal } from './ExamSimulationModal';
 import { ExamResultModal } from './ExamResultModal';
-import { BookOpen, Timer, Lock, ArrowRight } from 'lucide-react';
+import { BookOpen, Timer, Lock, ArrowRight, CheckCircle2, AlertCircle, HelpCircle } from 'lucide-react';
 import { usePage } from '@inertiajs/react';
 
 export const PastQuestionsHub: React.FC = () => {
@@ -332,54 +332,108 @@ export const PastQuestionsHub: React.FC = () => {
                     </span>
                 </div>
 
-                {/* Mode Action Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                    {/* Practice Mode */}
-                    <div className="p-5 rounded-2xl bg-[var(--color-accent-5)] border border-[var(--color-accent-20)] flex flex-col justify-between space-y-4">
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <div className="p-1.5 rounded-lg bg-[var(--color-accent-10)] text-[var(--color-accent)]">
-                                    <BookOpen className="w-4 h-4" />
-                                </div>
-                                <h3 className="font-bold text-sm text-[var(--color-text)]">
-                                    Interactive Practice Mode
-                                </h3>
-                            </div>
-                            <p className="text-xs text-[var(--color-muted)] mt-1.5 leading-relaxed">
-                                Self-paced learning with instant correct/wrong feedback, topic mastery, and step-by-step AI working for every question.
-                            </p>
-                        </div>
-                        <button
-                            disabled={isLoadingQuestions || filteredSubjects.length === 0}
-                            onClick={() => startSession('practice')}
-                            className="w-full py-2.5 rounded-xl bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white font-bold text-xs uppercase tracking-wider transition-colors shadow-xs cursor-pointer disabled:opacity-50"
-                        >
-                            {isLoadingQuestions ? 'Loading Questions...' : 'Start Practice Mode'}
-                        </button>
+                {/* Mode Action Cards with First-Time Candidate Guidance (Jordan) */}
+                <div className="space-y-3 pt-1">
+                    <div className="flex items-center justify-between text-xs text-[var(--color-muted)] px-1">
+                        <span className="font-bold flex items-center gap-1.5 text-[var(--color-text)]">
+                            <HelpCircle className="w-4 h-4 text-[var(--color-primary)]" />
+                            Choose Your Preparation Mode:
+                        </span>
+                        <span className="hidden sm:inline text-[11px]">
+                            Not sure? Use <strong>Practice</strong> to learn concepts, <strong>Simulation</strong> for mock exam drill.
+                        </span>
                     </div>
 
-                    {/* CBT Simulation */}
-                    <div className="p-5 rounded-2xl bg-[var(--color-primary-5)] border border-[var(--color-primary-20)] flex flex-col justify-between space-y-4">
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <div className="p-1.5 rounded-lg bg-[var(--color-primary-10)] text-[var(--color-primary)]">
-                                    <Timer className="w-4 h-4" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Practice Mode */}
+                        <div className="p-5 rounded-2xl bg-[var(--color-accent-5)] border border-[var(--color-accent-20)] flex flex-col justify-between space-y-4 hover:border-[var(--color-accent)] transition-all">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="p-1.5 rounded-lg bg-[var(--color-accent-10)] text-[var(--color-accent)]">
+                                            <BookOpen className="w-4 h-4" />
+                                        </div>
+                                        <h3 className="font-bold text-sm text-[var(--color-text)]">
+                                            Interactive Practice Mode
+                                        </h3>
+                                    </div>
+                                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-[var(--color-accent-10)] text-[var(--color-accent)] border border-[var(--color-accent-20)]">
+                                        Untimed · Study
+                                    </span>
                                 </div>
-                                <h3 className="font-bold text-sm text-[var(--color-text)]">
-                                    Timed CBT Simulation
-                                </h3>
+                                <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+                                    Low-stress, self-paced learning designed for concept mastery and step-by-step revision.
+                                </p>
+
+                                {/* Checklist */}
+                                <ul className="space-y-2 text-xs text-[var(--color-text)] pt-1">
+                                    <li className="flex items-start gap-2">
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-[var(--color-accent)] shrink-0 mt-0.5" />
+                                        <span><strong>Instant feedback:</strong> See correct answers and full working immediately</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-[var(--color-accent)] shrink-0 mt-0.5" />
+                                        <span><strong>AI Tutor hints:</strong> Step-by-step solutions with mathematical formulas</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-[var(--color-accent)] shrink-0 mt-0.5" />
+                                        <span><strong>Zero time pressure:</strong> Take as much time as you need per question</span>
+                                    </li>
+                                </ul>
                             </div>
-                            <p className="text-xs text-[var(--color-muted)] mt-1.5 leading-relaxed">
-                                Standard timed exam conditions with question palette, calculator, countdown timer, and weak-topic scorecard.
-                            </p>
+                            <button
+                                disabled={isLoadingQuestions || filteredSubjects.length === 0}
+                                onClick={() => startSession('practice')}
+                                className="w-full py-2.5 rounded-xl bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white font-bold text-xs uppercase tracking-wider transition-all shadow-xs cursor-pointer disabled:opacity-50 active:scale-[0.99]"
+                            >
+                                {isLoadingQuestions ? 'Loading Questions...' : 'Start Practice Mode (Untimed)'}
+                            </button>
                         </div>
-                        <button
-                            disabled={isLoadingQuestions || filteredSubjects.length === 0}
-                            onClick={() => startSession('simulation')}
-                            className="w-full py-2.5 rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-bold text-xs uppercase tracking-wider transition-colors shadow-xs cursor-pointer disabled:opacity-50"
-                        >
-                            {isLoadingQuestions ? 'Preparing CBT...' : 'Launch Timed CBT Simulation'}
-                        </button>
+
+                        {/* CBT Simulation */}
+                        <div className="p-5 rounded-2xl bg-[var(--color-primary-5)] border border-[var(--color-primary-20)] flex flex-col justify-between space-y-4 hover:border-[var(--color-primary)] transition-all">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="p-1.5 rounded-lg bg-[var(--color-primary-10)] text-[var(--color-primary)]">
+                                            <Timer className="w-4 h-4" />
+                                        </div>
+                                        <h3 className="font-bold text-sm text-[var(--color-text)]">
+                                            Timed CBT Simulation
+                                        </h3>
+                                    </div>
+                                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-[var(--color-primary-10)] text-[var(--color-primary)] border border-[var(--color-primary-20)]">
+                                        Strict Timer · Exam Drill
+                                    </span>
+                                </div>
+                                <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+                                    Authentic exam conditions mimicking official JAMB / WAEC Computer-Based Test centers.
+                                </p>
+
+                                {/* Checklist */}
+                                <ul className="space-y-2 text-xs text-[var(--color-text)] pt-1">
+                                    <li className="flex items-start gap-2">
+                                        <AlertCircle className="w-3.5 h-3.5 text-[var(--color-primary)] shrink-0 mt-0.5" />
+                                        <span><strong>Strict countdown timer:</strong> Official duration with auto-submit</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <AlertCircle className="w-3.5 h-3.5 text-[var(--color-primary)] shrink-0 mt-0.5" />
+                                        <span><strong>Hidden answers:</strong> Zero hints or answers revealed until final submission</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-[var(--color-primary)] shrink-0 mt-0.5" />
+                                        <span><strong>Real 1–40 Palette &amp; Hotkeys:</strong> Numbered status grid and diagnostics report</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            <button
+                                disabled={isLoadingQuestions || filteredSubjects.length === 0}
+                                onClick={() => startSession('simulation')}
+                                className="w-full py-2.5 rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-bold text-xs uppercase tracking-wider transition-all shadow-xs cursor-pointer disabled:opacity-50 active:scale-[0.99]"
+                            >
+                                {isLoadingQuestions ? 'Preparing CBT...' : 'Launch Timed CBT Simulation'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

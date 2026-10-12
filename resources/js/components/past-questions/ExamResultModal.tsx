@@ -34,21 +34,21 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)] backdrop-blur-md p-3 md:p-6 overflow-y-auto animate-fade-in">
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
                 {/* Header */}
-                <div className="p-6 border-b border-[var(--color-border)] bg-[var(--color-surface-hover)] flex items-center justify-between">
+                <div className="p-4 sm:p-6 border-b border-[var(--color-border)] bg-[var(--color-surface-hover)] flex items-center justify-between gap-3">
                     <div>
                         <span className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-primary)]">
                             Exam Simulation Scorecard
                         </span>
-                        <h2 className="text-xl font-extrabold text-[var(--color-text)] mt-0.5">
+                        <h2 className="text-lg sm:text-xl font-extrabold text-[var(--color-text)] mt-0.5">
                             {result.exam_code?.toUpperCase()} Performance Report
                         </h2>
                     </div>
 
                     <button
                         onClick={onClose}
-                        className="p-2 text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-xl hover:bg-[var(--color-border)]/50 transition-colors cursor-pointer"
+                        className="p-1.5 sm:p-2 text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-xl hover:bg-[var(--color-border)]/50 transition-colors cursor-pointer shrink-0"
                     >
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -57,10 +57,10 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                 </div>
 
                 {/* Tab Navigation */}
-                <div className="flex border-b border-[var(--color-border)] px-6 bg-[var(--color-surface)]">
+                <div className="flex border-b border-[var(--color-border)] px-4 sm:px-6 bg-[var(--color-surface)] overflow-x-auto no-scrollbar whitespace-nowrap">
                     <button
                         onClick={() => setActiveTab('summary')}
-                        className={`py-3.5 px-4 font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+                        className={`py-3.5 px-3 sm:px-4 font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer shrink-0 ${
                             activeTab === 'summary'
                                 ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
                                 : 'border-transparent text-[var(--color-muted)] hover:text-[var(--color-text)]'
@@ -70,7 +70,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                     </button>
                     <button
                         onClick={() => setActiveTab('topics')}
-                        className={`py-3.5 px-4 font-bold text-xs uppercase tracking-wider border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+                        className={`py-3.5 px-3 sm:px-4 font-bold text-xs uppercase tracking-wider border-b-2 transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
                             activeTab === 'topics'
                                 ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
                                 : 'border-transparent text-[var(--color-muted)] hover:text-[var(--color-text)]'
@@ -83,7 +83,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                     </button>
                     <button
                         onClick={() => setActiveTab('review')}
-                        className={`py-3.5 px-4 font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+                        className={`py-3.5 px-3 sm:px-4 font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer shrink-0 ${
                             activeTab === 'review'
                                 ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
                                 : 'border-transparent text-[var(--color-muted)] hover:text-[var(--color-text)]'
@@ -94,7 +94,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                 </div>
 
                 {/* Tab Body */}
-                <div className="p-6 md:p-8 overflow-y-auto flex-1 space-y-6">
+                <div className="p-4 sm:p-6 md:p-8 overflow-y-auto flex-1 space-y-6">
                     {activeTab === 'summary' && (
                         <div className="space-y-6">
                             {/* Score Card Hero */}
@@ -356,17 +356,17 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                 </div>
 
                 {/* Footer Controls */}
-                <div className="p-4 md:px-8 border-t border-[var(--color-border)] bg-[var(--color-surface-hover)] flex items-center justify-between gap-3">
+                <div className="p-4 sm:px-6 md:px-8 border-t border-[var(--color-border)] bg-[var(--color-surface-hover)] flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     <button
                         onClick={onClose}
-                        className="px-5 py-2.5 rounded-xl border border-[var(--color-border)] text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] cursor-pointer"
+                        className="w-full sm:w-auto text-center justify-center px-5 py-2.5 rounded-xl border border-[var(--color-border)] text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] cursor-pointer"
                     >
                         Back to Hub
                     </button>
 
                     <button
                         onClick={onRetake}
-                        className="px-6 py-2.5 rounded-xl bg-[var(--color-primary)] text-white text-xs font-bold hover:bg-[var(--color-primary-hover)] transition-all shadow-md cursor-pointer"
+                        className="w-full sm:w-auto text-center justify-center px-6 py-2.5 rounded-xl bg-[var(--color-primary)] text-white text-xs font-bold hover:bg-[var(--color-primary-hover)] transition-all shadow-md cursor-pointer"
                     >
                         Retake Exam ↻
                     </button>

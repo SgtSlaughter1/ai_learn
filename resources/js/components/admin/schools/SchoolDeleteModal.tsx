@@ -34,11 +34,11 @@ export default function SchoolDeleteModal({
                         Are you sure you want to remove this school? This will unlink associated classes and members.
                     </p>
                 </div>
-                <div className="flex items-center justify-end gap-3 pt-3">
+                <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-3">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-4 py-2 text-sm font-semibold text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] rounded-xl transition-colors cursor-pointer"
+                        className="w-full sm:w-auto px-4 py-2 text-sm font-semibold text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] rounded-xl transition-colors cursor-pointer text-center"
                     >
                         Cancel
                     </button>
@@ -46,7 +46,7 @@ export default function SchoolDeleteModal({
                         type="button"
                         onClick={onConfirmDelete}
                         disabled={submitting}
-                        className="px-5 py-2 text-sm font-semibold bg-[var(--color-error)] text-white hover:opacity-90 rounded-xl transition-all duration-200 cursor-pointer active:scale-[0.98] disabled:opacity-50 flex items-center gap-2"
+                        className="w-full sm:w-auto justify-center px-5 py-2 text-sm font-semibold bg-[var(--color-error)] text-white hover:opacity-90 rounded-xl transition-all duration-200 cursor-pointer active:scale-[0.98] disabled:opacity-50 flex items-center gap-2"
                     >
                         {submitting && (
                             <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">

@@ -229,6 +229,7 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/admin/questions', [AdminDashboardController::class, 'getQuestions']);
         Route::post('/admin/questions', [AdminDashboardController::class, 'saveQuestion']);
+        Route::post('/admin/questions/upload-image', [AdminDashboardController::class, 'uploadQuestionImage']);
         Route::post('/admin/questions/ai-extract', [AdminDashboardController::class, 'aiExtractQuestions']);
         Route::post('/admin/questions/ai-generate', [AdminDashboardController::class, 'aiGenerateQuestions']);
         Route::post('/admin/questions/bulk', [AdminDashboardController::class, 'bulkSaveQuestions']);

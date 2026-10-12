@@ -192,11 +192,18 @@ D) 8`);
         setExtractedQuestions(updated);
     };
 
+    const handleUpdateImageUrl = (qIdx: number, url: string | null) => {
+        const updated = [...extractedQuestions];
+        updated[qIdx].image_url = url;
+        setExtractedQuestions(updated);
+    };
+
     const handleAddBlankQuestion = () => {
         setExtractedQuestions([
             ...extractedQuestions,
             {
                 question_text: 'New Question Prompt',
+                image_url: null,
                 type: 'multiple_choice',
                 difficulty: 'medium',
                 explanation: null,
@@ -211,12 +218,12 @@ D) 8`);
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-scale-up">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-scale-up">
                 {/* Header */}
-                <div className="p-6 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-surface)]">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-[var(--color-primary-10)] text-[var(--color-primary)] border border-[var(--color-primary)]/20 flex items-center justify-center shadow-sm">
+                <div className="p-4 sm:p-6 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-surface)] gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-2xl bg-[var(--color-primary-10)] text-[var(--color-primary)] border border-[var(--color-primary)]/20 flex items-center justify-center shadow-sm shrink-0">
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path
                                     strokeLinecap="round"
@@ -226,14 +233,14 @@ D) 8`);
                                 />
                             </svg>
                         </div>
-                        <div>
-                            <h3 className="text-base font-extrabold text-[var(--color-text)] flex items-center gap-2">
-                                AI Bulk Question Import & Generator
+                        <div className="min-w-0">
+                            <h3 className="text-sm sm:text-base font-extrabold text-[var(--color-text)] flex items-center gap-2 flex-wrap">
+                                <span>AI Bulk Question Import & Generator</span>
                                 <span className="px-2.5 py-0.5 text-[10px] font-bold uppercase rounded-full bg-[var(--color-primary-10)] text-[var(--color-primary)] border border-[var(--color-primary)]/20">
                                     {step === 'input' ? 'Step 1: Input & Generate' : 'Step 2: Review & Save'}
                                 </span>
                             </h3>
-                            <p className="text-xs text-[var(--color-muted)]">
+                            <p className="text-xs text-[var(--color-muted)] truncate sm:whitespace-normal">
                                 {step === 'input'
                                     ? 'Generate 10 questions with AI for your selected topic or paste raw exam text to extract and solve.'
                                     : 'Review questions, verify answers and explanations, then save all directly to your Question Bank.'}
@@ -243,7 +250,7 @@ D) 8`);
                     <button
                         type="button"
                         onClick={onClose}
-                        className="p-2 text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] rounded-xl transition-all cursor-pointer"
+                        className="p-1.5 sm:p-2 text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] rounded-xl transition-all cursor-pointer shrink-0"
                     >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -252,7 +259,7 @@ D) 8`);
                 </div>
 
                 {/* Modal Body */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 sm:space-y-6">
                     {step === 'input' ? (
                         <div className="space-y-5">
                             {/* Grade & Class & Subject & Topic Selection */}
@@ -566,6 +573,8 @@ Ans: B`}
                                         onUpdateOptionText={handleUpdateOptionText}
                                         onRemoveOptionFromQuestion={handleRemoveOptionFromQuestion}
                                         onUpdateExplanation={handleUpdateExplanation}
+                                        onUpdateImageUrl={handleUpdateImageUrl}
+                                        showToast={showToast}
                                     />
                                 ))}
                             </div>
@@ -574,22 +583,22 @@ Ans: B`}
                 </div>
 
                 {/* Modal Footer */}
-                <div className="p-5 border-t border-[var(--color-border)] bg-[var(--color-surface)] flex items-center justify-between">
+                <div className="p-4 sm:p-5 border-t border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-5 py-2.5 text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] cursor-pointer"
+                        className="px-4 py-2.5 text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] cursor-pointer text-center"
                     >
                         Cancel
                     </button>
 
                     {step === 'input' ? (
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                             <button
                                 type="button"
                                 onClick={() => onGenerate?.(bulkGradeLevel)}
                                 disabled={isGenerating || loading || !bulkTopicId}
-                                className="px-6 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2"
+                                className="w-full sm:w-auto justify-center px-5 sm:px-6 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2"
                             >
                                 {isGenerating ? (
                                     <>
@@ -615,7 +624,7 @@ Ans: B`}
                                     type="button"
                                     onClick={onExtract}
                                     disabled={loading || isGenerating || !bulkTopicId}
-                                    className="px-6 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2"
+                                    className="w-full sm:w-auto justify-center px-5 sm:px-6 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2"
                                 >
                                     {loading ? (
                                         <>
@@ -639,11 +648,11 @@ Ans: B`}
                             )}
                         </div>
                     ) : (
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
                             <button
                                 type="button"
                                 onClick={handleAddBlankQuestion}
-                                className="px-4 py-2.5 text-xs font-bold text-[var(--color-primary)] hover:bg-[var(--color-primary-5)] rounded-xl border border-[var(--color-border)] transition-all cursor-pointer"
+                                className="w-full sm:w-auto justify-center px-4 py-2.5 text-xs font-bold text-[var(--color-primary)] hover:bg-[var(--color-primary-5)] rounded-xl border border-[var(--color-border)] transition-all cursor-pointer flex items-center"
                             >
                                 + Add Blank Question
                             </button>
@@ -651,7 +660,7 @@ Ans: B`}
                                 type="button"
                                 onClick={onSave}
                                 disabled={isSubmitting || extractedQuestions.length === 0}
-                                className="px-6 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2"
+                                className="w-full sm:w-auto justify-center px-5 sm:px-6 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2"
                             >
                                 {isSubmitting ? (
                                     <>

@@ -14,6 +14,7 @@ export interface ResultAnswer {
     id: string;
     question_id: number;
     question_text: string;
+    image_url?: string | null;
     explanation: string;
     selected_option_id: number | null;
     is_correct: boolean;
@@ -74,6 +75,16 @@ export function ResultQuestionBreakdown({
                                         {formatMathText(answer.question_text)}
                                     </Markdown>
                                 </h3>
+                                {answer.image_url && (
+                                    <div className="flex justify-center my-3">
+                                        <img
+                                            src={answer.image_url}
+                                            alt="Question diagram"
+                                            className="max-h-56 max-w-full rounded-2xl border border-[var(--color-border)] shadow-xs object-contain bg-[var(--color-background)]"
+                                            loading="lazy"
+                                        />
+                                    </div>
+                                )}
                             </div>
 
                             <div className="shrink-0 self-start sm:self-auto">

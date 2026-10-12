@@ -239,6 +239,7 @@ export interface QuestionItem {
     school?: { id: number; name: string } | null;
     topic_id: number;
     question_text: string;
+    image_url?: string | null;
     type: string;
     difficulty: string;
     explanation: string | null;

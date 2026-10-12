@@ -1,5 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import ChatWidget from '@/components/ui/ChatWidget';
 import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt';
 import UserProfileMenu from '@/components/ui/UserProfileMenu';
@@ -23,7 +23,25 @@ interface PageProps {
 export default function AuthenticatedLayout({ children, header }: { children: React.ReactNode; header?: React.ReactNode }) {
     const { auth } = usePage<PageProps>().props;
     const { url } = usePage();
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [currentPathWithQuery, setCurrentPathWithQuery] = useState(url);
+
+    useEffect(() => {
+        setCurrentPathWithQuery(url);
+    }, [url]);
+
+    useEffect(() => {
+        const handleLocationChange = () => {
+            if (typeof window !== 'undefined') {
+                setCurrentPathWithQuery(window.location.pathname + window.location.search);
+            }
+        };
+        window.addEventListener('popstate', handleLocationChange);
+        window.addEventListener('urlchange', handleLocationChange);
+        return () => {
+            window.removeEventListener('popstate', handleLocationChange);
+            window.removeEventListener('urlchange', handleLocationChange);
+        };
+    }, []);
 
     useEffect(() => {
         // Trigger background curriculum preloading whenever user is online
@@ -68,65 +86,26 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
 
     return (
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex flex-col relative">
-            {/* Mobile Header Bar */}
-            <div className="md:hidden bg-[var(--color-surface)] border-b border-[var(--color-border)] px-4 py-3 flex items-center justify-between sticky top-0 z-50">
+            {/* Mobile Clean Top Header Bar */}
+            <div className="md:hidden bg-[var(--color-surface)] border-b border-[var(--color-border)] px-4 py-3 flex items-center justify-between sticky top-0 z-30 shadow-xs">
                 <Link
                     href="/dashboard"
-                    className="text-xl font-bold text-[var(--color-primary)] tracking-tight"
+                    className="text-xl font-bold text-[var(--color-primary)] tracking-tight flex items-center gap-2"
                 >
-                    AceDrill
+                    <span>AceDrill</span>
                 </Link>
                 <div className="flex items-center gap-2">
                     <UserProfileMenu user={auth?.user} />
-
-                    <button
-                        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                        className="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-md focus:outline-none min-h-[38px] min-w-[38px] flex items-center justify-center cursor-pointer"
-                        aria-label="Toggle Menu"
-                    >
-                        <svg className="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
-                            {isMobileMenuOpen ? (
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                            ) : (
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-                            )}
-                        </svg>
-                    </button>
                 </div>
             </div>
 
-            {/* Mobile Backdrop Overlay */}
-            {isMobileMenuOpen && (
-                <div
-                    className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 md:hidden animate-fade-in"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    aria-hidden="true"
-                />
-            )}
-
-            {/* Fixed Sidebar Container */}
+            {/* Desktop Fixed Sidebar Container (Hidden on mobile) */}
             <aside
-                className={`fixed inset-y-0 left-0 transform ${
-                    isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-                } md:translate-x-0 transition-transform duration-200 ease-in-out z-50 w-72 md:w-64 bg-[var(--color-primary)] flex flex-col justify-between h-screen overflow-y-auto shadow-2xl md:shadow-none`}
+                className="hidden md:flex fixed inset-y-0 left-0 z-40 w-64 bg-[var(--color-primary)] flex-col justify-between h-screen overflow-y-auto"
             >
                 <div>
-                    {/* Mobile Close Button & Header */}
-                    <div className="md:hidden flex items-center justify-between p-5 border-b border-white/10 bg-black/20">
-                        <span className="text-white font-bold text-xl tracking-tight">AceDrill</span>
-                        <button
-                            onClick={() => setIsMobileMenuOpen(false)}
-                            className="p-1.5 text-white/70 hover:text-white rounded-lg hover:bg-white/10 focus:outline-none cursor-pointer"
-                            aria-label="Close Menu"
-                        >
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
-
                     {/* Desktop Sidebar Brand Header */}
-                    <div className="px-6 py-6 border-b border-white/10 hidden md:block">
+                    <div className="px-6 py-6 border-b border-white/10">
                         <Link
                             href="/dashboard"
                             className="text-2xl font-bold text-white tracking-tight"
@@ -142,7 +121,6 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                             <Link
                                 href="/admin/dashboard"
                                 className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/admin/dashboard') || activeRouteClass('/super-admin/dashboard') || activeRouteClass('/school-admin/dashboard')}`}
-                                onClick={() => setIsMobileMenuOpen(false)}
                             >
                                 <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
@@ -153,7 +131,6 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                             <Link
                                 href="/teacher/dashboard"
                                 className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/teacher/dashboard') || activeRouteClass('/dashboard')}`}
-                                onClick={() => setIsMobileMenuOpen(false)}
                             >
                                 <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z" />
@@ -167,7 +144,6 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                                 <Link
                                     href="/dashboard"
                                     className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/dashboard')}`}
-                                    onClick={() => setIsMobileMenuOpen(false)}
                                 >
                                     <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -179,7 +155,6 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                                     <Link
                                         href="/subjects"
                                         className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/subjects')}`}
-                                        onClick={() => setIsMobileMenuOpen(false)}
                                     >
                                         <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
@@ -191,7 +166,6 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                                 <Link
                                     href="/general-knowledge"
                                     className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/general-knowledge')}`}
-                                    onClick={() => setIsMobileMenuOpen(false)}
                                 >
                                     <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -202,7 +176,6 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                                 <Link
                                     href="/past-questions"
                                     className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/past-questions')}`}
-                                    onClick={() => setIsMobileMenuOpen(false)}
                                 >
                                     <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
@@ -216,7 +189,6 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                                 <Link
                                     href="/flashcards"
                                     className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/flashcards')}`}
-                                    onClick={() => setIsMobileMenuOpen(false)}
                                 >
                                     <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -252,10 +224,222 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                 </header>
 
                 {/* Main Content Body */}
-                <main className="flex-1 px-3.5 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 max-w-7xl w-full mx-auto pb-24">
+                <main className="flex-1 px-3.5 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 max-w-7xl w-full mx-auto pb-28 md:pb-16">
                     {children}
                 </main>
             </div>
+
+            {/* Mobile Bottom Navigation Bar (High-ergonomics thumb zone for phone screens) */}
+            <nav
+                className="md:hidden fixed bottom-0 inset-x-0 bg-[var(--color-surface)]/95 backdrop-blur-lg border-t border-[var(--color-border)] z-30 px-2 py-1.5 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] shadow-[0_-4px_20px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.3)] transition-all"
+                aria-label="Mobile Navigation"
+            >
+                {isTeacher ? (
+                    <div className="grid grid-cols-4 items-center justify-around w-full max-w-md mx-auto">
+                        <Link
+                            href="/teacher/dashboard"
+                            preserveState
+                            preserveScroll
+                            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all min-h-[48px] ${
+                                currentPathWithQuery.startsWith('/teacher/dashboard') && (!currentPathWithQuery.includes('tab=') || currentPathWithQuery.includes('tab=overview'))
+                                    ? 'text-[var(--color-primary)] font-extrabold bg-[var(--color-primary-10)]'
+                                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                            }`}
+                        >
+                            <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                            <span>Overview</span>
+                        </Link>
+                        <Link
+                            href="/teacher/dashboard?tab=struggling"
+                            preserveState
+                            preserveScroll
+                            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all min-h-[48px] relative ${
+                                currentPathWithQuery.startsWith('/teacher/dashboard') && currentPathWithQuery.includes('tab=struggling')
+                                    ? 'text-[var(--color-primary)] font-extrabold bg-[var(--color-primary-10)]'
+                                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                            }`}
+                        >
+                            <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            <span>Targeted</span>
+                        </Link>
+                        <Link
+                            href="/teacher/dashboard?tab=learners"
+                            preserveState
+                            preserveScroll
+                            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all min-h-[48px] ${
+                                currentPathWithQuery.startsWith('/teacher/dashboard') && currentPathWithQuery.includes('tab=learners')
+                                    ? 'text-[var(--color-primary)] font-extrabold bg-[var(--color-primary-10)]'
+                                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                            }`}
+                        >
+                            <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
+                            <span>Roster</span>
+                        </Link>
+                        <Link
+                            href="/teacher/dashboard?tab=questions"
+                            preserveState
+                            preserveScroll
+                            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all min-h-[48px] ${
+                                currentPathWithQuery.startsWith('/teacher/dashboard') && currentPathWithQuery.includes('tab=questions')
+                                    ? 'text-[var(--color-primary)] font-extrabold bg-[var(--color-primary-10)]'
+                                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                            }`}
+                        >
+                            <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>Questions</span>
+                        </Link>
+                    </div>
+                ) : isAdmin ? (
+                    <div className="grid grid-cols-4 items-center justify-around w-full max-w-md mx-auto">
+                        <Link
+                            href={isSuperAdmin ? '/super-admin/dashboard' : '/admin/dashboard'}
+                            preserveState
+                            preserveScroll
+                            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all min-h-[48px] ${
+                                (currentPathWithQuery.startsWith('/admin') || currentPathWithQuery.startsWith('/super-admin') || currentPathWithQuery.startsWith('/school-admin')) &&
+                                (!currentPathWithQuery.includes('tab=') || currentPathWithQuery.includes('tab=overview'))
+                                    ? 'text-[var(--color-primary)] font-extrabold bg-[var(--color-primary-10)]'
+                                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                            }`}
+                        >
+                            <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                            <span>Overview</span>
+                        </Link>
+                        <Link
+                            href={isSuperAdmin ? '/super-admin/dashboard?tab=schools' : '/admin/dashboard?tab=classes'}
+                            preserveState
+                            preserveScroll
+                            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all min-h-[48px] ${
+                                currentPathWithQuery.includes('tab=classes') || currentPathWithQuery.includes('tab=schools')
+                                    ? 'text-[var(--color-primary)] font-extrabold bg-[var(--color-primary-10)]'
+                                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                            }`}
+                        >
+                            <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                            <span>{isSuperAdmin ? 'Schools' : 'Classes'}</span>
+                        </Link>
+                        <Link
+                            href={isSuperAdmin ? '/super-admin/dashboard?tab=school_admins' : '/admin/dashboard?tab=learners'}
+                            preserveState
+                            preserveScroll
+                            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all min-h-[48px] ${
+                                currentPathWithQuery.includes('tab=learners') || currentPathWithQuery.includes('tab=school_admins')
+                                    ? 'text-[var(--color-primary)] font-extrabold bg-[var(--color-primary-10)]'
+                                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                            }`}
+                        >
+                            <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
+                            <span>{isSuperAdmin ? 'Admins' : 'Learners'}</span>
+                        </Link>
+                        <Link
+                            href={isSuperAdmin ? '/super-admin/dashboard?tab=questions' : '/admin/dashboard?tab=questions'}
+                            preserveState
+                            preserveScroll
+                            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all min-h-[48px] ${
+                                currentPathWithQuery.includes('tab=questions')
+                                    ? 'text-[var(--color-primary)] font-extrabold bg-[var(--color-primary-10)]'
+                                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                            }`}
+                        >
+                            <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>Questions</span>
+                        </Link>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-5 items-center justify-around w-full max-w-lg mx-auto">
+                        <Link
+                            href="/dashboard"
+                            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl text-[9px] font-bold transition-all min-h-[48px] ${
+                                currentPathWithQuery === '/dashboard' || currentPathWithQuery === '/' || currentPathWithQuery.startsWith('/learner/dashboard')
+                                    ? 'text-[var(--color-primary)] font-extrabold bg-[var(--color-primary-10)]'
+                                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                            }`}
+                        >
+                            <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                            </svg>
+                            <span className="truncate">Dashboard</span>
+                        </Link>
+
+                        <Link
+                            href="/subjects"
+                            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl text-[9px] font-bold transition-all min-h-[48px] ${
+                                currentPathWithQuery.startsWith('/subjects') && !currentPathWithQuery.includes('scope=general')
+                                    ? 'text-[var(--color-primary)] font-extrabold bg-[var(--color-primary-10)]'
+                                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                            }`}
+                        >
+                            <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                            </svg>
+                            <span className="truncate">Curriculum</span>
+                        </Link>
+
+                        <Link
+                            href="/general-knowledge"
+                            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl text-[9px] font-bold transition-all min-h-[48px] ${
+                                currentPathWithQuery.startsWith('/general-knowledge') || (currentPathWithQuery.startsWith('/subjects') && currentPathWithQuery.includes('scope=general'))
+                                    ? 'text-[var(--color-primary)] font-extrabold bg-[var(--color-primary-10)]'
+                                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                            }`}
+                        >
+                            <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="truncate">Knowledge</span>
+                        </Link>
+
+                        <Link
+                            href="/past-questions"
+                            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl text-[9px] font-bold transition-all min-h-[48px] relative ${
+                                currentPathWithQuery.startsWith('/past-questions')
+                                    ? 'text-[var(--color-primary)] font-extrabold bg-[var(--color-primary-10)]'
+                                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                            }`}
+                        >
+                            <div className="relative flex items-center justify-center">
+                                <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                                </svg>
+                                <span className="absolute -top-1.5 -right-3 text-[7px] font-black px-1 rounded bg-[var(--color-accent)] text-white leading-tight">
+                                    CBT
+                                </span>
+                            </div>
+                            <span className="truncate">Past Qs</span>
+                        </Link>
+
+                        <Link
+                            href="/flashcards"
+                            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl text-[9px] font-bold transition-all min-h-[48px] ${
+                                currentPathWithQuery.startsWith('/flashcards')
+                                    ? 'text-[var(--color-primary)] font-extrabold bg-[var(--color-primary-10)]'
+                                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                            }`}
+                        >
+                            <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            </svg>
+                            <span className="truncate">Recall</span>
+                        </Link>
+                    </div>
+                )}
+            </nav>
 
             {/* Persistent AI Companion Floating Widget (Global across all pages) */}
             <ChatWidget />

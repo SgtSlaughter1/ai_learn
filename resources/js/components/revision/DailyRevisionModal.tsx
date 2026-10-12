@@ -274,24 +274,24 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
 
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-3 md:p-6 overflow-y-auto animate-fade-in">
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
                 {/* Modal Top Header */}
-                <div className="p-4 sm:p-5 border-b border-[var(--color-border)] bg-[var(--color-surface-hover)] flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-xl bg-[var(--color-accent)] text-white flex items-center justify-center shadow-xs">
+                <div className="p-3.5 sm:p-5 border-b border-[var(--color-border)] bg-[var(--color-surface-hover)] flex items-start sm:items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-xl bg-[var(--color-accent)] text-white flex items-center justify-center shadow-xs shrink-0">
                             <Zap className="w-4 h-4" />
                         </div>
-                        <div>
-                            <div className="flex items-center gap-2">
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                                 <span className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-accent)]">
                                     Today's 5-Minute AI Revision
                                 </span>
-                                <span className="text-xs text-[var(--color-muted)]">•</span>
+                                <span className="text-xs text-[var(--color-muted)] hidden sm:inline">•</span>
                                 <span className="text-[10px] font-bold text-[var(--color-muted)]">
-                                    Question {currentIndex + 1} of {totalItems}
+                                    Q{currentIndex + 1} of {totalItems}
                                 </span>
                             </div>
-                            <h2 className="text-sm font-bold text-[var(--color-text)]">
+                            <h2 className="text-xs sm:text-sm font-bold text-[var(--color-text)] truncate">
                                 {currentItem?.subject_name} • <span className="text-[var(--color-muted)]">{currentItem?.topic_name}</span>
                             </h2>
                         </div>
@@ -300,7 +300,7 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
                     <button
                         onClick={onClose}
                         aria-label="Close revision session"
-                        className="p-2 text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-xl hover:bg-[var(--color-border)]/50 transition-colors cursor-pointer"
+                        className="p-1.5 sm:p-2 text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-xl hover:bg-[var(--color-border)]/50 transition-colors cursor-pointer shrink-0"
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -602,10 +602,10 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
                 )}
 
                 {/* Footer Controls */}
-                <div className="p-4 sm:px-7 border-t border-[var(--color-border)] bg-[var(--color-surface-hover)] flex items-center justify-between gap-3">
+                <div className="p-3.5 sm:p-4 sm:px-7 border-t border-[var(--color-border)] bg-[var(--color-surface-hover)] flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     {!isSessionFinished ? (
                         <>
-                            <span className="text-[11px] font-medium text-[var(--color-muted)] flex items-center gap-1.5">
+                            <span className="text-[11px] font-medium text-[var(--color-muted)] flex items-center justify-center sm:justify-start gap-1.5">
                                 <Clock className="w-3.5 h-3.5" />
                                 ~{Math.max(1, Math.round((totalItems - currentIndex) * 0.8))} min remaining
                             </span>
@@ -614,7 +614,7 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
                                 type="button"
                                 disabled={!isSubmitted || isSubmitting}
                                 onClick={handleNextQuestion}
-                                className="px-6 py-2.5 rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md hover:shadow-lg flex items-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                className="w-full sm:w-auto justify-center px-6 py-2.5 rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md hover:shadow-lg flex items-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                                 <span>{currentIndex + 1 === totalItems ? 'Finish Revision' : 'Next Question'}</span>
                                 <ArrowRight className="w-4 h-4" />

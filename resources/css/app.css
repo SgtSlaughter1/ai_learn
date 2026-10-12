@@ -407,6 +407,38 @@ input:-webkit-autofill:focus {
     padding: 0 0.1em;
 }
 
+/* ═══════════════════════════════════════════════════════════
+   SCREEN READER & LOW-VISION ACCESSIBILITY (Sam)
+   ═══════════════════════════════════════════════════════════ */
+
+/* Prevent screen readers from double-reading visual KaTeX HTML glyphs */
+.katex .katex-html,
+.katex-html,
+.katex-html[aria-hidden="true"] {
+    speak: never !important;
+}
+
+/* Ensure assistive text-to-speech cleanly announces MathML and accessible equation tags */
+.katex-mathml {
+    position: absolute !important;
+    clip: rect(1px, 1px, 1px, 1px) !important;
+    clip-path: inset(50%) !important;
+    height: 1px !important;
+    width: 1px !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+    margin: -1px !important;
+    padding: 0 !important;
+    speak: always !important;
+}
+
+/* High-contrast and low-vision focus rings */
+:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
 
 
 

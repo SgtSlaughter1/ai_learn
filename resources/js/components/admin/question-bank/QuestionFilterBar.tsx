@@ -79,14 +79,14 @@ export default function QuestionFilterBar({
     );
 
     return (
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3.5 sm:gap-4">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <input
                     type="text"
                     placeholder="Search questions..."
                     value={questionSearch}
                     onChange={(e) => setQuestionSearch(e.target.value)}
-                    className="px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] outline-none w-48 focus:border-[var(--color-primary)]"
+                    className="w-full sm:w-48 px-3.5 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
                 />
                 <select
                     value={questionGradeFilter}
@@ -96,7 +96,7 @@ export default function QuestionFilterBar({
                         setQuestionSubjectFilter('');
                         setQuestionTopicFilter('');
                     }}
-                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
+                    className="flex-1 sm:flex-initial min-w-[120px] px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
                 >
                     <option value="">All Grade Levels</option>
                     {availableGradeGroups.map((grp) => (
@@ -116,7 +116,7 @@ export default function QuestionFilterBar({
                         setQuestionSubjectFilter('');
                         setQuestionTopicFilter('');
                     }}
-                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] max-w-[160px] outline-none cursor-pointer"
+                    className="flex-1 sm:flex-initial min-w-[120px] max-w-full sm:max-w-[160px] px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
                 >
                     <option value="">{questionGradeFilter ? 'All Classes in Grade' : 'All Classes'}</option>
                     {filteredClasses.map((cls) => (
@@ -131,7 +131,7 @@ export default function QuestionFilterBar({
                         setQuestionSubjectFilter(e.target.value);
                         setQuestionTopicFilter('');
                     }}
-                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] min-w-[150px] outline-none cursor-pointer"
+                    className="flex-1 sm:flex-initial min-w-[130px] px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
                 >
                     <option value="">{questionClassFilter ? 'All Class Subjects' : 'All Subjects'}</option>
                     {availableSubjects.map((s) => {
@@ -147,7 +147,7 @@ export default function QuestionFilterBar({
                 <select
                     value={questionTopicFilter}
                     onChange={(e) => setQuestionTopicFilter(e.target.value)}
-                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] min-w-[160px] outline-none cursor-pointer"
+                    className="flex-1 sm:flex-initial min-w-[130px] px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
                 >
                     <option value="">{questionSubjectFilter ? 'All Subject Topics' : 'All Topics'}</option>
                     {availableTopics.map((t) => (
@@ -159,7 +159,7 @@ export default function QuestionFilterBar({
                 <select
                     value={questionDifficultyFilter}
                     onChange={(e) => setQuestionDifficultyFilter(e.target.value)}
-                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
+                    className="flex-1 sm:flex-initial min-w-[110px] px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
                 >
                     <option value="">All Difficulties</option>
                     <option value="easy">Easy / Beginner</option>
@@ -168,11 +168,11 @@ export default function QuestionFilterBar({
                 </select>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 w-full lg:w-auto shrink-0">
                 <button
                     type="button"
                     onClick={onOpenBulkModal}
-                    className="px-4 py-2.5 bg-[var(--color-primary-10)] text-[var(--color-primary)] hover:bg-[var(--color-primary)] hover:text-white border border-[var(--color-primary)]/25 active:scale-[0.98] cursor-pointer text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2"
+                    className="flex-1 lg:flex-initial justify-center px-4 py-2.5 bg-[var(--color-primary-10)] text-[var(--color-primary)] hover:bg-[var(--color-primary)] hover:text-white border border-[var(--color-primary)]/25 active:scale-[0.98] cursor-pointer text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2"
                 >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path
@@ -188,7 +188,7 @@ export default function QuestionFilterBar({
                 <button
                     type="button"
                     onClick={onOpenAddModal}
-                    className="px-5 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2"
+                    className="flex-1 lg:flex-initial justify-center px-5 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2"
                 >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />

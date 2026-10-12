@@ -38,31 +38,23 @@ export const ExamPracticeModal: React.FC<Props> = ({
     const [aiTutorLoading, setAiTutorLoading] = useState<boolean>(false);
     const explanationCacheRef = useRef<Record<string, string>>({});
 
-    if (!questions || questions.length === 0) {
-        return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-fade-in">
-                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-8 max-w-md w-full text-center shadow-2xl">
-                    <p className="text-base font-bold text-[var(--color-text)]">No questions found for the selected criteria.</p>
-                    <button
-                        onClick={onClose}
-                        className="mt-6 px-6 py-2.5 bg-[var(--color-primary)] text-white font-bold text-sm rounded-xl hover:bg-[var(--color-primary-hover)] transition-colors cursor-pointer"
-                    >
-                        Close
-                    </button>
-                </div>
-            </div>
-        );
-    }
+    // Safe bounds enforcement
+    const safeIndex = Math.min(Math.max(0, currentIndex), Math.max(0, questions.length - 1));
+    const currentQ = questions[safeIndex];
 
-    const currentQ = questions[currentIndex];
-    const selectedOptId = selectedAnswers[currentQ.id];
+    const selectedOptId = currentQ ? selectedAnswers[currentQ.id] : undefined;
     const isAnswered = selectedOptId !== undefined;
-    const verification = verifiedAnswers[currentQ.id];
-    const isCorrect = verification?.isCorrect ?? (currentQ.options.find(o => o.id === selectedOptId)?.is_correct ?? false);
-    const correctOptionId = verification?.correctOptionId ?? currentQ.options.find(o => o.is_correct)?.id;
+    const verification = currentQ ? verifiedAnswers[currentQ.id] : undefined;
+    const isCorrect = verification?.isCorrect ?? (currentQ?.options.find(o => o.id === selectedOptId)?.is_correct ?? false);
+    const correctOptionId = verification?.correctOptionId ?? currentQ?.options.find(o => o.is_correct)?.id;
+
+    const toggleBookmark = () => {
+        if (!currentQ) return;
+        setBookmarked(prev => ({ ...prev, [currentQ.id]: !prev[currentQ.id] }));
+    };
 
     const handleSelectOption = async (optId: number) => {
-        if (isAnswered) return;
+        if (!currentQ || isAnswered) return;
 
         setSelectedAnswers(prev => ({ ...prev, [currentQ.id]: optId }));
 
@@ -104,16 +96,95 @@ export const ExamPracticeModal: React.FC<Props> = ({
                             explanation: data.explanation,
                         },
                     }));
+                    return;
                 }
             } catch (err) {
-                console.error('Answer verification error:', err);
+                console.error('Answer verification error, using fallback:', err);
             }
         }
+
+        // Offline / Network Fallback: preserve interaction gracefully
+        const fallbackOpt = currentQ.options.find(o => o.id === optId);
+        setVerifiedAnswers(prev => ({
+            ...prev,
+            [currentQ.id]: {
+                isCorrect: Boolean(fallbackOpt?.is_correct),
+                correctOptionId: currentQ.options[0]?.id || optId,
+                explanation: currentQ.explanation,
+            },
+        }));
     };
 
-    const toggleBookmark = () => {
-        setBookmarked(prev => ({ ...prev, [currentQ.id]: !prev[currentQ.id] }));
-    };
+    // Keyboard Shortcuts for Authentic CBT Experience
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const activeEl = document.activeElement;
+            const isTyping = activeEl && (
+                activeEl.tagName === 'INPUT' ||
+                activeEl.tagName === 'TEXTAREA' ||
+                (activeEl as HTMLElement).isContentEditable
+            );
+            if (isTyping) return;
+
+            // Escape closes AI Tutor drawer first if open, else closes modal
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                if (aiTutorOpen) {
+                    setAiTutorOpen(false);
+                } else {
+                    onClose();
+                }
+                return;
+            }
+
+            if (aiTutorOpen) return;
+
+            // Navigation: Next (ArrowRight, N) and Previous (ArrowLeft, P)
+            if (e.key === 'ArrowRight' || e.key === 'n' || e.key === 'N') {
+                e.preventDefault();
+                setCurrentIndex(prev => Math.min(questions.length - 1, prev + 1));
+                return;
+            }
+            if (e.key === 'ArrowLeft' || e.key === 'p' || e.key === 'P') {
+                e.preventDefault();
+                setCurrentIndex(prev => Math.max(0, prev - 1));
+                return;
+            }
+
+            // Bookmark: B key
+            if (e.key === 'b' || e.key === 'B') {
+                e.preventDefault();
+                toggleBookmark();
+                return;
+            }
+
+            // AI Explanation / Help: H or E (when answered)
+            if (e.key === 'h' || e.key === 'H' || (isAnswered && (e.key === 'e' || e.key === 'E'))) {
+                e.preventDefault();
+                handleAskAiTutor();
+                return;
+            }
+
+            // CBT Option Selection: A-E or 1-5 keys
+            if (!isAnswered && currentQ?.options?.length > 0) {
+                const key = e.key.toUpperCase();
+                let targetIdx = -1;
+                if (key === 'A' || key === '1') targetIdx = 0;
+                else if (key === 'B' || key === '2') targetIdx = 1;
+                else if (key === 'C' || key === '3') targetIdx = 2;
+                else if (key === 'D' || key === '4') targetIdx = 3;
+                else if (key === 'E' || key === '5') targetIdx = 4;
+
+                if (targetIdx >= 0 && targetIdx < currentQ.options.length) {
+                    e.preventDefault();
+                    handleSelectOption(currentQ.options[targetIdx].id);
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [currentIndex, isAnswered, aiTutorOpen, currentQ, questions.length, onClose]);
 
     const selectedOpt = currentQ.options.find(o => o.id === selectedOptId);
     const correctOpt = currentQ.options.find(o => o.id === correctOptionId) || currentQ.options.find(o => o.is_correct);
@@ -208,11 +279,11 @@ export const ExamPracticeModal: React.FC<Props> = ({
     return (
         <>
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)] backdrop-blur-md p-3 md:p-6 overflow-y-auto animate-fade-in">
-                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
                 {/* Header Bar */}
-                <div className="px-6 py-4 border-b border-[var(--color-border)] bg-[var(--color-surface-hover)] flex items-center justify-between">
-                    <div>
-                        <div className="flex items-center gap-2 flex-wrap">
+                <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-[var(--color-border)] bg-[var(--color-surface-hover)] flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                             <span className="px-2.5 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-[var(--color-primary-10)] text-[var(--color-primary)] border border-[var(--color-primary-20)]">
                                 {currentQ.exam_code ? currentQ.exam_code.toUpperCase() : examTitle}
                             </span>
@@ -221,7 +292,7 @@ export const ExamPracticeModal: React.FC<Props> = ({
                                     Year {currentQ.exam_year || yearTitle}
                                 </span>
                             )}
-                            <span className="text-xs font-semibold text-[var(--color-muted)]">
+                            <span className="text-xs font-semibold text-[var(--color-muted)] truncate max-w-[120px] sm:max-w-none">
                                 {currentQ.subject?.name || subjectTitle}
                             </span>
                             <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase bg-[var(--color-accent-10)] text-[var(--color-accent)] border border-[var(--color-accent-20)]">
@@ -233,11 +304,11 @@ export const ExamPracticeModal: React.FC<Props> = ({
                         </h2>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                         <button
                             type="button"
                             onClick={handleAskAiTutor}
-                            className="px-3 py-1.5 rounded-xl border border-[var(--color-primary-20)] bg-[var(--color-primary-5)] hover:bg-[var(--color-primary-10)] text-[var(--color-primary)] text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                            className="px-2.5 sm:px-3 py-1.5 rounded-xl border border-[var(--color-primary-20)] bg-[var(--color-primary-5)] hover:bg-[var(--color-primary-10)] text-[var(--color-primary)] text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
                             title="Ask AI Tutor for guidance"
                         >
                             <Sparkles className="w-3.5 h-3.5" />
@@ -245,7 +316,7 @@ export const ExamPracticeModal: React.FC<Props> = ({
                         </button>
                         <button
                             onClick={toggleBookmark}
-                            className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                            className={`p-1.5 sm:p-2 rounded-xl border transition-all cursor-pointer ${
                                 bookmarked[currentQ.id]
                                     ? 'bg-[var(--color-accent-20)] border-[var(--color-accent)] text-[var(--color-accent)]'
                                     : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)]'
@@ -258,17 +329,22 @@ export const ExamPracticeModal: React.FC<Props> = ({
                         </button>
                         <button
                             onClick={onClose}
-                            className="p-2 text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-xl hover:bg-[var(--color-border)]/50 transition-colors cursor-pointer"
+                            className="p-1.5 sm:p-2 text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-xl hover:bg-[var(--color-border)]/50 transition-colors cursor-pointer flex items-center gap-1.5"
+                            title="Close modal (Esc)"
+                            aria-label="Close practice modal"
                         >
+                            <span className="hidden sm:inline-block text-[10px] text-[var(--color-muted)] font-mono border border-[var(--color-border)] px-1.5 py-0.5 rounded-md bg-[var(--color-surface)]">
+                                Esc
+                            </span>
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </button>
                     </div>
                 </div>
 
                 {/* Question Body */}
-                <div className="p-6 md:p-8 overflow-y-auto flex-1 space-y-6">
+                <div className="p-4 sm:p-6 md:p-8 overflow-y-auto flex-1 space-y-6">
                     {/* Topic Badge */}
                     {currentQ.topic?.name && (
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-[var(--color-primary-5)] border border-[var(--color-border)] text-[var(--color-muted)]">
@@ -352,9 +428,16 @@ export const ExamPracticeModal: React.FC<Props> = ({
                                     onClick={() => handleSelectOption(option.id)}
                                     className={`w-full text-left p-4 rounded-2xl border transition-all flex items-start gap-4 ${optionStyle} cursor-pointer disabled:cursor-default`}
                                 >
-                                    <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-extrabold shrink-0 transition-colors ${badgeStyle}`}>
-                                        {option.label || chrFromIdx(idx)}
-                                    </span>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-extrabold transition-colors ${badgeStyle}`}>
+                                            {option.label || chrFromIdx(idx)}
+                                        </span>
+                                        {!isAnswered && (
+                                            <span className="hidden lg:inline-flex text-[9px] font-mono px-1 py-0.5 rounded bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)] font-bold">
+                                                [{option.label || chrFromIdx(idx)}]
+                                            </span>
+                                        )}
+                                    </div>
                                     <div className="flex-1 pt-1 font-semibold text-sm text-[var(--color-text)] [&_p]:inline">
                                         <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                                             {formatMathText(option.option_text)}
@@ -460,9 +543,11 @@ export const ExamPracticeModal: React.FC<Props> = ({
                     <button
                         disabled={currentIndex === 0}
                         onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
-                        className="px-5 py-2.5 rounded-xl border border-[var(--color-border)] text-sm font-bold text-[var(--color-text)] hover:bg-[var(--color-surface)] disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                        className="px-5 py-2.5 rounded-xl border border-[var(--color-border)] text-sm font-bold text-[var(--color-text)] hover:bg-[var(--color-surface)] disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer flex items-center gap-1.5"
+                        title="Previous question (Press P or Left Arrow)"
                     >
-                        ← Previous
+                        <span>← Previous</span>
+                        <span className="hidden sm:inline text-[10px] font-mono opacity-60">(P)</span>
                     </button>
 
                     <div className="text-xs font-semibold text-[var(--color-muted)]">
@@ -472,9 +557,11 @@ export const ExamPracticeModal: React.FC<Props> = ({
                     <button
                         disabled={currentIndex === questions.length - 1}
                         onClick={() => setCurrentIndex(prev => Math.min(questions.length - 1, prev + 1))}
-                        className="px-6 py-2.5 rounded-xl bg-[var(--color-primary)] text-white text-sm font-bold hover:bg-[var(--color-primary-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md cursor-pointer"
+                        className="px-6 py-2.5 rounded-xl bg-[var(--color-primary)] text-white text-sm font-bold hover:bg-[var(--color-primary-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+                        title="Next question (Press N or Right Arrow)"
                     >
-                        Next →
+                        <span>Next →</span>
+                        <span className="hidden sm:inline text-[10px] font-mono opacity-80">(N)</span>
                     </button>
                 </div>
             </div>

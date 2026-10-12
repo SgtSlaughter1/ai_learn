@@ -63,7 +63,7 @@ export default function SubjectFilterBar({
                 <button
                     type="button"
                     onClick={onOpenAddSubjectModal}
-                    className="px-5 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2"
+                    className="w-full sm:w-auto justify-center px-5 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2"
                 >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -73,13 +73,13 @@ export default function SubjectFilterBar({
             </div>
 
             {/* Filter Bar */}
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
                 <input
                     type="text"
                     placeholder="Search subjects..."
                     value={subjectSearch}
                     onChange={(e) => setSubjectSearch(e.target.value)}
-                    className="px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] outline-none w-52 focus:border-[var(--color-primary)]"
+                    className="w-full sm:w-52 px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
                 />
                 <select
                     value={gradeFilter}
@@ -87,7 +87,7 @@ export default function SubjectFilterBar({
                         setGradeFilter(e.target.value);
                         setSelectedClassFilter('all');
                     }}
-                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
+                    className="flex-1 sm:flex-initial min-w-[130px] px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
                 >
                     <option value="">All Grade Levels</option>
                     {availableGradeGroups.map((grp) => (
@@ -103,7 +103,7 @@ export default function SubjectFilterBar({
                 <select
                     value={selectedClassFilter}
                     onChange={(e) => setSelectedClassFilter(e.target.value)}
-                    className="px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
+                    className="flex-1 sm:flex-initial min-w-[130px] px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs font-semibold text-[var(--color-text)] outline-none cursor-pointer"
                 >
                     <option value="all">{gradeFilter ? 'All Classes in Grade' : 'All Classes & General'}</option>
                     <option value="unassigned">School-wide / Unassigned</option>
