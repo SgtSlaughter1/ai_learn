@@ -113,191 +113,183 @@ export default function Register() {
             </div>
 
             {/* ═══════════════════════════════════════════════════════════
-               RIGHT COLUMN: Registration Form Alone (Maintained on Mobile)
+               RIGHT COLUMN: Registration Form (Elevated Mobile & Desktop Card)
                ═══════════════════════════════════════════════════════════ */}
-            <div className="w-full lg:w-7/12 xl:w-1/2 flex flex-col justify-between p-5 sm:p-8 lg:p-10 xl:p-14 min-h-screen lg:min-h-0 lg:h-full overflow-y-auto">
-                {/* Top Nav: Back to Home (Mobile only) & Theme Toggle */}
-                <div className="flex items-center justify-between w-full mb-6 sm:mb-8 lg:mb-0">
+            <div className="w-full lg:w-7/12 xl:w-1/2 flex flex-col justify-between min-h-screen lg:min-h-0 lg:h-full overflow-y-auto bg-[var(--color-background)]">
+                {/* Top Nav: Back to Home & Theme Toggle */}
+                <div className="w-full max-w-md mx-auto px-4 sm:px-6 pt-4 sm:pt-6 pb-2 flex items-center justify-between shrink-0">
                     <Link
                         href="/"
-                        className="lg:hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] text-xs font-semibold transition-colors shadow-xs"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] text-xs font-semibold transition-all shadow-xs hover:shadow-sm"
                     >
                         <ArrowLeft className="w-3.5 h-3.5" />
                         <span>Home</span>
                     </Link>
 
-                    <div className="ml-auto">
-                        <ThemeToggle />
-                    </div>
+                    <ThemeToggle />
                 </div>
 
-                {/* Centered Form Wrapper */}
-                <div className="w-full max-w-sm mx-auto my-auto py-2 sm:py-4 space-y-5">
-                    {/* Brand Emblem (Mobile Only) */}
-                    <div className="lg:hidden flex items-center gap-2.5 mb-1">
-                        <div className="w-9 h-9 rounded-xl bg-[var(--color-primary)] text-white flex items-center justify-center font-bold shadow-xs">
-                            <BookOpen className="w-4 h-4" />
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-lg font-black tracking-tight text-[var(--color-primary)] leading-none">AceDrill</span>
-                            <span className="text-[10px] font-semibold text-[var(--color-muted)]">Learner Sign Up</span>
-                        </div>
-                    </div>
-
-                    {/* Header */}
-                    <div className="space-y-1">
-                        <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--color-text)]">
-                            Create Account
-                        </h2>
-                        <p className="text-xs sm:text-sm text-[var(--color-muted)]">
-                            Sign up as an independent learner to start studying.
-                        </p>
-                    </div>
-
-                    {/* Form */}
-                    <form onSubmit={handleSubmit} className="space-y-3.5">
-                        {/* Full Name Input */}
-                        <div className="space-y-1">
-                            <label htmlFor="name" className="block text-[11px] font-bold uppercase tracking-wider text-[var(--color-muted)]">
-                                Full Name
-                            </label>
-                            <input
-                                id="name"
-                                type="text"
-                                name="name"
-                                value={data.name}
-                                onChange={(e) => setData('name', e.target.value)}
-                                className="input-field text-xs sm:text-sm"
-                                placeholder="Amina Bello"
-                                required
-                                autoFocus
-                                autoComplete="name"
-                            />
-                            {errors.name && (
-                                <p className="text-xs text-[var(--color-error)] font-semibold mt-1">{errors.name}</p>
-                            )}
-                        </div>
-
-                        {/* Email Input */}
-                        <div className="space-y-1">
-                            <label htmlFor="email" className="block text-[11px] font-bold uppercase tracking-wider text-[var(--color-muted)]">
-                                Email Address
-                            </label>
-                            <input
-                                id="email"
-                                type="email"
-                                name="email"
-                                value={data.email}
-                                onChange={(e) => setData('email', e.target.value)}
-                                className="input-field text-xs sm:text-sm"
-                                placeholder="amina@example.com"
-                                required
-                                autoComplete="username"
-                            />
-                            {errors.email && (
-                                <p className="text-xs text-[var(--color-error)] font-semibold mt-1">{errors.email}</p>
-                            )}
-                        </div>
-
-                        {/* Password Input */}
-                        <div className="space-y-1">
-                            <label htmlFor="password" className="block text-[11px] font-bold uppercase tracking-wider text-[var(--color-muted)]">
-                                Password
-                            </label>
-                            <div className="relative">
-                                <input
-                                    id="password"
-                                    type={showPassword ? 'text' : 'password'}
-                                    name="password"
-                                    value={data.password}
-                                    onChange={(e) => setData('password', e.target.value)}
-                                    className="input-field pr-11 text-xs sm:text-sm"
-                                    placeholder="•••••••• (Min 6 characters)"
-                                    required
-                                    autoComplete="new-password"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors focus:outline-none cursor-pointer"
-                                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                                >
-                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                </button>
+                {/* Central Card Container */}
+                <div className="flex-1 flex flex-col justify-center items-center w-full max-w-md mx-auto px-4 py-4 sm:py-6">
+                    <div className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-sm shadow-black/[0.03]">
+                        {/* Centered Brand Emblem & Header */}
+                        <div className="flex flex-col items-center text-center mb-6">
+                            <div className="w-12 h-12 rounded-2xl bg-[var(--color-primary)] text-white flex items-center justify-center font-bold shadow-sm mb-3">
+                                <BookOpen className="w-6 h-6" />
                             </div>
-                            {errors.password && (
-                                <p className="text-xs text-[var(--color-error)] font-semibold mt-1">{errors.password}</p>
-                            )}
+                            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-[var(--color-text)]">
+                                Create Account
+                            </h1>
+                            <p className="text-xs sm:text-sm text-[var(--color-muted)] mt-1.5">
+                                Sign up to start studying with offline AI lessons & past questions
+                            </p>
                         </div>
 
-                        {/* Confirm Password Input */}
-                        <div className="space-y-1">
-                            <label htmlFor="password_confirmation" className="block text-[11px] font-bold uppercase tracking-wider text-[var(--color-muted)]">
-                                Confirm Password
-                            </label>
-                            <div className="relative">
+                        {/* Form */}
+                        <form onSubmit={handleSubmit} className="space-y-3.5">
+                            {/* Full Name Input */}
+                            <div className="space-y-1.5 text-left">
+                                <label htmlFor="name" className="block text-xs font-bold text-[var(--color-text)]">
+                                    Full Name
+                                </label>
                                 <input
-                                    id="password_confirmation"
-                                    type={showConfirmPassword ? 'text' : 'password'}
-                                    name="password_confirmation"
-                                    value={data.password_confirmation}
-                                    onChange={(e) => setData('password_confirmation', e.target.value)}
-                                    className="input-field pr-11 text-xs sm:text-sm"
-                                    placeholder="••••••••"
+                                    id="name"
+                                    type="text"
+                                    name="name"
+                                    value={data.name}
+                                    onChange={(e) => setData('name', e.target.value)}
+                                    className="input-field text-xs sm:text-sm"
+                                    placeholder="Amina Bello"
                                     required
-                                    autoComplete="new-password"
+                                    autoFocus
+                                    autoComplete="name"
                                 />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors focus:outline-none cursor-pointer"
-                                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                                >
-                                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                </button>
+                                {errors.name && (
+                                    <p className="text-xs text-[var(--color-error)] font-semibold mt-1">{errors.name}</p>
+                                )}
                             </div>
-                            {errors.password_confirmation && (
-                                <p className="text-xs text-[var(--color-error)] font-semibold mt-1">{errors.password_confirmation}</p>
-                            )}
-                        </div>
 
-                        {/* Submit Button */}
-                        <button
-                            type="submit"
-                            disabled={processing}
-                            className="w-full btn-primary py-3 text-sm font-bold shadow-md hover:shadow-lg active:scale-[0.99] transition-all cursor-pointer mt-2"
-                        >
-                            {processing ? (
-                                <div className="flex items-center justify-center space-x-2">
-                                    <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                    </svg>
-                                    <span>Creating Account...</span>
+                            {/* Email Input */}
+                            <div className="space-y-1.5 text-left">
+                                <label htmlFor="email" className="block text-xs font-bold text-[var(--color-text)]">
+                                    Email Address
+                                </label>
+                                <input
+                                    id="email"
+                                    type="email"
+                                    name="email"
+                                    value={data.email}
+                                    onChange={(e) => setData('email', e.target.value)}
+                                    className="input-field text-xs sm:text-sm"
+                                    placeholder="amina@example.com"
+                                    required
+                                    autoComplete="username"
+                                />
+                                {errors.email && (
+                                    <p className="text-xs text-[var(--color-error)] font-semibold mt-1">{errors.email}</p>
+                                )}
+                            </div>
+
+                            {/* Password Input */}
+                            <div className="space-y-1.5 text-left">
+                                <label htmlFor="password" className="block text-xs font-bold text-[var(--color-text)]">
+                                    Password
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        id="password"
+                                        type={showPassword ? 'text' : 'password'}
+                                        name="password"
+                                        value={data.password}
+                                        onChange={(e) => setData('password', e.target.value)}
+                                        className="input-field pr-11 text-xs sm:text-sm"
+                                        placeholder="•••••••• (Min 6 characters)"
+                                        required
+                                        autoComplete="new-password"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors focus:outline-none cursor-pointer"
+                                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                    >
+                                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
                                 </div>
-                            ) : (
-                                <span>Create Free Account</span>
-                            )}
-                        </button>
-                    </form>
+                                {errors.password && (
+                                    <p className="text-xs text-[var(--color-error)] font-semibold mt-1">{errors.password}</p>
+                                )}
+                            </div>
 
-                    {/* Sign In Link */}
-                    <div className="text-center pt-2">
-                        <p className="text-xs text-[var(--color-muted)]">
-                            Already have an account?{' '}
-                            <Link
-                                href="/login"
-                                className="font-bold text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] hover:underline"
+                            {/* Confirm Password Input */}
+                            <div className="space-y-1.5 text-left">
+                                <label htmlFor="password_confirmation" className="block text-xs font-bold text-[var(--color-text)]">
+                                    Confirm Password
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        id="password_confirmation"
+                                        type={showConfirmPassword ? 'text' : 'password'}
+                                        name="password_confirmation"
+                                        value={data.password_confirmation}
+                                        onChange={(e) => setData('password_confirmation', e.target.value)}
+                                        className="input-field pr-11 text-xs sm:text-sm"
+                                        placeholder="••••••••"
+                                        required
+                                        autoComplete="new-password"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors focus:outline-none cursor-pointer"
+                                        aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                                    >
+                                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                                {errors.password_confirmation && (
+                                    <p className="text-xs text-[var(--color-error)] font-semibold mt-1">{errors.password_confirmation}</p>
+                                )}
+                            </div>
+
+                            {/* Submit Button */}
+                            <button
+                                type="submit"
+                                disabled={processing}
+                                className="w-full btn-primary py-3 text-sm font-bold shadow-xs hover:shadow-md active:scale-[0.99] transition-all cursor-pointer mt-2 rounded-xl"
                             >
-                                Sign In
-                            </Link>
-                        </p>
-                    </div>
-                </div>
+                                {processing ? (
+                                    <div className="flex items-center justify-center space-x-2">
+                                        <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                        </svg>
+                                        <span>Creating Account...</span>
+                                    </div>
+                                ) : (
+                                    <span>Create Free Account</span>
+                                )}
+                            </button>
+                        </form>
 
-                {/* Footer Note */}
-                <div className="text-center text-[11px] text-[var(--color-muted)] pt-4">
-                    Protected by offline-first encryption.
+                        {/* Sign In Link */}
+                        <div className="text-center pt-5 mt-2 border-t border-[var(--color-border)]/60">
+                            <p className="text-xs text-[var(--color-muted)]">
+                                Already have an account?{' '}
+                                <Link
+                                    href="/login"
+                                    className="font-bold text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] hover:underline ml-1"
+                                >
+                                    Sign In
+                                </Link>
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Footer Note */}
+                    <p className="text-center text-[11px] text-[var(--color-muted)] mt-4">
+                        Protected by offline-first local encryption.
+                    </p>
                 </div>
             </div>
         </div>

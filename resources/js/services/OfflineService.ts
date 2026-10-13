@@ -242,9 +242,47 @@ export async function getPendingSyncCount(): Promise<number> {
     return attempts + progress + gamification;
 }
 
-// ── Full Offline Preloading ──
+// ── Full Offline Preloading with Live Progress ──
 
-let isPreloading = false;
+export interface OfflinePreloadProgress {
+    isPreloading: boolean;
+    isComplete: boolean;
+    totalSubjects: number;
+    completedSubjects: number;
+    percent: number;
+    currentSubjectName?: string;
+    cachedSubjectsCount: number;
+}
+
+let preloadState: OfflinePreloadProgress = {
+    isPreloading: false,
+    isComplete: false,
+    totalSubjects: 0,
+    completedSubjects: 0,
+    percent: 0,
+    cachedSubjectsCount: 0,
+};
+
+type PreloadListener = (state: OfflinePreloadProgress) => void;
+const preloadListeners = new Set<PreloadListener>();
+
+export function getOfflinePreloadState(): OfflinePreloadProgress {
+    return { ...preloadState };
+}
+
+export function subscribeOfflinePreload(listener: PreloadListener): () => void {
+    preloadListeners.add(listener);
+    listener({ ...preloadState });
+    return () => {
+        preloadListeners.delete(listener);
+    };
+}
+
+function updatePreloadState(patch: Partial<OfflinePreloadProgress>) {
+    preloadState = { ...preloadState, ...patch };
+    preloadListeners.forEach((l) => l({ ...preloadState }));
+}
+
 let hasPreloadedThisSession = false;
 
 function getInertiaVersion(): string {
@@ -262,9 +300,7 @@ function getInertiaVersion(): string {
 
 /**
  * Pre-warm a route by fetching the full HTML page and storing it in
- * the SW runtime caches. Each cache.put() needs its own Response object
- * so we fetch multiple times (Responses cannot be cloned more than once
- * after their body has been read).
+ * the SW runtime caches.
  */
 async function prewarmRoute(url: string): Promise<void> {
     const fullUrl = new URL(url, window.location.origin).href;
@@ -273,17 +309,18 @@ async function prewarmRoute(url: string): Promise<void> {
         const appCache = await caches.open('app-routes-cache');
         const pagesCache = await caches.open('pages-cache');
 
-        // 1. Prewarm HTML document (for direct browser navigations/refreshes)
+        // 1. Prewarm HTML document
         const htmlRes = await fetch(fullUrl, {
             credentials: 'same-origin',
             headers: { Accept: 'text/html' },
-        });
-        if (htmlRes.ok) {
+        }).catch(() => null);
+
+        if (htmlRes && htmlRes.ok) {
             await appCache.put(fullUrl, htmlRes.clone());
             await pagesCache.put(fullUrl, htmlRes);
         }
 
-        // 2. Prewarm Inertia JSON payload (for SPA <Link> navigations)
+        // 2. Prewarm Inertia JSON payload
         const inertiaVersion = getInertiaVersion();
         const inertiaHeaders: Record<string, string> = {
             'X-Inertia': 'true',
@@ -310,49 +347,86 @@ async function prewarmRoute(url: string): Promise<void> {
     }
 }
 
+/**
+ * 2-Stage Parallelized Offline Curriculum Preloader
+ * Stage 1: Instant cache of routes & subjects index (< 1.5s)
+ * Stage 2: Concurrent batch worker pool (4 workers) for topics, quizzes & flashcards (~5-7s)
+ */
 export async function preloadFullOfflineCurriculum(): Promise<void> {
-    if (isPreloading || hasPreloadedThisSession || !navigator.onLine) return;
-    isPreloading = true;
+    if (preloadState.isPreloading || hasPreloadedThisSession || !navigator.onLine) return;
+
+    const initialCachedCount = await db.subjects.count().catch(() => 0);
+    updatePreloadState({
+        isPreloading: true,
+        isComplete: false,
+        cachedSubjectsCount: initialCachedCount,
+    });
 
     try {
-        // 1. Pre-warm main routes
-        await prewarmRoute('/dashboard');
-        await prewarmRoute('/subjects');
-        await prewarmRoute('/flashcards');
+        // ── STAGE 1: Instant Critical Pack (< 1.5s) ──
+        // 1. Pre-warm top routes in parallel
+        await Promise.allSettled([
+            prewarmRoute('/dashboard'),
+            prewarmRoute('/subjects'),
+            prewarmRoute('/flashcards'),
+        ]);
 
-        // 2. Fetch and cache all subjects across both school and general knowledge (API data → IndexedDB)
-        const subjectsRes = await fetch('/api/v1/subjects?scope=general');
-        if (!subjectsRes.ok) return;
+        // 2. Fetch and cache subjects catalog
+        const subjectsRes = await fetch('/api/v1/subjects?scope=general').catch(() => null);
+        if (!subjectsRes || !subjectsRes.ok) {
+            updatePreloadState({ isPreloading: false });
+            return;
+        }
+
         const subjectsData = await subjectsRes.json();
         const subjectsList = subjectsData.subjects || subjectsData || [];
 
-        if (Array.isArray(subjectsList) && subjectsList.length > 0) {
-            await db.subjects.bulkPut(
-                subjectsList.map((s: any) => ({
-                    id: s.id,
-                    school_id: s.school_id,
-                    school_name: s.school_name,
-                    is_general_knowledge: s.is_general_knowledge,
-                    name: s.name,
-                    slug: s.slug,
-                    description: s.description,
-                    status: 'published',
-                    sort_order: 0,
-                    progress_percent: s.progress_percent || 0,
-                    topics_count: s.topics_count || 0,
-                    cached_at: new Date().toISOString(),
-                }))
-            );
+        if (!Array.isArray(subjectsList) || subjectsList.length === 0) {
+            updatePreloadState({ isPreloading: false, isComplete: true });
+            return;
+        }
 
-            // 3. Fetch and cache topics and quizzes for each subject
-            for (const subject of subjectsList) {
-                try {
-                    await prewarmRoute(`/subjects/${subject.slug}`);
+        // Save subjects index to Dexie
+        await db.subjects.bulkPut(
+            subjectsList.map((s: any) => ({
+                id: s.id,
+                school_id: s.school_id,
+                school_name: s.school_name,
+                is_general_knowledge: s.is_general_knowledge,
+                name: s.name,
+                slug: s.slug,
+                description: s.description,
+                status: 'published',
+                sort_order: 0,
+                progress_percent: s.progress_percent || 0,
+                topics_count: s.topics_count || 0,
+                cached_at: new Date().toISOString(),
+            }))
+        );
 
-                    const subRes = await fetch(`/api/v1/subjects/${subject.slug}?scope=general`);
-                    if (!subRes.ok) continue;
+        const totalSubjects = subjectsList.length;
+        let completedSubjects = 0;
+
+        updatePreloadState({
+            totalSubjects,
+            completedSubjects: 0,
+            percent: 0,
+            cachedSubjectsCount: totalSubjects,
+        });
+
+        // ── STAGE 2: Concurrent Worker Pool for Topics & Quizzes (Pool of 4) ──
+        const downloadSubjectCurriculum = async (subject: any) => {
+            try {
+                // Prewarm route and fetch subject details in parallel
+                const [, subRes] = await Promise.all([
+                    prewarmRoute(`/subjects/${subject.slug}`),
+                    fetch(`/api/v1/subjects/${subject.slug}?scope=general`).catch(() => null),
+                ]);
+
+                if (subRes && subRes.ok) {
                     const subData = await subRes.json();
 
+                    // Save topics
                     if (subData.topics && subData.topics.length > 0) {
                         await db.topics.bulkPut(
                             subData.topics.map((t: any) => ({
@@ -368,6 +442,7 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
                             }))
                         );
 
+                        // Save topic progress
                         const progressList: LocalLearnerProgress[] = [];
                         for (const t of subData.topics) {
                             if (t.progress) {
@@ -389,65 +464,93 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
                         }
                     }
 
+                    // Save quizzes in parallel
                     if (subData.quizzes && subData.quizzes.length > 0) {
-                        for (const q of subData.quizzes) {
-                            try {
-                                await prewarmRoute(`/quizzes/${q.id}`);
-
-                                if (q.questions && q.questions.length > 0) {
-                                    await db.quizzes.put({
-                                        ...q,
-                                        status: 'published',
-                                        cached_at: new Date().toISOString(),
-                                    });
-                                } else {
-                                    const quizRes = await fetch(`/api/v1/quizzes/${q.id}`);
-                                    if (quizRes.ok) {
-                                        const quizData = await quizRes.json();
-                                        if (quizData.quiz) {
-                                            await db.quizzes.put({
-                                                ...quizData.quiz,
-                                                status: 'published',
-                                                cached_at: new Date().toISOString(),
-                                            });
+                        await Promise.allSettled(
+                            subData.quizzes.map(async (q: any) => {
+                                try {
+                                    await prewarmRoute(`/quizzes/${q.id}`);
+                                    if (q.questions && q.questions.length > 0) {
+                                        await db.quizzes.put({
+                                            ...q,
+                                            status: 'published',
+                                            cached_at: new Date().toISOString(),
+                                        });
+                                    } else {
+                                        const quizRes = await fetch(`/api/v1/quizzes/${q.id}`).catch(() => null);
+                                        if (quizRes && quizRes.ok) {
+                                            const quizData = await quizRes.json();
+                                            if (quizData.quiz) {
+                                                await db.quizzes.put({
+                                                    ...quizData.quiz,
+                                                    status: 'published',
+                                                    cached_at: new Date().toISOString(),
+                                                });
+                                            }
                                         }
                                     }
+                                } catch {
+                                    // ignore individual quiz errors
                                 }
-                            } catch {
-                                // Ignore individual quiz fetch failure
-                            }
-                        }
+                            })
+                        );
                     }
-                } catch {
-                    // Ignore individual subject fetch failure
                 }
+            } catch {
+                // ignore individual subject errors
+            } finally {
+                completedSubjects++;
+                updatePreloadState({
+                    completedSubjects,
+                    percent: Math.min(100, Math.round((completedSubjects / totalSubjects) * 100)),
+                    currentSubjectName: subject.name,
+                });
             }
-        }
+        };
 
-        // 4. Fetch and cache flashcards deck
-        try {
-            const flashRes = await fetch('/api/v1/flashcards/deck');
-            if (flashRes.ok) {
-                const flashData = await flashRes.json();
-                if (flashData.deck && flashData.deck.length > 0) {
-                    await db.flashcards.bulkPut(
-                        flashData.deck.map((f: any) => ({
-                            ...f,
-                            cached_at: new Date().toISOString(),
-                        }))
-                    );
+        // Worker Pool with Concurrency of 4
+        const CONCURRENCY = 4;
+        let queueIndex = 0;
+        const workers = Array.from({ length: Math.min(CONCURRENCY, subjectsList.length) }, async () => {
+            while (queueIndex < subjectsList.length) {
+                const item = subjectsList[queueIndex++];
+                await downloadSubjectCurriculum(item);
+            }
+        });
+
+        // Also fetch and cache flashcards deck in parallel
+        const flashcardsPromise = fetch('/api/v1/flashcards/deck')
+            .then(async (flashRes) => {
+                if (flashRes.ok) {
+                    const flashData = await flashRes.json();
+                    if (flashData.deck && flashData.deck.length > 0) {
+                        await db.flashcards.bulkPut(
+                            flashData.deck.map((f: any) => ({
+                                ...f,
+                                cached_at: new Date().toISOString(),
+                            }))
+                        );
+                    }
                 }
-            }
-        } catch {
-            // Ignore flashcard failure
-        }
+            })
+            .catch(() => null);
 
-        console.log('[OfflineService] Offline curriculum fully preloaded and cached.');
+        await Promise.all([...workers, flashcardsPromise]);
+
+        updatePreloadState({
+            isPreloading: false,
+            isComplete: true,
+            percent: 100,
+            completedSubjects: totalSubjects,
+        });
+        hasPreloadedThisSession = true;
+        console.log('[OfflineService] 2-stage parallel offline curriculum preloading completed.');
     } catch (e) {
         console.warn('Background offline preload encountered an error:', e);
-    } finally {
-        isPreloading = false;
-        hasPreloadedThisSession = true;
+        updatePreloadState({
+            isPreloading: false,
+            isComplete: false,
+        });
     }
 }
 

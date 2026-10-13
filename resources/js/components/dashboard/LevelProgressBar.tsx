@@ -1,4 +1,5 @@
-import { Flame, Trophy } from 'lucide-react';
+import { Flame, Trophy, HelpCircle } from 'lucide-react';
+import { Skeleton } from '@/components/common/Skeleton';
 import { AchievementsGrid, DashboardAchievement } from './AchievementsGrid';
 import { XpGuideModal } from './XpGuideModal';
 
@@ -32,7 +33,8 @@ export interface GamificationData {
 }
 
 interface LevelProgressBarProps {
-    gamification: GamificationData;
+    gamification: GamificationData | null;
+    loading?: boolean;
     activeTooltip: string | null;
     onToggleTooltip: (id: string | null) => void;
     showXpGuide: boolean;
@@ -41,137 +43,166 @@ interface LevelProgressBarProps {
 
 export function LevelProgressBar({
     gamification,
+    loading = false,
     activeTooltip,
     onToggleTooltip,
     showXpGuide,
     onToggleXpGuide,
 }: LevelProgressBarProps) {
+    if (loading || !gamification) {
+        return (
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] p-6 rounded-2xl shadow-sm h-full flex flex-col justify-between min-h-[320px]">
+                <div>
+                    <div className="flex items-center justify-between">
+                        <Skeleton variant="text" className="h-5 w-36" animate="wave" />
+                        <Skeleton variant="rounded" className="h-5 w-20 rounded-full" animate="wave" />
+                    </div>
+                    <Skeleton variant="text" className="h-3.5 w-48 mt-1.5" animate="wave" />
+                </div>
+
+                <div className="my-6 space-y-5">
+                    <div className="flex items-center gap-4">
+                        <Skeleton variant="rounded" className="h-14 w-14 rounded-2xl shrink-0" animate="wave" />
+                        <div className="space-y-2 flex-1">
+                            <Skeleton variant="text" className="h-4 w-full" animate="wave" />
+                            <Skeleton variant="rounded" className="h-2.5 w-full rounded-full" animate="wave" />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <Skeleton variant="rounded" className="h-12 w-full rounded-xl" animate="wave" />
+                        <Skeleton variant="rounded" className="h-12 w-full rounded-xl" animate="wave" />
+                    </div>
+                </div>
+
+                <Skeleton variant="rounded" className="h-9 w-full rounded-xl" animate="wave" />
+            </div>
+        );
+    }
+
+    const progressPercent = Math.min(100, Math.max(0, gamification.xp_progress_percent));
+
     return (
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] p-6 md:p-8 rounded-3xl shadow-sm">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-                <div className="flex items-center gap-5">
-                    <div className="relative">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] p-6 rounded-2xl shadow-sm h-full flex flex-col justify-between min-h-[320px]">
+            {/* Card Header matching Overall Mastery & Recent Quizzes */}
+            <div>
+                <div className="flex items-center justify-between gap-2">
+                    <h2 className="text-lg font-bold text-[var(--color-text)]">Level & Progression</h2>
+                    <span
+                        className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border shrink-0 tracking-wide"
+                        style={{
+                            backgroundColor: `${gamification.tier_color}18`,
+                            borderColor: `${gamification.tier_color}45`,
+                            color: gamification.tier_color,
+                        }}
+                    >
+                        {gamification.tier}
+                    </span>
+                </div>
+                <p className="text-[var(--color-muted)] text-xs mt-1">Tier rank and XP progress milestones.</p>
+            </div>
+
+            {/* Middle Section: Emblem, XP Bar & Stats */}
+            <div className="my-5 space-y-4">
+                {/* Level Emblem + Fluid XP Progress Bar */}
+                <div className="flex items-center gap-4">
+                    <div className="relative shrink-0">
                         <div
-                            className="h-16 w-16 rounded-2xl flex items-center justify-center text-2xl font-black border-2 shadow-lg"
+                            className="h-14 w-14 rounded-2xl flex items-center justify-center text-xl font-black border-2 shadow-sm transition-transform hover:scale-105"
                             style={{
-                                backgroundColor: `${gamification.tier_color}15`,
-                                borderColor: `${gamification.tier_color}40`,
+                                backgroundColor: `${gamification.tier_color}18`,
+                                borderColor: `${gamification.tier_color}45`,
                                 color: gamification.tier_color,
                             }}
                         >
                             L{gamification.level}
                         </div>
-                        <span className="absolute -bottom-1 -right-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)] uppercase tracking-wider">
-                            Lvl
+                        <span className="absolute -bottom-1 -right-1 text-[8px] font-black px-1.5 py-0.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-muted)] uppercase tracking-wider">
+                            LVL
                         </span>
                     </div>
 
-                    <div className="space-y-1.5">
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm font-extrabold" style={{ color: gamification.tier_color }}>
-                                {gamification.tier}
-                            </span>
-                            <span className="text-xs text-[var(--color-muted)]">•</span>
-                            <span className="text-xs text-[var(--color-muted)] font-semibold">
-                                Level {gamification.level}
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="font-bold text-[var(--color-text)]">Level {gamification.level}</span>
+                            <span className="text-[11px] font-extrabold text-[var(--color-muted)] tabular-nums">
+                                {gamification.xp_into_level} / {gamification.xp_for_next_level} XP
                             </span>
                         </div>
-                        <div className="flex items-center gap-3">
-                            <div className="w-40 md:w-56 bg-[var(--color-background)] border border-[var(--color-border)] h-3 rounded-full overflow-hidden">
-                                <div
-                                    className="h-full rounded-full transition-all duration-700 ease-out"
-                                    style={{
-                                        width: `${gamification.xp_progress_percent}%`,
-                                        backgroundColor: gamification.tier_color,
-                                    }}
-                                />
-                            </div>
-                            <span className="text-[10px] font-bold text-[var(--color-muted)] whitespace-nowrap">
-                                {gamification.xp_into_level}/{gamification.xp_for_next_level} XP
+                        {/* Fluid Progress Bar (w-full, never overflows) */}
+                        <div className="w-full bg-[var(--color-background)] border border-[var(--color-border)] h-2.5 rounded-full overflow-hidden">
+                            <div
+                                className="h-full rounded-full transition-all duration-700 ease-out"
+                                style={{
+                                    width: `${progressPercent}%`,
+                                    backgroundColor: gamification.tier_color,
+                                }}
+                            />
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-[var(--color-muted)] mt-1.5 font-semibold">
+                            <span>{gamification.total_xp.toLocaleString()} total XP</span>
+                            <span className="font-bold" style={{ color: gamification.tier_color }}>
+                                {progressPercent}%
                             </span>
                         </div>
-                        <span className="text-xs text-[var(--color-muted)] font-semibold">
-                            {gamification.total_xp.toLocaleString()} total XP earned
-                        </span>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-6">
-                    <div className="text-center">
-                        <div className="flex items-center gap-1.5 justify-center">
-                            <Flame className="w-5 h-5 text-amber-500 shrink-0" />
-                            <span className="text-2xl font-black text-[var(--color-accent)]">
-                                {gamification.current_streak}
+                {/* Compact Mini Metric Stats: Streak & Badges */}
+                <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl p-2.5 flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500 shrink-0">
+                            <Flame className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                            <span className="block text-xs font-black text-[var(--color-text)]">
+                                {gamification.current_streak} {gamification.current_streak === 1 ? 'day' : 'days'}
+                            </span>
+                            <span className="block text-[10px] text-[var(--color-muted)] font-semibold truncate">
+                                Study Streak
                             </span>
                         </div>
-                        <span className="text-[10px] text-[var(--color-muted)] font-bold uppercase tracking-wider">
-                            Day Streak
-                        </span>
                     </div>
-                    <div className="text-center">
-                        <div className="flex items-center gap-1.5 justify-center">
-                            <Trophy className="w-5 h-5 text-amber-500 shrink-0" />
-                            <span className="text-2xl font-black text-[var(--color-accent)]">
-                                {gamification.earned_achievements}
+                    <div className="bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl p-2.5 flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500 shrink-0">
+                            <Trophy className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                            <span className="block text-xs font-black text-[var(--color-text)]">
+                                {gamification.earned_achievements} unlocked
+                            </span>
+                            <span className="block text-[10px] text-[var(--color-muted)] font-semibold truncate">
+                                Badges
                             </span>
                         </div>
-                        <span className="text-[10px] text-[var(--color-muted)] font-bold uppercase tracking-wider">
-                            Badges
-                        </span>
                     </div>
                 </div>
+
+                {/* Achievements Unlocked chips (if any) or encouragement note */}
+                {gamification.achievements && gamification.achievements.length > 0 ? (
+                    <AchievementsGrid
+                        achievements={gamification.achievements}
+                        activeTooltip={activeTooltip}
+                        onToggleTooltip={onToggleTooltip}
+                    />
+                ) : (
+                    <p className="text-[11px] text-[var(--color-muted)] text-center py-1 font-medium">
+                        Complete quizzes to unlock your first milestone badge!
+                    </p>
+                )}
             </div>
 
-            {/* Recent XP chips */}
-            {gamification.recent_xp.length > 0 && (
-                <div className="mt-5 pt-5 border-t border-[var(--color-border)]">
-                    <div className="flex items-center gap-x-2.5 gap-y-3 flex-wrap">
-                        <span className="text-[10px] font-bold text-[var(--color-muted)] uppercase tracking-wider shrink-0">
-                            Recent XP:
-                        </span>
-                        {gamification.recent_xp.slice(0, 4).map((xp, idx) => {
-                            const tooltipId = `xp-${idx}`;
-                            const isOpen = activeTooltip === tooltipId;
-                            return (
-                                <div key={idx} className="relative group/xp inline-flex">
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onToggleTooltip(isOpen ? null : tooltipId);
-                                        }}
-                                        className="badge-success text-[10px] shadow-2xs hover:border-[var(--color-success)] transition-colors cursor-pointer select-none text-left focus:outline-none"
-                                    >
-                                        +{xp.amount} XP • {xp.description || xp.source.replace('_', ' ')}
-                                    </button>
-                                    <div
-                                        className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 ${
-                                            isOpen ? 'flex' : 'hidden md:group-hover/xp:flex'
-                                        } flex-col items-center pointer-events-none z-40 w-48 max-w-[85vw]`}
-                                    >
-                                        <div className="bg-[var(--color-text)] text-[var(--color-surface)] text-[10px] p-2 rounded-xl shadow-xl border border-white/10 text-center font-medium leading-snug">
-                                            <span className="font-bold text-emerald-400">+{xp.amount} XP Earned</span>
-                                            <span className="block text-gray-200 text-[9px] mt-0.5 capitalize">
-                                                {xp.description || xp.source.replace('_', ' ')}
-                                            </span>
-                                        </div>
-                                        <div className="w-2 h-2 bg-[var(--color-text)] transform rotate-45 -mt-1 shadow-sm" />
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
+            {/* Card Footer Action: mirrors Overall Mastery footer badge */}
+            <button
+                type="button"
+                onClick={onToggleXpGuide}
+                className="w-full text-center text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] bg-[var(--color-background)] hover:bg-[var(--color-surface-hover)] py-2.5 rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary-light)] flex items-center justify-center gap-1.5 font-medium transition-all cursor-pointer group shadow-2xs"
+            >
+                <HelpCircle className="w-4 h-4 text-sky-500 group-hover:scale-110 transition-transform" />
+                <span>How to earn XP & rank up</span>
+                <span className="text-[10px] text-[var(--color-muted)] transition-transform group-hover:translate-x-0.5">→</span>
+            </button>
 
-            {/* Achievements */}
-            <AchievementsGrid
-                achievements={gamification.achievements}
-                activeTooltip={activeTooltip}
-                onToggleTooltip={onToggleTooltip}
-            />
-
-            {/* XP Guide */}
+            {/* Portal XP Guide Modal Dialog */}
             <XpGuideModal isOpen={showXpGuide} onToggle={onToggleXpGuide} />
         </div>
     );

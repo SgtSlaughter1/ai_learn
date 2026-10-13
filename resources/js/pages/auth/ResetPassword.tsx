@@ -118,46 +118,37 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
             </div>
 
             {/* ═══════════════════════════════════════════════════════════
-               RIGHT COLUMN: Reset Password Form (Maintained on Mobile)
+               RIGHT COLUMN: Reset Password Form (Elevated Mobile & Desktop Card)
                ═══════════════════════════════════════════════════════════ */}
-            <div className="w-full lg:w-7/12 xl:w-1/2 flex flex-col justify-between p-5 sm:p-8 lg:p-10 xl:p-14 min-h-screen lg:min-h-0 lg:h-full overflow-y-auto">
-                {/* Top Nav: Back to Sign In (Mobile only) & Theme Toggle */}
-                <div className="flex items-center justify-between w-full mb-6 sm:mb-8 lg:mb-0">
+            <div className="w-full lg:w-7/12 xl:w-1/2 flex flex-col justify-between min-h-screen lg:min-h-0 lg:h-full overflow-y-auto bg-[var(--color-background)]">
+                {/* Top Nav: Back to Sign In & Theme Toggle */}
+                <div className="w-full max-w-md mx-auto px-4 sm:px-6 pt-4 sm:pt-6 pb-2 flex items-center justify-between shrink-0">
                     <Link
                         href="/login"
-                        className="lg:hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] text-xs font-semibold transition-colors shadow-xs"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] text-xs font-semibold transition-all shadow-xs hover:shadow-sm"
                     >
                         <ArrowLeft className="w-3.5 h-3.5" />
                         <span>Sign In</span>
                     </Link>
 
-                    <div className="ml-auto">
-                        <ThemeToggle />
-                    </div>
+                    <ThemeToggle />
                 </div>
 
-                {/* Centered Form Wrapper */}
-                <div className="w-full max-w-sm mx-auto my-auto py-2 sm:py-4 space-y-5">
-                    {/* Brand Emblem (Mobile Only) */}
-                    <div className="lg:hidden flex items-center gap-2.5 mb-1">
-                        <div className="w-9 h-9 rounded-xl bg-[var(--color-primary)] text-white flex items-center justify-center font-bold shadow-xs">
-                            <BookOpen className="w-4 h-4" />
+                {/* Central Card Container */}
+                <div className="flex-1 flex flex-col justify-center items-center w-full max-w-md mx-auto px-4 py-4 sm:py-6">
+                    <div className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-sm shadow-black/[0.03]">
+                        {/* Centered Brand Emblem & Header */}
+                        <div className="flex flex-col items-center text-center mb-6">
+                            <div className="w-12 h-12 rounded-2xl bg-[var(--color-primary)] text-white flex items-center justify-center font-bold shadow-sm mb-3">
+                                <BookOpen className="w-6 h-6" />
+                            </div>
+                            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-[var(--color-text)]">
+                                Create New Password
+                            </h1>
+                            <p className="text-xs sm:text-sm text-[var(--color-muted)] mt-1.5">
+                                Enter your email and choose a strong new password
+                            </p>
                         </div>
-                        <div className="flex flex-col">
-                            <span className="text-lg font-black tracking-tight text-[var(--color-primary)] leading-none">AceDrill</span>
-                            <span className="text-[10px] font-semibold text-[var(--color-muted)]">Account Recovery</span>
-                        </div>
-                    </div>
-
-                    {/* Header */}
-                    <div className="space-y-1">
-                        <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--color-text)]">
-                            Create New Password
-                        </h2>
-                        <p className="text-xs sm:text-sm text-[var(--color-muted)]">
-                            Enter your email and choose a strong new password.
-                        </p>
-                    </div>
 
                     {/* Form */}
                     <form onSubmit={handleSubmit} className="space-y-4">
@@ -248,7 +239,7 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
                         <button
                             type="submit"
                             disabled={processing}
-                            className="w-full btn-primary py-3 text-xs sm:text-sm font-bold shadow-md hover:shadow-lg active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-2"
+                            className="w-full btn-primary py-3 text-xs sm:text-sm font-bold shadow-xs hover:shadow-md active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-2 rounded-xl mt-2"
                         >
                             {processing ? (
                                 <>
@@ -262,22 +253,25 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
                     </form>
 
                     {/* Bottom Return to Sign In */}
-                    <div className="pt-2 text-center text-xs text-[var(--color-muted)]">
-                        Remember your password?{' '}
-                        <Link
-                            href="/login"
-                            className="font-bold text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] transition-colors hover:underline"
-                        >
-                            Sign in here
-                        </Link>
+                    <div className="text-center pt-5 mt-2 border-t border-[var(--color-border)]/60">
+                        <p className="text-xs text-[var(--color-muted)]">
+                            Remember your password?{' '}
+                            <Link
+                                href="/login"
+                                className="font-bold text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] transition-colors hover:underline ml-1"
+                            >
+                                Sign In
+                            </Link>
+                        </p>
                     </div>
                 </div>
 
-                {/* Mobile Bottom Footer */}
-                <div className="lg:hidden text-center text-[10px] text-[var(--color-muted)] pt-6">
-                    © {new Date().getFullYear()} AceDrill Learning. All rights reserved.
-                </div>
+                {/* Footer Note */}
+                <p className="text-center text-[11px] text-[var(--color-muted)] mt-4">
+                    Protected by offline-first local encryption.
+                </p>
             </div>
         </div>
-    );
+    </div>
+);
 }

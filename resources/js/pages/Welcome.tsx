@@ -186,8 +186,8 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
 
             <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] font-sans antialiased">
                 {/* ── 1. NAVBAR (CLEAN & UNCONGESTED) ─────────────── */}
-                <header className="sticky top-0 z-50 w-full px-4 sm:px-6 pt-3 pb-2">
-                    <nav className="max-w-6xl mx-auto px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-2xl bg-[var(--color-surface)]/95 backdrop-blur-md border border-[var(--color-border)] shadow-sm flex items-center justify-between gap-2 sm:gap-4">
+                <header className="sticky top-0 z-50 w-full px-2.5 sm:px-6 pt-2.5 sm:pt-3 pb-2">
+                    <nav className="max-w-6xl mx-auto px-3 sm:px-5 py-2 sm:py-2.5 rounded-2xl bg-[var(--color-surface)]/90 backdrop-blur-md border border-[var(--color-border)] shadow-sm flex items-center justify-between gap-2 sm:gap-4 transition-all">
                         {/* Brand Logo */}
                         <Link href="/" className="flex items-center gap-2 sm:gap-2.5 shrink-0">
                             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[var(--color-primary)] flex items-center justify-center text-white shadow-xs">
@@ -219,10 +219,10 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
 
                         {/* Right Actions */}
                         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-                            <ThemeToggle />
+                            <ThemeToggle className="shrink-0" />
                             <Link
                                 href="/login"
-                                className="hidden sm:inline-block px-3 py-1.5 text-xs sm:text-sm font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors whitespace-nowrap"
+                                className="px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors whitespace-nowrap shrink-0"
                             >
                                 Sign In
                             </Link>

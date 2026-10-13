@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Head, Link } from '@inertiajs/react';
-import { Globe, ArrowRight } from 'lucide-react';
+import { Head } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { db } from '@/db/database';
 import { preloadFullOfflineCurriculum, saveLocalGamification } from '@/services/OfflineService';
 import { StatsOverview } from '@/components/dashboard/StatsOverview';
 import { LevelProgressBar, GamificationData } from '@/components/dashboard/LevelProgressBar';
-import { AchievementsGrid } from '@/components/dashboard/AchievementsGrid';
-import { RecentAttemptsList, DashboardAttempt } from '@/components/dashboard/RecentAttemptsList';
+import { OverallMasteryCard, RecentQuizActivityCard, DashboardAttempt } from '@/components/dashboard/RecentAttemptsList';
 import { DashboardRevisionCard } from '@/components/dashboard/DashboardRevisionCard';
 import { MilestoneRoadmapModal } from '@/components/dashboard/MilestoneRoadmapModal';
 import 'katex/dist/katex.min.css';
@@ -281,29 +279,9 @@ export default function LearnerDashboard() {
     return (
         <AuthenticatedLayout
             header={
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div>
-                        <h1 className="text-3xl font-extrabold text-[var(--color-text)] tracking-tight">Dashboard</h1>
-                        <p className="text-[var(--color-muted)] mt-1">Track your progress and offline learning path.</p>
-                        {!isOnline && (
-                            <span className="inline-flex items-center gap-1 mt-2 text-xs font-bold text-[var(--color-accent)] bg-[var(--color-accent)]/10 px-2 py-1 rounded-full border border-[var(--color-accent)]/20">
-                                <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)] animate-pulse" />
-                                Offline: showing saved data
-                            </span>
-                        )}
-                    </div>
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                        <Link
-                            href="/general-knowledge"
-                            className="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[var(--color-surface)] border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text)] flex items-center gap-2 transition-all shadow-xs active:scale-98"
-                        >
-                            <Globe className="w-4 h-4 text-[var(--color-primary)]" />
-                            <span>General Knowledge</span>
-                        </Link>
-                        <Link href="/subjects" className="btn-primary">
-                            Browse Curriculum
-                        </Link>
-                    </div>
+                <div>
+                    <h1 className="text-xl lg:text-2xl font-bold text-[var(--color-text)] tracking-tight">Dashboard</h1>
+                    <p className="text-xs text-[var(--color-muted)]">Track your progress and offline learning path.</p>
                 </div>
             }
         >
@@ -312,65 +290,35 @@ export default function LearnerDashboard() {
                 <meta name="description" content="View your subject mastery progress, active study streaks, recommended practice topics, and offline quiz history on AceDrill." />
             </Head>
 
-            <div className="space-y-8 relative">
-                {/* 🎯 AI-Curated Next 15-Minute Mission & Daily Streak Defense Card */}
-                <DashboardRevisionCard
-                    gamification={gamification}
-                    onOpenMilestones={() => setIsMilestonesOpen(true)}
-                    onSessionCompleted={() => {
-                        fetch('/api/v1/gamification/profile')
-                            .then((r) => r.json())
-                            .then((d) => setGamification(d))
-                            .catch(() => {});
-                    }}
-                />
+            <div className="space-y-6 lg:space-y-8 relative">
+                {/* 1. Hero Row: Today's 15-Minute Mission (Left) paired with Level & Progression (Right) */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch">
+                    <div className="lg:col-span-7 xl:col-span-8 flex flex-col">
+                        <DashboardRevisionCard
+                            gamification={gamification}
+                            onOpenMilestones={() => setIsMilestonesOpen(true)}
+                            onSessionCompleted={() => {
+                                fetch('/api/v1/gamification/profile')
+                                    .then((r) => r.json())
+                                    .then((d) => setGamification(d))
+                                    .catch(() => {});
+                            }}
+                        />
+                    </div>
 
-                {/* 🌍 General Knowledge & Global Discovery Spotlight Card */}
-                <div className="relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:p-6 shadow-xs hover:border-[var(--color-primary-30)] transition-all">
-                    <div className="absolute top-0 right-0 -mt-8 -mr-8 w-40 h-40 bg-[var(--color-primary-5)] rounded-full blur-2xl pointer-events-none" />
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative z-10">
-                        <div className="flex items-start gap-4">
-                            <div className="w-12 h-12 rounded-xl bg-[var(--color-primary-10)] text-[var(--color-primary)] flex items-center justify-center shrink-0 border border-[var(--color-primary-20)] shadow-xs">
-                                <Globe className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <h3 className="text-base sm:text-lg font-bold text-[var(--color-text)]">
-                                        General Knowledge & Global Hub
-                                    </h3>
-                                    <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                                        Offline Ready
-                                    </span>
-                                </div>
-                                <p className="text-xs sm:text-sm text-[var(--color-muted)] mt-1 max-w-xl leading-relaxed">
-                                    Expand your horizons beyond the school curriculum. Explore world affairs, history, civics, general sciences, and culture anytime.
-                                </p>
-                                <div className="flex items-center gap-2 mt-3 flex-wrap">
-                                    <span className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-[var(--color-background)] border border-[var(--color-border)] text-[var(--color-muted)]">
-                                        🌍 World Affairs
-                                    </span>
-                                    <span className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-[var(--color-background)] border border-[var(--color-border)] text-[var(--color-muted)]">
-                                        🏛️ Civics & History
-                                    </span>
-                                    <span className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-[var(--color-background)] border border-[var(--color-border)] text-[var(--color-muted)]">
-                                        💡 Science & Tech
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="sm:self-center shrink-0">
-                            <Link
-                                href="/general-knowledge"
-                                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[var(--color-primary)] text-white hover:opacity-95 shadow-xs transition-all w-full sm:w-auto active:scale-98"
-                            >
-                                <span>Explore Knowledge</span>
-                                <ArrowRight className="w-4 h-4" />
-                            </Link>
-                        </div>
+                    <div className="lg:col-span-5 xl:col-span-4 flex flex-col">
+                        <LevelProgressBar
+                            gamification={gamification}
+                            loading={loading}
+                            activeTooltip={activeTooltip}
+                            onToggleTooltip={setActiveTooltip}
+                            showXpGuide={showXpGuide}
+                            onToggleXpGuide={() => setShowXpGuide(!showXpGuide)}
+                        />
                     </div>
                 </div>
 
-                {/* 4 Summary Stats Cards */}
+                {/* 2. Core Stats KPI Row (Desktop: 4 columns in 1 row; Mobile: compact 2x2 cluster) */}
                 <StatsOverview
                     loading={loading}
                     isOnline={isOnline}
@@ -379,37 +327,21 @@ export default function LearnerDashboard() {
                     accuracy={accuracy}
                 />
 
-                {/* Responsive 2-Column Split: Active Learning (Left) vs. Gamification & Progression (Right) */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                    {/* Left Column (Operational Mastery & Recent Quizzes) */}
-                    <div className="lg:col-span-7 xl:col-span-8 space-y-8">
-                        <RecentAttemptsList
+                {/* 3. Deep Dive & Activity Row: Overall Mastery (4 cols) + Recent Quiz Activity (8 cols) */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch">
+                    <div className="lg:col-span-4 xl:col-span-4 flex flex-col">
+                        <OverallMasteryCard
                             loading={loading}
-                            isOnline={isOnline}
-                            attempts={recentAttempts}
                             averageMastery={avgMasteryScore}
                         />
                     </div>
 
-                    {/* Right Column (Gamification Level, XP & Badges) */}
-                    <div className="lg:col-span-5 xl:col-span-4 space-y-8">
-                        {!loading && gamification && (
-                            <LevelProgressBar
-                                gamification={gamification}
-                                activeTooltip={activeTooltip}
-                                onToggleTooltip={setActiveTooltip}
-                                showXpGuide={showXpGuide}
-                                onToggleXpGuide={() => setShowXpGuide(!showXpGuide)}
-                            />
-                        )}
-
-                        {!loading && gamification && gamification.achievements && gamification.achievements.length > 0 && (
-                            <AchievementsGrid
-                                achievements={gamification.achievements}
-                                activeTooltip={activeTooltip}
-                                onToggleTooltip={setActiveTooltip}
-                            />
-                        )}
+                    <div className="lg:col-span-8 xl:col-span-8 flex flex-col">
+                        <RecentQuizActivityCard
+                            loading={loading}
+                            isOnline={isOnline}
+                            attempts={recentAttempts}
+                        />
                     </div>
                 </div>
             </div>

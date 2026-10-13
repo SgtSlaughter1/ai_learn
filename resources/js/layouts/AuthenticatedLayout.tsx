@@ -4,6 +4,8 @@ import ChatWidget from '@/components/ui/ChatWidget';
 import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt';
 import UserProfileMenu from '@/components/ui/UserProfileMenu';
 import { preloadFullOfflineCurriculum } from '@/services/OfflineService';
+import { OfflineReadinessBadge } from '@/components/dashboard/OfflineReadinessBadge';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 
 interface User {
     id: number;
@@ -23,6 +25,7 @@ interface PageProps {
 export default function AuthenticatedLayout({ children, header }: { children: React.ReactNode; header?: React.ReactNode }) {
     const { auth } = usePage<PageProps>().props;
     const { url } = usePage();
+    const { isOnline } = useNetworkStatus();
     const [currentPathWithQuery, setCurrentPathWithQuery] = useState(url);
 
     useEffect(() => {
@@ -82,12 +85,13 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
     const isSchoolAdmin = auth?.user?.role === 'school_admin';
     const isTeacher = auth?.user?.role === 'teacher';
     const isAdmin = isSuperAdmin || isSchoolAdmin;
+    const isLearner = !isAdmin && !isTeacher;
     const hasSchool = auth?.user?.has_school_access !== false;
 
     return (
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex flex-col relative">
             {/* Mobile Clean Top Header Bar */}
-            <div className="md:hidden bg-[var(--color-surface)] border-b border-[var(--color-border)] px-4 py-3 flex items-center justify-between sticky top-0 z-30 shadow-xs">
+            <div className="md:hidden bg-[var(--color-surface)] border-b border-[var(--color-border)] px-4 py-2.5 flex items-center justify-between sticky top-0 z-30 shadow-xs">
                 <Link
                     href="/dashboard"
                     className="text-xl font-bold text-[var(--color-primary)] tracking-tight flex items-center gap-2"
@@ -95,6 +99,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                     <span>AceDrill</span>
                 </Link>
                 <div className="flex items-center gap-2">
+                    {isLearner && <OfflineReadinessBadge isOnline={isOnline} compact />}
                     <UserProfileMenu user={auth?.user} />
                 </div>
             </div>
@@ -204,7 +209,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
             {/* Page Shell Main Content */}
             <div className="flex-1 flex flex-col min-w-0 md:pl-64 min-h-screen">
                 {/* Desktop Top Header Bar */}
-                <header className="hidden md:flex bg-[var(--color-surface)] border-b border-[var(--color-border)] px-6 lg:px-8 py-3.5 items-center justify-between sticky top-0 z-30 shadow-xs">
+                <header className="hidden md:flex bg-[var(--color-surface)] border-b border-[var(--color-border)] px-6 lg:px-8 py-3 items-center justify-between sticky top-0 z-30 shadow-xs">
                     <div className="min-w-0 flex-1">
                         {header ? (
                             header
@@ -219,6 +224,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                         )}
                     </div>
                     <div className="flex items-center gap-3 shrink-0 ml-4">
+                        {isLearner && <OfflineReadinessBadge isOnline={isOnline} />}
                         <UserProfileMenu user={auth?.user} />
                     </div>
                 </header>
