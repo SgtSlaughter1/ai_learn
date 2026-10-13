@@ -1488,16 +1488,30 @@ class AdminDashboardController extends Controller
                 ? ($validated['school_id'] ?? $topic?->subject?->school_id)
                 : ($schoolId ?? $topic?->subject?->school_id);
 
-            $question = Question::create([
+            $hasMultipleCorrect = count(array_filter($validated['options'], fn($o) => !empty($o['is_correct']))) > 1;
+            $type = $validated['type'] ?? ($hasMultipleCorrect ? 'multiple_select' : 'multiple_choice');
+            $marks = (int) ($validated['marks'] ?? 1);
+            $gradeLevel = $validated['grade_level'] ?? $topic?->level;
+
+            $payload = [
                 'topic_id' => $validated['topic_id'],
                 'school_id' => $assignedSchoolId,
                 'question_text' => $validated['question_text'],
                 'image_url' => $validated['image_url'] ?? null,
-                'type' => $validated['type'] ?? 'multiple_choice',
+                'type' => $type,
                 'difficulty' => $validated['difficulty'] ?? 'medium',
                 'explanation' => $validated['explanation'] ?? null,
                 'status' => $validated['status'] ?? 'active',
-            ]);
+            ];
+
+            if (Schema::hasColumn('questions', 'marks')) {
+                $payload['marks'] = $marks;
+            }
+            if (Schema::hasColumn('questions', 'grade_level')) {
+                $payload['grade_level'] = $gradeLevel;
+            }
+
+            $question = Question::create($payload);
 
             foreach ($validated['options'] as $index => $opt) {
                 QuestionOption::create([
@@ -1527,7 +1541,7 @@ class AdminDashboardController extends Controller
                     $maxSort = (int) $quiz->questions()->max('quiz_questions.sort_order');
                     $quiz->questions()->attach($question->id, [
                         'sort_order' => $maxSort + 1,
-                        'marks' => 2,
+                        'marks' => $marks,
                     ]);
                 }
             }
@@ -1725,16 +1739,30 @@ class AdminDashboardController extends Controller
                 ? ($validated['school_id'] ?? $question->school_id ?? $newTopic?->subject?->school_id)
                 : ($schoolId ?? $question->school_id ?? $newTopic?->subject?->school_id);
 
-            $question->update([
+            $hasMultipleCorrect = !empty($validated['options']) && count(array_filter($validated['options'], fn($o) => !empty($o['is_correct']))) > 1;
+            $type = $validated['type'] ?? ($hasMultipleCorrect ? 'multiple_select' : $question->type);
+            $marks = isset($validated['marks']) ? (int) $validated['marks'] : ($question->marks ?? 1);
+            $gradeLevel = $validated['grade_level'] ?? $question->grade_level ?? $newTopic?->level;
+
+            $updatePayload = [
                 'topic_id' => $validated['topic_id'],
                 'school_id' => $assignedSchoolId,
                 'question_text' => $validated['question_text'],
                 'image_url' => array_key_exists('image_url', $validated) ? $validated['image_url'] : $question->image_url,
-                'type' => $validated['type'] ?? $question->type,
+                'type' => $type,
                 'difficulty' => $validated['difficulty'] ?? $question->difficulty,
                 'explanation' => $validated['explanation'] ?? null,
                 'status' => $validated['status'] ?? $question->status,
-            ]);
+            ];
+
+            if (Schema::hasColumn('questions', 'marks')) {
+                $updatePayload['marks'] = $marks;
+            }
+            if (Schema::hasColumn('questions', 'grade_level')) {
+                $updatePayload['grade_level'] = $gradeLevel;
+            }
+
+            $question->update($updatePayload);
 
             // Recreate options
             $question->options()->delete();
@@ -1766,7 +1794,11 @@ class AdminDashboardController extends Controller
                     $maxSort = (int) $quiz->questions()->max('quiz_questions.sort_order');
                     $quiz->questions()->attach($question->id, [
                         'sort_order' => $maxSort + 1,
-                        'marks' => 2,
+                        'marks' => $marks,
+                    ]);
+                } else {
+                    $quiz->questions()->updateExistingPivot($question->id, [
+                        'marks' => $marks,
                     ]);
                 }
             }

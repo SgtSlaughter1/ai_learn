@@ -5,6 +5,7 @@ import { getAdminAuthHeaders } from '@/services/AdminOfflineService';
 interface QuestionImageUploaderProps {
     imageUrl: string | null | undefined;
     onChange: (url: string | null) => void;
+    onHide?: () => void;
     showToast?: (text: string, type?: 'success' | 'error') => void;
     label?: string;
     description?: string;
@@ -13,6 +14,7 @@ interface QuestionImageUploaderProps {
 export default function QuestionImageUploader({
     imageUrl,
     onChange,
+    onHide,
     showToast,
     label = 'Question Diagram / Figure (Optional)',
     description = 'Attach an illustration, graph, or diagram to this question.',
@@ -164,7 +166,7 @@ export default function QuestionImageUploader({
             onPaste={handlePaste}
             className="rounded-2xl p-4 bg-[var(--color-background)] border border-[var(--color-border)] space-y-3 transition-colors"
         >
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                     <label className="text-xs font-bold text-[var(--color-text)] flex items-center gap-1.5">
                         <ImageIcon className="w-3.5 h-3.5 text-[var(--color-primary)]" />
@@ -173,32 +175,46 @@ export default function QuestionImageUploader({
                     <p className="text-[10px] text-[var(--color-muted)]">{description}</p>
                 </div>
 
-                {!imageUrl && (
-                    <div className="flex items-center gap-1 bg-[var(--color-surface)] p-0.5 rounded-lg border border-[var(--color-border)] text-[10px] font-bold">
+                <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                    {!imageUrl && (
+                        <div className="flex items-center gap-1 bg-[var(--color-surface)] p-0.5 rounded-lg border border-[var(--color-border)] text-[10px] font-bold">
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('upload')}
+                                className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                                    activeTab === 'upload'
+                                        ? 'bg-[var(--color-primary)] text-white shadow-xs'
+                                        : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                                }`}
+                            >
+                                Upload / Paste
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('url')}
+                                className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                                    activeTab === 'url'
+                                        ? 'bg-[var(--color-primary)] text-white shadow-xs'
+                                        : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                                }`}
+                            >
+                                URL Link
+                            </button>
+                        </div>
+                    )}
+
+                    {onHide && !imageUrl && (
                         <button
                             type="button"
-                            onClick={() => setActiveTab('upload')}
-                            className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
-                                activeTab === 'upload'
-                                    ? 'bg-[var(--color-primary)] text-white shadow-xs'
-                                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
-                            }`}
+                            onClick={onHide}
+                            className="px-2 py-1 rounded-lg text-[10px] font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] transition-colors cursor-pointer flex items-center gap-1"
+                            title="Hide diagram uploader"
                         >
-                            Upload / Paste
+                            <X className="w-3 h-3" />
+                            <span>Hide</span>
                         </button>
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab('url')}
-                            className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
-                                activeTab === 'url'
-                                    ? 'bg-[var(--color-primary)] text-white shadow-xs'
-                                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
-                            }`}
-                        >
-                            URL Link
-                        </button>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
 
             {/* Active Image Preview Card */}

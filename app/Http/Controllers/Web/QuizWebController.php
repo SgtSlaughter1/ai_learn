@@ -149,20 +149,32 @@ class QuizWebController extends Controller
                 $isCorrect = false;
                 $marksAwarded = 0;
 
-                if ($selectedOptionId) {
+                if (is_array($selectedOptionId)) {
+                    $correctOptionIds = $question->options->where('is_correct', true)->pluck('id')->map(fn($id) => (int) $id)->sort()->values()->all();
+                    $studentOptionIds = collect($selectedOptionId)->map(fn($id) => (int) $id)->sort()->values()->all();
+                    if (!empty($correctOptionIds) && $correctOptionIds === $studentOptionIds) {
+                        $isCorrect = true;
+                        $marksAwarded = $pivotMarks;
+                        $score += $pivotMarks;
+                    }
+                    $recordedOptionId = !empty($studentOptionIds) ? $studentOptionIds[0] : null;
+                } elseif ($selectedOptionId) {
                     $option = $question->options->firstWhere('id', $selectedOptionId);
                     if ($option && $option->is_correct) {
                         $isCorrect = true;
                         $marksAwarded = $pivotMarks;
                         $score += $pivotMarks;
                     }
+                    $recordedOptionId = $selectedOptionId;
+                } else {
+                    $recordedOptionId = null;
                 }
 
                 $answersToInsert[] = [
                     'id' => (string) Str::uuid(),
                     'quiz_attempt_id' => $attemptId,
                     'question_id' => $questionId,
-                    'selected_option_id' => $selectedOptionId,
+                    'selected_option_id' => $recordedOptionId,
                     'is_correct' => $isCorrect,
                     'marks_awarded' => $marksAwarded,
                     'answered_at' => now(),

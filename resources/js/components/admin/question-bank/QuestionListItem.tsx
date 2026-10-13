@@ -21,8 +21,16 @@ export default function QuestionListItem({ question: q, onEdit, onDelete, isDele
             {/* Top Bar: Badges + Action Buttons */}
             <div className="flex items-center justify-between gap-2.5 pb-0.5">
                 <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                    {(q.grade_level || q.topic?.level) && (
+                        <span className="px-2 py-0.5 rounded bg-[var(--color-primary-10)] text-[var(--color-primary)] text-[10px] font-extrabold uppercase border border-[var(--color-primary)]/25 shrink-0">
+                            {q.grade_level || q.topic?.level}
+                        </span>
+                    )}
                     <span className="px-2 py-0.5 rounded bg-[var(--color-primary-5)] text-[var(--color-primary)] text-[10px] font-bold uppercase border border-[var(--color-border)] truncate max-w-[200px] sm:max-w-none">
                         {q.topic?.subject?.name || 'Subject'} • {q.topic?.name || 'Topic'}
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-[var(--color-surface)] text-[var(--color-muted)] text-[10px] font-extrabold uppercase border border-[var(--color-border)] shrink-0">
+                        {q.marks ?? 1} {(q.marks ?? 1) === 1 ? 'Mark' : 'Marks'}
                     </span>
                     {q._pendingSync && (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[var(--color-accent-10)] text-[var(--color-accent)] border border-[var(--color-accent)]/25 shrink-0">

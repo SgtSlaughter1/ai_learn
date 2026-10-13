@@ -50,6 +50,8 @@ export default function QuestionBankTab({
     const [deletingQuestionId, setDeletingQuestionId] = useState<number | null>(null);
     const [questionForm, setQuestionForm] = useState<QuestionFormData>({
         topic_id: '',
+        grade_level: '',
+        marks: 1,
         question_text: '',
         image_url: '',
         type: 'multiple_choice',
@@ -105,6 +107,8 @@ export default function QuestionBankTab({
     const resetQuestionForm = () => {
         setQuestionForm({
             topic_id: allTopics[0]?.id ? String(allTopics[0].id) : '',
+            grade_level: '',
+            marks: 1,
             question_text: '',
             image_url: '',
             type: 'multiple_choice',
@@ -124,6 +128,8 @@ export default function QuestionBankTab({
         setEditingQuestion(q);
         setQuestionForm({
             topic_id: String(q.topic_id),
+            grade_level: q.grade_level || q.topic?.level || '',
+            marks: q.marks ?? 1,
             question_text: q.question_text,
             image_url: q.image_url || '',
             type: q.type,
@@ -305,6 +311,7 @@ export default function QuestionBankTab({
                             ? {
                                   id: selectedTopic.id,
                                   name: selectedTopic.name,
+                                  level: selectedTopic.level,
                                   subject: selectedTopic.subject,
                               }
                             : undefined,
@@ -363,6 +370,8 @@ export default function QuestionBankTab({
             const optimisticQuestion: QuestionItem = {
                 id: editingQuestion ? editingQuestion.id : Date.now(),
                 topic_id: Number(questionForm.topic_id),
+                grade_level: questionForm.grade_level || selectedTopic?.level || null,
+                marks: questionForm.marks ?? 1,
                 question_text: questionForm.question_text,
                 image_url: questionForm.image_url || null,
                 type: questionForm.type,
@@ -378,6 +387,7 @@ export default function QuestionBankTab({
                     ? {
                           id: selectedTopic.id,
                           name: selectedTopic.name,
+                          level: selectedTopic.level,
                           subject: selectedTopic.subject,
                       }
                     : undefined,

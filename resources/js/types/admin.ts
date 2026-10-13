@@ -238,6 +238,8 @@ export interface QuestionItem {
     school_id?: number | null;
     school?: { id: number; name: string } | null;
     topic_id: number;
+    grade_level?: string | null;
+    marks?: number;
     question_text: string;
     image_url?: string | null;
     type: string;
@@ -248,6 +250,7 @@ export interface QuestionItem {
     topic?: {
         id: number;
         name: string;
+        level?: string;
         subject?: {
             id: number;
             name: string;
