@@ -121,11 +121,11 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
                RIGHT COLUMN: Reset Password Form (Elevated Mobile & Desktop Card)
                ═══════════════════════════════════════════════════════════ */}
             <div className="w-full lg:w-7/12 xl:w-1/2 flex flex-col justify-between min-h-screen lg:min-h-0 lg:h-full overflow-y-auto bg-[var(--color-background)]">
-                {/* Top Nav: Back to Sign In & Theme Toggle */}
-                <div className="w-full max-w-md mx-auto px-4 sm:px-6 pt-4 sm:pt-6 pb-2 flex items-center justify-between shrink-0">
+                {/* Top Nav: Back to Sign In (Mobile only) & Theme Toggle */}
+                <div className="w-full max-w-md mx-auto px-4 sm:px-6 pt-4 sm:pt-6 pb-2 flex items-center justify-between lg:justify-end shrink-0">
                     <Link
                         href="/login"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] text-xs font-semibold transition-all shadow-xs hover:shadow-sm"
+                        className="lg:hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] text-xs font-semibold transition-all shadow-xs hover:shadow-sm"
                     >
                         <ArrowLeft className="w-3.5 h-3.5" />
                         <span>Sign In</span>

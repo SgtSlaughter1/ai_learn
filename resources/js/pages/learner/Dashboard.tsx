@@ -293,7 +293,7 @@ export default function LearnerDashboard() {
             <div className="space-y-6 lg:space-y-8 relative">
                 {/* 1. Hero Row: Today's 15-Minute Mission (Left) paired with Level & Progression (Right) */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch">
-                    <div className="lg:col-span-7 xl:col-span-8 flex flex-col">
+                    <div className="lg:col-span-7 xl:col-span-7 flex flex-col">
                         <DashboardRevisionCard
                             gamification={gamification}
                             onOpenMilestones={() => setIsMilestonesOpen(true)}
@@ -306,12 +306,11 @@ export default function LearnerDashboard() {
                         />
                     </div>
 
-                    <div className="lg:col-span-5 xl:col-span-4 flex flex-col">
+                    <div className="lg:col-span-5 xl:col-span-5 flex flex-col">
                         <LevelProgressBar
                             gamification={gamification}
                             loading={loading}
-                            activeTooltip={activeTooltip}
-                            onToggleTooltip={setActiveTooltip}
+                            onOpenMilestones={() => setIsMilestonesOpen(true)}
                             showXpGuide={showXpGuide}
                             onToggleXpGuide={() => setShowXpGuide(!showXpGuide)}
                         />
