@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
@@ -27,27 +28,37 @@ class EnsureIdempotentRequest
     // A request still marked processing after this long is assumed to have died mid-flight.
     private const STALE_PROCESSING_SECONDS = 120;
 
+    // Keys only matter while a device may still retry. Old ones are pruned by the daily
+    // schedule, and also on 1 in PRUNE_LOTTERY requests for hosts without cron.
+    private const KEEP_DAYS = 14;
+
+    private const PRUNE_LOTTERY = 500;
+
     public function handle(Request $request, Closure $next): Response
     {
         $key = $request->header(self::HEADER);
 
-        if (!$key || $request->isMethodSafe()) {
+        if (! $key || $request->isMethodSafe()) {
             return $next($request);
         }
 
         $user = $request->user();
-        if (!$user) {
+        if (! $user) {
             return $next($request);
         }
 
-        if (strlen($key) > 100 || !preg_match('/^[A-Za-z0-9_\-:.]+$/', $key)) {
+        if (strlen($key) > 100 || ! preg_match('/^[A-Za-z0-9_\-:.]+$/', $key)) {
             return response()->json([
                 'message' => 'Invalid Idempotency-Key header.',
                 'code' => 'invalid_idempotency_key',
             ], 400);
         }
 
-        $requestHash = hash('sha256', $request->method() . '|' . $request->path() . '|' . $request->getContent());
+        if (random_int(1, self::PRUNE_LOTTERY) === 1) {
+            DB::table('idempotency_keys')->where('created_at', '<', now()->subDays(self::KEEP_DAYS))->limit(1000)->delete();
+        }
+
+        $requestHash = hash('sha256', $request->method().'|'.$request->path().'|'.$request->getContent());
 
         $claimed = $this->claim($user->id, $key, $requestHash);
         if ($claimed instanceof Response) {
@@ -65,6 +76,7 @@ class EnsureIdempotentRequest
 
         if ($status >= 500 || in_array($status, self::RETRYABLE_STATUSES, true)) {
             $this->release($user->id, $key);
+
             return $response;
         }
 
@@ -96,6 +108,7 @@ class EnsureIdempotentRequest
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+
             return null;
         } catch (UniqueConstraintViolationException) {
             // Fall through: a request with this key has been seen before.
@@ -106,7 +119,7 @@ class EnsureIdempotentRequest
             ->where('idempotency_key', $key)
             ->first();
 
-        if (!$existing) {
+        if (! $existing) {
             // Released between our insert and select; let the client retry.
             return $this->inProgressResponse();
         }
@@ -124,7 +137,7 @@ class EnsureIdempotentRequest
                 ->header('Idempotent-Replayed', 'true');
         }
 
-        $updatedAt = \Illuminate\Support\Carbon::parse($existing->updated_at);
+        $updatedAt = Carbon::parse($existing->updated_at);
         if ($updatedAt->lt(now()->subSeconds(self::STALE_PROCESSING_SECONDS))) {
             $this->release($userId, $key);
         }

@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Jobs\AwardQuizCompletionXp;
 use App\Services\Gamification\GamificationService;
 
 class QuizWebController extends Controller
@@ -139,7 +140,7 @@ class QuizWebController extends Controller
 
         try {
             $answersToInsert = [];
-            $topicIdsEvaluated = [];
+            $topicTallies = [];
 
             foreach ($questionsToGrade as $question) {
                 $questionId = $question->id;
@@ -183,7 +184,9 @@ class QuizWebController extends Controller
                     'updated_at' => now(),
                 ];
 
-                $topicIdsEvaluated[$question->topic_id] = true;
+                $topicTallies[$question->topic_id] ??= ['attempted' => 0, 'correct' => 0];
+                $topicTallies[$question->topic_id]['attempted']++;
+                $topicTallies[$question->topic_id]['correct'] += $isCorrect ? 1 : 0;
             }
 
             // Create the attempt
@@ -201,38 +204,8 @@ class QuizWebController extends Controller
             // Save all quiz answers
             QuizAnswer::insert($answersToInsert);
 
-            // Batch compute all evaluated topic stats in ONE query instead of 2N correlated whereHas subqueries
-            $topicStats = DB::table('quiz_answers as qa')
-                ->join('quiz_attempts as qat', 'qa.quiz_attempt_id', '=', 'qat.id')
-                ->join('questions as q', 'qa.question_id', '=', 'q.id')
-                ->where('qat.user_id', $user->id)
-                ->whereIn('q.topic_id', array_keys($topicIdsEvaluated))
-                ->groupBy('q.topic_id')
-                ->selectRaw('
-                    q.topic_id,
-                    COUNT(*) as questions_attempted,
-                    SUM(CASE WHEN qa.is_correct = 1 THEN 1 ELSE 0 END) as questions_correct
-                ')
-                ->get()
-                ->keyBy('topic_id');
-
-            $now = now();
-            foreach (array_keys($topicIdsEvaluated) as $topicId) {
-                $stat = $topicStats->get($topicId);
-                $attempted = (int) ($stat?->questions_attempted ?? 0);
-                $correct   = (int) ($stat?->questions_correct ?? 0);
-                $masteryScore = $attempted > 0 ? (int) round(($correct / $attempted) * 100) : 0;
-
-                LearnerProgress::updateOrCreate(
-                    ['user_id' => $user->id, 'topic_id' => $topicId],
-                    [
-                        'questions_attempted' => $attempted,
-                        'questions_correct'   => $correct,
-                        'mastery_score'       => $masteryScore,
-                        'last_attempted_at'   => $now,
-                    ]
-                );
-            }
+            // Add this attempt's results to topic progress (atomic, independent of history size).
+            LearnerProgress::recordResults($user->id, $topicTallies, now());
 
             DB::commit();
         } catch (\Exception $e) {
@@ -244,9 +217,9 @@ class QuizWebController extends Controller
         }
 
         // Process gamification rewards (XP, streaks, achievements)
-        $attempt = QuizAttempt::find($attemptId);
+        $attempt = QuizAttempt::find($attemptId)->setRelation('user', $user)->setRelation('quiz', $quiz);
         $gamificationService = app(GamificationService::class);
-        $newAchievements = $gamificationService->processQuizCompletion($user, $attempt, $quiz);
+        $newAchievements = $gamificationService->awardQuizCompletionOnce($attempt);
 
         // Auto-record questions into Spaced Repetition memory engine
         try {
@@ -374,7 +347,7 @@ class QuizWebController extends Controller
         $score      = 0;
         $totalMarks = 0;
         $answersToInsert    = [];
-        $topicIdsEvaluated  = [];
+        $topicTallies       = [];
 
         foreach ($questionsToGrade as $question) {
             $pivotMarks = $question->pivot->marks ?? 1;
@@ -415,11 +388,13 @@ class QuizWebController extends Controller
                 'updated_at'      => now(),
             ];
 
-            $topicIdsEvaluated[$question->topic_id] = true;
+            $topicTallies[$question->topic_id] ??= ['attempted' => 0, 'correct' => 0];
+            $topicTallies[$question->topic_id]['attempted']++;
+            $topicTallies[$question->topic_id]['correct'] += $isCorrect ? 1 : 0;
         }
 
         try {
-            DB::transaction(function () use ($user, $quiz, $attemptId, $score, $totalMarks, $startedAt, $completedAt, $answersToInsert, $topicIdsEvaluated) {
+            DB::transaction(function () use ($user, $quiz, $attemptId, $score, $totalMarks, $startedAt, $completedAt, $answersToInsert, $topicTallies) {
                 $attempt = QuizAttempt::create([
                     'id'           => $attemptId,
                     'user_id'      => $user->id,
@@ -433,42 +408,13 @@ class QuizWebController extends Controller
 
                 QuizAnswer::insert($answersToInsert);
 
-                // Batch compute all evaluated topic stats in ONE query instead of 2N correlated whereHas subqueries
-                $topicStats = DB::table('quiz_answers as qa')
-                    ->join('quiz_attempts as qat', 'qa.quiz_attempt_id', '=', 'qat.id')
-                    ->join('questions as q', 'qa.question_id', '=', 'q.id')
-                    ->where('qat.user_id', $user->id)
-                    ->whereIn('q.topic_id', array_keys($topicIdsEvaluated))
-                    ->groupBy('q.topic_id')
-                    ->selectRaw('
-                        q.topic_id,
-                        COUNT(*) as questions_attempted,
-                        SUM(CASE WHEN qa.is_correct = 1 THEN 1 ELSE 0 END) as questions_correct
-                    ')
-                    ->get()
-                    ->keyBy('topic_id');
+                // Add this attempt's results to topic progress (atomic, independent of history size).
+                LearnerProgress::recordResults($user->id, $topicTallies, $completedAt);
 
-                foreach (array_keys($topicIdsEvaluated) as $topicId) {
-                    $stat = $topicStats->get($topicId);
-                    $attempted = (int) ($stat?->questions_attempted ?? 0);
-                    $correct   = (int) ($stat?->questions_correct ?? 0);
-                    $masteryScore = $attempted > 0 ? (int) round(($correct / $attempted) * 100) : 0;
-
-                    LearnerProgress::updateOrCreate(
-                        ['user_id' => $user->id, 'topic_id' => $topicId],
-                        [
-                            'questions_attempted' => $attempted,
-                            'questions_correct'   => $correct,
-                            'mastery_score'       => $masteryScore,
-                            'last_attempted_at'   => $completedAt,
-                        ]
-                    );
-                }
-
-                // XP is awarded in the same transaction: if it fails, the attempt is rolled
-                // back and the retry awards it, instead of the retry seeing "already synced"
-                // and the XP being lost for good.
-                app(GamificationService::class)->processQuizCompletion($user, $attempt, $quiz, $completedAt);
+                // XP, streak and achievements are queued (dispatched once this commits), so a
+                // classroom syncing at once isn't slowed down by them. The job is idempotent
+                // through quiz_attempts.xp_awarded_at, so retries never award twice.
+                AwardQuizCompletionXp::dispatch($attemptId, $completedAt->toIso8601String());
             });
         } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
             // Another request (second tab, or the page's own submit) synced this attempt first.

@@ -229,6 +229,27 @@ class GamificationService
     }
 
     /**
+     * Award an attempt's XP exactly once, however many times it is called (retried jobs,
+     * a sync racing the online submit).
+     *
+     * @return array Newly earned achievements (empty when already awarded)
+     */
+    public function awardQuizCompletionOnce(QuizAttempt $attempt, ?Carbon $activityAt = null): array
+    {
+        return DB::transaction(function () use ($attempt, $activityAt) {
+            // Atomic claim: only one caller can set it, and it's rolled back if awarding fails.
+            $claimed = QuizAttempt::whereKey($attempt->getKey())
+                ->whereNull('xp_awarded_at')
+                ->update(['xp_awarded_at' => now()]);
+            if ($claimed === 0) {
+                return [];
+            }
+
+            return $this->processQuizCompletion($attempt->user, $attempt, $attempt->quiz, $activityAt);
+        });
+    }
+
+    /**
      * Record daily activity to maintain user streak.
      *
      * @param  User  $user

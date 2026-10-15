@@ -9,7 +9,7 @@ import {
 import { db, type SyncQueueItem } from '../db/database';
 import { flushFeedbackOutbox } from './FeedbackOutbox';
 import { reportServerReachable } from './Connectivity';
-import { getAdminAuthHeaders, notifyAdminDataChanged } from './AdminOfflineService';
+import { notifyAdminDataChanged } from './AdminOfflineService';
 import {
     belongsTo,
     classifyResponse,
@@ -92,68 +92,142 @@ export function isSyncAuthRequired(): boolean {
     return authRequired;
 }
 
+// ── Batches ──
+
+/** Changes per batch request (the server accepts up to 25). */
+const BATCH_SIZE = 25;
+
+interface BatchItem {
+    key: string;
+    method: 'POST' | 'PUT' | 'DELETE';
+    path: string;
+    body: unknown;
+}
+
+interface BatchResult {
+    key: string;
+    status: number | null;
+    body: any;
+    skipped?: boolean;
+    /** 'time_budget': the server ran out of time for this request; send it again right away. */
+    reason?: 'halted' | 'time_budget';
+}
+
+type BatchResponse =
+    | { ok: true; results: BatchResult[] }
+    | { ok: false; result: 'offline' | 'auth' | 'transient'; retryAfter: number | null };
+
+function retryAfterSeconds(res: Response): number | null {
+    const value = Number(res.headers.get('Retry-After'));
+    return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/**
+ * Send up to BATCH_SIZE queued changes in one request. The server applies them in order,
+ * each through its own endpoint, and stops at the first one that must be retried.
+ */
+async function sendBatch(items: BatchItem[]): Promise<BatchResponse> {
+    let res: Response;
+    try {
+        res = await fetch('/api/v1/sync/batch', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: jsonHeaders(),
+            body: JSON.stringify({ items }),
+        });
+    } catch {
+        return { ok: false, result: 'offline', retryAfter: null };
+    }
+    if (res.status === 401 || res.status === 419) return { ok: false, result: 'auth', retryAfter: null };
+    if (!res.ok) return { ok: false, result: 'transient', retryAfter: retryAfterSeconds(res) };
+
+    const data = await res.json().catch(() => null);
+    return Array.isArray(data?.results)
+        ? { ok: true, results: data.results }
+        : { ok: false, result: 'transient', retryAfter: null };
+}
+
+function parseBody(payload: string): unknown {
+    if (!payload || payload === '{}') return null;
+    try {
+        return JSON.parse(payload);
+    } catch {
+        return null;
+    }
+}
+
 // ── Quiz attempts ──
 
 async function syncQuizAttempts(userId: string): Promise<{ result: PassResult; synced: number }> {
-    const attempts = (await getUnsyncedAttempts())
-        .filter(a => a.status === 'completed' && a.sync_status !== 'failed' && belongsTo(a.user_id, userId))
-        // Oldest first, so streaks are rebuilt in the order the learner actually studied.
-        .sort((a, b) => (a.completed_at ?? '').localeCompare(b.completed_at ?? ''));
     let synced = 0;
 
-    for (const attempt of attempts) {
-        if (!isDue(attempt.next_sync_at)) return { result: 'waiting', synced };
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+        const due = (await getUnsyncedAttempts())
+            .filter(a => a.status === 'completed' && a.sync_status !== 'failed' && belongsTo(a.user_id, userId))
+            // Oldest first, so streaks are rebuilt in the order the learner actually studied.
+            .sort((a, b) => (a.completed_at ?? '').localeCompare(b.completed_at ?? ''));
+        if (due.length === 0) return { result: 'done', synced };
 
-        let res: Response;
-        try {
-            res = await fetch(`/api/v1/quizzes/attempts/${attempt.id}/sync`, {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: jsonHeaders(),
-                body: JSON.stringify({
-                    quiz_id: attempt.quiz_id,
-                    answers: attempt.answers.map(a => ({
-                        question_id: a.question_id,
-                        selected_option_id: a.selected_option_id,
-                    })),
-                    duration_seconds: attempt.duration_seconds,
-                    started_at: attempt.started_at,
-                    completed_at: attempt.completed_at,
-                }),
-            });
-        } catch {
-            return { result: 'offline', synced };
+        const chunk = [];
+        for (const attempt of due) {
+            if (chunk.length >= BATCH_SIZE || !isDue(attempt.next_sync_at)) break; // keep study order
+            chunk.push(attempt);
         }
+        if (chunk.length === 0) return { result: 'waiting', synced };
 
-        const body = await res.json().catch(() => null);
-        const outcome = classifyResponse(res.status, 'POST', body);
+        const response = await sendBatch(chunk.map((attempt) => ({
+            key: `attempt-${attempt.id}`,
+            method: 'POST',
+            path: `/api/v1/quizzes/attempts/${attempt.id}/sync`,
+            body: {
+                quiz_id: attempt.quiz_id,
+                answers: attempt.answers.map(a => ({ question_id: a.question_id, selected_option_id: a.selected_option_id })),
+                duration_seconds: attempt.duration_seconds,
+                started_at: attempt.started_at,
+                completed_at: attempt.completed_at,
+            },
+        })));
 
-        if (outcome === 'ok') {
-            await markAttemptSynced(attempt.id);
-            await db.quizAttempts.update(attempt.id, { user_id: userId, sync_status: undefined, sync_error: null });
-            synced++;
-            continue;
+        if (!response.ok) {
+            if (response.result === 'transient') {
+                const tries = (chunk[0].sync_attempts ?? 0) + 1;
+                await db.quizAttempts.update(chunk[0].id, { sync_attempts: tries, next_sync_at: nextAttemptAt(tries, response.retryAfter) });
+                return { result: 'waiting', synced };
+            }
+            return { result: response.result, synced };
         }
-        if (outcome === 'auth') return { result: 'auth', synced };
+        if (response.results.length === 0) return { result: 'waiting', synced };
 
-        const attemptsSoFar = (attempt.sync_attempts ?? 0) + 1;
-        if (outcome === 'permanent' || attemptsSoFar >= MAX_SERVER_ERROR_ATTEMPTS) {
-            await db.quizAttempts.update(attempt.id, {
-                sync_status: 'failed',
-                sync_error: describeError(res.status, body),
-                sync_attempts: attemptsSoFar,
-            });
-            continue;
+        for (const [index, result] of response.results.entries()) {
+            const attempt = chunk[index];
+            if (result.skipped || result.status === null) {
+                if (result.reason === 'time_budget') break; // next round sends it straight away
+                return { result: 'waiting', synced };
+            }
+
+            const outcome = classifyResponse(result.status, 'POST', result.body);
+            if (outcome === 'ok') {
+                await markAttemptSynced(attempt.id);
+                await db.quizAttempts.update(attempt.id, { user_id: userId, sync_status: undefined, sync_error: null });
+                synced++;
+                continue;
+            }
+            if (outcome === 'auth') return { result: 'auth', synced };
+
+            const tries = (attempt.sync_attempts ?? 0) + 1;
+            if (outcome === 'permanent' || tries >= MAX_SERVER_ERROR_ATTEMPTS) {
+                await db.quizAttempts.update(attempt.id, {
+                    sync_status: 'failed',
+                    sync_error: describeError(result.status, result.body),
+                    sync_attempts: tries,
+                });
+                continue;
+            }
+            await db.quizAttempts.update(attempt.id, { sync_attempts: tries, next_sync_at: nextAttemptAt(tries) });
+            return { result: 'waiting', synced };
         }
-
-        await db.quizAttempts.update(attempt.id, {
-            sync_attempts: attemptsSoFar,
-            next_sync_at: nextAttemptAt(attemptsSoFar),
-        });
-        return { result: 'waiting', synced };
     }
-
-    return { result: 'done', synced };
 }
 
 // ── Topic progress ──
@@ -235,65 +309,98 @@ async function applyToLocalTable(item: SyncQueueItem, data: any): Promise<void> 
     }
 }
 
+/**
+ * The next run of queued changes that can travel together: in order, due, and not
+ * referring to a record created earlier in the same batch (its real id is only known
+ * once that create has landed).
+ */
+function nextAdminBatch(items: SyncQueueItem[]): SyncQueueItem[] {
+    const batch: SyncQueueItem[] = [];
+    const tempIdsInBatch: string[] = [];
+
+    for (const item of items) {
+        if (batch.length >= BATCH_SIZE || !isDue(item.next_attempt_at)) break;
+        const refersToBatchedCreate = tempIdsInBatch.some(
+            (id) => item.record_id === id || item.endpoint.includes(id) || item.payload.includes(id)
+        );
+        if (refersToBatchedCreate) break;
+
+        batch.push(item);
+        if (item.action === 'insert' && item.record_id.startsWith('temp_')) tempIdsInBatch.push(item.record_id);
+    }
+    return batch;
+}
+
 async function syncAdminQueue(userId: string): Promise<{ result: PassResult; synced: number }> {
-    // Strict creation order: an edit never runs before the create it depends on.
-    const items = (await db.syncQueue.orderBy('id').toArray())
-        .filter(q => !q.synced && q.status !== 'failed' && belongsTo(q.user_id, userId));
     let synced = 0;
 
-    for (const queued of items) {
-        // Re-read: an earlier item in this pass may have remapped its temp id.
-        const item = queued.id ? await db.syncQueue.get(queued.id) : queued;
-        if (!item || item.status === 'failed') continue;
-        if (!isDue(item.next_attempt_at)) return { result: 'waiting', synced };
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+        // Strict creation order: an edit never runs before the create it depends on.
+        // Re-read each round: a create in the previous round may have remapped temp ids.
+        const pending = (await db.syncQueue.orderBy('id').toArray())
+            .filter(q => !q.synced && q.status !== 'failed' && belongsTo(q.user_id, userId));
+        if (pending.length === 0) return { result: 'done', synced };
 
-        if (!item.idempotency_key) {
-            item.idempotency_key = crypto.randomUUID();
-            await db.syncQueue.update(item.id!, { idempotency_key: item.idempotency_key });
-        }
-        if (!item.sent) await db.syncQueue.update(item.id!, { sent: true });
+        const batch = nextAdminBatch(pending);
+        if (batch.length === 0) return { result: 'waiting', synced };
 
-        let res: Response;
-        try {
-            res = await fetch(item.endpoint, {
-                method: item.method,
-                headers: { ...getAdminAuthHeaders(), 'Idempotency-Key': item.idempotency_key },
-                credentials: 'include',
-                body: item.payload && item.payload !== '{}' ? item.payload : undefined,
-            });
-        } catch {
-            return { result: 'offline', synced };
+        for (const item of batch) {
+            if (!item.idempotency_key) item.idempotency_key = crypto.randomUUID();
+            await db.syncQueue.update(item.id!, { idempotency_key: item.idempotency_key, sent: true });
         }
 
-        const data = await res.json().catch(() => ({}));
-        const outcome = classifyResponse(res.status, item.method, data);
+        const response = await sendBatch(batch.map((item) => ({
+            key: item.idempotency_key!,
+            method: item.method,
+            path: item.endpoint,
+            body: parseBody(item.payload),
+        })));
 
-        if (outcome === 'ok') {
-            await applyToLocalTable(item, data);
-            const saved = extractSavedRecord(data);
-            if (item.action === 'insert' && saved?.id !== undefined) {
-                await remapTempId(item.record_id, saved.id);
+        if (!response.ok) {
+            if (response.result === 'transient') {
+                const retries = (batch[0].retries ?? 0) + 1;
+                await db.syncQueue.update(batch[0].id!, { retries, next_attempt_at: nextAttemptAt(retries, response.retryAfter) });
+                return { result: 'waiting', synced };
             }
-            await db.syncQueue.delete(item.id!);
-            synced++;
-            continue;
-        }
-        if (outcome === 'auth') return { result: 'auth', synced };
-        if (outcome === 'permanent') {
-            await markFailed(item, describeError(res.status, data));
-            continue;
+            return { result: response.result, synced };
         }
 
-        const retries = (item.retries ?? 0) + 1;
-        if (retries >= MAX_SERVER_ERROR_ATTEMPTS) {
-            await markFailed(item, 'The server could not process this change.');
-            continue;
+        if (response.results.length === 0) return { result: 'waiting', synced };
+
+        for (const [index, result] of response.results.entries()) {
+            const item = batch[index];
+            if (result.skipped || result.status === null) {
+                if (result.reason === 'time_budget') break; // next round sends it straight away
+                return { result: 'waiting', synced };
+            }
+
+            const outcome = classifyResponse(result.status, item.method, result.body);
+            if (outcome === 'ok') {
+                await applyToLocalTable(item, result.body ?? {});
+                const saved = extractSavedRecord(result.body);
+                if (item.action === 'insert' && saved?.id !== undefined) {
+                    await remapTempId(item.record_id, saved.id);
+                }
+                await db.syncQueue.delete(item.id!);
+                synced++;
+                continue;
+            }
+            if (outcome === 'auth') return { result: 'auth', synced };
+            if (outcome === 'permanent') {
+                await markFailed(item, describeError(result.status, result.body));
+                continue;
+            }
+
+            const retries = (item.retries ?? 0) + 1;
+            if (retries >= MAX_SERVER_ERROR_ATTEMPTS) {
+                await markFailed(item, 'The server could not process this change.');
+                continue;
+            }
+            await db.syncQueue.update(item.id!, { retries, next_attempt_at: nextAttemptAt(retries) });
+            return { result: 'waiting', synced };
         }
-        await db.syncQueue.update(item.id!, { retries, next_attempt_at: nextAttemptAt(retries) });
-        return { result: 'waiting', synced };
     }
-
-    return { result: 'done', synced };
 }
 
 // ── Cross-tab lock ──
@@ -533,8 +640,9 @@ export function startAutoSync(intervalMs: number = 30000): void {
         }
     }, intervalMs);
 
-    // Pick up anything left from a previous session straight away.
-    if (navigator.onLine) syncAll();
+    // Pick up anything left from a previous session soon after the app opens (a little
+    // spread too, for when a whole class opens the app at once).
+    if (navigator.onLine) setTimeout(() => void syncAll(), Math.random() * 3_000);
 }
 
 export function stopAutoSync(): void {
@@ -546,8 +654,20 @@ export function stopAutoSync(): void {
     document.removeEventListener('visibilitychange', handleVisibleSync);
 }
 
+/**
+ * When a school's Wi-Fi comes back, every device sees "online" at the same moment.
+ * Spread their first sync over a short random window so the server isn't hit by the
+ * whole classroom in the same second.
+ */
+const RECONNECT_SPREAD_MS = 20_000;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
 function handleOnlineSync(): void {
-    syncAll();
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        void syncAll();
+    }, Math.random() * RECONNECT_SPREAD_MS);
 }
 
 function handleVisibleSync(): void {

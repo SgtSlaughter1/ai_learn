@@ -10,7 +10,7 @@ Route::get('/subjects', [SubjectController::class, 'getSubjectsList']);
 Route::get('/quizzes/{quiz}', [QuizController::class, 'showQuizDetails']);
 
 // Past questions public API endpoints (accessible for standalone PWA and client simulations)
-Route::prefix('v1/past-questions')->group(function () {
+Route::prefix('v1/past-questions')->middleware('throttle:api')->group(function () {
     Route::get('/meta', [PastQuestionController::class, 'getMeta']);
     Route::get('/questions', [PastQuestionController::class, 'getQuestions']);
     Route::post('/verify-answer', [PastQuestionController::class, 'verifyAnswer']);
@@ -22,7 +22,7 @@ Route::prefix('v1/past-questions')->group(function () {
 });
 
 // LMS Questions API
-Route::prefix('v1/questions')->group(function () {
+Route::prefix('v1/questions')->middleware('throttle:ai')->group(function () {
     Route::get('/similar', [\App\Http\Controllers\Web\AIWebController::class, 'similarQuestion']);
     Route::post('/explain', [\App\Http\Controllers\Web\AIWebController::class, 'explain']);
 });

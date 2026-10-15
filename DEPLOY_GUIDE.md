@@ -113,3 +113,48 @@ In `config/filesystems.php` (around line 41):
          ],
 ```
 This forces all public uploads to write directly into `public/storage`, removing the need for a symlink!
+
+---
+
+## 7. Running for Many Users at Once (Offline Sync at Scale)
+
+When a whole class reconnects, every device syncs its offline work. The app is built so
+this never creates duplicates or loses data (idempotency keys, row locks, unique indexes),
+and so it stays fast:
+
+* Devices spread their first sync over ~20 seconds after reconnecting.
+* Each device sends its backlog in batches of up to 25 changes (`POST /api/v1/sync/batch`).
+* Per-user rate limits protect the server (`api` 600/min, `sync-batch` 60/min, `ai` 20/min,
+  `login` 10/min); the app waits and retries automatically when limited.
+* Quiz XP, streaks and achievements run as a queued job, exactly once per attempt.
+
+### `.env` settings
+
+```env
+SESSION_DRIVER=database
+CACHE_STORE=database
+QUEUE_CONNECTION=database   # or "sync" on hosts that can't run a queue worker
+```
+
+The `sessions`, `cache` and `jobs` tables are created by the normal migrations.
+
+### On InfinityFree (shared hosting)
+
+* Use `QUEUE_CONNECTION=sync` (no background workers are allowed). Jobs then run inside the
+  request; they are still applied exactly once.
+* There is no cron, so the daily cleanup can't be scheduled; old idempotency keys are also
+  pruned automatically during normal requests.
+* **Free shared hosting caps how many PHP requests run at the same time.** It suits a pilot,
+  but not 100+ learners syncing together: requests beyond the cap are refused or delayed.
+
+### On a VPS (recommended for schools)
+
+A small server (2 vCPU, 4 GB RAM) with nginx + PHP-FPM + MySQL comfortably handles a
+classroom-scale reconnect:
+
+* PHP-FPM: `pm = dynamic`, `pm.max_children = 24` (roughly RAM available ÷ 60 MB).
+* Queue worker kept running by Supervisor:
+  `php artisan queue:work --tries=5 --max-time=3600`
+* Scheduler via cron: `* * * * * cd /path/to/app && php artisan schedule:run >> /dev/null 2>&1`
+* Later, for thousands of users, switch the three drivers above to `redis`.
+

@@ -95,20 +95,20 @@ Route::get('/llms-full.txt', function () {
 // Authentication & Password Reset Routes
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'show'])->name('login');
-    Route::post('/login', [LoginController::class, 'store']);
+    Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:login');
     Route::get('/register', [RegisterController::class, 'show'])->name('register');
-    Route::post('/register', [RegisterController::class, 'store']);
+    Route::post('/register', [RegisterController::class, 'store'])->middleware('throttle:login');
     Route::get('/signup', [RegisterController::class, 'show'])->name('signup');
-    Route::post('/signup', [RegisterController::class, 'store']);
+    Route::post('/signup', [RegisterController::class, 'store'])->middleware('throttle:login');
     Route::get('/forgot-password', [PasswordResetLinkController::class, 'show'])->name('password.request');
-    Route::post('/forgot-password', [PasswordResetLinkController::class, 'store'])->name('password.email');
+    Route::post('/forgot-password', [PasswordResetLinkController::class, 'store'])->name('password.email')->middleware('throttle:login');
     Route::get('/reset-password/{token}', [NewPasswordController::class, 'show'])->name('password.reset');
     Route::post('/reset-password', [NewPasswordController::class, 'store'])->name('password.update');
 });
 Route::post('/logout', [LoginController::class, 'destroy']);
 
 // Standalone API Auth Endpoints
-Route::prefix('api/v1/auth')->group(function () {
+Route::prefix('api/v1/auth')->middleware('throttle:login')->group(function () {
     Route::post('/login', [LoginController::class, 'login']);
     Route::post('/register', [RegisterController::class, 'store']);
     Route::get('/user', [LoginController::class, 'getUser']);
@@ -139,7 +139,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/flashcards', [FlashcardController::class, 'showFlashcardsPage']);
 
     // Separate JSON Data Routes
-    Route::prefix('api/v1')->group(function () {
+    Route::prefix('api/v1')->middleware('throttle:api')->group(function () {
         Route::get('/dashboard/stats', [DashboardController::class, 'getLearnerStats']);
         Route::get('/teacher/stats', [TeacherDashboardController::class, 'getTeacherStats'])->middleware('can:access-teaching');
         Route::get('/classes', [SubjectWebController::class, 'getClasses']);
@@ -156,9 +156,11 @@ Route::middleware('auth')->group(function () {
         Route::post('/quizzes/{quiz}/adaptive/answer', [AdaptiveQuizController::class, 'answer']);
 
         // AI Tutoring & Assistance
-        Route::post('/ai/explain', [AIWebController::class, 'explain']);
-        Route::get('/ai/similar-question', [AIWebController::class, 'similarQuestion']);
-        Route::post('/ai/chat', [AIWebController::class, 'chat']);
+        Route::middleware('throttle:ai')->group(function () {
+            Route::post('/ai/explain', [AIWebController::class, 'explain']);
+            Route::get('/ai/similar-question', [AIWebController::class, 'similarQuestion']);
+            Route::post('/ai/chat', [AIWebController::class, 'chat']);
+        });
 
         // Spaced Repetition (Daily 5-Min Smart Revision)
         Route::get('/revision/today', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'getTodayQueue']);
@@ -176,6 +178,7 @@ Route::middleware('auth')->group(function () {
 
         // Offline Sync Endpoints (called by SyncService.ts when coming back online)
         Route::get('/sync/session', [SyncController::class, 'session']);
+        Route::post('/sync/batch', [SyncController::class, 'batch'])->middleware('throttle:sync-batch');
 
         Route::post('/progress/sync', [SyncController::class, 'syncProgress']);
         Route::post('/gamification/sync', [SyncController::class, 'syncGamification']);
@@ -203,8 +206,8 @@ Route::middleware('auth')->group(function () {
             Route::put('/admin/questions/{id}', [Admin\QuestionController::class, 'update']);
             Route::delete('/admin/questions/{id}', [Admin\QuestionController::class, 'destroy']);
             Route::post('/admin/questions/upload-image', [Admin\QuestionToolsController::class, 'uploadImage']);
-            Route::post('/admin/questions/ai-extract', [Admin\QuestionToolsController::class, 'extract']);
-            Route::post('/admin/questions/ai-generate', [Admin\QuestionToolsController::class, 'generate']);
+            Route::post('/admin/questions/ai-extract', [Admin\QuestionToolsController::class, 'extract'])->middleware('throttle:ai');
+            Route::post('/admin/questions/ai-generate', [Admin\QuestionToolsController::class, 'generate'])->middleware('throttle:ai');
         });
 
         // ── Administration (school admins: their own school; platform admins: everything) ──
@@ -266,14 +269,15 @@ Route::middleware('auth')->group(function () {
 });
 
 // Past questions public API endpoints (accessible without strict session login for guest practice)
-Route::prefix('api/v1/past-questions')->group(function () {
+// Open to guests (CBT practice); these registrations take precedence over the signed-in ones above.
+Route::prefix('api/v1/past-questions')->middleware('throttle:api')->group(function () {
     Route::get('/meta', [PastQuestionController::class, 'getMeta']);
     Route::get('/questions', [PastQuestionController::class, 'getQuestions']);
     Route::post('/verify-answer', [PastQuestionController::class, 'verifyAnswer']);
     Route::post('/simulation/start', [PastQuestionController::class, 'startSimulation']);
     Route::post('/simulation/submit', [PastQuestionController::class, 'submitSimulation']);
     Route::get('/history', [PastQuestionController::class, 'getHistory']);
-    Route::post('/explain', [PastQuestionController::class, 'explain']);
+    Route::post('/explain', [PastQuestionController::class, 'explain'])->middleware('throttle:ai');
 });
 
 Route::get('/api/health', function () {
@@ -534,5 +538,5 @@ Route::get('/run-past-questions-seed', function () use ($guardMaintenance) {
 });
 
 // Feedback Submission Web Endpoint
-Route::post('/api/v1/feedback', [\App\Http\Controllers\Api\FeedbackController::class, 'store']);
+Route::post('/api/v1/feedback', [\App\Http\Controllers\Api\FeedbackController::class, 'store'])->middleware('throttle:public-feedback');
 

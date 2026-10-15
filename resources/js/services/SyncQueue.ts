@@ -75,8 +75,10 @@ const MAX_DELAY_MS = 15 * 60_000;
 /** Server errors (not network drops) after which an item is set aside so it stops blocking the queue. */
 export const MAX_SERVER_ERROR_ATTEMPTS = 8;
 
-export function nextAttemptAt(attempts: number): string {
-    const delay = Math.min(MAX_DELAY_MS, BASE_DELAY_MS * 2 ** Math.max(0, attempts - 1));
+/** Exponential backoff with jitter; never sooner than the server's Retry-After, when it sent one. */
+export function nextAttemptAt(attempts: number, retryAfterSeconds: number | null = null): string {
+    const backoff = Math.min(MAX_DELAY_MS, BASE_DELAY_MS * 2 ** Math.max(0, attempts - 1));
+    const delay = Math.max(backoff, (retryAfterSeconds ?? 0) * 1000);
     const jitter = Math.random() * delay * 0.2;
     return new Date(Date.now() + delay + jitter).toISOString();
 }

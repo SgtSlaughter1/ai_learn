@@ -499,24 +499,7 @@ class PastQuestionController extends Controller
 
             // Update user learner_progress topic mastery if user exists
             if ($user && $tId && !$alreadyRecorded) {
-                DB::transaction(function () use ($user, $tId, $stat, $completedAt) {
-                    $progress = LearnerProgress::createOrFirst([
-                        'user_id' => $user->id,
-                        'topic_id' => $tId,
-                    ]);
-                    $progress = LearnerProgress::whereKey($progress->id)->lockForUpdate()->first();
-
-                    $prevAttempted = (int) ($progress->questions_attempted ?? 0);
-                    $prevCorrect   = (int) ($progress->questions_correct ?? 0);
-                    $newAttempted  = $prevAttempted + (int) ($stat['total'] ?? 0);
-                    $newCorrect    = $prevCorrect + (int) ($stat['correct'] ?? 0);
-
-                    $progress->questions_attempted = $newAttempted;
-                    $progress->questions_correct   = $newCorrect;
-                    $progress->mastery_score       = $newAttempted > 0 ? (int) round(($newCorrect / $newAttempted) * 100) : 0;
-                    $progress->last_attempted_at   = $completedAt;
-                    $progress->save();
-                });
+                LearnerProgress::recordResults($user->id, [$tId => ['attempted' => (int) ($stat['total'] ?? 0), 'correct' => (int) ($stat['correct'] ?? 0)]], $completedAt);
             }
         }
 
