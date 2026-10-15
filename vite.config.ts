@@ -40,107 +40,41 @@ export default defineConfig({
                 cleanupOutdatedCaches: true,
                 clientsClaim: true,
                 skipWaiting: true,
-                // No navigateFallback here — we handle offline navigation via
-                // the runtimeCaching NetworkFirst rules below which check the
-                // cache before giving up. offline.html is only shown when
-                // nothing is cached AND network fails.
+                // No navigateFallback: the navigation handler below serves the app shell
+                // (or offline.html) when the network is unavailable.
                 navigateFallback: null,
                 runtimeCaching: [
+                    // Inertia page visits (X-Inertia XHRs) are deliberately NOT cached here:
+                    // when one can't reach the server the app renders the page on the device
+                    // from local data (resources/js/services/OfflineNavigation.ts).
                     {
-                        // 1. Cache app routes (both HTML and Inertia JSON) — covers all main nav pages
-                        // ignoreVary is critical: Inertia adds Vary: X-Inertia to responses
-                        urlPattern: ({ url }) => {
-                            return /^\/(dashboard|admin|teacher|subjects|quizzes|flashcards|past-questions|exam-prep|login|)(\/.*)?$/.test(url.pathname);
-                        },
-                        handler: 'NetworkFirst',
-                        options: {
-                            cacheName: 'app-routes-cache',
-                            networkTimeoutSeconds: 3,
-                            matchOptions: {
-                                ignoreVary: true,
-                                ignoreSearch: true,
-                            },
-                            expiration: {
-                                maxEntries: 100,
-                                maxAgeSeconds: 14 * 24 * 60 * 60, // 14 days
-                            },
-                            cacheableResponse: {
-                                statuses: [0, 200],
-                            },
-                            plugins: [
-                                {
-                                    handlerDidError: async ({ request }) => {
-                                        const isInertia = request?.headers?.get('X-Inertia') === 'true' || request?.headers?.get('x-inertia') === 'true';
-                                        const url = request?.url ? new URL(request.url) : null;
-                                        if (isInertia && url) {
-                                            const p = url.pathname;
-                                            let component = 'Dashboard';
-                                            if (p === '/' || p === '') component = 'Welcome';
-                                            else if (p === '/login') component = 'auth/Login';
-                                            else if (p.startsWith('/admin')) component = 'admin/Dashboard';
-                                            else if (p.startsWith('/teacher')) component = 'teacher/Dashboard';
-                                            else if (p === '/subjects') component = 'Subjects/Index';
-                                            else if (p.startsWith('/subjects/')) component = 'Subjects/Show';
-                                            else if (p.startsWith('/quizzes/attempts/')) component = 'quizzes/Result';
-                                            else if (p.startsWith('/quizzes/')) component = 'quizzes/Show';
-                                            else if (p.startsWith('/flashcards')) component = 'Flashcards/Index';
-                                            else if (p.startsWith('/past-questions') || p.startsWith('/exam-prep')) component = 'ExamPrep/PastQuestionsIndex';
-
-                                            const inertiaPayload = {
-                                                component: component,
-                                                props: {
-                                                    auth: { user: null },
-                                                    errors: {}
-                                                },
-                                                url: p,
-                                                version: ''
-                                            };
-
-                                            return new Response(JSON.stringify(inertiaPayload), {
-                                                status: 200,
-                                                headers: {
-                                                    'Content-Type': 'application/json',
-                                                    'X-Inertia': 'true',
-                                                }
-                                            });
-                                        }
-
-                                        const offlinePage = await caches.match('/offline.html');
-                                        return offlinePage || Response.error();
-                                    }
-                                }
-                            ],
-                        },
-                    },
-                    {
-                        // 2. Catch-all for ALL HTML navigation requests
-                        // NetworkFirst: tries network (3s timeout), falls back to cache,
-                        // and if nothing cached serves /offline.html
+                        // 1. Full page loads (open, refresh, typed URL).
+                        // Online: always the live page, never cached (a cached page could be
+                        // stale, belong to another user, or reference scripts from an old build).
+                        // Offline: the "app shell" saved by the app (OfflinePrewarm.ts), which
+                        // then renders the requested URL itself; else /offline.html.
                         urlPattern: ({ request }) => request.mode === 'navigate',
-                        handler: 'NetworkFirst',
-                        options: {
-                            cacheName: 'pages-cache',
-                            networkTimeoutSeconds: 3,
-                            expiration: {
-                                maxEntries: 50,
-                                maxAgeSeconds: 30 * 24 * 60 * 60,
-                            },
-                            cacheableResponse: {
-                                statuses: [0, 200],
-                            },
-                            plugins: [
-                                {
-                                    // When both network and cache fail, serve the offline page
-                                    handlerDidError: async () => {
-                                        const offlinePage = await caches.match('/offline.html');
-                                        return offlinePage || Response.error();
-                                    }
-                                }
-                            ],
+                        handler: async ({ request }) => {
+                            if (new URL(request.url).pathname === '/offline.html') {
+                                return (await caches.match('/offline.html', { ignoreSearch: true })) || fetch(request);
+                            }
+                            try {
+                                const controller = new AbortController();
+                                const timer = setTimeout(() => controller.abort(), 8000);
+                                const response = await fetch(request, { signal: controller.signal });
+                                clearTimeout(timer);
+                                return response;
+                            } catch {
+                                const shellCache = await caches.open('app-shell');
+                                const shell = await shellCache.match('/__app-shell');
+                                if (shell) return shell;
+                                const offlinePage = await caches.match('/offline.html', { ignoreSearch: true });
+                                return offlinePage || Response.error();
+                            }
                         },
                     },
                     {
-                        // 3. Cache built JS/CSS/asset chunks (CacheFirst)
+                        // 2. Cache built JS/CSS/asset chunks (CacheFirst)
                         urlPattern: ({ url }) => url.pathname.startsWith('/build/assets/'),
                         handler: 'CacheFirst',
                         options: {
@@ -170,8 +104,10 @@ export default defineConfig({
                         },
                     },
                     {
-                        // 4. Cache API calls for offline fallback
-                        urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
+                        // 3. Cache API calls for offline fallback.
+                        // Sync endpoints are excluded: a cached session check would make the
+                        // sync engine think it is online and signed in when it is not.
+                        urlPattern: ({ url }) => url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/v1/sync/'),
                         handler: 'NetworkFirst',
                         options: {
                             cacheName: 'api-cache',

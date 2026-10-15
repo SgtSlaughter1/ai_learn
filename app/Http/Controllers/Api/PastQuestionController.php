@@ -15,6 +15,7 @@ use App\Models\Subject;
 use App\Models\Topic;
 use App\Services\AIService;
 use Illuminate\Http\JsonResponse;
+use App\Services\Gamification\GamificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -333,7 +334,7 @@ class PastQuestionController extends Controller
         $simulationId = null;
 
         if ($user) {
-            $simulation = ExamSimulation::create([
+            $attributes = [
                 'user_id' => $user->id,
                 'school_id' => $user->school_id ?? null,
                 'exam_code' => strtolower($validated['exam_code']),
@@ -343,8 +344,13 @@ class PastQuestionController extends Controller
                 'total_questions' => $totalQuestions,
                 'duration_seconds' => $validated['duration_seconds'] ?? 2400, // 40 mins default
                 'status' => 'in_progress',
-            ]);
-            $simulationId = $simulation->id;
+            ];
+            // The device's id makes a retried start reuse the record, and lets a submit
+            // made later (possibly offline) find it.
+            $simulation = !empty($validated['client_id'])
+                ? ExamSimulation::createOrFirst(['client_id' => $validated['client_id']], $attributes)
+                : ExamSimulation::create($attributes);
+            $simulationId = $simulation->user_id === $user->id ? $simulation->id : null;
         }
 
         return response()->json([
@@ -456,6 +462,20 @@ class PastQuestionController extends Controller
             ? round(($correctAnswers / $totalQuestions) * 100, 2)
             : 0;
 
+        // Find this learner's simulation record: by the id the device gave it (works for
+        // simulations started offline), else by the server id from an online start.
+        $simulation = null;
+        if ($user && !empty($validated['client_id'])) {
+            $simulation = ExamSimulation::where('user_id', $user->id)->where('client_id', $validated['client_id'])->first();
+        }
+        if ($user && !$simulation && !empty($validated['simulation_id'])) {
+            // Scoped to the learner: a simulation id must never update another user's record.
+            $simulation = ExamSimulation::where('user_id', $user->id)->find($validated['simulation_id']);
+        }
+        // A resubmission of a finished simulation must not add its answers to progress again.
+        $alreadyRecorded = $simulation?->status === 'completed';
+        $completedAt = GamificationService::activityTime($validated['completed_at'] ?? null);
+
         // Process topic mastery and weakness recommendations
         $topicBreakdown = [];
         $weakTopics = [];
@@ -478,40 +498,51 @@ class PastQuestionController extends Controller
             }
 
             // Update user learner_progress topic mastery if user exists
-            if ($user && $tId) {
-                $progress = LearnerProgress::firstOrNew([
-                    'user_id' => $user->id,
-                    'topic_id' => $tId,
-                ]);
+            if ($user && $tId && !$alreadyRecorded) {
+                DB::transaction(function () use ($user, $tId, $stat, $completedAt) {
+                    $progress = LearnerProgress::createOrFirst([
+                        'user_id' => $user->id,
+                        'topic_id' => $tId,
+                    ]);
+                    $progress = LearnerProgress::whereKey($progress->id)->lockForUpdate()->first();
 
-                $prevAttempted = (int) ($progress->questions_attempted ?? 0);
-                $prevCorrect   = (int) ($progress->questions_correct ?? 0);
-                $newAttempted  = $prevAttempted + (int) ($stat['total'] ?? 0);
-                $newCorrect    = $prevCorrect + (int) ($stat['correct'] ?? 0);
+                    $prevAttempted = (int) ($progress->questions_attempted ?? 0);
+                    $prevCorrect   = (int) ($progress->questions_correct ?? 0);
+                    $newAttempted  = $prevAttempted + (int) ($stat['total'] ?? 0);
+                    $newCorrect    = $prevCorrect + (int) ($stat['correct'] ?? 0);
 
-                $progress->questions_attempted = $newAttempted;
-                $progress->questions_correct   = $newCorrect;
-                $progress->mastery_score       = $newAttempted > 0 ? (int) round(($newCorrect / $newAttempted) * 100) : 0;
-                $progress->last_attempted_at   = now();
-                $progress->save();
+                    $progress->questions_attempted = $newAttempted;
+                    $progress->questions_correct   = $newCorrect;
+                    $progress->mastery_score       = $newAttempted > 0 ? (int) round(($newCorrect / $newAttempted) * 100) : 0;
+                    $progress->last_attempted_at   = $completedAt;
+                    $progress->save();
+                });
             }
         }
 
         // Update or create simulation record
-        if (!empty($validated['simulation_id'])) {
-            $simulation = ExamSimulation::find($validated['simulation_id']);
-            if ($simulation) {
-                $simulation->update([
-                    'total_questions' => $totalQuestions,
-                    'correct_answers' => $correctAnswers,
-                    'score_percentage' => $scorePercentage,
-                    'time_spent_seconds' => $timeSpent,
-                    'status' => 'completed',
-                    'answers' => $answers,
-                    'topic_breakdown' => $topicBreakdown,
-                    'completed_at' => now(),
-                ]);
-            }
+        $result = [
+            'total_questions' => $totalQuestions,
+            'correct_answers' => $correctAnswers,
+            'score_percentage' => $scorePercentage,
+            'time_spent_seconds' => $timeSpent,
+            'status' => 'completed',
+            'answers' => $answers,
+            'topic_breakdown' => $topicBreakdown,
+            'completed_at' => $completedAt,
+        ];
+        if ($simulation && !$alreadyRecorded) {
+            $simulation->update($result);
+        } elseif (!$simulation && $user && !empty($validated['client_id'])) {
+            // Started while offline: the server never saw the start, so create it now.
+            ExamSimulation::createOrFirst(['client_id' => $validated['client_id']], $result + [
+                'user_id' => $user->id,
+                'school_id' => $user->school_id ?? null,
+                'exam_code' => strtolower($validated['exam_code']),
+                'exam_year' => $validated['exam_year'] ?? null,
+                'mode' => $validated['mode'] ?? 'simulation',
+                'duration_seconds' => $validated['duration_seconds'] ?? 2400,
+            ]);
         }
 
         return response()->json([

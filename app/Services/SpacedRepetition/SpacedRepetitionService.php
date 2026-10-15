@@ -43,17 +43,12 @@ class SpacedRepetitionService
             $subjectId = $subjectId ?: $q?->topic?->subject_id;
         }
 
-        // Find or instantiate existing SRS item
-        $item = SpacedRepetitionItem::where('user_id', $user->id)
-            ->where('question_id', $questionId)
-            ->first();
-
-        if (!$item) {
-            // New item creation
-            $item = new SpacedRepetitionItem([
-                'user_id' => $user->id,
+        // createOrFirst relies on the unique (user_id, question_id) index, so two concurrent
+        // reviews of the same question cannot create duplicate SRS items.
+        $item = SpacedRepetitionItem::createOrFirst(
+            ['user_id' => $user->id, 'question_id' => $questionId],
+            [
                 'item_type' => 'question',
-                'question_id' => $questionId,
                 'past_question_id' => null,
                 'subject_id' => $subjectId,
                 'topic_id' => $topicId,
@@ -68,8 +63,10 @@ class SpacedRepetitionService
                 'last_result' => $isCorrect ? ($rating ?: 'good') : 'wrong',
                 'reason_tag' => $isCorrect ? 'fragile_mastery' : 'recent_mistake',
                 'status' => 'active',
-            ]);
-            $item->save();
+            ]
+        );
+
+        if ($item->wasRecentlyCreated) {
             return $item;
         }
 
@@ -83,10 +80,13 @@ class SpacedRepetitionService
     /**
      * Apply SuperMemo SM-2 algorithm to update repetition level and next interval.
      */
-    protected function applySm2Update(SpacedRepetitionItem $item, bool $isCorrect, ?string $rating = null): void
+    protected function applySm2Update(SpacedRepetitionItem $item, bool $isCorrect, ?string $rating = null, ?Carbon $reviewedAt = null): void
     {
+        // Reviews synced from an offline device are scheduled from when they actually happened.
+        $at = $reviewedAt ?? now();
+
         $item->total_reviews += 1;
-        $item->last_reviewed_at = now();
+        $item->last_reviewed_at = $at;
 
         if (!$isCorrect || $rating === 'again') {
             // Mistake / Failed Recall: reset interval
@@ -95,7 +95,7 @@ class SpacedRepetitionService
             $item->consecutive_correct = 0;
             $item->total_mistakes += 1;
             $item->ease_factor = max(1.30, round($item->ease_factor - 0.20, 2));
-            $item->next_review_at = now()->addDay();
+            $item->next_review_at = $at->copy()->addDay();
             $item->last_result = 'wrong';
             $item->reason_tag = 'recent_mistake';
             $item->status = 'active';
@@ -136,13 +136,13 @@ class SpacedRepetitionService
         if ($item->consecutive_correct >= 5 || $nextInterval >= 60) {
             $item->status = 'mastered';
             $item->interval_days = max(60, $nextInterval);
-            $item->next_review_at = now()->addDays($item->interval_days);
+            $item->next_review_at = $at->copy()->addDays($item->interval_days);
             $item->reason_tag = 'retention_check';
         } else {
             $item->status = 'active';
             $item->interval_days = $nextInterval;
             $item->repetition_level = $nextLevel;
-            $item->next_review_at = now()->addDays($nextInterval);
+            $item->next_review_at = $at->copy()->addDays($nextInterval);
             $item->reason_tag = $nextInterval >= 14 ? 'retention_check' : 'fragile_mastery';
         }
 
@@ -529,6 +529,7 @@ class SpacedRepetitionService
 
         $selectedOptionId = $payload['selected_option_id'] ?? null;
         $rating = $payload['rating'] ?? null; // 'again', 'hard', 'good', 'easy'
+        $reviewedAt = GamificationService::activityTime($payload['reviewed_at'] ?? null);
 
         // Determine correctness from selected option
         $isCorrect = false;
@@ -558,7 +559,7 @@ class SpacedRepetitionService
         }
 
         // Apply SM-2 update
-        $this->applySm2Update($item, $isCorrect, $rating);
+        $this->applySm2Update($item, $isCorrect, $rating, $reviewedAt);
         $item->save();
 
         // Calculate XP Reward (strictly based on correct recall)
@@ -580,7 +581,8 @@ class SpacedRepetitionService
                 $user,
                 $xpEarned,
                 'spaced_repetition',
-                "Daily Revision Recall: " . ($item->topic?->name ?? 'Concept Recall')
+                "Daily Revision Recall: " . ($item->topic?->name ?? 'Concept Recall'),
+                $reviewedAt
             );
         }
 

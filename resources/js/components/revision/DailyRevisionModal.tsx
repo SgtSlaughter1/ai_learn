@@ -9,6 +9,8 @@ import {
     RevisionSubmitResult,
     RevisionSessionCompleteResult,
 } from '../../types/revision';
+import { enqueue, getSyncUser } from '../../services/SyncQueue';
+import { sendOrQueue, syncAll } from '../../services/SyncService';
 import { formatMathText, extractLiteratureContext } from '../../utils/mathFormatter';
 import { AiExplanationDrawer } from '../quiz/AiExplanationDrawer';
 import {
@@ -61,104 +63,77 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
     const correctOpt = currentItem?.options.find((o) => o.is_correct) ||
         (submitResult?.correct_option_id ? currentItem?.options.find((o) => o.id === submitResult.correct_option_id) : undefined);
 
+    // One review per question, sent once with the learner's final rating when they move on.
+    // (Previously the answer and any rating change were each sent, applying the spaced
+    // repetition update and its XP twice; and nothing was saved offline.)
+    const pendingReviewRef = useRef<{
+        item_id: number;
+        selected_option_id: number;
+        rating: 'again' | 'hard' | 'good' | 'easy';
+        reviewed_at: string;
+    } | null>(null);
+
+    const flushReview = async () => {
+        const review = pendingReviewRef.current;
+        pendingReviewRef.current = null;
+        if (!review || !getSyncUser()) return;
+        await enqueue({
+            table_name: 'revisionReviews',
+            action: 'insert',
+            record_id: `rev_${review.item_id}_${crypto.randomUUID()}`,
+            endpoint: '/api/v1/revision/submit',
+            method: 'POST',
+            payload: review,
+        }).catch((e) => console.warn('Could not save revision review:', e));
+        if (navigator.onLine) void syncAll();
+    };
+
+    // Shown straight away, online or offline; the server applies the same rules when the review syncs.
+    const localReviewResult = (isCorrect: boolean, rating: 'again' | 'hard' | 'good' | 'easy'): RevisionSubmitResult => {
+        const recalled = isCorrect && rating !== 'again';
+        const interval = recalled ? Math.max(3, currentItem.interval_days * 2) : 1;
+        return {
+            success: true,
+            is_correct: isCorrect,
+            correct_option_id: currentItem.options.find((o) => o.is_correct)?.id,
+            explanation: currentItem.explanation ?? undefined,
+            new_interval_days: interval,
+            next_review_in: interval === 1 ? 'Tomorrow' : `${interval} days`,
+            is_mastered: false,
+            xp_earned: recalled ? ({ easy: 6, good: 4, hard: 2, again: 0 } as const)[rating] : 0,
+        };
+    };
+
     const handleSelectOption = async (optionId: number) => {
         if (isSubmitted || isSubmitting) return;
 
         setSelectedOptionId(optionId);
-        setIsSubmitting(true);
+        const isCorr = Boolean(currentItem.options.find((o) => o.id === optionId)?.is_correct);
+        const rating = isCorr ? 'good' : 'again';
 
-        const csrfToken =
-            document.cookie
-                .split('; ')
-                .find((row) => row.startsWith('XSRF-TOKEN='))
-                ?.split('=')[1] || '';
-        const token = localStorage.getItem('token') || localStorage.getItem('auth_token') || '';
-
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
+        pendingReviewRef.current = {
+            item_id: currentItem.id,
+            selected_option_id: optionId,
+            rating,
+            reviewed_at: new Date().toISOString(),
         };
-        if (csrfToken) headers['X-XSRF-TOKEN'] = decodeURIComponent(csrfToken);
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
-        try {
-            const res = await fetch('/api/v1/revision/submit', {
-                method: 'POST',
-                headers,
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    item_id: currentItem.id,
-                    selected_option_id: optionId,
-                }),
-            });
-
-            const data = await res.json();
-            if (data.success && data.data) {
-                const resData: RevisionSubmitResult = data.data;
-                setSubmitResult(resData);
-                setIsSubmitted(true);
-
-                if (resData.is_correct) {
-                    setCorrectCount((prev) => prev + 1);
-                    setUserRating('good');
-                } else {
-                    setUserRating('again');
-                }
-            }
-        } catch (err) {
-            console.error('Error submitting revision answer:', err);
-            // Local fallback evaluation
-            const chosenOpt = currentItem.options.find((o) => o.id === optionId);
-            const isCorr = Boolean(chosenOpt?.is_correct);
-            const mockResult: RevisionSubmitResult = {
-                success: true,
-                is_correct: isCorr,
-                new_interval_days: isCorr ? currentItem.interval_days * 2 : 1,
-                next_review_in: isCorr ? `${currentItem.interval_days * 2} days` : 'Tomorrow',
-                is_mastered: false,
-                xp_earned: isCorr ? 4 : 1,
-            };
-            setSubmitResult(mockResult);
-            setIsSubmitted(true);
-            if (isCorr) setCorrectCount((prev) => prev + 1);
-        } finally {
-            setIsSubmitting(false);
-        }
+        setSubmitResult(localReviewResult(isCorr, rating));
+        setUserRating(rating);
+        setIsSubmitted(true);
+        if (isCorr) setCorrectCount((prev) => prev + 1);
     };
 
     const handleUpdateRating = async (rating: 'again' | 'hard' | 'good' | 'easy') => {
         setUserRating(rating);
-        const csrfToken =
-            document.cookie
-                .split('; ')
-                .find((row) => row.startsWith('XSRF-TOKEN='))
-                ?.split('=')[1] || '';
-        const token = localStorage.getItem('token') || localStorage.getItem('auth_token') || '';
-
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-        };
-        if (csrfToken) headers['X-XSRF-TOKEN'] = decodeURIComponent(csrfToken);
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
-        try {
-            const res = await fetch('/api/v1/revision/submit', {
-                method: 'POST',
-                headers,
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    item_id: currentItem.id,
-                    rating: rating,
-                }),
-            });
-            const data = await res.json();
-            if (data.success && data.data) {
-                setSubmitResult(data.data);
-            }
-        } catch (err) {
-            console.error('Failed to update rating:', err);
+        if (pendingReviewRef.current) {
+            pendingReviewRef.current = { ...pendingReviewRef.current, rating };
         }
+        setSubmitResult(localReviewResult(Boolean(submitResult?.is_correct), rating));
+    };
+
+    const handleClose = () => {
+        void flushReview();
+        onClose();
     };
 
     const handleExplainMistake = async () => {
@@ -214,63 +189,54 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
     };
 
     const handleNextQuestion = async () => {
+        await flushReview();
+
         if (currentIndex + 1 < totalItems) {
             setCurrentIndex((prev) => prev + 1);
             setSelectedOptionId(null);
             setIsSubmitted(false);
             setSubmitResult(null);
             setUserRating(null);
-        } else {
-            // Finalize session
-            setIsSubmitting(true);
-            const csrfToken =
-                document.cookie
-                    .split('; ')
-                    .find((row) => row.startsWith('XSRF-TOKEN='))
-                    ?.split('=')[1] || '';
-            const token = localStorage.getItem('token') || localStorage.getItem('auth_token') || '';
+            return;
+        }
 
-            const headers: Record<string, string> = {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            };
-            if (csrfToken) headers['X-XSRF-TOKEN'] = decodeURIComponent(csrfToken);
-            if (token) headers['Authorization'] = `Bearer ${token}`;
+        // Finalize session
+        setIsSubmitting(true);
+        // Same formula as the server (processRevisionCompletion): 1 XP per correct answer, +3 for a perfect session.
+        const estimate: RevisionSessionCompleteResult = {
+            bonus_xp: correctCount > 0 ? correctCount + (correctCount === totalItems ? 3 : 0) : 0,
+            completed_count: totalItems,
+            correct_count: correctCount,
+            streak_maintained: true,
+        };
 
-            try {
-                const res = await fetch('/api/v1/revision/complete-session', {
+        try {
+            const result = getSyncUser()
+                ? await sendOrQueue<{ success: boolean; data: RevisionSessionCompleteResult }>({
+                    table_name: 'revisionSessions',
+                    endpoint: '/api/v1/revision/complete-session',
                     method: 'POST',
-                    headers,
-                    credentials: 'same-origin',
-                    body: JSON.stringify({
+                    payload: {
                         completed_count: totalItems,
                         correct_count: correctCount,
-                    }),
-                });
-                const data = await res.json();
-                if (data.success && data.data) {
-                    setCompletionResult(data.data);
-                    onSessionCompleted?.(data.data);
-                }
-            } catch {
-                const earnedBonus = correctCount > 0 ? (correctCount * 3 + (correctCount === totalItems ? 10 : 0)) : 0;
-                const fallbackComp: RevisionSessionCompleteResult = {
-                    bonus_xp: earnedBonus,
-                    completed_count: totalItems,
-                    correct_count: correctCount,
-                    streak_maintained: true,
-                };
-                setCompletionResult(fallbackComp);
-                onSessionCompleted?.(fallbackComp);
-            } finally {
-                setIsSubmitting(false);
-                setIsSessionFinished(true);
-            }
+                        completed_at: new Date().toISOString(),
+                    },
+                })
+                : null;
+            const final = result?.status === 'sent' && result.data?.data ? result.data.data : estimate;
+            setCompletionResult(final);
+            onSessionCompleted?.(final);
+        } catch {
+            setCompletionResult(estimate);
+            onSessionCompleted?.(estimate);
+        } finally {
+            setIsSubmitting(false);
+            setIsSessionFinished(true);
         }
     };
 
     const litContext = currentItem ? extractLiteratureContext(currentItem.explanation || '') : null;
-    const earnedBonusXp = completionResult?.bonus_xp !== undefined ? completionResult.bonus_xp : (correctCount > 0 ? correctCount * 3 : 0);
+    const earnedBonusXp = completionResult?.bonus_xp !== undefined ? completionResult.bonus_xp : correctCount;
 
     return createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-3 md:p-6 overflow-y-auto animate-fade-in">
@@ -298,7 +264,7 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
                     </div>
 
                     <button
-                        onClick={onClose}
+                        onClick={handleClose}
                         aria-label="Close revision session"
                         className="p-1.5 sm:p-2 text-[var(--color-muted)] hover:text-[var(--color-text)] rounded-xl hover:bg-[var(--color-border)]/50 transition-colors cursor-pointer shrink-0"
                     >
@@ -623,7 +589,7 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
                     ) : (
                         <button
                             type="button"
-                            onClick={onClose}
+                            onClick={handleClose}
                             className="w-full py-3 rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md cursor-pointer text-center"
                         >
                             Return to Dashboard

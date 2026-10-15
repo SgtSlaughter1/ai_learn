@@ -174,6 +174,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/gamification/leaderboard', [GamificationController::class, 'leaderboard']);
 
         // Offline Sync Endpoints (called by SyncService.ts when coming back online)
+        Route::get('/sync/session', [SyncController::class, 'session']);
+
+        // Feedback inbox (platform admins; checked in the controller)
+        Route::get('/admin/feedbacks', [\App\Http\Controllers\Api\FeedbackController::class, 'index']);
+        Route::put('/admin/feedbacks/{id}/status', [\App\Http\Controllers\Api\FeedbackController::class, 'updateStatus']);
         Route::post('/progress/sync', [SyncController::class, 'syncProgress']);
         Route::post('/gamification/sync', [SyncController::class, 'syncGamification']);
 

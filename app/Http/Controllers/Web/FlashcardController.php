@@ -103,7 +103,13 @@ class FlashcardController extends Controller
     public function completeFlashcardReview(Request $request): JsonResponse
     {
         $user = $request->user();
-        $ratings = $request->input('ratings', []);
+        // Ratings only ever add XP, so cap the deck size and accept known values only.
+        $validated = $request->validate([
+            'ratings' => ['present', 'array', 'max:100'],
+            'ratings.*' => ['string', 'in:easy,good,again'],
+            'completed_at' => ['nullable', 'date'],
+        ]);
+        $ratings = $validated['ratings'];
         
         $cardsCount = count($ratings);
         
@@ -127,7 +133,12 @@ class FlashcardController extends Controller
         }
         
         $gamificationService = app(GamificationService::class);
-        $result = $gamificationService->processFlashcardCompletion($user, $xpEarned, $cardsCount);
+        $result = $gamificationService->processFlashcardCompletion(
+            $user,
+            $xpEarned,
+            $cardsCount,
+            GamificationService::activityTime($validated['completed_at'] ?? null)
+        );
         
         return response()->json([
             'success' => true,

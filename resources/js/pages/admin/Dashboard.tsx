@@ -120,15 +120,14 @@ export default function Dashboard() {
                 headers: getAdminAuthHeaders(),
                 credentials: 'include',
             });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.status === 'success') {
-                    setStats(data.data);
-                    localStorage.setItem('cached_admin_stats', JSON.stringify(data.data));
-                } else if (data.overview) {
-                    setStats(data);
-                    localStorage.setItem('cached_admin_stats', JSON.stringify(data));
-                }
+            if (!res.ok) throw new Error(`Stats request failed: ${res.status}`);
+            const data = await res.json();
+            if (data.status === 'success') {
+                setStats(data.data);
+                localStorage.setItem('cached_admin_stats', JSON.stringify(data.data));
+            } else if (data.overview) {
+                setStats(data);
+                localStorage.setItem('cached_admin_stats', JSON.stringify(data));
             }
         } catch (e) {
             console.warn('Failed to load stats online, checking local cache:', e);
@@ -392,13 +391,18 @@ export default function Dashboard() {
             });
         };
 
+        // A sync pass runs every 30s; only refetch when it actually uploaded something.
+        const handleSyncCompleted = (event: Event) => {
+            if ((event as CustomEvent).detail?.synced > 0) handleDataChange();
+        };
+
         window.addEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
-        window.addEventListener('app:sync-completed', handleDataChange);
+        window.addEventListener('app:sync-completed', handleSyncCompleted);
         window.addEventListener('online', handleOnline);
 
         return () => {
             window.removeEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
-            window.removeEventListener('app:sync-completed', handleDataChange);
+            window.removeEventListener('app:sync-completed', handleSyncCompleted);
             window.removeEventListener('online', handleOnline);
         };
     }, [isSuperAdmin]);

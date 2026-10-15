@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Question extends Model
@@ -29,6 +30,16 @@ class Question extends Model
     public function options(): HasMany
     {
         return $this->hasMany(QuestionOption::class)->orderBy('sort_order');
+    }
+
+    public function answers(): HasMany
+    {
+        return $this->hasMany(QuizAnswer::class);
+    }
+
+    public function quizzes(): BelongsToMany
+    {
+        return $this->belongsToMany(Quiz::class, 'quiz_questions');
     }
 
     public function isGeneralKnowledge(): bool

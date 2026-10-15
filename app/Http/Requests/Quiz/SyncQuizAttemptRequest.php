@@ -16,7 +16,12 @@ class SyncQuizAttemptRequest extends FormRequest
         return [
             'quiz_id' => ['required', 'integer', 'exists:quizzes,id'],
             'answers' => ['required', 'array'],
-            'duration_seconds' => ['nullable', 'integer'],
+            'answers.*.question_id' => ['required', 'integer'],
+            'answers.*.selected_option_id' => ['nullable'],
+            'answers.*.selected_option_id.*' => ['integer'],
+            'duration_seconds' => ['nullable', 'integer', 'min:0', 'max:86400'],
+            'started_at' => ['nullable', 'date'],
+            'completed_at' => ['nullable', 'date'],
         ];
     }
 }

@@ -49,6 +49,7 @@ export interface CachedQuestion {
     difficulty: string;
     explanation: string | null;
     status: string;
+    marks?: number;
     options: CachedQuestionOption[];
 }
 
@@ -83,6 +84,10 @@ export interface LocalQuizAttempt {
     duration_seconds: number | null;
     answers: LocalQuizAnswer[];
     synced: boolean;
+    sync_status?: 'pending' | 'failed';
+    sync_error?: string | null;
+    sync_attempts?: number;
+    next_sync_at?: string | null;
 }
 
 export interface LocalQuizAnswer {
@@ -134,6 +139,15 @@ export interface SyncQueueItem {
     synced: boolean;
     retries: number;
     error?: string;
+    /** Sent as the Idempotency-Key header on every attempt, so the server applies the change once. */
+    idempotency_key?: string;
+    /** Account that made the change; it is only ever synced under that account. Null for legacy items. */
+    user_id?: string | null;
+    /** 'pending' = will sync; 'failed' = the server rejected it, kept for the user to retry or discard. */
+    status?: 'pending' | 'failed';
+    /** True once a request may have reached the server; such items are never merged with later edits. */
+    sent?: boolean;
+    next_attempt_at?: string | null;
 }
 
 export interface CachedUserProfile {
@@ -144,6 +158,19 @@ export interface CachedUserProfile {
     school_id?: number | null;
     school_name?: string | null;
     cached_at: string;
+}
+
+/**
+ * The server data (Inertia props) of a page the user opened while online, so the page
+ * can be rendered on the device when it is opened again offline.
+ */
+export interface PageSnapshot {
+    /** pathname + search, e.g. "/teacher/dashboard?class_id=3" */
+    key: string;
+    component: string;
+    props: Record<string, unknown>;
+    user_id: string | null;
+    saved_at: string;
 }
 
 // ── Dexie Database ──
@@ -164,10 +191,13 @@ export class OfflineDB extends Dexie {
     adminQuestions!: Table<QuestionItem, number>;
     adminSchoolAdmins!: Table<SchoolAdminItem, string>;
     adminTeachers!: Table<TeacherItem, string>;
+    pageSnapshots!: Table<PageSnapshot, string>;
 
     constructor() {
         super('AceDrillDatabase');
 
+        // Versions are only ever added, never edited, so existing devices upgrade in place
+        // and keep their unsynced work.
         this.version(4).stores({
             subjects: 'id, school_id, slug, status, cached_at, _pendingSync',
             topics: 'id, subject_id, slug, level, status, cached_at, _pendingSync',
@@ -185,20 +215,33 @@ export class OfflineDB extends Dexie {
             adminSchoolAdmins: 'id, email, school_id, _pendingSync',
             adminTeachers: 'id, email, name, _pendingSync',
         });
+
+        this.version(5).stores({
+            syncQueue: '++id, table_name, action, synced, created_at, status, record_id, user_id',
+        }).upgrade(async (tx) => {
+            await tx.table('syncQueue').toCollection().modify((item: SyncQueueItem) => {
+                item.status = item.status ?? 'pending';
+                item.idempotency_key = item.idempotency_key ?? crypto.randomUUID();
+                item.user_id = item.user_id ?? null;
+                // It may already have been attempted, so never merge later edits into it.
+                item.sent = item.sent ?? (item.retries ?? 0) > 0;
+            });
+        });
+
+        this.version(6).stores({
+            pageSnapshots: 'key, user_id, saved_at',
+        });
     }
 }
 
 export const db = new OfflineDB();
 
-// Auto-recovery if database was left in closed/failed upgrade state
-db.open().catch(async (err) => {
-    if (err.name === 'DatabaseClosedError' || err.name === 'UpgradeError' || err.name === 'VersionError') {
-        console.warn('Dexie schema upgrade issue detected, recreating offline database...', err);
-        try {
-            await db.delete();
-            await db.open();
-        } catch {
-            // Ignore reset error
-        }
+// Never delete the database on an open/upgrade error: it holds unsynced work.
+// A VersionError means an older cached copy of the app is running against a newer
+// database; reloading picks up the current app, which opens it normally.
+db.open().catch((err) => {
+    console.error('[OfflineDB] Could not open the offline database:', err);
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('app:offline-db-error', { detail: { name: err?.name } }));
     }
 });

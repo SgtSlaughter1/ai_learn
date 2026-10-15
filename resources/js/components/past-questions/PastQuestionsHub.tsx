@@ -30,6 +30,9 @@ export const PastQuestionsHub: React.FC = () => {
     const [isLoadingQuestions, setIsLoadingQuestions] = useState<boolean>(false);
     const [activeMode, setActiveMode] = useState<'practice' | 'simulation' | null>(null);
     const [simulationId, setSimulationId] = useState<number | undefined>();
+    // Generated on the device for every simulation, so its result can be saved even if it
+    // was started offline (the server never saw the start) and is never counted twice.
+    const [simulationClientId, setSimulationClientId] = useState<string | undefined>();
     const [examResult, setExamResult] = useState<ExamSimulationResult | null>(null);
     const [errorToast, setErrorToast] = useState<string | null>(null);
 
@@ -173,46 +176,35 @@ export const PastQuestionsHub: React.FC = () => {
                 }
             }
 
-            // Fallback 1: Local cache
+            // Offline: questions saved on this device for this exam (and subject, if chosen).
+            // Only real past questions are used: substituting curriculum quiz questions would
+            // submit ids the server grades against different past questions.
             if (loadedQuestions.length === 0) {
-                try {
-                    const cached = localStorage.getItem(`cached_pq_${selectedExam}_${subjectToUse}`);
-                    if (cached) {
-                        loadedQuestions = JSON.parse(cached);
+                const readCache = (key: string): PastQuestionItem[] => {
+                    try {
+                        const cached = JSON.parse(localStorage.getItem(key) || '[]');
+                        return Array.isArray(cached) ? cached : [];
+                    } catch {
+                        return [];
                     }
-                } catch {}
-            }
-
-            // Fallback 2: Dexie offline quizzes
-            if (loadedQuestions.length === 0) {
-                try {
-                    const dexieQuizzes = await db.quizzes.toArray();
-                    const questionsPool = dexieQuizzes.flatMap((q) => q.questions || []);
-                    if (questionsPool.length > 0) {
-                        loadedQuestions = questionsPool.slice(0, Number(questionLimit)).map((q, idx) => ({
-                            id: q.id || idx + 1,
-                            exam_code: selectedExam,
-                            exam_year: 2024,
-                            question_number: idx + 1,
-                            question_text: q.question_text,
-                            difficulty: q.difficulty || 'medium',
-                            explanation: q.explanation || undefined,
-                            topic: { id: q.topic_id || 1, name: 'Core Assessment' },
-                            subject: { id: 1, name: subjectToUse !== 'all' ? subjectToUse : 'General Studies', slug: 'general-studies' },
-                            options: (q.options || []).map((opt, oIdx) => ({
-                                id: opt.id || oIdx + 1,
-                                key: String.fromCharCode(65 + oIdx),
-                                label: String.fromCharCode(65 + oIdx),
-                                option_text: opt.option_text,
-                                is_correct: opt.is_correct ?? (oIdx === 0),
-                            })),
-                        }));
+                };
+                let pool = readCache(`cached_pq_${selectedExam}_${subjectToUse}`);
+                if (pool.length === 0) {
+                    pool = readCache(`cached_pq_${selectedExam}_all`);
+                    if (subjectToUse !== 'all') {
+                        pool = pool.filter((q) => q.subject?.slug === subjectToUse);
                     }
-                } catch {}
+                }
+                // A fresh random selection each time, like the server gives.
+                loadedQuestions = [...pool]
+                    .sort(() => Math.random() - 0.5)
+                    .slice(0, Number(questionLimit));
             }
 
             if (loadedQuestions.length === 0) {
-                setErrorToast(`No questions found for ${selectedExam.toUpperCase()} with the selected criteria. Please connect online once to download the question bank.`);
+                setErrorToast(navigator.onLine
+                    ? `No questions found for ${selectedExam.toUpperCase()} with the selected criteria.`
+                    : `${selectedExam.toUpperCase()} questions${subjectToUse !== 'all' ? ' for this subject' : ''} aren't saved on this device yet. Connect once and they'll download automatically.`);
                 setIsLoadingQuestions(false);
                 return;
             }
@@ -220,6 +212,9 @@ export const PastQuestionsHub: React.FC = () => {
             setActiveQuestions(loadedQuestions);
 
             if (mode === 'simulation') {
+                const clientId = crypto.randomUUID();
+                setSimulationClientId(clientId);
+                setSimulationId(undefined);
                 if (navigator.onLine) {
                     try {
                         const simRes = await fetch('/api/v1/past-questions/simulation/start', {
@@ -232,19 +227,16 @@ export const PastQuestionsHub: React.FC = () => {
                                 exam_code: selectedExam,
                                 mode: 'simulation',
                                 total_questions: loadedQuestions.length,
+                                client_id: clientId,
                             }),
                         });
                         const simData = await simRes.json().catch(() => null);
-                        if (simData?.success) {
+                        if (simData?.success && simData.data.simulation_id) {
                             setSimulationId(simData.data.simulation_id);
-                        } else {
-                            setSimulationId(Date.now());
                         }
                     } catch {
-                        setSimulationId(Date.now());
+                        // Offline start: the result is saved by its client id on submit.
                     }
-                } else {
-                    setSimulationId(Date.now());
                 }
             }
 
@@ -661,6 +653,7 @@ export const PastQuestionsHub: React.FC = () => {
                     yearTitle=""
                     durationMinutes={currentExamMeta?.defaultDurationMinutes || 40}
                     simulationId={simulationId}
+                    simulationClientId={simulationClientId}
                     onFinish={(result) => {
                         setActiveMode(null);
                         setExamResult(result);

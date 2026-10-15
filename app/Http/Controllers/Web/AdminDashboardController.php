@@ -44,6 +44,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -694,9 +695,9 @@ class AdminDashboardController extends Controller
         
         // Unlink school admin from schools
         School::where('admin_user_id', $user->id)->update(['admin_user_id' => null]);
-        $user->delete();
+        $archived = $this->removeUser($user);
 
-        return response()->json(['message' => 'School Admin removed successfully']);
+        return response()->json(['message' => 'School Admin removed successfully', 'archived' => $archived]);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -904,13 +905,13 @@ class AdminDashboardController extends Controller
             }
         }
 
-        DB::transaction(function () use ($teacherUser) {
+        $archived = DB::transaction(function () use ($teacherUser) {
             ClassMembership::where('user_id', $teacherUser->id)->delete();
             $teacherUser->teacherProfile()->delete();
-            $teacherUser->delete();
+            return $this->removeUser($teacherUser);
         });
 
-        return response()->json(['message' => 'Teacher deleted successfully']);
+        return response()->json(['message' => 'Teacher deleted successfully', 'archived' => $archived]);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -1065,6 +1066,7 @@ class AdminDashboardController extends Controller
         $schoolAdminSchoolId = $isSchoolAdmin ? $authUser->primarySchool()?->id : null;
 
         $user = User::where('id', $id)->where('role', 'learner')->firstOrFail();
+        $this->authorizeLearnerInScope($request, $user);
 
         $validated = $request->validated();
 
@@ -1136,9 +1138,37 @@ class AdminDashboardController extends Controller
         $this->authorizeAdmin($request);
 
         $user = User::where('id', $id)->where('role', 'learner')->firstOrFail();
+        $this->authorizeLearnerInScope($request, $user);
+        $archived = DB::transaction(function () use ($user) {
+            ClassMembership::where('user_id', $user->id)->delete();
+            return $this->removeUser($user);
+        });
+
+        return response()->json(['message' => 'Learner deleted successfully', 'archived' => $archived]);
+    }
+
+    /**
+     * Delete a user, or archive them when they have quiz history (their attempts must
+     * stay valid for reports and cannot be deleted). Archived users cannot sign in and
+     * no longer appear anywhere; their email is freed so it can be used for a new account.
+     *
+     * @return bool true when the user was archived rather than deleted
+     */
+    private function removeUser(User $user): bool
+    {
+        if (!QuizAttempt::where('user_id', $user->id)->exists()) {
+            $user->forceDelete();
+            return false;
+        }
+
+        $user->forceFill([
+            'archived_email' => $user->email,
+            'email' => 'archived+' . $user->id . '@archived.invalid',
+            'remember_token' => null,
+        ])->save();
         $user->delete();
 
-        return response()->json(['message' => 'Learner deleted successfully']);
+        return true;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -1181,7 +1211,7 @@ class AdminDashboardController extends Controller
         $slug = !empty($validated['slug']) ? Str::slug($validated['slug']) : Str::slug($validated['name']);
         $originalSlug = $slug;
         $count = 1;
-        while (Subject::where('slug', $slug)->exists()) {
+        while (Subject::withTrashed()->where('slug', $slug)->exists()) {
             $slug = "{$originalSlug}-{$count}";
             $count++;
         }
@@ -1337,7 +1367,7 @@ class AdminDashboardController extends Controller
         $slug = !empty($validated['slug']) ? Str::slug($validated['slug']) : Str::slug($validated['name']);
         $originalSlug = $slug;
         $count = 1;
-        while (Topic::where('subject_id', $validated['subject_id'])->where('slug', $slug)->exists()) {
+        while (Topic::withTrashed()->where('subject_id', $validated['subject_id'])->where('slug', $slug)->exists()) {
             $slug = "{$originalSlug}-{$count}";
             $count++;
         }
@@ -1410,7 +1440,7 @@ class AdminDashboardController extends Controller
         $this->authorizeAdminOrTeacher($request);
         $user = $request->user();
 
-        $query = Question::forUser($user)->with([
+        $query = Question::forUser($user)->where('status', '!=', 'archived')->with([
             'options',
             'topic.subject:id,name,slug,school_id,class_id',
             'topic.subject.schoolClass:id,name,grade_level',
@@ -1764,16 +1794,7 @@ class AdminDashboardController extends Controller
 
             $question->update($updatePayload);
 
-            // Recreate options
-            $question->options()->delete();
-            foreach ($validated['options'] as $index => $opt) {
-                QuestionOption::create([
-                    'question_id' => $question->id,
-                    'option_text' => $opt['option_text'],
-                    'is_correct' => (bool) $opt['is_correct'],
-                    'sort_order' => $opt['sort_order'] ?? $index,
-                ]);
-            }
+            $this->syncQuestionOptions($question, $validated['options'] ?? []);
 
             // Ensure question is linked to the subject quiz
             if ($newTopic && $newTopic->subject) {
@@ -1842,9 +1863,59 @@ class AdminDashboardController extends Controller
             return response()->json(['error' => 'You do not have permission to delete this question.'], 403);
         }
 
+        // Learners' answers reference this question, so deleting it would break their
+        // quiz history. Archive it instead: it disappears from the bank and from quizzes.
+        if ($question->answers()->exists()) {
+            DB::transaction(function () use ($question) {
+                $question->update(['status' => 'archived']);
+                $question->quizzes()->detach();
+            });
+
+            return response()->json(['message' => 'Question archived successfully', 'archived' => true]);
+        }
+
         $question->delete();
 
         return response()->json(['message' => 'Question deleted successfully']);
+    }
+
+    /**
+     * Update a question's options in place instead of deleting and recreating them,
+     * so options that learners have already picked keep their ids.
+     * Options are matched by id, then by identical text; anything left over is removed.
+     */
+    private function syncQuestionOptions(Question $question, array $options): void
+    {
+        $existing = $question->options()->get();
+        $unmatched = $existing->keyBy('id');
+
+        foreach (array_values($options) as $index => $opt) {
+            $attributes = [
+                'option_text' => $opt['option_text'],
+                'is_correct' => (bool) $opt['is_correct'],
+                'sort_order' => $opt['sort_order'] ?? $index,
+            ];
+
+            $match = null;
+            if (!empty($opt['id']) && is_numeric($opt['id'])) {
+                $match = $unmatched->get((int) $opt['id']);
+            }
+            if (!$match) {
+                $match = $unmatched->first(fn ($o) => trim($o->option_text) === trim($opt['option_text']));
+            }
+
+            if ($match) {
+                $match->update($attributes);
+                $unmatched->forget($match->id);
+            } else {
+                $question->options()->create($attributes);
+            }
+        }
+
+        // Removed options: answers that pointed at them keep their marks; the link is nulled by the FK.
+        if ($unmatched->isNotEmpty()) {
+            QuestionOption::whereIn('id', $unmatched->keys())->delete();
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -1948,12 +2019,13 @@ class AdminDashboardController extends Controller
         $schoolId = $isSchoolAdmin ? $user->primarySchool()?->id : null;
 
         $class = ClassModel::findOrFail($id);
-
-        if (!$user->isPlatformAdmin() && $schoolId && $class->school_id !== $schoolId) {
-            return response()->json(['error' => 'You do not have permission to modify classes from another school.'], 403);
-        }
+        $this->authorizeClassInScope($request, $class);
 
         $validated = $request->validated();
+        // A school admin can't move a class into another school.
+        if ($schoolId !== null && !$user->isPlatformAdmin()) {
+            $validated['school_id'] = $class->school_id;
+        }
 
         $effectiveSchoolId = $validated['school_id'] ?? $class->school_id;
         $targetSchool = School::find($effectiveSchoolId);
@@ -1980,6 +2052,7 @@ class AdminDashboardController extends Controller
         $this->authorizeAdmin($request);
 
         $class = ClassModel::findOrFail($id);
+        $this->authorizeClassInScope($request, $class);
         $class->delete();
 
         return response()->json(['message' => 'Class deleted successfully']);
@@ -1990,6 +2063,7 @@ class AdminDashboardController extends Controller
         $this->authorizeAdmin($request);
 
         $class = ClassModel::with('school:id,name')->findOrFail($classId);
+        $this->authorizeClassInScope($request, $class);
 
         $learnerIds = ClassMembership::where('class_id', $classId)
             ->where('role', 'learner')
@@ -2058,6 +2132,7 @@ class AdminDashboardController extends Controller
         $this->authorizeAdmin($request);
 
         $class = ClassModel::findOrFail($classId);
+        $this->authorizeClassInScope($request, $class);
 
         $validated = $request->validated();
 
@@ -2077,20 +2152,16 @@ class AdminDashboardController extends Controller
         if (!$learner->isLearner()) {
             return response()->json(['error' => 'Selected user is not a learner'], 400);
         }
+        $this->authorizeLearnerInScope($request, $learner, allowUnaffiliated: true);
 
-        $membership = ClassMembership::where('class_id', $classId)
-            ->where('user_id', $learner->id)
-            ->first();
-
-        if ($membership) {
+        // createOrFirst relies on the unique (class_id, user_id) index, so a retried or
+        // concurrent enrolment reuses the membership instead of failing on a duplicate.
+        $membership = ClassMembership::createOrFirst(
+            ['class_id' => $classId, 'user_id' => $learner->id],
+            ['role' => 'learner', 'is_active' => true]
+        );
+        if (!$membership->wasRecentlyCreated && !$membership->is_active) {
             $membership->update(['is_active' => true]);
-        } else {
-            ClassMembership::create([
-                'class_id' => $classId,
-                'user_id' => $learner->id,
-                'role' => 'learner',
-                'is_active' => true,
-            ]);
         }
 
         return response()->json(['message' => 'Learner enrolled into class successfully']);
@@ -2099,6 +2170,7 @@ class AdminDashboardController extends Controller
     public function removeClassLearner(Request $request, int $classId, string $learnerId): JsonResponse
     {
         $this->authorizeAdmin($request);
+        $this->authorizeClassInScope($request, ClassModel::findOrFail($classId));
 
         ClassMembership::where('class_id', $classId)
             ->where('user_id', $learnerId)
@@ -2125,6 +2197,55 @@ class AdminDashboardController extends Controller
         $user = $request->user();
         if (!$user || (!$user->isAdmin() && !$user->isTeacher())) {
             abort(403, 'Forbidden. Admin or Teacher access required.');
+        }
+    }
+
+    /**
+     * The school a school admin is limited to, or null for a platform admin (no limit).
+     */
+    private function adminSchoolScope(Request $request): ?int
+    {
+        $user = $request->user();
+        if ($user->isPlatformAdmin()) {
+            return null;
+        }
+        $schoolId = $user->primarySchool()?->id;
+        if (!$schoolId) {
+            abort(403, 'Your account is not linked to a school.');
+        }
+        return $schoolId;
+    }
+
+    /**
+     * School admins may only manage learners of their own school. When enrolling,
+     * a self-registered learner with no school yet may also be added.
+     */
+    private function authorizeLearnerInScope(Request $request, User $learner, bool $allowUnaffiliated = false): void
+    {
+        $schoolId = $this->adminSchoolScope($request);
+        if ($schoolId === null) {
+            return;
+        }
+        $schoolClassIds = ClassModel::where('school_id', $schoolId)->select('id');
+        $inSchool = $learner->learnerProfile()->where('school_id', $schoolId)->exists()
+            || ClassMembership::where('user_id', $learner->id)->whereIn('class_id', $schoolClassIds)->exists();
+        if ($inSchool) {
+            return;
+        }
+
+        $unaffiliated = !$learner->learnerProfile()->whereNotNull('school_id')->exists()
+            && !ClassMembership::where('user_id', $learner->id)->exists();
+        if (!($allowUnaffiliated && $unaffiliated)) {
+            abort(403, 'This learner does not belong to your school.');
+        }
+    }
+
+    /** School admins may only manage classes of their own school. */
+    private function authorizeClassInScope(Request $request, ClassModel $class): void
+    {
+        $schoolId = $this->adminSchoolScope($request);
+        if ($schoolId !== null && (int) $class->school_id !== $schoolId) {
+            abort(403, 'This class does not belong to your school.');
         }
     }
 

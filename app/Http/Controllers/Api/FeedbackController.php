@@ -24,11 +24,13 @@ class FeedbackController extends Controller
             'subject' => 'nullable|string|max:255',
             'message' => 'required|string|min:3|max:5000',
             'meta' => 'nullable|array',
+            'client_id' => 'nullable|string|max:64',
         ]);
 
-        $user = Auth::guard('sanctum')->user() ?? Auth::user();
+        // Session auth (the sanctum guard is not installed in this app, so asking for it threw).
+        $user = Auth::user();
 
-        $feedback = Feedback::create([
+        $attributes = [
             'user_id' => $user ? $user->id : null,
             'name' => $validated['name'] ?? ($user ? $user->name : null),
             'email' => $validated['email'] ?? ($user ? $user->email : null),
@@ -43,7 +45,13 @@ class FeedbackController extends Controller
                 'user_agent' => $request->userAgent(),
                 'submitted_at' => now()->toIso8601String(),
             ]),
-        ]);
+        ];
+
+        // Feedback written offline is resent until it gets through; the id it was given
+        // on the device makes the resend find the first copy instead of storing it twice.
+        $feedback = !empty($validated['client_id'])
+            ? Feedback::createOrFirst(['client_id' => $validated['client_id']], $attributes)
+            : Feedback::create($attributes);
 
         return response()->json([
             'status' => 'success',
@@ -57,6 +65,9 @@ class FeedbackController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        // Feedback includes visitors' names and emails: platform admins only.
+        abort_unless($request->user()?->isPlatformAdmin(), 403, 'Forbidden. Platform Admin access required.');
+
         $query = Feedback::with('user:id,name,email,role')
             ->latest();
 
@@ -91,6 +102,9 @@ class FeedbackController extends Controller
      */
     public function updateStatus(Request $request, int $id): JsonResponse
     {
+        // Feedback includes visitors' names and emails: platform admins only.
+        abort_unless($request->user()?->isPlatformAdmin(), 403, 'Forbidden. Platform Admin access required.');
+
         $validated = $request->validate([
             'status' => 'required|string|in:new,reviewed,resolved',
         ]);

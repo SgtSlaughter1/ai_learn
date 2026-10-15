@@ -127,9 +127,14 @@ class DomainModelTest extends TestCase
             'started_at' => now(),
         ]);
 
-        // Deleting the user must throw a restrict database exception to protect attempt history
-        $this->expectException(\PDOException::class);
+        // delete() archives (soft deletes) the user, so their attempt history stays intact
         $user->delete();
+        $this->assertSoftDeleted($user);
+        $this->assertDatabaseHas('quiz_attempts', ['id' => $attempt->id]);
+
+        // A hard delete must still throw a restrict database exception to protect attempt history
+        $this->expectException(\PDOException::class);
+        $user->forceDelete();
     }
 
     public function test_api_resources_securely_serialize_correct_answer(): void

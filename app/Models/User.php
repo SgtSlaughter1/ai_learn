@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Notifications\Notifiable;
 
 use App\Enums\UserRole;
@@ -20,7 +21,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, HasUuids;
+    // SoftDeletes = archiving: archived users keep their quiz history but cannot sign in.
+    use HasFactory, Notifiable, HasUuids, SoftDeletes;
 
     protected $guarded = [];
 

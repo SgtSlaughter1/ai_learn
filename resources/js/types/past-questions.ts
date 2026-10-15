@@ -98,4 +98,7 @@ export interface ExamSimulationResult {
     topic_breakdown: TopicBreakdownItem[];
     weak_topics: TopicBreakdownItem[];
     detailed_results: DetailedQuestionResult[];
+    /** Taken offline without the answer key: saved, and scored by the server once it syncs. */
+    scoring_pending?: boolean;
+    answered_count?: number;
 }

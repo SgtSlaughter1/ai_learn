@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { submitFeedback } from '@/services/FeedbackOutbox';
 
 export default function FeedbackSection() {
     const [form, setForm] = useState({
@@ -32,54 +33,17 @@ export default function FeedbackSection() {
         };
 
         try {
-            if (!navigator.onLine) {
-                const existingQueue = JSON.parse(localStorage.getItem('offline_feedbacks') || '[]');
-                existingQueue.push({ ...payload, queued_at: new Date().toISOString() });
-                localStorage.setItem('offline_feedbacks', JSON.stringify(existingQueue));
-
-                setSubmitted(true);
-                setStatusMessage({
-                    text: 'Your feedback has been saved offline and will sync once you are back online.',
-                    type: 'success',
-                });
+            const result = await submitFeedback(payload);
+            if (result.status === 'rejected') {
+                setStatusMessage({ text: result.error, type: 'error' });
                 return;
             }
-
-            const res = await fetch('/api/v1/feedback', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                credentials: 'include',
-                body: JSON.stringify(payload),
-            });
-
-            const data = await res.json();
-
-            if (res.ok && data.status === 'success') {
-                setSubmitted(true);
-                setStatusMessage({
-                    text: 'Thank you. Your feedback has been received.',
-                    type: 'success',
-                });
-            } else {
-                setStatusMessage({
-                    text: data.message || 'Unable to submit feedback. Please try again.',
-                    type: 'error',
-                });
-            }
-        } catch {
-            const existingQueue = JSON.parse(localStorage.getItem('offline_feedbacks') || '[]');
-            existingQueue.push({ ...payload, queued_at: new Date().toISOString() });
-            localStorage.setItem('offline_feedbacks', JSON.stringify(existingQueue));
-
             setSubmitted(true);
-            setStatusMessage({
-                text: 'Your feedback has been saved offline and will sync once you are back online.',
-                type: 'success',
-            });
+            setStatusMessage(
+                result.status === 'sent'
+                    ? { text: 'Thank you. Your feedback has been received.', type: 'success' }
+                    : { text: 'Your feedback has been saved and will be sent automatically once you are back online.', type: 'success' }
+            );
         } finally {
             setSubmitting(false);
         }

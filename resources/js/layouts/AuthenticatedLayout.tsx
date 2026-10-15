@@ -5,6 +5,8 @@ import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt';
 import UserProfileMenu from '@/components/ui/UserProfileMenu';
 import { preloadFullOfflineCurriculum } from '@/services/OfflineService';
 import { OfflineReadinessBadge } from '@/components/dashboard/OfflineReadinessBadge';
+import { SyncStatus } from '@/components/sync/SyncStatus';
+import { SessionExpiredBanner } from '@/components/sync/SessionExpiredBanner';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 
 interface User {
@@ -99,7 +101,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                     <span>AceDrill</span>
                 </Link>
                 <div className="flex items-center gap-2">
-                    {isLearner && <OfflineReadinessBadge isOnline={isOnline} compact />}
+                    <SyncStatus compact fallback={isLearner ? <OfflineReadinessBadge isOnline={isOnline} compact /> : null} />
                     <UserProfileMenu user={auth?.user} />
                 </div>
             </div>
@@ -224,13 +226,14 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                         )}
                     </div>
                     <div className="flex items-center gap-3 shrink-0 ml-4">
-                        {isLearner && <OfflineReadinessBadge isOnline={isOnline} />}
+                        <SyncStatus fallback={isLearner ? <OfflineReadinessBadge isOnline={isOnline} /> : null} />
                         <UserProfileMenu user={auth?.user} />
                     </div>
                 </header>
 
                 {/* Main Content Body */}
                 <main className="flex-1 px-3.5 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 max-w-7xl w-full mx-auto pb-28 md:pb-16">
+                    <SessionExpiredBanner />
                     {children}
                 </main>
             </div>

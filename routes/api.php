@@ -27,36 +27,6 @@ Route::prefix('v1/questions')->group(function () {
     Route::post('/explain', [\App\Http\Controllers\Web\AIWebController::class, 'explain']);
 });
 
-// Teacher & Classroom Intervention API
-Route::prefix('v1/teacher')->middleware('auth:sanctum')->group(function () {
-    Route::get('/stats', [\App\Http\Controllers\Web\TeacherDashboardController::class, 'getTeacherStats']);
-    Route::get('/classes/{classId}/learners', [\App\Http\Controllers\Web\TeacherDashboardController::class, 'getClassLearners']);
-    Route::get('/classes/{classId}/diagnostics', [\App\Http\Controllers\Web\TeacherDashboardController::class, 'getClassDiagnostics']);
-    Route::post('/interventions/assign', [\App\Http\Controllers\Web\TeacherDashboardController::class, 'assignIntervention']);
-    Route::post('/learners', [\App\Http\Controllers\Web\TeacherDashboardController::class, 'saveLearner']);
-    Route::post('/classes/{classId}/enroll', [\App\Http\Controllers\Web\TeacherDashboardController::class, 'enrollLearner']);
-});
-
-// Admin & Teacher Management API
-Route::prefix('v1/admin')->middleware('auth:sanctum')->group(function () {
-    Route::get('/teachers', [\App\Http\Controllers\Web\AdminDashboardController::class, 'getTeachers']);
-    Route::post('/teachers', [\App\Http\Controllers\Web\AdminDashboardController::class, 'saveTeacher']);
-    Route::put('/teachers/{id}', [\App\Http\Controllers\Web\AdminDashboardController::class, 'updateTeacher']);
-    Route::delete('/teachers/{id}', [\App\Http\Controllers\Web\AdminDashboardController::class, 'deleteTeacher']);
-
-    Route::get('/classes', [\App\Http\Controllers\Web\AdminDashboardController::class, 'getClasses']);
-    Route::get('/subjects', [\App\Http\Controllers\Web\AdminDashboardController::class, 'getSubjects']);
-    Route::get('/topics', [\App\Http\Controllers\Web\AdminDashboardController::class, 'getTopics']);
-
-    Route::get('/questions', [\App\Http\Controllers\Web\AdminDashboardController::class, 'getQuestions']);
-    Route::post('/questions', [\App\Http\Controllers\Web\AdminDashboardController::class, 'saveQuestion']);
-    Route::post('/questions/ai-extract', [\App\Http\Controllers\Web\AdminDashboardController::class, 'aiExtractQuestions']);
-    Route::post('/questions/ai-generate', [\App\Http\Controllers\Web\AdminDashboardController::class, 'aiGenerateQuestions']);
-    Route::post('/questions/bulk', [\App\Http\Controllers\Web\AdminDashboardController::class, 'bulkSaveQuestions']);
-    Route::put('/questions/{id}', [\App\Http\Controllers\Web\AdminDashboardController::class, 'updateQuestion']);
-    Route::delete('/questions/{id}', [\App\Http\Controllers\Web\AdminDashboardController::class, 'deleteQuestion']);
-});
-
 // Spaced Repetition API
 Route::prefix('v1/revision')->group(function () {
     Route::get('/today', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'getTodayQueue']);
@@ -67,10 +37,3 @@ Route::prefix('v1/revision')->group(function () {
 
 // Feedback & Inquiries API (Public & Authenticated)
 Route::post('v1/feedback', [\App\Http\Controllers\Api\FeedbackController::class, 'store']);
-Route::prefix('v1/admin/feedbacks')->middleware('auth:sanctum')->group(function () {
-    Route::get('/', [\App\Http\Controllers\Api\FeedbackController::class, 'index']);
-    Route::put('/{id}/status', [\App\Http\Controllers\Api\FeedbackController::class, 'updateStatus']);
-});
-
-
-

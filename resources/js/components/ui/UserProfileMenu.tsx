@@ -3,6 +3,7 @@ import { Link } from '@inertiajs/react';
 import { LogOut, ChevronDown, Sun, Moon, Shield, Sparkles } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { signOutSafely } from '@/services/SignOut';
 
 interface User {
     id: number;
@@ -17,6 +18,7 @@ interface UserProfileMenuProps {
 
 export default function UserProfileMenu({ user }: UserProfileMenuProps) {
     const [isOpen, setIsOpen] = useState(false);
+    const [isSigningOut, setIsSigningOut] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const { isDark, toggleTheme } = useTheme();
     const { isOnline, pendingSync, isSyncing, triggerSync } = useNetworkStatus();
@@ -184,16 +186,23 @@ export default function UserProfileMenu({ user }: UserProfileMenuProps) {
 
                     {/* Logout Footer */}
                     <div className="p-2">
-                        <Link
-                            href="/logout"
-                            method="post"
-                            as="button"
-                            onClick={() => setIsOpen(false)}
-                            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[var(--color-error)] hover:bg-[var(--color-error)]/10 transition-colors cursor-pointer text-left"
+                        <button
+                            type="button"
+                            disabled={isSigningOut}
+                            onClick={async () => {
+                                setIsSigningOut(true);
+                                try {
+                                    await signOutSafely();
+                                } finally {
+                                    setIsSigningOut(false);
+                                    setIsOpen(false);
+                                }
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[var(--color-error)] hover:bg-[var(--color-error)]/10 transition-colors cursor-pointer text-left disabled:opacity-60 disabled:cursor-wait"
                         >
                             <LogOut className="w-4 h-4" />
-                            <span>Sign Out</span>
-                        </Link>
+                            <span>{isSigningOut ? 'Saving your work…' : 'Sign Out'}</span>
+                        </button>
                     </div>
                 </div>
             )}

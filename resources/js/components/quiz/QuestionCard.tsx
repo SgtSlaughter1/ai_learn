@@ -15,6 +15,8 @@ export interface QuizQuestion {
     type: string;
     difficulty?: string;
     explanation?: string;
+    /** Marks this question is worth in its quiz (from the server; 1 if unknown). */
+    marks?: number;
     options: QuestionOption[];
 }
 

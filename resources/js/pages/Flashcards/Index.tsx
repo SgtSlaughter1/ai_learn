@@ -8,6 +8,8 @@ import { FlashcardCard } from '@/components/flashcards/FlashcardCard';
 import { FlashcardRatingBar, RecallRating } from '@/components/flashcards/FlashcardRatingBar';
 import { FlashcardSessionComplete } from '@/components/flashcards/FlashcardSessionComplete';
 import { FlashcardProgressBar } from '@/components/flashcards/FlashcardProgressBar';
+import { getSyncUser } from '@/services/SyncQueue';
+import { sendOrQueue } from '@/services/SyncService';
 
 export default function Index() {
     const [loading, setLoading] = useState<boolean>(true);
@@ -64,40 +66,40 @@ export default function Index() {
     };
 
     const submitSession = async (finalRatings: RecallRating[]) => {
-        if (!navigator.onLine) {
-            setXpEarned(Math.round(finalRatings.filter((r) => r !== 'again').length * 5));
-            setCompleted(true);
-            return;
-        }
-
-        const csrfToken =
-            document.cookie
-                .split('; ')
-                .find((row) => row.startsWith('XSRF-TOKEN='))
-                ?.split('=')[1] || '';
+        // Same formula as the server (FlashcardController): easy 2, good 1, again 0,
+        // plus 5 for finishing the deck, so the offline figure matches what is awarded.
+        const localXp = finalRatings.reduce((sum, r) => sum + (r === 'easy' ? 2 : r === 'good' ? 1 : 0), 0)
+            + (finalRatings.length > 0 ? 5 : 0);
 
         try {
-            const res = await fetch('/api/v1/flashcards/complete', {
+            // Signed-out visitors have nothing to save.
+            if (!getSyncUser()) {
+                setXpEarned(localXp);
+                return;
+            }
+
+            const result = await sendOrQueue<{ xp_earned: number; new_level?: number; new_tier?: string; new_achievements?: any[] }>({
+                table_name: 'flashcardSessions',
+                endpoint: '/api/v1/flashcards/complete',
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-XSRF-TOKEN': decodeURIComponent(csrfToken),
-                },
-                body: JSON.stringify({ ratings: finalRatings }),
+                payload: { ratings: finalRatings, completed_at: new Date().toISOString() },
             });
 
-            if (!res.ok) throw new Error('Failed to submit flashcard session');
-            const data = await res.json();
-            setXpEarned(data.xp_earned);
-            if (data.new_level && data.new_tier) {
-                setLevelUpInfo({
-                    level: data.new_level,
-                    tier: data.new_tier,
-                    achievements: data.new_achievements || [],
-                });
+            if (result.status === 'sent') {
+                setXpEarned(result.data.xp_earned);
+                if (result.data.new_level && result.data.new_tier) {
+                    setLevelUpInfo({
+                        level: result.data.new_level,
+                        tier: result.data.new_tier,
+                        achievements: result.data.new_achievements || [],
+                    });
+                }
+            } else {
+                // Queued: saved on this device and awarded when it syncs.
+                setXpEarned(localXp);
             }
         } catch {
-            setXpEarned(Math.round(finalRatings.filter((r) => r !== 'again').length * 5));
+            setXpEarned(localXp);
         } finally {
             setCompleted(true);
         }

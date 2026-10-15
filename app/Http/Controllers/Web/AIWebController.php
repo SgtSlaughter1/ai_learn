@@ -53,7 +53,7 @@ class AIWebController extends Controller
             }
         }
 
-        $query = Question::with(['options', 'topic.subject']);
+        $query = Question::with(['options', 'topic.subject'])->where('status', 'active');
 
         if (! empty($excludeIds)) {
             $query->whereNotIn('id', array_unique($excludeIds));
@@ -72,6 +72,7 @@ class AIWebController extends Controller
         // Fallback to subject if no more questions in specific topic
         if (! $question && $subjectId && $topicId) {
             $fallbackQuery = Question::with(['options', 'topic.subject'])
+                ->where('status', 'active')
                 ->whereHas('topic', fn ($q) => $q->where('subject_id', $subjectId));
             if (! empty($excludeIds)) {
                 $fallbackQuery->whereNotIn('id', array_unique($excludeIds));

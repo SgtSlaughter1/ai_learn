@@ -1,3 +1,6 @@
+import { belongsTo, getSyncUser } from './SyncQueue';
+import { clearSnapshots, forgetAuthUser } from './OfflineNavigation';
+import { APP_SHELL_CACHE } from './OfflinePrewarm';
 import { db } from '../db/database';
 import type {
     CachedSubject,
@@ -233,14 +236,25 @@ export async function getCachedUserProfile(): Promise<CachedUserProfile | undefi
 
 // ── Stats ──
 
-export async function getPendingSyncCount(): Promise<number> {
-    const [attempts, progress, gamification, adminQueue] = await Promise.all([
-        db.quizAttempts.filter(a => !a.synced || (a.synced as any) === 0).count(),
-        db.learnerProgress.filter(p => !p.synced || (p.synced as any) === 0).count(),
-        db.gamification.filter(g => !g.synced || (g.synced as any) === 0).count(),
-        db.syncQueue.filter(q => !q.synced).count(),
+/** Changes still waiting to reach the server for the signed-in account (set-aside items excluded). */
+export async function getPendingSyncCount(userId: string | null = getSyncUser()): Promise<number> {
+    const mine = (owner: string | null | undefined) => !userId || belongsTo(owner, userId);
+    const [attempts, progress, adminQueue] = await Promise.all([
+        db.quizAttempts.filter(a => (!a.synced || (a.synced as any) === 0) && a.sync_status !== 'failed' && mine(a.user_id)).count(),
+        db.learnerProgress.filter(p => (!p.synced || (p.synced as any) === 0) && mine(p.user_id)).count(),
+        db.syncQueue.filter(q => !q.synced && q.status !== 'failed' && mine(q.user_id)).count(),
     ]);
-    return attempts + progress + gamification + adminQueue;
+    return attempts + progress + adminQueue;
+}
+
+/** Changes the server rejected; they are kept so the user can retry or discard them. */
+export async function getFailedSyncCount(userId: string | null = getSyncUser()): Promise<number> {
+    const mine = (owner: string | null | undefined) => !userId || belongsTo(owner, userId);
+    const [attempts, adminQueue] = await Promise.all([
+        db.quizAttempts.filter(a => a.sync_status === 'failed' && mine(a.user_id)).count(),
+        db.syncQueue.filter(q => q.status === 'failed' && mine(q.user_id)).count(),
+    ]);
+    return attempts + adminQueue;
 }
 
 // ── Full Offline Preloading with Live Progress ──
@@ -286,68 +300,6 @@ function updatePreloadState(patch: Partial<OfflinePreloadProgress>) {
 
 let hasPreloadedThisSession = false;
 
-function getInertiaVersion(): string {
-    try {
-        const el = document.getElementById('app') || document.querySelector('[data-page]');
-        if (el && el.getAttribute('data-page')) {
-            const page = JSON.parse(el.getAttribute('data-page') || '{}');
-            return page.version || '';
-        }
-    } catch {
-        // ignore
-    }
-    return '';
-}
-
-/**
- * Pre-warm a route by fetching the full HTML page and storing it in
- * the SW runtime caches.
- */
-async function prewarmRoute(url: string): Promise<void> {
-    const fullUrl = new URL(url, window.location.origin).href;
-
-    try {
-        const appCache = await caches.open('app-routes-cache');
-        const pagesCache = await caches.open('pages-cache');
-
-        // 1. Prewarm HTML document
-        const htmlRes = await fetch(fullUrl, {
-            credentials: 'same-origin',
-            headers: { Accept: 'text/html' },
-        }).catch(() => null);
-
-        if (htmlRes && htmlRes.ok) {
-            await appCache.put(fullUrl, htmlRes.clone());
-            await pagesCache.put(fullUrl, htmlRes);
-        }
-
-        // 2. Prewarm Inertia JSON payload
-        const inertiaVersion = getInertiaVersion();
-        const inertiaHeaders: Record<string, string> = {
-            'X-Inertia': 'true',
-            'X-Requested-With': 'XMLHttpRequest',
-            'Accept': 'text/html, application/xhtml+xml',
-        };
-        if (inertiaVersion) {
-            inertiaHeaders['X-Inertia-Version'] = inertiaVersion;
-        }
-
-        const inertiaRes = await fetch(fullUrl, {
-            credentials: 'same-origin',
-            headers: inertiaHeaders,
-        }).catch(() => null);
-
-        if (inertiaRes && inertiaRes.ok) {
-            const inertiaReq = new Request(fullUrl, {
-                headers: { 'X-Inertia': 'true' },
-            });
-            await appCache.put(inertiaReq, inertiaRes);
-        }
-    } catch {
-        // Best-effort: silent fail is fine
-    }
-}
-
 /**
  * 2-Stage Parallelized Offline Curriculum Preloader
  * Stage 1: Instant cache of routes & subjects index (< 1.5s)
@@ -365,23 +317,30 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
 
     try {
         // ── STAGE 1: Instant Critical Pack (< 1.5s) ──
-        // 1. Pre-warm top routes in parallel
-        await Promise.allSettled([
-            prewarmRoute('/dashboard'),
-            prewarmRoute('/subjects'),
-            prewarmRoute('/flashcards'),
-            prewarmRoute('/past-questions'),
-        ]);
-
-        // 2. Fetch and cache subjects catalog
-        const subjectsRes = await fetch('/api/v1/subjects?scope=general').catch(() => null);
-        if (!subjectsRes || !subjectsRes.ok) {
+        // Page shells are not fetched here: offline, pages are rendered on the device
+        // (see OfflineNavigation.ts), so only their data needs to be stored.
+        // Fetch and cache subjects catalog
+        // Both the learner's school curriculum and general knowledge; the API falls back to
+        // general for learners without a school, so de-duplicate by id.
+        const scopes = ['school', 'general'] as const;
+        const scopeLists = await Promise.all(scopes.map(async (scope) => {
+            const res = await fetch(`/api/v1/subjects?scope=${scope}`, { headers: { Accept: 'application/json' } }).catch(() => null);
+            if (!res || !res.ok) return null;
+            const data = await res.json().catch(() => null);
+            const list = data?.subjects || data || [];
+            return Array.isArray(list) ? list.map((s: any) => ({ ...s, __scope: scope })) : [];
+        }));
+        if (scopeLists.every((list) => list === null)) {
             updatePreloadState({ isPreloading: false });
             return;
         }
 
-        const subjectsData = await subjectsRes.json();
-        const subjectsList = subjectsData.subjects || subjectsData || [];
+        const seenSubjectIds = new Set<number>();
+        const subjectsList = scopeLists.flat().filter((s: any) => {
+            if (!s || seenSubjectIds.has(s.id)) return false;
+            seenSubjectIds.add(s.id);
+            return true;
+        });
 
         if (!Array.isArray(subjectsList) || subjectsList.length === 0) {
             updatePreloadState({ isPreloading: false, isComplete: true });
@@ -419,11 +378,7 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
         // ── STAGE 2: Concurrent Worker Pool for Topics & Quizzes (Pool of 4) ──
         const downloadSubjectCurriculum = async (subject: any) => {
             try {
-                // Prewarm route and fetch subject details in parallel
-                const [, subRes] = await Promise.all([
-                    prewarmRoute(`/subjects/${subject.slug}`),
-                    fetch(`/api/v1/subjects/${subject.slug}?scope=general`).catch(() => null),
-                ]);
+                const subRes = await fetch(`/api/v1/subjects/${subject.slug}?scope=${subject.__scope}`, { headers: { Accept: 'application/json' } }).catch(() => null);
 
                 if (subRes && subRes.ok) {
                     const subData = await subRes.json();
@@ -450,7 +405,7 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
                             if (t.progress) {
                                 progressList.push({
                                     id: t.progress.id || t.id,
-                                    user_id: 'current',
+                                    user_id: getSyncUser() ?? 'current',
                                     topic_id: t.id,
                                     questions_attempted: t.progress.questions_attempted || 0,
                                     questions_correct: t.progress.questions_correct || 0,
@@ -471,7 +426,6 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
                         await Promise.allSettled(
                             subData.quizzes.map(async (q: any) => {
                                 try {
-                                    await prewarmRoute(`/quizzes/${q.id}`);
                                     if (q.questions && q.questions.length > 0) {
                                         await db.quizzes.put({
                                             ...q,
@@ -547,12 +501,95 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
         });
         hasPreloadedThisSession = true;
         console.log('[OfflineService] 2-stage parallel offline curriculum preloading completed.');
+
+        // Then the past-question bank, so CBT practice and simulations work offline too.
+        void preloadPastQuestions();
     } catch (e) {
         console.warn('Background offline preload encountered an error:', e);
         updatePreloadState({
             isPreloading: false,
             isComplete: false,
         });
+    }
+}
+
+// ── Past questions ──
+
+/** Questions kept per exam for offline use (the API's maximum per request). */
+const PAST_QUESTIONS_PER_EXAM = 100;
+
+/**
+ * Keep a pool of each exam's past questions on the device (the same localStorage keys the
+ * past-questions hub already reads), so simulations and practice can start offline.
+ * Answer keys stay on the server; offline simulations are scored when they sync.
+ */
+export async function preloadPastQuestions(): Promise<void> {
+    if (!navigator.onLine) return;
+    try {
+        const metaRes = await fetch('/api/v1/past-questions/meta', { headers: { Accept: 'application/json' } });
+        if (!metaRes.ok) return;
+        const meta = await metaRes.json();
+        if (!meta?.success || !meta.data) return;
+        localStorage.setItem('cached_past_questions_meta', JSON.stringify(meta.data));
+
+        const exams: Array<{ code: string; questionCount?: number }> = meta.data.exams || [];
+        for (const exam of exams.filter((e) => (e.questionCount ?? 1) > 0)) {
+            const params = new URLSearchParams({ exam_code: exam.code, mode: 'simulation', limit: String(PAST_QUESTIONS_PER_EXAM) });
+            const res = await fetch(`/api/v1/past-questions/questions?${params}`, { headers: { Accept: 'application/json' } }).catch(() => null);
+            const data = res?.ok ? await res.json().catch(() => null) : null;
+            if (!data?.success || !Array.isArray(data.data) || data.data.length === 0) continue;
+            try {
+                localStorage.setItem(`cached_pq_${exam.code}_all`, JSON.stringify(data.data));
+            } catch {
+                break; // storage full: keep the exams already saved
+            }
+        }
+    } catch (e) {
+        console.warn('[OfflineService] Past questions preload failed:', e);
+    }
+}
+
+// ── Sign-out cleanup ──
+
+const PRIVATE_CACHE_NAMES = ['app-routes-cache', 'pages-cache', 'api-cache', APP_SHELL_CACHE];
+
+/**
+ * Remove the signed-out user's data from this device so the next person cannot see it.
+ * Unsynced work is kept (it stays tagged with its owner and syncs the next time that
+ * person signs in); everything already on the server is cleared.
+ */
+export async function clearUserOfflineData(userId: string | null): Promise<void> {
+    const owned = (owner: string | null | undefined) => !userId || belongsTo(owner, userId);
+
+    forgetAuthUser();
+    await clearSnapshots().catch(() => {});
+
+    await db.transaction('rw', [db.quizAttempts, db.learnerProgress, db.gamification, db.userProfile], async () => {
+        await db.quizAttempts.filter(a => owned(a.user_id) && (a.synced === true || (a.synced as any) === 1)).delete();
+        await db.learnerProgress.filter(p => owned(p.user_id)).delete();
+        await db.gamification.filter(g => owned(g.user_id)).delete();
+        await db.userProfile.clear();
+    });
+
+    // Admin/teacher caches: keep only records with changes still waiting to sync.
+    const adminTables = [db.adminLearners, db.adminSchools, db.adminClasses, db.adminQuestions, db.adminSchoolAdmins, db.adminTeachers];
+    for (const table of adminTables) {
+        await (table as any).filter((r: any) => !r._pendingSync).delete();
+    }
+
+    try {
+        // Per-user dashboard copies kept for offline display.
+        const privatePrefixes = ['cached_dashboard_', 'cached_admin_', 'cached_teacher_'];
+        Object.keys(localStorage)
+            .filter(k => privatePrefixes.some(prefix => k.startsWith(prefix)))
+            .forEach(k => localStorage.removeItem(k));
+    } catch {
+        // ignore
+    }
+
+    // Cached pages and API responses contain the previous user's data.
+    if (typeof caches !== 'undefined') {
+        await Promise.all(PRIVATE_CACHE_NAMES.map(name => caches.delete(name).catch(() => false)));
     }
 }
 

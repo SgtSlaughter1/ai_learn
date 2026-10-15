@@ -63,14 +63,25 @@ export default function Index() {
     };
 
     useEffect(() => {
+        const CACHE_KEY = 'cached_class_options';
         fetch('/api/v1/classes')
-            .then((res) => res.json())
+            .then((res) => {
+                if (!res.ok) throw new Error(`Classes request failed: ${res.status}`);
+                return res.json();
+            })
             .then((data) => {
                 if (data.classes && data.classes.length > 0) {
                     setClasses(data.classes);
+                    try { localStorage.setItem(CACHE_KEY, JSON.stringify(data.classes)); } catch {}
                 }
             })
-            .catch(() => {});
+            .catch(() => {
+                // Offline: use the class list from the last time this page loaded online.
+                try {
+                    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]');
+                    if (Array.isArray(cached) && cached.length > 0) setClasses(cached);
+                } catch {}
+            });
     }, []);
 
     useEffect(() => {

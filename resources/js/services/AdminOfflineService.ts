@@ -1,4 +1,6 @@
 import { db } from '../db/database';
+import { classifyResponse, describeError, enqueue, hasPendingQueueItems } from './SyncQueue';
+import { syncAll } from './SyncService';
 import type {
     Learner,
     SchoolItem,
@@ -548,7 +550,8 @@ export interface AdminActionResult<T = any> {
 }
 
 export async function executeAdminAction<T = any>(options: {
-    table: 'adminLearners' | 'adminSchools' | 'adminClasses' | 'adminQuestions' | 'adminSchoolAdmins' | 'adminTeachers' | 'subjects' | 'topics';
+    // 'classMemberships' has no local table: callers keep their own cached roster up to date.
+    table: 'adminLearners' | 'adminSchools' | 'adminClasses' | 'adminQuestions' | 'adminSchoolAdmins' | 'adminTeachers' | 'subjects' | 'topics' | 'classMemberships';
     action: 'insert' | 'update' | 'delete';
     recordId: string;
     endpoint: string;
@@ -558,23 +561,33 @@ export async function executeAdminAction<T = any>(options: {
 }): Promise<AdminActionResult<T>> {
     const { table, action, recordId, endpoint, method, payload, optimisticRecord } = options;
 
+    // One key per user action, reused by every retry, so the server applies it exactly once.
+    const idempotencyKey = crypto.randomUUID();
+
+    // Go straight to the server only when nothing is waiting ahead of this change and the
+    // record already exists there; otherwise queue it behind earlier changes to keep order.
+    const mustQueue = recordId.startsWith('temp_') || await hasPendingQueueItems();
+    let requestMayHaveReachedServer = false;
+
     // 1. Try Online Request First if browser is online
-    if (navigator.onLine) {
+    if (navigator.onLine && !mustQueue) {
         try {
+            requestMayHaveReachedServer = true;
             const res = await fetch(endpoint, {
                 method,
-                headers: getAdminAuthHeaders(),
+                headers: { ...getAdminAuthHeaders(), 'Idempotency-Key': idempotencyKey },
                 credentials: 'include',
                 body: payload ? JSON.stringify(payload) : undefined,
             });
+            const data = await res.json().catch(() => ({}));
+            const outcome = classifyResponse(res.status, method, data);
 
-            if (res.ok) {
-                const data = await res.json().catch(() => ({}));
+            if (outcome === 'ok') {
                 try {
                     const tableObj = (db as any)[table];
                     if (tableObj) {
                         if (action === 'delete') {
-                            await tableObj.delete(recordId.startsWith('temp_') ? recordId : isNaN(Number(recordId)) ? recordId : Number(recordId));
+                            await tableObj.delete(isNaN(Number(recordId)) ? recordId : Number(recordId));
                         } else {
                             const saved = data.learner || data.subject || data.question || data.class || data.school || data.admin || data.teacher || data.topic || data.data;
                             if (saved) {
@@ -595,16 +608,17 @@ export async function executeAdminAction<T = any>(options: {
                     data,
                     message: data.message || (action === 'delete' ? 'Deleted successfully' : 'Saved successfully'),
                 };
-            } else {
-                if (res.status >= 400 && res.status < 500) {
-                    const errorData = await res.json().catch(() => ({}));
-                    return {
-                        success: false,
-                        synced: false,
-                        error: errorData.message || errorData.error || `Server responded with status ${res.status}`,
-                    };
-                }
             }
+
+            if (outcome === 'permanent') {
+                // Validation or permission problem: show it now, nothing to queue.
+                return {
+                    success: false,
+                    synced: false,
+                    error: describeError(res.status, data),
+                };
+            }
+            // 'auth' or 'transient': keep the change and let the sync engine retry it.
         } catch (netErr) {
             console.warn('[AdminOfflineService] Online request failed with network error, queuing offline:', netErr);
         }
@@ -622,26 +636,30 @@ export async function executeAdminAction<T = any>(options: {
             }
         }
 
-        await db.syncQueue.add({
+        await enqueue({
             table_name: table,
             action,
             record_id: String(recordId),
             endpoint,
             method,
-            payload: JSON.stringify(payload || {}),
-            created_at: new Date().toISOString(),
-            synced: false,
-            retries: 0,
+            payload: payload || {},
+            idempotency_key: idempotencyKey,
+            sent: requestMayHaveReachedServer,
         });
 
         notifyAdminDataChanged({ table, action });
+        if (navigator.onLine) {
+            void syncAll();
+        }
 
         return {
             success: true,
             synced: false,
             offline: true,
             data: optimisticRecord,
-            message: 'Saved offline. Changes will automatically sync when connection is restored.',
+            message: navigator.onLine
+                ? 'Saved. Syncing with the server…'
+                : 'Saved offline. Changes will automatically sync when connection is restored.',
         };
     } catch (dbErr) {
         console.error('[AdminOfflineService] Local database error:', dbErr);

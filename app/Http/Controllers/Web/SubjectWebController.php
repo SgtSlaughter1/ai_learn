@@ -637,6 +637,7 @@ class SubjectWebController extends Controller
             'qn.type',
             'qn.difficulty',
             'qn.explanation',
+            'qq.marks as question_marks',
             'qo.id as option_id',
             'qo.option_text',
             'qo.is_correct',
@@ -671,6 +672,8 @@ class SubjectWebController extends Controller
                     'type' => $row->type,
                     'difficulty' => $row->difficulty,
                     'explanation' => $row->explanation,
+                    // Marks in this quiz, so offline grading matches the server's.
+                    'marks' => (int) ($row->question_marks ?? 1),
                     'options' => [],
                 ];
             }

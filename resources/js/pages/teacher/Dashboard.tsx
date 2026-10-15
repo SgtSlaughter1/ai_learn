@@ -136,7 +136,7 @@ const toArray = <T,>(val: any): T[] => {
     return [];
 };
 
-export default function Dashboard({ school, classes, selectedClass }: Props) {
+export default function Dashboard({ school, classes = [], selectedClass = null }: Props) {
     const [stats, setStats] = useState<Stats>(defaultStats);
     const [loading, setLoading] = useState(true);
     const [showLearnerModal, setShowLearnerModal] = useState(false);
@@ -268,7 +268,8 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                 headers: getAdminAuthHeaders(),
                 credentials: 'include',
             });
-            if (res.ok) {
+            if (!res.ok) throw new Error(`Teacher stats request failed: ${res.status}`);
+            {
                 const data = await res.json();
                 if (data && data.overview) {
                     setStats({
@@ -396,13 +397,18 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
             });
         };
 
+        // A sync pass runs every 30s; only refetch when it actually uploaded something.
+        const handleSyncCompleted = (event: Event) => {
+            if ((event as CustomEvent).detail?.synced > 0) handleDataChange();
+        };
+
         window.addEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
-        window.addEventListener('app:sync-completed', handleDataChange);
+        window.addEventListener('app:sync-completed', handleSyncCompleted);
         window.addEventListener('online', handleOnline);
 
         return () => {
             window.removeEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
-            window.removeEventListener('app:sync-completed', handleDataChange);
+            window.removeEventListener('app:sync-completed', handleSyncCompleted);
             window.removeEventListener('online', handleOnline);
         };
     }, [selectedClass]);
