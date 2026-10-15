@@ -31,9 +31,10 @@ import ClassesTab from '@/components/admin/ClassesTab';
 import LearnersTab from '@/components/admin/LearnersTab';
 import SubjectsTab from '@/components/admin/SubjectsTab';
 import QuestionBankTab from '@/components/admin/QuestionBankTab';
+import type { Abilities } from '@/types';
 
 export default function Dashboard() {
-    const { auth } = usePage<{ auth: { user: { id: number; name: string; email: string; role: string } } }>().props;
+    const { auth } = usePage<{ auth: { user: { id: number; name: string; email: string; role: string }; can?: Abilities | null } }>().props;
     const { url } = usePage();
 
     const parseTabFromUrl = (targetUrl?: string): 'overview' | 'schools' | 'school_admins' | 'teachers' | 'classes' | 'learners' | 'subjects' | 'questions' => {
@@ -78,7 +79,8 @@ export default function Dashboard() {
     const [stats, setStats] = useState<Stats | null>(null);
     const [loadingStats, setLoadingStats] = useState(true);
     
-    const isSuperAdmin = auth?.user?.role === 'platform_admin' || (stats?.is_super_admin === true);
+    // From the server's gates (HandleInertiaRequests), not a role-string comparison.
+    const isSuperAdmin = auth?.can?.managePlatform === true;
     
     const [schools, setSchools] = useState<SchoolItem[]>([]);
     const [loadingSchools, setLoadingSchools] = useState(false);

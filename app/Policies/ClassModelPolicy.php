@@ -4,9 +4,12 @@ namespace App\Policies;
 
 use App\Models\ClassModel;
 use App\Models\User;
+use App\Policies\Concerns\ChecksSchoolOwnership;
 
 class ClassModelPolicy
 {
+    use ChecksSchoolOwnership;
+
     public function viewAny(User $user): bool
     {
         return true;
@@ -14,81 +17,30 @@ class ClassModelPolicy
 
     public function view(User $user, ClassModel $class): bool
     {
-        if ($user->isPlatformAdmin()) {
-            return true;
-        }
-
-        if ($user->isSchoolAdmin()) {
-            return $class->school_id === $user->primarySchool()?->id;
-        }
-
-        if ($user->isTeacher()) {
-            if ($user->relationLoaded('classes')) {
-                return $user->classes->contains('id', $class->id);
-            }
-            return $user->classes()->where('classes.id', $class->id)->exists();
-        }
-
-        if ($user->isLearner()) {
-            return $class->id === $user->primaryClass()?->id;
-        }
-
-        return false;
+        return $this->adminManagesSchool($user, $class->school_id)
+            || $user->teachesClass($class->id)
+            || ($user->isLearner() && $user->classes()->where('classes.id', $class->id)->exists());
     }
 
     public function create(User $user): bool
     {
-        return $user->isPlatformAdmin() || $user->isSchoolAdmin();
+        return $user->isAdmin();
     }
 
+    /** Edit or delete the class and manage its roster: the school's admins. */
     public function update(User $user, ClassModel $class): bool
     {
-        if ($user->isPlatformAdmin()) {
-            return true;
-        }
-
-        if ($user->isSchoolAdmin()) {
-            return $class->school_id === $user->primarySchool()?->id;
-        }
-
-        return false;
+        return $this->adminManagesSchool($user, $class->school_id);
     }
 
     public function delete(User $user, ClassModel $class): bool
     {
-        if ($user->isPlatformAdmin()) {
-            return true;
-        }
-
-        if ($user->isSchoolAdmin()) {
-            return $class->school_id === $user->primarySchool()?->id;
-        }
-
-        return false;
+        return $this->update($user, $class);
     }
 
+    /** Day-to-day class work (adding learners, interventions): the school's admins or the class's teachers. */
     public function manage(User $user, ClassModel $class): bool
     {
-        if ($user->isPlatformAdmin()) {
-            return true;
-        }
-
-        if ($user->isSchoolAdmin()) {
-            return $class->school_id === $user->primarySchool()?->id;
-        }
-
-        if ($user->isTeacher()) {
-            if ($user->relationLoaded('classes')) {
-                return $user->classes->contains('id', $class->id);
-            }
-            return $user->classes()->where('classes.id', $class->id)->exists();
-        }
-
-        return false;
-    }
-
-    public function manageLearners(User $user, ClassModel $class): bool
-    {
-        return $this->manage($user, $class);
+        return $this->update($user, $class) || $user->teachesClass($class->id);
     }
 }

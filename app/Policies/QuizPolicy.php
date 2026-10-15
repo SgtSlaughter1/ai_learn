@@ -4,9 +4,12 @@ namespace App\Policies;
 
 use App\Models\Quiz;
 use App\Models\User;
+use App\Policies\Concerns\ChecksSchoolOwnership;
 
 class QuizPolicy
 {
+    use ChecksSchoolOwnership;
+
     public function viewAny(User $user): bool
     {
         return true;
@@ -24,12 +27,12 @@ class QuizPolicy
 
     public function update(User $user, Quiz $quiz): bool
     {
-        return $user->isPlatformAdmin() || $user->isSchoolAdmin();
+        return $this->adminManagesSchool($user, $quiz->school_id);
     }
 
     public function delete(User $user, Quiz $quiz): bool
     {
-        return $user->isPlatformAdmin();
+        return $this->update($user, $quiz);
     }
 
     public function attempt(User $user, Quiz $quiz): bool

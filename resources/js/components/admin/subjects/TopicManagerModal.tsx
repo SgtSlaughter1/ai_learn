@@ -34,16 +34,18 @@ export default function TopicManagerModal({
                         </p>
                     </div>
                     <div className="flex items-center justify-between sm:justify-end gap-2">
-                        <button
-                            type="button"
-                            onClick={onOpenAddTopicModal}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all"
-                        >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
-                            <span>Add Topic</span>
-                        </button>
+                        {subject.can?.update !== false && (
+                            <button
+                                type="button"
+                                onClick={onOpenAddTopicModal}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all"
+                            >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                                <span>Add Topic</span>
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={onClose}
@@ -91,20 +93,24 @@ export default function TopicManagerModal({
                                     )}
                                 </div>
                                 <div className="flex items-center justify-end gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-[var(--color-border)]">
-                                    <button
-                                        type="button"
-                                        onClick={() => onEditTopic(top)}
-                                        className="px-2.5 py-1 text-xs font-bold text-[var(--color-primary)] hover:bg-[var(--color-primary-5)] active:scale-[0.98] cursor-pointer rounded-lg transition-all border border-[var(--color-border)]"
-                                    >
-                                        Edit
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => onDeleteTopic(top)}
-                                        className="px-2.5 py-1 text-xs font-bold text-[var(--color-error)] hover:bg-[var(--color-error-5)] active:scale-[0.98] cursor-pointer rounded-lg transition-all"
-                                    >
-                                        Delete
-                                    </button>
+                                    {top.can?.update !== false && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onEditTopic(top)}
+                                            className="px-2.5 py-1 text-xs font-bold text-[var(--color-primary)] hover:bg-[var(--color-primary-5)] active:scale-[0.98] cursor-pointer rounded-lg transition-all border border-[var(--color-border)]"
+                                        >
+                                            Edit
+                                        </button>
+                                    )}
+                                    {top.can?.delete !== false && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onDeleteTopic(top)}
+                                            className="px-2.5 py-1 text-xs font-bold text-[var(--color-error)] hover:bg-[var(--color-error-5)] active:scale-[0.98] cursor-pointer rounded-lg transition-all"
+                                        >
+                                            Delete
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ))

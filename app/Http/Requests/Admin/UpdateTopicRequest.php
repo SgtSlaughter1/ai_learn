@@ -6,9 +6,10 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateTopicRequest extends FormRequest
 {
+    /** Authorized by the route's role gate and the controller's policy checks. */
     public function authorize(): bool
     {
-        return $this->user()?->isAdmin() || $this->user()?->isTeacher();
+        return true;
     }
 
     public function rules(): array

@@ -4,56 +4,40 @@ namespace App\Policies;
 
 use App\Models\Subject;
 use App\Models\User;
+use App\Policies\Concerns\ChecksSchoolOwnership;
 
 class SubjectPolicy
 {
+    use ChecksSchoolOwnership;
+
     public function viewAny(User $user): bool
     {
         return true;
     }
 
+    /** Global or own-school subjects; inactive ones only for the staff who manage content. */
     public function view(User $user, Subject $subject): bool
     {
-        if ($user->isPlatformAdmin() || $user->isSchoolAdmin()) {
-            return true;
+        if (! $this->visibleInSchool($user, $subject->school_id)) {
+            return false;
         }
 
-        if ($user->isTeacher()) {
-            return $subject->class_id && $user->canManageClass($subject->class_id);
-        }
-
-        return $subject->status === 'active';
+        return $subject->status === 'active' || $user->isAdmin() || $user->isTeacher();
     }
 
     public function create(User $user): bool
     {
-        return $user->isPlatformAdmin() || $user->isSchoolAdmin();
+        return $user->isAdmin();
     }
 
+    /** Global subjects: platform admins only; school subjects: that school's admins. */
     public function update(User $user, Subject $subject): bool
     {
-        return $this->manage($user, $subject);
+        return $this->adminManagesSchool($user, $subject->school_id);
     }
 
     public function delete(User $user, Subject $subject): bool
     {
-        return $user->isPlatformAdmin();
-    }
-
-    public function manage(User $user, Subject $subject): bool
-    {
-        if ($user->isPlatformAdmin()) {
-            return true;
-        }
-
-        if ($user->isSchoolAdmin()) {
-            return $subject->school_id === $user->primarySchool()?->id || is_null($subject->school_id);
-        }
-
-        if ($user->isTeacher()) {
-            return $subject->class_id && $user->canManageClass($subject->class_id);
-        }
-
-        return false;
+        return $this->update($user, $subject);
     }
 }

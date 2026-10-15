@@ -3,12 +3,14 @@
 namespace App\Http\Requests\Admin;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class SaveSchoolRequest extends FormRequest
 {
+    /** Authorized by the route's role gate and the controller's policy checks. */
     public function authorize(): bool
     {
-        return $this->user()?->isPlatformAdmin() ?? false;
+        return true;
     }
 
     public function rules(): array
@@ -26,7 +28,8 @@ class SaveSchoolRequest extends FormRequest
             'email' => ['nullable', 'string', 'email', 'max:255'],
             'description' => ['nullable', 'string'],
             'is_active' => ['nullable', 'boolean'],
-            'admin_user_id' => ['nullable', 'exists:users,id'],
+            // Only a school admin account can be put in charge of a school.
+            'admin_user_id' => ['nullable', Rule::exists('users', 'id')->where('role', 'school_admin')->whereNull('deleted_at')],
         ];
     }
 }

@@ -101,7 +101,7 @@ function rememberServerPage(page: any): void {
     const authUser: AuthUser | null = user?.id ? { ...user, id: String(user.id) } : null;
     prepareOfflineFor(authUser, page.version);
     if (!authUser) return;
-    rememberAuthUser(authUser);
+    rememberAuthUser(authUser, page.props?.auth?.can);
     setSyncUser(authUser.id);
     cacheUserProfile({
         id: authUser.id,

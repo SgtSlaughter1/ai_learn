@@ -1,5 +1,13 @@
 export type UserRole = 'platform_admin' | 'school_admin' | 'learner';
 
+/** Role-level abilities shared by the server (HandleInertiaRequests), from the route gates. */
+export interface Abilities {
+    accessAdmin: boolean;
+    accessTeaching: boolean;
+    managePlatform: boolean;
+    manageCurriculum: boolean;
+}
+
 export interface User {
     id: number;
     name: string;

@@ -63,11 +63,9 @@ class FeedbackController extends Controller
     /**
      * Admin: List all submitted feedbacks with filters.
      */
+    /** Platform admins only (route gate `manage-platform`): feedback includes visitors' emails. */
     public function index(Request $request): JsonResponse
     {
-        // Feedback includes visitors' names and emails: platform admins only.
-        abort_unless($request->user()?->isPlatformAdmin(), 403, 'Forbidden. Platform Admin access required.');
-
         $query = Feedback::with('user:id,name,email,role')
             ->latest();
 
@@ -102,9 +100,6 @@ class FeedbackController extends Controller
      */
     public function updateStatus(Request $request, int $id): JsonResponse
     {
-        // Feedback includes visitors' names and emails: platform admins only.
-        abort_unless($request->user()?->isPlatformAdmin(), 403, 'Forbidden. Platform Admin access required.');
-
         $validated = $request->validate([
             'status' => 'required|string|in:new,reviewed,resolved',
         ]);

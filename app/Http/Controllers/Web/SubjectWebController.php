@@ -15,6 +15,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -182,11 +183,7 @@ class SubjectWebController extends Controller
                     $userSchoolId = $enrolledClass->school_id;
                 }
 
-                $gradeOrder = [
-                    'CRECHE' => 1, 'KG1' => 2, 'KG2' => 3, 'NUR1' => 4, 'NUR2' => 5,
-                    'PRI1' => 6, 'PRI2' => 7, 'PRI3' => 8, 'PRI4' => 9, 'PRI5' => 10, 'PRI6' => 11,
-                    'JSS1' => 12, 'JSS2' => 13, 'JSS3' => 14, 'SS1' => 15, 'SS2' => 16, 'SS3' => 17,
-                ];
+                $gradeOrder = ClassModel::GRADE_ORDER;
 
                 $schoolClasses = DB::table('classes as c')
                     ->leftJoin('programs as p', 'p.id', '=', 'c.program_id')
@@ -361,11 +358,7 @@ class SubjectWebController extends Controller
             return [];
         }
 
-        $gradeOrder = [
-            'CRECHE' => 1, 'KG1' => 2, 'KG2' => 3, 'NUR1' => 4, 'NUR2' => 5,
-            'PRI1' => 6, 'PRI2' => 7, 'PRI3' => 8, 'PRI4' => 9, 'PRI5' => 10, 'PRI6' => 11,
-            'JSS1' => 12, 'JSS2' => 13, 'JSS3' => 14, 'SS1' => 15, 'SS2' => 16, 'SS3' => 17,
-        ];
+        $gradeOrder = ClassModel::GRADE_ORDER;
 
         return DB::table('classes as c')
             ->leftJoin('programs as p', 'p.id', '=', 'c.program_id')
@@ -412,11 +405,7 @@ class SubjectWebController extends Controller
         $userClassWindowIds = [];
 
         if ($user) {
-            if ($user->learnerProfile && $user->learnerProfile->school_id) {
-                $schoolId = $user->learnerProfile->school_id;
-            } elseif ($user->isSchoolAdmin()) {
-                $schoolId = $user->primarySchool()?->id;
-            }
+            $schoolId = $user->managedSchoolId();
 
             if ($user->isLearner()) {
                 $enrolledClass = DB::table('class_memberships as cm')
@@ -430,11 +419,7 @@ class SubjectWebController extends Controller
 
                 if ($enrolledClass) {
                     $schoolId = $schoolId ?: $enrolledClass->school_id;
-                    $gradeOrder = [
-                        'CRECHE' => 1, 'KG1' => 2, 'KG2' => 3, 'NUR1' => 4, 'NUR2' => 5,
-                        'PRI1' => 6, 'PRI2' => 7, 'PRI3' => 8, 'PRI4' => 9, 'PRI5' => 10, 'PRI6' => 11,
-                        'JSS1' => 12, 'JSS2' => 13, 'JSS3' => 14, 'SS1' => 15, 'SS2' => 16, 'SS3' => 17,
-                    ];
+                    $gradeOrder = ClassModel::GRADE_ORDER;
 
                     $schoolClasses = DB::table('classes as c')
                         ->leftJoin('programs as p', 'p.id', '=', 'c.program_id')
@@ -492,11 +477,7 @@ class SubjectWebController extends Controller
             ->orderBy('c.id')
             ->get();
 
-        $gradeOrder = [
-            'CRECHE' => 1, 'KG1' => 2, 'KG2' => 3, 'NUR1' => 4, 'NUR2' => 5,
-            'PRI1' => 6, 'PRI2' => 7, 'PRI3' => 8, 'PRI4' => 9, 'PRI5' => 10, 'PRI6' => 11,
-            'JSS1' => 12, 'JSS2' => 13, 'JSS3' => 14, 'SS1' => 15, 'SS2' => 16, 'SS3' => 17,
-        ];
+        $gradeOrder = ClassModel::GRADE_ORDER;
         $sortedClasses = $classesQuery
             ->sortBy(fn ($c) => $gradeOrder[strtoupper($c->grade_level ?? '')] ?? 99)
             ->map(fn ($c) => [
@@ -530,10 +511,7 @@ class SubjectWebController extends Controller
         $gradeLevel = $request->get('grade_level') ?? $request->get('level');
         $scope = $request->get('scope', 'school');
 
-        $userSchoolId = null;
-        if ($user) {
-            $userSchoolId = $user->learnerProfile?->school_id ?? ($user->isSchoolAdmin() ? $user->primarySchool()?->id : null);
-        }
+        $userSchoolId = $user?->managedSchoolId();
 
         if ($classId && !$gradeLevel) {
             $selectedClass = ClassModel::find($classId);
@@ -560,6 +538,7 @@ class SubjectWebController extends Controller
         if (!$subject) {
             return response()->json(['message' => 'Subject not found'], 404);
         }
+        Gate::authorize('view', Subject::findOrFail($subject->id));
 
         // 1. Efficient single-join query for topics and user progress
         $topics = DB::table('topics as t')
@@ -613,10 +592,14 @@ class SubjectWebController extends Controller
             ->where('q.status', 'active')
             ->where('qn.status', 'active');
 
-        if ($scope === 'school' && $userSchoolId) {
-            $quizQuery->where(function ($q) use ($userSchoolId) {
-                $q->where('q.school_id', $userSchoolId)
-                  ->orWhereNull('q.school_id');
+        // Quizzes (which include answer keys for offline grading) only from the user's own
+        // school or global ones, whatever scope is requested. Platform admins see all.
+        if (!$user?->can('manage-platform')) {
+            $quizQuery->where(function ($q) use ($userSchoolId, $scope) {
+                $q->whereNull('q.school_id');
+                if ($scope === 'school' && $userSchoolId) {
+                    $q->orWhere('q.school_id', $userSchoolId);
+                }
             });
         }
 
@@ -720,6 +703,7 @@ class SubjectWebController extends Controller
         if (!$sub) {
             return response()->json(['message' => 'Subject not found'], 404);
         }
+        Gate::authorize('view', $sub);
 
         $topics = $sub->topics()
             ->where('status', 'active')

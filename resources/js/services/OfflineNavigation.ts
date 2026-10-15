@@ -83,12 +83,24 @@ export function homePathsForRole(role: string | undefined): string[] {
 // Kept in localStorage (not only IndexedDB) so it is available synchronously at boot.
 
 const AUTH_USER_KEY = 'acedrill:auth-user';
+const AUTH_CAN_KEY = 'acedrill:auth-can';
 
-export function rememberAuthUser(user: AuthUser): void {
+/** Remember the signed-in user and the abilities the server gave them (auth.can). */
+export function rememberAuthUser(user: AuthUser, can?: Record<string, boolean> | null): void {
     try {
         localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+        if (can) localStorage.setItem(AUTH_CAN_KEY, JSON.stringify(can));
     } catch {
         // ignore
+    }
+}
+
+function getRememberedAbilities(): Record<string, boolean> | null {
+    try {
+        const raw = localStorage.getItem(AUTH_CAN_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
     }
 }
 
@@ -104,6 +116,7 @@ export function getRememberedAuthUser(): AuthUser | null {
 export function forgetAuthUser(): void {
     try {
         localStorage.removeItem(AUTH_USER_KEY);
+        localStorage.removeItem(AUTH_CAN_KEY);
     } catch {
         // ignore
     }
@@ -216,7 +229,7 @@ export async function buildOfflinePage(href: string): Promise<OfflinePage | null
     return {
         component: snapshot?.component ?? route.component,
         url: url.pathname + url.search,
-        props: { ...props, auth: { user }, errors: {}, [OFFLINE_PROP]: true },
+        props: { ...props, auth: { user, can: user ? getRememberedAbilities() : null }, errors: {}, [OFFLINE_PROP]: true },
     };
 }
 

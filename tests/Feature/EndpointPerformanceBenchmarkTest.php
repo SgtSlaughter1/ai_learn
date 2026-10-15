@@ -440,6 +440,8 @@ class EndpointPerformanceBenchmarkTest extends TestCase
         ]);
 
         $teacher = User::factory()->create(['role' => UserRole::SCHOOL_ADMIN]);
+        // The admin runs this school (admins may only read their own school's classes).
+        $school->update(['admin_user_id' => $teacher->id]);
         $class = ClassModel::create([
             'school_id' => $school->id,
             'name' => 'Biology AP',

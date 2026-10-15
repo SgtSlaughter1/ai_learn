@@ -131,4 +131,47 @@ class Question extends Model
 
         return $query;
     }
+
+    /**
+     * Update a question's options in place instead of deleting and recreating them,
+     * so options that learners have already picked keep their ids.
+     * Options are matched by id, then by identical text; anything left over is removed.
+     */
+    public function syncOptions(array $options): void
+    {
+        $existing = $this->options()->get();
+        $unmatched = $existing->keyBy('id');
+
+        foreach (array_values($options) as $index => $opt) {
+            $attributes = [
+                'option_text' => $opt['option_text'],
+                'is_correct' => (bool) $opt['is_correct'],
+                'sort_order' => $opt['sort_order'] ?? $index,
+            ];
+
+            $match = null;
+            if (!empty($opt['id']) && is_numeric($opt['id'])) {
+                $match = $unmatched->get((int) $opt['id']);
+            }
+            if (!$match) {
+                $match = $unmatched->first(fn ($o) => trim($o->option_text) === trim($opt['option_text']));
+            }
+
+            if ($match) {
+                $match->update($attributes);
+                $unmatched->forget($match->id);
+            } else {
+                $this->options()->create($attributes);
+            }
+        }
+
+        // Removed options: answers that pointed at them keep their marks; the link is nulled by the FK.
+        if ($unmatched->isNotEmpty()) {
+            QuestionOption::whereIn('id', $unmatched->keys())->delete();
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Class Cohorts & Roster Management
+    // ──────────────────────────────────────────────────────────────────────────
 }
