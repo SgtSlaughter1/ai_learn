@@ -234,12 +234,13 @@ export async function getCachedUserProfile(): Promise<CachedUserProfile | undefi
 // ── Stats ──
 
 export async function getPendingSyncCount(): Promise<number> {
-    const [attempts, progress, gamification] = await Promise.all([
+    const [attempts, progress, gamification, adminQueue] = await Promise.all([
         db.quizAttempts.filter(a => !a.synced || (a.synced as any) === 0).count(),
         db.learnerProgress.filter(p => !p.synced || (p.synced as any) === 0).count(),
         db.gamification.filter(g => !g.synced || (g.synced as any) === 0).count(),
+        db.syncQueue.filter(q => !q.synced).count(),
     ]);
-    return attempts + progress + gamification;
+    return attempts + progress + gamification + adminQueue;
 }
 
 // ── Full Offline Preloading with Live Progress ──
@@ -369,6 +370,7 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
             prewarmRoute('/dashboard'),
             prewarmRoute('/subjects'),
             prewarmRoute('/flashcards'),
+            prewarmRoute('/past-questions'),
         ]);
 
         // 2. Fetch and cache subjects catalog

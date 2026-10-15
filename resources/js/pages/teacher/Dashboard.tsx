@@ -14,6 +14,7 @@ import {
     getAdminAuthHeaders,
     ADMIN_DATA_CHANGED_EVENT,
 } from '@/services/AdminOfflineService';
+import { syncAll } from '@/services/SyncService';
 import QuestionBankTab from '@/components/admin/QuestionBankTab';
 import Pagination from '@/components/common/Pagination';
 import { getGradeLevelsForTeacher } from '@/utils/format';
@@ -276,10 +277,25 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                         struggling_learners: toArray<LearnerDiagnostic>(data.struggling_learners),
                         classes: toArray<AdminClassItem>(data.classes),
                     });
+                    try {
+                        localStorage.setItem(`cached_teacher_stats_${selectedClass || 'all'}`, JSON.stringify(data));
+                    } catch {}
                 }
             }
         } catch (e) {
-            console.error('Failed to load teacher stats', e);
+            console.warn('Failed to load teacher stats online, checking local cache:', e);
+            try {
+                const cached = localStorage.getItem(`cached_teacher_stats_${selectedClass || 'all'}`);
+                if (cached) {
+                    const data = JSON.parse(cached);
+                    setStats({
+                        ...data,
+                        top_performers: toArray<Learner>(data.top_performers),
+                        struggling_learners: toArray<LearnerDiagnostic>(data.struggling_learners),
+                        classes: toArray<AdminClassItem>(data.classes),
+                    });
+                }
+            } catch {}
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -372,8 +388,23 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
             fetchQuestions();
         };
 
+        const handleOnline = () => {
+            syncAll().then(() => {
+                fetchStats(true);
+                fetchSubjects();
+                fetchQuestions();
+            });
+        };
+
         window.addEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
-        return () => window.removeEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
+        window.addEventListener('app:sync-completed', handleDataChange);
+        window.addEventListener('online', handleOnline);
+
+        return () => {
+            window.removeEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
+            window.removeEventListener('app:sync-completed', handleDataChange);
+            window.removeEventListener('online', handleOnline);
+        };
     }, [selectedClass]);
 
     useEffect(() => {

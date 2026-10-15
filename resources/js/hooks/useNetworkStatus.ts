@@ -40,16 +40,21 @@ export function useNetworkStatus(): NetworkStatus {
     useEffect(() => {
         const handleOnline = () => {
             setIsOnline(true);
-            // Auto-sync when coming back online
-            setTimeout(() => triggerSync(), 2000);
+            // Auto-sync immediately when coming back online
+            triggerSync();
         };
 
         const handleOffline = () => {
             setIsOnline(false);
         };
 
+        const handleSyncCompleted = () => {
+            refreshPendingCount();
+        };
+
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
+        window.addEventListener('app:sync-completed', handleSyncCompleted);
 
         // Initial pending count
         refreshPendingCount();
@@ -60,6 +65,7 @@ export function useNetworkStatus(): NetworkStatus {
         return () => {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
+            window.removeEventListener('app:sync-completed', handleSyncCompleted);
             clearInterval(interval);
         };
     }, [refreshPendingCount, triggerSync]);

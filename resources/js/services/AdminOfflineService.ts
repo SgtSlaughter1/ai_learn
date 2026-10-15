@@ -40,10 +40,33 @@ export function getAdminAuthHeaders(): Record<string, string> {
 
 // ── Cache Sync Helpers ──
 
+export async function getPendingSyncRecordIds(tableName: string): Promise<Set<string>> {
+    try {
+        const queued = await db.syncQueue
+            .where('table_name')
+            .equals(tableName)
+            .filter(q => !q.synced && q.action !== 'delete')
+            .toArray();
+        const ids = new Set<string>();
+        for (const q of queued) {
+            ids.add(String(q.record_id));
+            const match = q.record_id.match(/(\d{10,})/);
+            if (match) {
+                ids.add(match[1]);
+                ids.add(`temp_${match[1]}`);
+            }
+        }
+        return ids;
+    } catch {
+        return new Set();
+    }
+}
+
 export async function cacheAdminLearners(serverLearners: Learner[]): Promise<Learner[]> {
     try {
         const existing = await db.adminLearners.toArray();
-        const pendingSyncItems = existing.filter(l => l._pendingSync);
+        const validPendingIds = await getPendingSyncRecordIds('adminLearners');
+        const pendingSyncItems = existing.filter(l => Boolean((l as any)._pendingSync) && validPendingIds.has(String(l.id)));
         const pendingDeletions = await db.syncQueue
             .where('table_name')
             .equals('adminLearners')
@@ -77,9 +100,14 @@ export async function getCachedAdminLearners(): Promise<Learner[]> {
             .filter(q => q.action === 'delete' && !q.synced)
             .toArray();
         const deletedIds = new Set(pendingDeletions.map(d => String(d.record_id)));
+        const validPendingIds = await getPendingSyncRecordIds('adminLearners');
 
         const learners = await db.adminLearners.toArray();
-        return learners.filter(l => !deletedIds.has(String(l.id)));
+        return learners.filter(l => {
+            if (deletedIds.has(String(l.id))) return false;
+            if ((l as any)._pendingSync && !validPendingIds.has(String(l.id))) return false;
+            return true;
+        });
     } catch {
         return [];
     }
@@ -88,7 +116,8 @@ export async function getCachedAdminLearners(): Promise<Learner[]> {
 export async function cacheAdminSchools(serverSchools: SchoolItem[]): Promise<SchoolItem[]> {
     try {
         const existing = await db.adminSchools.toArray();
-        const pendingSyncItems = existing.filter(s => (s as any)._pendingSync);
+        const validPendingIds = await getPendingSyncRecordIds('adminSchools');
+        const pendingSyncItems = existing.filter(s => Boolean((s as any)._pendingSync) && validPendingIds.has(String(s.id)));
         const pendingDeletions = await db.syncQueue
             .where('table_name')
             .equals('adminSchools')
@@ -121,9 +150,14 @@ export async function getCachedAdminSchools(): Promise<SchoolItem[]> {
             .filter(q => q.action === 'delete' && !q.synced)
             .toArray();
         const deletedIds = new Set(pendingDeletions.map(d => String(d.record_id)));
+        const validPendingIds = await getPendingSyncRecordIds('adminSchools');
 
         const schools = await db.adminSchools.toArray();
-        return schools.filter(s => !deletedIds.has(String(s.id)));
+        return schools.filter(s => {
+            if (deletedIds.has(String(s.id))) return false;
+            if ((s as any)._pendingSync && !validPendingIds.has(String(s.id))) return false;
+            return true;
+        });
     } catch {
         return [];
     }
@@ -132,7 +166,8 @@ export async function getCachedAdminSchools(): Promise<SchoolItem[]> {
 export async function cacheAdminClasses(serverClasses: ClassItem[]): Promise<ClassItem[]> {
     try {
         const existing = await db.adminClasses.toArray();
-        const pendingSyncItems = existing.filter(c => (c as any)._pendingSync);
+        const validPendingIds = await getPendingSyncRecordIds('adminClasses');
+        const pendingSyncItems = existing.filter(c => Boolean((c as any)._pendingSync) && validPendingIds.has(String(c.id)));
         const pendingDeletions = await db.syncQueue
             .where('table_name')
             .equals('adminClasses')
@@ -165,9 +200,14 @@ export async function getCachedAdminClasses(): Promise<ClassItem[]> {
             .filter(q => q.action === 'delete' && !q.synced)
             .toArray();
         const deletedIds = new Set(pendingDeletions.map(d => String(d.record_id)));
+        const validPendingIds = await getPendingSyncRecordIds('adminClasses');
 
         const classes = await db.adminClasses.toArray();
-        return classes.filter(c => !deletedIds.has(String(c.id)));
+        return classes.filter(c => {
+            if (deletedIds.has(String(c.id))) return false;
+            if ((c as any)._pendingSync && !validPendingIds.has(String(c.id))) return false;
+            return true;
+        });
     } catch {
         return [];
     }
@@ -176,7 +216,8 @@ export async function getCachedAdminClasses(): Promise<ClassItem[]> {
 export async function cacheAdminQuestions(serverQuestions: QuestionItem[]): Promise<QuestionItem[]> {
     try {
         const existing = await db.adminQuestions.toArray();
-        const pendingSyncItems = existing.filter(q => (q as any)._pendingSync);
+        const validPendingIds = await getPendingSyncRecordIds('adminQuestions');
+        const pendingSyncItems = existing.filter(q => Boolean((q as any)._pendingSync) && validPendingIds.has(String(q.id)));
         const pendingDeletions = await db.syncQueue
             .where('table_name')
             .equals('adminQuestions')
@@ -184,7 +225,7 @@ export async function cacheAdminQuestions(serverQuestions: QuestionItem[]): Prom
             .toArray();
         const deletedIds = new Set(pendingDeletions.map(d => String(d.record_id)));
 
-        const filteredServerItems = serverQuestions.filter(q => !deletedIds.has(String(q.id)));
+        const filteredServerItems = serverQuestions.filter(s => !deletedIds.has(String(s.id)));
 
         await db.adminQuestions.clear();
         if (filteredServerItems.length > 0) {
@@ -209,9 +250,14 @@ export async function getCachedAdminQuestions(): Promise<QuestionItem[]> {
             .filter(q => q.action === 'delete' && !q.synced)
             .toArray();
         const deletedIds = new Set(pendingDeletions.map(d => String(d.record_id)));
+        const validPendingIds = await getPendingSyncRecordIds('adminQuestions');
 
         const questions = await db.adminQuestions.toArray();
-        return questions.filter(q => !deletedIds.has(String(q.id)));
+        return questions.filter(q => {
+            if (deletedIds.has(String(q.id))) return false;
+            if ((q as any)._pendingSync && !validPendingIds.has(String(q.id))) return false;
+            return true;
+        });
     } catch {
         return [];
     }
@@ -220,7 +266,8 @@ export async function getCachedAdminQuestions(): Promise<QuestionItem[]> {
 export async function cacheAdminSubjects(serverSubjects: SubjectItem[]): Promise<SubjectItem[]> {
     try {
         const existing = await db.subjects.toArray();
-        const pendingSyncItems = existing.filter(s => (s as any)._pendingSync);
+        const validPendingIds = await getPendingSyncRecordIds('subjects');
+        const pendingSyncItems = existing.filter(s => Boolean((s as any)._pendingSync) && validPendingIds.has(String(s.id)));
         const pendingDeletions = await db.syncQueue
             .where('table_name')
             .equals('subjects')
@@ -276,10 +323,15 @@ export async function getCachedAdminSubjects(): Promise<SubjectItem[]> {
             .filter(q => q.action === 'delete' && !q.synced)
             .toArray();
         const deletedIds = new Set(pendingDeletions.map(d => String(d.record_id)));
+        const validPendingIds = await getPendingSyncRecordIds('subjects');
 
         const cached = await db.subjects.toArray();
         return cached
-            .filter(c => !deletedIds.has(String(c.id)))
+            .filter(c => {
+                if (deletedIds.has(String(c.id))) return false;
+                if ((c as any)._pendingSync && !validPendingIds.has(String(c.id))) return false;
+                return true;
+            })
             .map(c => ({
                 id: c.id,
                 school_id: c.school_id,
@@ -299,7 +351,8 @@ export async function getCachedAdminSubjects(): Promise<SubjectItem[]> {
 export async function cacheAdminTopics(serverTopics: TopicItem[]): Promise<TopicItem[]> {
     try {
         const existing = await db.topics.toArray();
-        const pendingSyncItems = existing.filter(t => (t as any)._pendingSync);
+        const validPendingIds = await getPendingSyncRecordIds('topics');
+        const pendingSyncItems = existing.filter(t => Boolean((t as any)._pendingSync) && validPendingIds.has(String(t.id)));
         const pendingDeletions = await db.syncQueue
             .where('table_name')
             .equals('topics')
@@ -355,13 +408,18 @@ export async function getCachedAdminTopics(subjectId?: number): Promise<TopicIte
             .filter(q => q.action === 'delete' && !q.synced)
             .toArray();
         const deletedIds = new Set(pendingDeletions.map(d => String(d.record_id)));
+        const validPendingIds = await getPendingSyncRecordIds('topics');
 
         const cached = subjectId
             ? await db.topics.where('subject_id').equals(subjectId).toArray()
             : await db.topics.toArray();
 
         return cached
-            .filter(t => !deletedIds.has(String(t.id)))
+            .filter(t => {
+                if (deletedIds.has(String(t.id))) return false;
+                if ((t as any)._pendingSync && !validPendingIds.has(String(t.id))) return false;
+                return true;
+            })
             .map(t => ({
                 id: t.id,
                 subject_id: t.subject_id,
@@ -381,7 +439,8 @@ export async function getCachedAdminTopics(subjectId?: number): Promise<TopicIte
 export async function cacheAdminSchoolAdmins(serverAdmins: SchoolAdminItem[]): Promise<SchoolAdminItem[]> {
     try {
         const existing = await db.adminSchoolAdmins.toArray();
-        const pendingSyncItems = existing.filter(a => (a as any)._pendingSync);
+        const validPendingIds = await getPendingSyncRecordIds('adminSchoolAdmins');
+        const pendingSyncItems = existing.filter(a => Boolean((a as any)._pendingSync) && validPendingIds.has(String(a.id)));
         const pendingDeletions = await db.syncQueue
             .where('table_name')
             .equals('adminSchoolAdmins')
@@ -414,9 +473,14 @@ export async function getCachedAdminSchoolAdmins(): Promise<SchoolAdminItem[]> {
             .filter(q => q.action === 'delete' && !q.synced)
             .toArray();
         const deletedIds = new Set(pendingDeletions.map(d => String(d.record_id)));
+        const validPendingIds = await getPendingSyncRecordIds('adminSchoolAdmins');
 
         const admins = await db.adminSchoolAdmins.toArray();
-        return admins.filter(a => !deletedIds.has(String(a.id)));
+        return admins.filter(a => {
+            if (deletedIds.has(String(a.id))) return false;
+            if ((a as any)._pendingSync && !validPendingIds.has(String(a.id))) return false;
+            return true;
+        });
     } catch {
         return [];
     }
@@ -425,7 +489,8 @@ export async function getCachedAdminSchoolAdmins(): Promise<SchoolAdminItem[]> {
 export async function cacheAdminTeachers(serverTeachers: TeacherItem[]): Promise<TeacherItem[]> {
     try {
         const existing = await db.adminTeachers.toArray();
-        const pendingSyncItems = existing.filter(t => (t as any)._pendingSync);
+        const validPendingIds = await getPendingSyncRecordIds('adminTeachers');
+        const pendingSyncItems = existing.filter(t => Boolean((t as any)._pendingSync) && validPendingIds.has(String(t.id)));
         const pendingDeletions = await db.syncQueue
             .where('table_name')
             .equals('adminTeachers')
@@ -458,9 +523,14 @@ export async function getCachedAdminTeachers(): Promise<TeacherItem[]> {
             .filter(q => q.action === 'delete' && !q.synced)
             .toArray();
         const deletedIds = new Set(pendingDeletions.map(d => String(d.record_id)));
+        const validPendingIds = await getPendingSyncRecordIds('adminTeachers');
 
         const teachers = await db.adminTeachers.toArray();
-        return teachers.filter(t => !deletedIds.has(String(t.id)));
+        return teachers.filter(t => {
+            if (deletedIds.has(String(t.id))) return false;
+            if ((t as any)._pendingSync && !validPendingIds.has(String(t.id))) return false;
+            return true;
+        });
     } catch {
         return [];
     }

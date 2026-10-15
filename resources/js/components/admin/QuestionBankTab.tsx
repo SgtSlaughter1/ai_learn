@@ -78,6 +78,14 @@ export default function QuestionBankTab({
     const [extractedQuestions, setExtractedQuestions] = useState<ExtractedQuestion[]>([]);
     const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
 
+    useEffect(() => {
+        const handleOnline = () => {
+            onRefresh();
+        };
+        window.addEventListener('online', handleOnline);
+        return () => window.removeEventListener('online', handleOnline);
+    }, [onRefresh]);
+
     const openBulkModal = () => {
         setBulkStep('input');
         setExtractedQuestions([]);

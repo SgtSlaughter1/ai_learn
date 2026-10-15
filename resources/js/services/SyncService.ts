@@ -132,6 +132,39 @@ async function syncGamification(): Promise<number> {
 import { db } from '../db/database';
 import { getAdminAuthHeaders, notifyAdminDataChanged } from './AdminOfflineService';
 
+async function cleanUpTempRecord(tableObj: any, recordId: string) {
+    if (!tableObj || !recordId) return;
+    try {
+        // 1. Delete by exact string record_id
+        await tableObj.delete(recordId);
+
+        // 2. Extract numeric timestamp (e.g., "temp_q_1760518385123" -> 1760518385123)
+        const match = recordId.match(/(\d{10,})/);
+        if (match) {
+            const num = Number(match[1]);
+            if (!isNaN(num)) {
+                await tableObj.delete(num);
+            }
+            // 3. Delete "temp_${timestamp}" (used by teacher/admin/learner forms)
+            await tableObj.delete(`temp_${match[1]}`);
+        }
+
+        // 4. Clean up any lingering optimistic records flagged _pendingSync
+        const pendingItems = await tableObj.filter((r: any) => Boolean(r._pendingSync)).toArray();
+        for (const item of pendingItems) {
+            if (
+                item.id === recordId ||
+                String(item.id).includes(match ? match[1] : recordId) ||
+                (item.record_id && item.record_id === recordId)
+            ) {
+                await tableObj.delete(item.id);
+            }
+        }
+    } catch (e) {
+        console.warn('[SyncService] Cleanup temp record error:', e);
+    }
+}
+
 async function syncAdminQueue(): Promise<number> {
     try {
         const queueItems = await db.syncQueue.filter(item => !item.synced).toArray();
@@ -152,10 +185,12 @@ async function syncAdminQueue(): Promise<number> {
                         const tableObj = (db as any)[item.table_name];
                         if (tableObj) {
                             if (item.action === 'insert' && item.record_id.startsWith('temp_')) {
-                                await tableObj.delete(item.record_id);
+                                await cleanUpTempRecord(tableObj, item.record_id);
                                 const saved = data.learner || data.subject || data.question || data.class || data.school || data.admin || data.teacher || data.topic || data.data;
                                 if (saved) {
-                                    await tableObj.put(saved);
+                                    await tableObj.put({ ...saved, _pendingSync: false });
+                                } else if (Array.isArray(data.questions)) {
+                                    await tableObj.bulkPut(data.questions.map((q: any) => ({ ...q, _pendingSync: false })));
                                 }
                             } else if (item.action === 'delete') {
                                 const key = isNaN(Number(item.record_id)) ? item.record_id : Number(item.record_id);
@@ -222,6 +257,11 @@ export async function syncAll(): Promise<{ synced: number; errors: number }> {
         totalSynced = attemptSynced + progressSynced + gamificationSynced + adminSynced;
     } finally {
         syncInProgress = false;
+        // Unconditionally notify all listening pages that sync completed
+        notifyAdminDataChanged();
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('app:sync-completed', { detail: { synced: totalSynced, errors: totalErrors } }));
+        }
     }
 
     return { synced: totalSynced, errors: totalErrors };
@@ -252,8 +292,14 @@ export function stopAutoSync(): void {
 }
 
 function handleOnlineSync(): void {
-    // Small delay to ensure connection is stable
-    setTimeout(() => syncAll(), 2000);
+    // 1. Immediately trigger sync upon reconnection
+    syncAll();
+    // 2. Secondary follow-up after 1.5s to ensure connection stability
+    setTimeout(() => {
+        if (navigator.onLine) {
+            syncAll();
+        }
+    }, 1500);
 }
 
 // ── Sync status type ──

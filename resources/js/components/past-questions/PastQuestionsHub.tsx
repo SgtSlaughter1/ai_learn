@@ -10,6 +10,7 @@ import { ExamSimulationModal } from './ExamSimulationModal';
 import { ExamResultModal } from './ExamResultModal';
 import { BookOpen, Timer, Lock, ArrowRight, CheckCircle2, AlertCircle, HelpCircle } from 'lucide-react';
 import { usePage } from '@inertiajs/react';
+import { db } from '@/db/database';
 
 export const PastQuestionsHub: React.FC = () => {
     const pageProps = usePage<any>().props;
@@ -53,9 +54,86 @@ export const PastQuestionsHub: React.FC = () => {
                 if (data.data.exams?.length > 0) {
                     setSelectedExam(data.data.exams[0].code);
                 }
+
+                try {
+                    localStorage.setItem('cached_past_questions_meta', JSON.stringify(data.data));
+                } catch {}
             }
         } catch (err) {
-            console.error('Error fetching meta:', err);
+            console.warn('Error fetching meta online, checking local cache:', err);
+            try {
+                const cached = localStorage.getItem('cached_past_questions_meta');
+                if (cached) {
+                    const data = JSON.parse(cached);
+                    setExams(data.exams || []);
+                    setSubjects(data.subjects || []);
+                    setTotalQuestions(data.total_questions || 0);
+                    if (data.exams?.length > 0) {
+                        setSelectedExam(data.exams[0].code);
+                    }
+                    return;
+                }
+            } catch {}
+
+            // Offline fallback defaults if cache is fresh
+            const defaultExams: ExamMeta[] = [
+                {
+                    code: 'jamb',
+                    name: 'JAMB UTME',
+                    fullName: 'Joint Admissions and Matriculation Board',
+                    description: 'Full CBT simulation with authentic JAMB scoring system.',
+                    badge: 'UTME Prep',
+                    color: '#10b981',
+                    gradient: 'from-emerald-500 to-teal-700',
+                    bgLight: 'bg-emerald-50',
+                    questionCount: 400,
+                    defaultDurationMinutes: 120,
+                    defaultQuestionCount: 60,
+                },
+                {
+                    code: 'waec',
+                    name: 'WAEC SSCE',
+                    fullName: 'West African Senior School Certificate',
+                    description: 'West African Examination Council standard past questions.',
+                    badge: 'SSCE Prep',
+                    color: '#3b82f6',
+                    gradient: 'from-blue-500 to-indigo-700',
+                    bgLight: 'bg-blue-50',
+                    questionCount: 350,
+                    defaultDurationMinutes: 90,
+                    defaultQuestionCount: 50,
+                },
+                {
+                    code: 'neco',
+                    name: 'NECO SSCE',
+                    fullName: 'National Examinations Council',
+                    description: 'National Examinations Council practice questions.',
+                    badge: 'Senior High',
+                    color: '#f59e0b',
+                    gradient: 'from-amber-500 to-orange-700',
+                    bgLight: 'bg-amber-50',
+                    questionCount: 280,
+                    defaultDurationMinutes: 90,
+                    defaultQuestionCount: 50,
+                },
+            ];
+            setExams(defaultExams);
+            setSelectedExam('jamb');
+
+            // Load subjects from Dexie
+            db.subjects.toArray().then((dbSubs) => {
+                if (dbSubs.length > 0) {
+                    setSubjects(
+                        dbSubs.map((s) => ({
+                            id: s.id,
+                            name: s.name,
+                            slug: s.slug,
+                            questions_count: 50,
+                            available_exams: ['jamb', 'waec', 'neco'],
+                        }))
+                    );
+                }
+            }).catch(() => {});
         }
     };
 
@@ -78,40 +156,102 @@ export const PastQuestionsHub: React.FC = () => {
                 params.append('subject', subjectToUse);
             }
 
-            const res = await fetch(`/api/v1/past-questions/questions?${params.toString()}`);
-            const data = await res.json().catch(() => null);
+            let loadedQuestions: PastQuestionItem[] = [];
 
-            if (!res.ok || !data?.success || !data?.data || data.data.length === 0) {
-                setErrorToast(`No questions found for ${selectedExam.toUpperCase()} with the selected criteria.`);
+            if (navigator.onLine) {
+                try {
+                    const res = await fetch(`/api/v1/past-questions/questions?${params.toString()}`);
+                    const data = await res.json().catch(() => null);
+                    if (res.ok && data?.success && data?.data && data.data.length > 0) {
+                        loadedQuestions = data.data;
+                        try {
+                            localStorage.setItem(`cached_pq_${selectedExam}_${subjectToUse}`, JSON.stringify(data.data));
+                        } catch {}
+                    }
+                } catch {
+                    // Fall back to offline
+                }
+            }
+
+            // Fallback 1: Local cache
+            if (loadedQuestions.length === 0) {
+                try {
+                    const cached = localStorage.getItem(`cached_pq_${selectedExam}_${subjectToUse}`);
+                    if (cached) {
+                        loadedQuestions = JSON.parse(cached);
+                    }
+                } catch {}
+            }
+
+            // Fallback 2: Dexie offline quizzes
+            if (loadedQuestions.length === 0) {
+                try {
+                    const dexieQuizzes = await db.quizzes.toArray();
+                    const questionsPool = dexieQuizzes.flatMap((q) => q.questions || []);
+                    if (questionsPool.length > 0) {
+                        loadedQuestions = questionsPool.slice(0, Number(questionLimit)).map((q, idx) => ({
+                            id: q.id || idx + 1,
+                            exam_code: selectedExam,
+                            exam_year: 2024,
+                            question_number: idx + 1,
+                            question_text: q.question_text,
+                            difficulty: q.difficulty || 'medium',
+                            explanation: q.explanation || undefined,
+                            topic: { id: q.topic_id || 1, name: 'Core Assessment' },
+                            subject: { id: 1, name: subjectToUse !== 'all' ? subjectToUse : 'General Studies', slug: 'general-studies' },
+                            options: (q.options || []).map((opt, oIdx) => ({
+                                id: opt.id || oIdx + 1,
+                                key: String.fromCharCode(65 + oIdx),
+                                label: String.fromCharCode(65 + oIdx),
+                                option_text: opt.option_text,
+                                is_correct: opt.is_correct ?? (oIdx === 0),
+                            })),
+                        }));
+                    }
+                } catch {}
+            }
+
+            if (loadedQuestions.length === 0) {
+                setErrorToast(`No questions found for ${selectedExam.toUpperCase()} with the selected criteria. Please connect online once to download the question bank.`);
                 setIsLoadingQuestions(false);
                 return;
             }
 
-            setActiveQuestions(data.data);
+            setActiveQuestions(loadedQuestions);
 
             if (mode === 'simulation') {
-                const simRes = await fetch('/api/v1/past-questions/simulation/start', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        exam_code: selectedExam,
-                        mode: 'simulation',
-                        total_questions: data.data.length,
-                    }),
-                });
-                const simData = await simRes.json().catch(() => null);
-                if (simData?.success) {
-                    setSimulationId(simData.data.simulation_id);
+                if (navigator.onLine) {
+                    try {
+                        const simRes = await fetch('/api/v1/past-questions/simulation/start', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                exam_code: selectedExam,
+                                mode: 'simulation',
+                                total_questions: loadedQuestions.length,
+                            }),
+                        });
+                        const simData = await simRes.json().catch(() => null);
+                        if (simData?.success) {
+                            setSimulationId(simData.data.simulation_id);
+                        } else {
+                            setSimulationId(Date.now());
+                        }
+                    } catch {
+                        setSimulationId(Date.now());
+                    }
+                } else {
+                    setSimulationId(Date.now());
                 }
             }
 
             setActiveMode(mode);
         } catch (err) {
             console.error('Error starting session:', err);
-            setErrorToast('Failed to load exam questions. Please verify your connection.');
+            setErrorToast('Failed to load exam questions.');
         } finally {
             setIsLoadingQuestions(false);
         }

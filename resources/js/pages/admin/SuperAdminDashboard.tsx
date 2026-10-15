@@ -16,6 +16,7 @@ import {
     getAdminAuthHeaders,
     ADMIN_DATA_CHANGED_EVENT,
 } from '@/services/AdminOfflineService';
+import { syncAll } from '@/services/SyncService';
 import SchoolsTab from '@/components/admin/SchoolsTab';
 import SchoolAdminsTab from '@/components/admin/SchoolAdminsTab';
 import SubjectsTab from '@/components/admin/SubjectsTab';
@@ -262,8 +263,21 @@ export default function SuperAdminDashboard() {
             fetchQuestions();
         };
 
+        const handleOnline = () => {
+            syncAll().then(() => {
+                handleDataChange();
+            });
+        };
+
         window.addEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
-        return () => window.removeEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
+        window.addEventListener('app:sync-completed', handleDataChange);
+        window.addEventListener('online', handleOnline);
+
+        return () => {
+            window.removeEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
+            window.removeEventListener('app:sync-completed', handleDataChange);
+            window.removeEventListener('online', handleOnline);
+        };
     }, []);
 
     return (

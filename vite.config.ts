@@ -50,7 +50,7 @@ export default defineConfig({
                         // 1. Cache app routes (both HTML and Inertia JSON) — covers all main nav pages
                         // ignoreVary is critical: Inertia adds Vary: X-Inertia to responses
                         urlPattern: ({ url }) => {
-                            return /^\/(dashboard|admin|teacher|subjects|quizzes|flashcards|login|)(\/.*)?$/.test(url.pathname);
+                            return /^\/(dashboard|admin|teacher|subjects|quizzes|flashcards|past-questions|exam-prep|login|)(\/.*)?$/.test(url.pathname);
                         },
                         handler: 'NetworkFirst',
                         options: {
@@ -84,6 +84,7 @@ export default defineConfig({
                                             else if (p.startsWith('/quizzes/attempts/')) component = 'quizzes/Result';
                                             else if (p.startsWith('/quizzes/')) component = 'quizzes/Show';
                                             else if (p.startsWith('/flashcards')) component = 'Flashcards/Index';
+                                            else if (p.startsWith('/past-questions') || p.startsWith('/exam-prep')) component = 'ExamPrep/PastQuestionsIndex';
 
                                             const inertiaPayload = {
                                                 component: component,

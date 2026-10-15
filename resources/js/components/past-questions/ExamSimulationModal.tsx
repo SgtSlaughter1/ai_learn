@@ -6,6 +6,7 @@ import 'katex/dist/katex.min.css';
 import { PastQuestionItem, ExamSimulationResult } from '../../types/past-questions';
 import { formatMathText, extractLiteratureContext } from '../../utils/mathFormatter';
 import { BookOpen, Monitor, Keyboard } from 'lucide-react';
+import { db } from '@/db/database';
 
 interface Props {
     questions: PastQuestionItem[];
@@ -155,35 +156,95 @@ export const ExamSimulationModal: React.FC<Props> = ({
         setIsSubmitting(true);
         setErrorMessage(null);
 
+        const submitPayload = {
+            simulation_id: simulationId,
+            exam_code: examCode,
+            exam_year: currentQ?.exam_year,
+            time_spent_seconds: timeSpentSeconds,
+            answers: selectedAnswers,
+            question_ids: questions.map(q => q.id),
+        };
+
+        if (navigator.onLine) {
+            try {
+                const res = await fetch('/api/v1/past-questions/simulation/submit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify(submitPayload),
+                });
+
+                const data = await res.json().catch(() => null);
+                if (res.ok && data?.success) {
+                    onFinish(data.data);
+                    return;
+                }
+            } catch (err) {
+                console.warn('Online submit failed, falling back to local grading and queue:', err);
+            }
+        }
+
+        // ── 100% Offline-First Fallback: Local grading and queue ──
         try {
-            const res = await fetch('/api/v1/past-questions/simulation/submit', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                body: JSON.stringify({
-                    simulation_id: simulationId,
-                    exam_code: examCode,
-                    exam_year: currentQ?.exam_year,
-                    time_spent_seconds: timeSpentSeconds,
-                    answers: selectedAnswers,
-                    question_ids: questions.map(q => q.id),
-                }),
+            let correctCount = 0;
+            const detailed = questions.map((q) => {
+                const selectedId = selectedAnswers[q.id] ?? null;
+                const correctOpt = q.options.find(o => o.is_correct) || q.options[0];
+                const isCorrect = selectedId !== null && selectedId === correctOpt?.id;
+                if (isCorrect) correctCount++;
+                const selectedOpt = q.options.find(o => o.id === selectedId);
+                return {
+                    question_id: q.id,
+                    question_number: q.question_number,
+                    question_text: q.question_text,
+                    passage_text: q.passage_text,
+                    image_url: q.image_url,
+                    explanation: q.explanation,
+                    topic: q.topic || { id: 1, name: 'Core Assessment' },
+                    subject: q.subject || { id: 1, name: subjectTitle, slug: 'subject' },
+                    selected_option_id: selectedId,
+                    selected_option_text: selectedOpt?.option_text,
+                    correct_option_id: correctOpt?.id || 1,
+                    correct_option_text: correctOpt?.option_text,
+                    is_correct: isCorrect,
+                    options: q.options,
+                };
             });
 
-            const data = await res.json().catch(() => null);
-            if (res.ok && data?.success) {
-                onFinish(data.data);
-            } else {
-                const msg = data?.message || (data?.errors ? Object.values(data.errors).flat().join(', ') : 'Submission failed. Please try again.');
-                setErrorMessage(msg);
-                setIsSubmitting(false);
-            }
-        } catch (err) {
-            console.error('Submit error:', err);
-            setErrorMessage('Failed to submit exam attempt. Please check your network connection.');
+            const totalQ = questions.length;
+            const scorePct = totalQ > 0 ? Math.round((correctCount / totalQ) * 100) : 0;
+
+            // Queue for background sync when back online
+            await db.syncQueue.add({
+                table_name: 'pastQuestionSimulations',
+                action: 'insert',
+                record_id: `sim_${simulationId || Date.now()}`,
+                endpoint: '/api/v1/past-questions/simulation/submit',
+                method: 'POST',
+                payload: JSON.stringify(submitPayload),
+                created_at: new Date().toISOString(),
+                synced: false,
+                retries: 0,
+            });
+
+            onFinish({
+                exam_code: examCode,
+                exam_year: currentQ?.exam_year,
+                total_questions: totalQ,
+                correct_answers: correctCount,
+                wrong_answers: totalQ - correctCount,
+                score_percentage: scorePct,
+                time_spent_seconds: timeSpentSeconds,
+                topic_breakdown: [],
+                weak_topics: [],
+                detailed_results: detailed,
+            });
+        } catch (localErr) {
+            console.error('Offline grade error:', localErr);
+            setErrorMessage('Failed to grade exam attempt locally.');
             setIsSubmitting(false);
         }
     };

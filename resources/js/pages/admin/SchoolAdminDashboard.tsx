@@ -20,6 +20,7 @@ import {
     getAdminAuthHeaders,
     ADMIN_DATA_CHANGED_EVENT,
 } from '@/services/AdminOfflineService';
+import { syncAll } from '@/services/SyncService';
 import TeachersTab from '@/components/admin/TeachersTab';
 import ClassesTab from '@/components/admin/ClassesTab';
 import LearnersTab from '@/components/admin/LearnersTab';
@@ -337,8 +338,21 @@ export default function SchoolAdminDashboard() {
             fetchQuestions();
         };
 
+        const handleOnline = () => {
+            syncAll().then(() => {
+                handleDataChange();
+            });
+        };
+
         window.addEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
-        return () => window.removeEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
+        window.addEventListener('app:sync-completed', handleDataChange);
+        window.addEventListener('online', handleOnline);
+
+        return () => {
+            window.removeEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
+            window.removeEventListener('app:sync-completed', handleDataChange);
+            window.removeEventListener('online', handleOnline);
+        };
     }, []);
 
     const schoolName = stats?.school?.name || (schools[0]?.name) || 'School';
