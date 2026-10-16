@@ -50,7 +50,7 @@ export function OfflineReadinessBadge({ isOnline, className = '', compact = fals
                     <span>Offline</span>
                     {!compact && (
                         <span className="text-[10px] text-amber-600/80 dark:text-amber-400/80 font-normal">
-                            • {cachedSubjectsCount > 0 ? `${cachedSubjectsCount} subjects saved` : 'Saved data active'}
+                            • {cachedSubjectsCount > 0 ? `${cachedSubjectsCount} items saved` : 'Saved data active'}
                         </span>
                     )}
                 </button>
@@ -66,8 +66,8 @@ export function OfflineReadinessBadge({ isOnline, className = '', compact = fals
                         </div>
                         <p className="text-[var(--color-muted)] leading-relaxed">
                             {cachedSubjectsCount > 0
-                                ? `You have ${cachedSubjectsCount} subjects and quizzes cached in local device storage. Practice attempts will sync automatically when reconnected.`
-                                : 'You are currently disconnected. Previously viewed subjects and quizzes remain available offline.'}
+                                ? `You have ${cachedSubjectsCount} curriculum items and records saved in local device storage. Practice attempts, questions, and changes will sync automatically when reconnected.`
+                                : 'You are currently disconnected. All downloaded curriculum, quizzes, and dashboard records remain available offline.'}
                         </p>
                     </div>
                 )}
@@ -83,7 +83,7 @@ export function OfflineReadinessBadge({ isOnline, className = '', compact = fals
                     className={`inline-flex items-center gap-1.5 rounded-full font-semibold bg-sky-500/10 border border-sky-500/25 text-sky-700 dark:text-sky-300 shadow-2xs select-none transition-all ${
                         compact ? 'px-2 py-0.5 text-[11px]' : 'px-3 py-1 text-xs gap-2'
                     }`}
-                    title={`Downloading offline curriculum (${percent}%)`}
+                    title={`Downloading offline pack (${percent}%)`}
                 >
                     {/* Pulsing Signal Beacon */}
                     <span className="relative flex h-2 w-2 shrink-0">
@@ -93,7 +93,7 @@ export function OfflineReadinessBadge({ isOnline, className = '', compact = fals
 
                     <span className="flex items-center gap-1">
                         <CloudDownload className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-sky-500 shrink-0`} />
-                        <span>{compact ? 'Caching' : 'Preparing pack'}</span>
+                        <span>{compact ? 'Syncing' : 'Preparing offline pack'}</span>
                         {totalSubjects > 0 && (
                             <span className="tabular-nums font-bold text-[10px]">
                                 ({completedSubjects}/{totalSubjects})
@@ -129,7 +129,7 @@ export function OfflineReadinessBadge({ isOnline, className = '', compact = fals
                     className={`inline-flex items-center gap-1.5 rounded-full font-semibold bg-emerald-500/10 border border-emerald-500/25 text-emerald-700 dark:text-emerald-400 shadow-2xs select-none transition-all cursor-pointer hover:bg-emerald-500/15 ${
                         compact ? 'px-2 py-0.5 text-[11px]' : 'px-3 py-1 text-xs'
                     }`}
-                    title="All curriculum and quizzes are stored offline - click for details"
+                    title="Curriculum, quizzes, questions, and records are stored offline - click for details"
                     aria-label="Offline Ready"
                 >
                     <CheckCircle2 className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-emerald-500 shrink-0`} />
@@ -151,7 +151,7 @@ export function OfflineReadinessBadge({ isOnline, className = '', compact = fals
                             <span>Full Offline Storage Ready</span>
                         </div>
                         <p className="text-[var(--color-muted)] leading-relaxed">
-                            {cachedSubjectsCount} subjects, quizzes, and revision cards are saved locally on your device. You can turn off your internet connection anytime to study offline with 0 mobile data.
+                            Curriculum, quizzes, questions, and dashboard records are safely stored in your device storage. You can turn off your internet connection anytime to work offline with 0 mobile data.
                         </p>
                     </div>
                 )}

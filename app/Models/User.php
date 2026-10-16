@@ -111,7 +111,19 @@ class User extends Authenticatable
         return $this->role === UserRole::SCHOOL_ADMIN || $this->role === 'school_admin';
     }
 
+    /**
+     * In this application, 'isAdmin' is strictly reserved for School Administrators.
+     * Platform/Super administrators use 'isSuperAdmin()' or 'isPlatformAdmin()'.
+     */
     public function isAdmin(): bool
+    {
+        return $this->isSchoolAdmin();
+    }
+
+    /**
+     * Helper to check if user has any administrative privileges (Super Admin or School Admin).
+     */
+    public function isAnyAdmin(): bool
     {
         return $this->isPlatformAdmin() || $this->isSchoolAdmin();
     }

@@ -9,7 +9,7 @@ class AiExtractQuestionsRequest extends FormRequest
     public function authorize(): bool
     {
         $user = $this->user();
-        return $user && ($user->isAdmin() || $user->isTeacher() || $user->isSchoolAdmin());
+        return $user && ($user->isAnyAdmin() || $user->isTeacher());
     }
 
     public function rules(): array

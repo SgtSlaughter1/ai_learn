@@ -23,6 +23,7 @@ import {
     ADMIN_DATA_CHANGED_EVENT,
 } from '@/services/AdminOfflineService';
 import { syncAll } from '@/services/SyncService';
+import { preloadFullOfflineData } from '@/services/OfflineService';
 import OverviewTab from '@/components/admin/OverviewTab';
 import SchoolsTab from '@/components/admin/SchoolsTab';
 import SchoolAdminsTab from '@/components/admin/SchoolAdminsTab';
@@ -372,6 +373,9 @@ export default function Dashboard() {
         fetchLearners();
         fetchSubjects();
         fetchQuestions();
+        if (navigator.onLine) {
+            preloadFullOfflineData(isSuperAdmin ? 'platform_admin' : 'school_admin');
+        }
 
         const handleDataChange = () => {
             fetchStats();
@@ -389,6 +393,7 @@ export default function Dashboard() {
         const handleOnline = () => {
             syncAll().then(() => {
                 handleDataChange();
+                preloadFullOfflineData(isSuperAdmin ? 'platform_admin' : 'school_admin', true);
             });
         };
 

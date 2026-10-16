@@ -21,7 +21,7 @@ class FlashcardController extends Controller
     public function showFlashcardsPage(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
-        if ($user?->isAdmin()) {
+        if ($user?->isAnyAdmin()) {
             return redirect('/admin/dashboard');
         }
         return Inertia::render('Flashcards/Index');

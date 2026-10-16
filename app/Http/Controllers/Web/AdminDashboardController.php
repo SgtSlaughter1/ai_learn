@@ -74,7 +74,7 @@ class AdminDashboardController extends Controller
     public function getAdminStats(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user || !$user->isAdmin()) {
+        if (!$user || !$user->isAnyAdmin()) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
 
@@ -2115,7 +2115,7 @@ class AdminDashboardController extends Controller
     private function authorizeAdmin(Request $request): void
     {
         $user = $request->user();
-        if (!$user || !$user->isAdmin()) {
+        if (!$user || !$user->isAnyAdmin()) {
             abort(403, 'Forbidden');
         }
     }
@@ -2123,7 +2123,7 @@ class AdminDashboardController extends Controller
     private function authorizeAdminOrTeacher(Request $request): void
     {
         $user = $request->user();
-        if (!$user || (!$user->isAdmin() && !$user->isTeacher())) {
+        if (!$user || (!$user->isAnyAdmin() && !$user->isTeacher())) {
             abort(403, 'Forbidden. Admin or Teacher access required.');
         }
     }

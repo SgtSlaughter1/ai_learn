@@ -26,7 +26,7 @@ class SubjectWebController extends Controller
     public function showSubjectsPage(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
-        if ($user?->isAdmin()) {
+        if ($user?->isAnyAdmin()) {
             return redirect('/admin/dashboard');
         }
         if ($user && $user->isLearner() && !$user->hasSchoolAccess()) {
@@ -49,7 +49,7 @@ class SubjectWebController extends Controller
     public function showGeneralKnowledgePage(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
-        if ($user?->isAdmin()) {
+        if ($user?->isAnyAdmin()) {
             return redirect('/admin/dashboard');
         }
         return Inertia::render('GeneralKnowledge/Index');
@@ -69,7 +69,7 @@ class SubjectWebController extends Controller
     public function showSubject(Request $request, string $slug): Response|RedirectResponse
     {
         $user = $request->user();
-        if ($user?->isAdmin()) {
+        if ($user?->isAnyAdmin()) {
             return redirect('/admin/dashboard');
         }
         return Inertia::render('Subjects/Show', [

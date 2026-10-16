@@ -27,7 +27,7 @@ class QuizWebController extends Controller
     public function showQuiz(Request $request, Quiz $quiz): Response|RedirectResponse
     {
         $user = $request->user();
-        if ($user?->isAdmin()) {
+        if ($user?->isAnyAdmin()) {
             return redirect('/admin/dashboard');
         }
         return Inertia::render('quizzes/Show', [

@@ -21,8 +21,8 @@ class DashboardController extends Controller
     public function showLearnerDashboard(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
-        if ($user?->isAdmin()) {
-            return redirect('/admin/dashboard');
+        if ($user?->isAnyAdmin()) {
+            return redirect($user->isSuperAdmin() ? '/super-admin/dashboard' : '/admin/dashboard');
         }
         if ($user?->isTeacher()) {
             return redirect('/teacher/dashboard');

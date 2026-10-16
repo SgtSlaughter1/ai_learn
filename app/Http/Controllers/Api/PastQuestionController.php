@@ -239,7 +239,7 @@ class PastQuestionController extends Controller
 
         $user = Auth::user() ?? $request->user();
         $isGuest = !$user;
-        $isAdmin = $user && method_exists($user, 'isAdmin') && $user->isAdmin();
+        $isAdmin = $user && method_exists($user, 'isAnyAdmin') ? $user->isAnyAdmin() : ($user && method_exists($user, 'isAdmin') && $user->isAdmin());
 
         // Always hide answers by default so learners cannot inspect client-side state/HTML
         $hideAnswers = !($isAdmin && $request->boolean('include_answers', false));

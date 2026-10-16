@@ -544,10 +544,14 @@ export default function ChatWidget() {
     const { auth } = usePage<any>().props;
     const user = auth?.user;
     const isTeacher = user?.role === 'teacher';
-    const isSchoolAdmin = user?.role === 'school_admin' || user?.role === 'platform_admin';
-    const isStaffOrEducator = isSchoolAdmin || isTeacher;
+    const isSuperAdmin = user?.role === 'platform_admin';
+    const isAdmin = user?.role === 'school_admin';
+    const isSchoolAdmin = isAdmin;
+    const isStaffOrEducator = isSuperAdmin || isAdmin || isTeacher;
 
-    const defaultGreeting = isSchoolAdmin
+    const defaultGreeting = isSuperAdmin
+        ? `Hello ${user?.name || 'Super Admin'}! I am your AI Platform Copilot. Ask me about system-wide school metrics, question banks, curriculum coverage, or administrative assistance.`
+        : isAdmin
         ? `Hello ${user?.name || 'Admin'}! I am your AI School Administrator Copilot. Ask me to summarize student scores, suggest student support plans, draft exam questions, or create lesson outlines.`
         : isTeacher
         ? `Hello ${user?.name || 'Teacher'}! I am your AI Educator Copilot. Ask me to draft exam questions, plan revision lessons, create lesson outlines, or check class scores.`
@@ -787,7 +791,7 @@ export default function ChatWidget() {
             <button
                 onClick={() => setChatOpen(!chatOpen)}
                 className="group h-14 w-14 rounded-full bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white flex items-center justify-center shadow-[0_8px_24px_rgba(24,59,43,0.35)] dark:shadow-[0_8px_24px_rgba(46,125,82,0.4)] hover:shadow-[0_12px_28px_rgba(24,59,43,0.45)] hover:scale-105 active:scale-95 transition-all duration-300 motion-reduce:transform-none cursor-pointer focus:outline-none focus:ring-4 focus:ring-[var(--color-primary-20)]"
-                title={isStaffOrEducator ? (isTeacher ? "Open AI Educator Copilot" : "Open AI School Copilot") : "Open AI Study Companion"}
+                title={isStaffOrEducator ? (isSuperAdmin ? "Open AI Platform Copilot" : isTeacher ? "Open AI Educator Copilot" : "Open AI School Copilot") : "Open AI Study Companion"}
                 aria-label="Toggle AI Study Assistant"
             >
                 {chatOpen ? (

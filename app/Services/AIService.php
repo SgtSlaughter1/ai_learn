@@ -290,7 +290,7 @@ Rules:
      */
     public function generateChatResponse(User $user, string $message, array $history): string
     {
-        if ($user->isAdmin() || $user->isTeacher()) {
+        if ($user->isAnyAdmin() || $user->isTeacher()) {
             return $this->generateAdminChatResponse($user, $message, $history);
         }
 

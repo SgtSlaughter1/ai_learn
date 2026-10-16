@@ -28,7 +28,11 @@ class LoginController extends Controller
             $user = Auth::user();
             $role = $user->role instanceof \BackedEnum ? $user->role->value : ($user->role ?? 'learner');
 
-            $redirectPath = $user->isAdmin() ? '/admin/dashboard' : ($user->isTeacher() ? '/teacher/dashboard' : '/dashboard');
+            $redirectPath = $user->isSuperAdmin()
+                ? '/super-admin/dashboard'
+                : ($user->isAdmin()
+                    ? '/school-admin/dashboard'
+                    : ($user->isTeacher() ? '/teacher/dashboard' : '/dashboard'));
 
             if ($request->wantsJson()) {
                 return response()->json([

@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import ChatWidget from '@/components/ui/ChatWidget';
 import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt';
 import UserProfileMenu from '@/components/ui/UserProfileMenu';
-import { preloadFullOfflineCurriculum } from '@/services/OfflineService';
+import { preloadFullOfflineData } from '@/services/OfflineService';
 import { OfflineReadinessBadge } from '@/components/dashboard/OfflineReadinessBadge';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 
@@ -47,9 +47,12 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
     }, []);
 
     useEffect(() => {
-        // Trigger background curriculum preloading whenever user is online
-        preloadFullOfflineCurriculum();
-    }, []);
+        // Trigger background offline data preloading for user role whenever online
+        if (isOnline) {
+            const role = auth?.user?.role || (isLearner ? 'learner' : isTeacher ? 'teacher' : 'admin');
+            preloadFullOfflineData(role);
+        }
+    }, [isOnline, auth?.user?.role]);
 
     const activeRouteClass = (path: string) => {
         const currentUrl = url || (typeof window !== 'undefined' ? (window.location.pathname + window.location.search) : '');
@@ -84,8 +87,8 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
     const isSuperAdmin = auth?.user?.role === 'platform_admin';
     const isSchoolAdmin = auth?.user?.role === 'school_admin';
     const isTeacher = auth?.user?.role === 'teacher';
-    const isAdmin = isSuperAdmin || isSchoolAdmin;
-    const isLearner = !isAdmin && !isTeacher;
+    const isAdmin = isSchoolAdmin;
+    const isLearner = !isSuperAdmin && !isAdmin && !isTeacher;
     const hasSchool = auth?.user?.has_school_access !== false;
 
     return (
@@ -99,7 +102,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                     <span>AceDrill</span>
                 </Link>
                 <div className="flex items-center gap-2">
-                    {isLearner && <OfflineReadinessBadge isOnline={isOnline} compact />}
+                    <OfflineReadinessBadge isOnline={isOnline} compact />
                     <UserProfileMenu user={auth?.user} />
                 </div>
             </div>
@@ -122,15 +125,25 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
 
                     {/* Navigation Items */}
                     <nav className="mt-4 space-y-1">
-                        {isAdmin ? (
+                        {isSuperAdmin ? (
                             <Link
                                 href="/admin/dashboard"
-                                className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/admin/dashboard') || activeRouteClass('/super-admin/dashboard') || activeRouteClass('/school-admin/dashboard')}`}
+                                className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/admin/dashboard') || activeRouteClass('/super-admin/dashboard')}`}
                             >
                                 <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
                                 </svg>
-                                {isSuperAdmin ? 'Super Admin Portal' : 'School Admin Portal'}
+                                Super Admin Portal
+                            </Link>
+                        ) : isAdmin ? (
+                            <Link
+                                href="/admin/dashboard"
+                                className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/admin/dashboard') || activeRouteClass('/school-admin/dashboard')}`}
+                            >
+                                <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                                </svg>
+                                School Admin Portal
                             </Link>
                         ) : isTeacher ? (
                             <Link
@@ -224,7 +237,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                         )}
                     </div>
                     <div className="flex items-center gap-3 shrink-0 ml-4">
-                        {isLearner && <OfflineReadinessBadge isOnline={isOnline} />}
+                        <OfflineReadinessBadge isOnline={isOnline} />
                         <UserProfileMenu user={auth?.user} />
                     </div>
                 </header>
@@ -303,7 +316,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                             <span>Questions</span>
                         </Link>
                     </div>
-                ) : isAdmin ? (
+                ) : (isSuperAdmin || isAdmin) ? (
                     <div className="grid grid-cols-4 items-center justify-around w-full max-w-md mx-auto">
                         <Link
                             href={isSuperAdmin ? '/super-admin/dashboard' : '/admin/dashboard'}

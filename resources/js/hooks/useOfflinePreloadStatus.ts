@@ -11,8 +11,15 @@ export function useOfflinePreloadStatus(): OfflinePreloadProgress {
 
     useEffect(() => {
         // Hydrate cached count from local Dexie database if not already preloading
-        db.subjects.count()
-            .then((count) => {
+        Promise.all([
+            db.subjects.count().catch(() => 0),
+            db.adminQuestions.count().catch(() => 0),
+            db.adminClasses.count().catch(() => 0),
+            db.adminLearners.count().catch(() => 0),
+            db.quizzes.count().catch(() => 0),
+        ])
+            .then(([subCount, qCount, cCount, lCount, quizCount]) => {
+                const count = subCount + qCount + cCount + lCount + quizCount;
                 if (count > 0) {
                     setStatus((prev) => ({
                         ...prev,

@@ -39,18 +39,18 @@ class TeacherDashboardController extends Controller
     public function showTeacherDashboard(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
-        if (!$user || (!$user->isAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
+        if (!$user || (!$user->isAnyAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
             abort(403);
         }
 
         // If user is a school admin or platform admin and not explicitly a teacher, route to admin portal
-        if ($user->isAdmin() && !$user->isTeacher() && !$request->has('as_teacher')) {
-            return redirect('/admin/dashboard');
+        if ($user->isAnyAdmin() && !$user->isTeacher() && !$request->has('as_teacher')) {
+            return redirect($user->isSuperAdmin() ? '/super-admin/dashboard' : '/admin/dashboard');
         }
 
         // Get teacher's school
         $teacherProfile = $user->teacherProfile()->with('school')->first();
-        $school = $teacherProfile?->school ?? ($user->isAdmin() ? $user->primarySchool() : null);
+        $school = $teacherProfile?->school ?? ($user->isAnyAdmin() ? $user->primarySchool() : null);
 
         if (!$school) {
             // Teacher without a school — show setup page
@@ -131,12 +131,12 @@ class TeacherDashboardController extends Controller
     public function getTeacherStats(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user || (!$user->isAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
+        if (!$user || (!$user->isAnyAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
             abort(403);
         }
 
         $teacherProfile = $user->teacherProfile()->first();
-        $school = $teacherProfile?->school ?? ($user->isAdmin() ? $user->primarySchool() : null);
+        $school = $teacherProfile?->school ?? ($user->isAnyAdmin() ? $user->primarySchool() : null);
 
         if (!$school) {
             return response()->json([
@@ -213,7 +213,7 @@ class TeacherDashboardController extends Controller
 
     private function resolveTeacherClassIds(User $user, School $school): Collection
     {
-        if ($user->isAdmin()) {
+        if ($user->isAnyAdmin()) {
             return ClassModel::where('school_id', $school->id)->where('is_active', true)->pluck('id');
         }
 
@@ -292,7 +292,7 @@ class TeacherDashboardController extends Controller
 
         return ClassModel::where('school_id', $school->id)
             ->where('is_active', true)
-            ->when(!$user->isAdmin(), fn ($q) => $q->whereHas('memberships', fn ($m) => $m->where('user_id', $user->id)->where('role', 'teacher')))
+            ->when(!$user->isAnyAdmin(), fn ($q) => $q->whereHas('memberships', fn ($m) => $m->where('user_id', $user->id)->where('role', 'teacher')))
             ->with(['program:id,name,code,slug'])
             ->withCount(['learnerUsers as learner_count'])
             ->get()
@@ -446,12 +446,12 @@ class TeacherDashboardController extends Controller
     public function saveLearner(SaveTeacherLearnerRequest $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user || (!$user->isAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
+        if (!$user || (!$user->isAnyAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
             abort(403);
         }
 
         $teacherProfile = $user->teacherProfile()->first();
-        $school = $teacherProfile?->school ?? ($user->isAdmin() ? $user->primarySchool() : null);
+        $school = $teacherProfile?->school ?? ($user->isAnyAdmin() ? $user->primarySchool() : null);
 
         if (!$school) {
             return response()->json(['error' => 'No school associated with this account.'], 400);
@@ -533,7 +533,7 @@ class TeacherDashboardController extends Controller
             ->where('role', 'teacher')
             ->first();
 
-        if (!$membership && !$user->isAdmin()) {
+        if (!$membership && !$user->isAnyAdmin()) {
             return response()->json(['error' => 'Access denied'], 403);
         }
 
@@ -619,12 +619,12 @@ class TeacherDashboardController extends Controller
     public function getClassDiagnostics(Request $request, int $classId): JsonResponse
     {
         $user = $request->user();
-        if (!$user || (!$user->isAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
+        if (!$user || (!$user->isAnyAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
             abort(403);
         }
 
         // Verify access
-        if (!$user->isAdmin()) {
+        if (!$user->isAnyAdmin()) {
             $membership = ClassMembership::where('class_id', $classId)
                 ->where('user_id', $user->id)
                 ->where('role', 'teacher')
@@ -658,7 +658,7 @@ class TeacherDashboardController extends Controller
     public function assignIntervention(AssignInterventionRequest $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user || (!$user->isAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
+        if (!$user || (!$user->isAnyAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
 

@@ -21,6 +21,7 @@ import {
     ADMIN_DATA_CHANGED_EVENT,
 } from '@/services/AdminOfflineService';
 import { syncAll } from '@/services/SyncService';
+import { preloadFullOfflineData } from '@/services/OfflineService';
 import TeachersTab from '@/components/admin/TeachersTab';
 import ClassesTab from '@/components/admin/ClassesTab';
 import LearnersTab from '@/components/admin/LearnersTab';
@@ -327,6 +328,9 @@ export default function SchoolAdminDashboard() {
         fetchLearners();
         fetchSubjects();
         fetchQuestions();
+        if (navigator.onLine) {
+            preloadFullOfflineData('school_admin');
+        }
 
         const handleDataChange = () => {
             fetchStats();
@@ -341,6 +345,7 @@ export default function SchoolAdminDashboard() {
         const handleOnline = () => {
             syncAll().then(() => {
                 handleDataChange();
+                preloadFullOfflineData('school_admin', true);
             });
         };
 

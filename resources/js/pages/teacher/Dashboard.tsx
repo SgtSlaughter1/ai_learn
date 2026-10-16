@@ -15,6 +15,7 @@ import {
     ADMIN_DATA_CHANGED_EVENT,
 } from '@/services/AdminOfflineService';
 import { syncAll } from '@/services/SyncService';
+import { preloadFullOfflineData } from '@/services/OfflineService';
 import QuestionBankTab from '@/components/admin/QuestionBankTab';
 import Pagination from '@/components/common/Pagination';
 import { getGradeLevelsForTeacher } from '@/utils/format';
@@ -304,8 +305,11 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
 
     const handleManualRefresh = async () => {
         await fetchStats(true);
+        if (navigator.onLine) {
+            preloadFullOfflineData('teacher', true);
+        }
         setToastMessage({
-            text: 'Dashboard statistics refreshed with live data!',
+            text: 'Dashboard statistics refreshed & offline pack updated!',
             type: 'success',
         });
     };
@@ -393,6 +397,7 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                 fetchStats(true);
                 fetchSubjects();
                 fetchQuestions();
+                preloadFullOfflineData('teacher', true);
             });
         };
 

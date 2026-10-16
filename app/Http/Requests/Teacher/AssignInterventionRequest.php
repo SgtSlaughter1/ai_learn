@@ -9,7 +9,7 @@ class AssignInterventionRequest extends FormRequest
     public function authorize(): bool
     {
         $user = $this->user();
-        return $user && ($user->isAdmin() || $user->isTeacher() || $user->teacherProfile()->exists());
+        return $user && ($user->isAnyAdmin() || $user->isTeacher() || $user->teacherProfile()->exists());
     }
 
     public function rules(): array
