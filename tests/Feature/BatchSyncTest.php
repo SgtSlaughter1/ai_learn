@@ -142,4 +142,13 @@ class BatchSyncTest extends TestCase
         $this->assertGreaterThan(0, $xpAfterSync);
         $this->assertEquals($xpAfterSync, XpTransaction::where('user_id', $this->learner->id)->sum('amount'));
     }
+
+    public function test_session_check_reports_guests_without_an_error(): void
+    {
+        // Public pages run the sync engine too: a guest gets a normal answer, not a 401.
+        $this->getJson('/api/v1/sync/session')->assertOk()->assertJsonPath('user_id', null);
+
+        $this->actingAs($this->learner)->getJson('/api/v1/sync/session')
+            ->assertOk()->assertJsonPath('user_id', $this->learner->id);
+    }
 }

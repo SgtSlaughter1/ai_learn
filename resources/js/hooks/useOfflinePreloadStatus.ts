@@ -2,35 +2,28 @@ import { useState, useEffect } from 'react';
 import {
     subscribeOfflinePreload,
     getOfflinePreloadState,
+    rememberedReadiness,
     OfflinePreloadProgress,
 } from '@/services/OfflineService';
-import { db } from '@/db/database';
 
 export function useOfflinePreloadStatus(): OfflinePreloadProgress {
-    const [status, setStatus] = useState<OfflinePreloadProgress>(() => getOfflinePreloadState());
+    const [status, setStatus] = useState<OfflinePreloadProgress>(() => {
+        const state = getOfflinePreloadState();
+        // Data downloaded on an earlier visit counts as ready until this visit's refresh finishes.
+        const remembered = rememberedReadiness();
+        return remembered && !state.isPreloading && !state.savedSummary
+            ? { ...state, isComplete: true, savedSummary: remembered.summary, savedDetail: remembered.detail }
+            : state;
+    });
 
-    useEffect(() => {
-        // Hydrate cached count from local Dexie database if not already preloading
-        db.subjects.count()
-            .then((count) => {
-                if (count > 0) {
-                    setStatus((prev) => ({
-                        ...prev,
-                        cachedSubjectsCount: count,
-                        isComplete: prev.isComplete || (!prev.isPreloading && count > 0),
-                    }));
-                }
-            })
-            .catch(() => {});
-
-        const unsubscribe = subscribeOfflinePreload((newStatus) => {
-            setStatus(newStatus);
-        });
-
-        return () => {
-            unsubscribe();
-        };
-    }, []);
+    useEffect(() => subscribeOfflinePreload((next) => {
+        setStatus((prev) => ({
+            ...next,
+            // Keep the remembered summary while a fresh download runs.
+            savedSummary: next.savedSummary ?? prev.savedSummary,
+            savedDetail: next.savedDetail ?? prev.savedDetail,
+        }));
+    }), []);
 
     return status;
 }

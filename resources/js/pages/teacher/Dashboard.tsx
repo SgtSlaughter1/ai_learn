@@ -10,7 +10,6 @@ import {
     cacheAdminTopics,
     getCachedAdminTopics,
     executeAdminAction,
-    getCachedAdminLearners,
     getAdminAuthHeaders,
     ADMIN_DATA_CHANGED_EVENT,
 } from '@/services/AdminOfflineService';
@@ -25,6 +24,7 @@ import {
     SkeletonDistribution,
     SkeletonTable,
 } from '@/components/common/Skeleton';
+import { recallResponse, rememberResponse } from '@/services/OfflineService';
 
 export interface DiagnosticTopic {
     id: number;
@@ -1738,32 +1738,27 @@ function ClassLearnersPanel({
             return;
         }
 
+        // Offline: the roster saved the last time it loaded (or by the offline download).
+        const showSavedRoster = () => {
+            const saved = recallResponse<{ learners?: any[]; class?: { name?: string } }>(`teacher_roster_${selectedClass}`);
+            setLearners(saved?.learners || []);
+            if (saved?.class?.name) setClassName(saved.class.name);
+        };
+
         const loadLearners = async () => {
             setLoading(true);
             try {
-                if (!navigator.onLine) {
-                    const cached = await getCachedAdminLearners();
-                    const matched = cached.filter((l: any) => String(l.class_id) === String(selectedClass));
-                    setLearners(matched as any[]);
-                    return;
-                }
                 const res = await fetch(`/api/v1/teacher/classes/${selectedClass}/learners`, {
                     headers: getAdminAuthHeaders(),
                     credentials: 'include',
                 });
-                if (res.ok) {
-                    const data = await res.json();
-                    setLearners(data.learners || []);
-                    setClassName(data.class?.name || '');
-                } else {
-                    const cached = await getCachedAdminLearners();
-                    const matched = cached.filter((l: any) => String(l.class_id) === String(selectedClass));
-                    setLearners(matched as any[]);
-                }
+                if (!res.ok) throw new Error(`Roster request failed: ${res.status}`);
+                const data = await res.json();
+                setLearners(data.learners || []);
+                setClassName(data.class?.name || '');
+                rememberResponse(`teacher_roster_${selectedClass}`, data);
             } catch {
-                const cached = await getCachedAdminLearners();
-                const matched = cached.filter((l: any) => String(l.class_id) === String(selectedClass));
-                setLearners(matched as any[]);
+                showSavedRoster();
             } finally {
                 setLoading(false);
             }

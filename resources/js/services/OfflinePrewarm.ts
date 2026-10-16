@@ -1,4 +1,6 @@
 import { homePathsForRole, saveSnapshot, type AuthUser } from './OfflineNavigation';
+import { preloadFullOfflineCurriculum, runPreloadSteps } from './OfflineService';
+import { staffPreloadSteps } from './AdminOfflineService';
 
 /**
  * Keeps what the device needs to open the app offline up to date, while online:
@@ -70,3 +72,19 @@ export async function removeLegacyCaches(): Promise<void> {
 export function resetPrewarm(): void {
     prewarmedFor = null;
 }
+
+const STAFF_DETAIL = 'Your school\'s classes, learners, subjects and question bank are saved on this device. Changes you make offline sync automatically when you reconnect.';
+
+/**
+ * Download what this user needs to keep working offline, with progress shown in the
+ * header badge: learners get their curriculum and past questions; teachers and admins
+ * get their school's records, picked from the abilities the server granted.
+ */
+export function prepareOfflineData(role: string | undefined, can: Record<string, boolean> | null | undefined): void {
+    if (role === 'learner' || !can?.accessTeaching) {
+        void preloadFullOfflineCurriculum();
+        return;
+    }
+    void runPreloadSteps(staffPreloadSteps(can, role === 'teacher'), 'School data saved', STAFF_DETAIL);
+}
+

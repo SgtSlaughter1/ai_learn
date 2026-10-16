@@ -6,6 +6,11 @@ export interface CachedSubject {
     id: number;
     school_id?: number | null;
     school_name?: string | null;
+    class_id?: number | null;
+    class_name?: string | null;
+    class_grade_level?: string | null;
+    progress_percent?: number;
+    topics_count?: number;
     is_general_knowledge?: boolean;
     name: string;
     slug: string;

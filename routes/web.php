@@ -177,7 +177,6 @@ Route::middleware('auth')->group(function () {
         Route::get('/gamification/leaderboard', [GamificationController::class, 'leaderboard']);
 
         // Offline Sync Endpoints (called by SyncService.ts when coming back online)
-        Route::get('/sync/session', [SyncController::class, 'session']);
         Route::post('/sync/batch', [SyncController::class, 'batch'])->middleware('throttle:sync-batch');
 
         Route::post('/progress/sync', [SyncController::class, 'syncProgress']);
@@ -539,4 +538,8 @@ Route::get('/run-past-questions-seed', function () use ($guardMaintenance) {
 
 // Feedback Submission Web Endpoint
 Route::post('/api/v1/feedback', [\App\Http\Controllers\Api\FeedbackController::class, 'store'])->middleware('throttle:public-feedback');
+
+// Who is signed in (null for guests). Public so the sync engine can ask on any page
+// without the browser logging a 401 for signed-out visitors.
+Route::get('/api/v1/sync/session', [\App\Http\Controllers\Web\SyncController::class, 'session'])->middleware('throttle:api');
 

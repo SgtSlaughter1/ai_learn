@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import ChatWidget from '@/components/ui/ChatWidget';
 import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt';
 import UserProfileMenu from '@/components/ui/UserProfileMenu';
-import { preloadFullOfflineCurriculum } from '@/services/OfflineService';
+import { prepareOfflineData } from '@/services/OfflinePrewarm';
 import { OfflineReadinessBadge } from '@/components/dashboard/OfflineReadinessBadge';
 import { SyncStatus } from '@/components/sync/SyncStatus';
 import { SessionExpiredBanner } from '@/components/sync/SessionExpiredBanner';
@@ -20,6 +20,7 @@ interface User {
 interface PageProps {
     auth: {
         user: User;
+        can?: Record<string, boolean> | null;
     };
     [key: string]: any;
 }
@@ -49,8 +50,8 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
     }, []);
 
     useEffect(() => {
-        // Trigger background curriculum preloading whenever user is online
-        preloadFullOfflineCurriculum();
+        // Download what this role needs offline (curriculum for learners, school data for staff).
+        prepareOfflineData(auth?.user?.role, auth?.can);
     }, []);
 
     const activeRouteClass = (path: string) => {
@@ -87,7 +88,6 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
     const isSchoolAdmin = auth?.user?.role === 'school_admin';
     const isTeacher = auth?.user?.role === 'teacher';
     const isAdmin = isSuperAdmin || isSchoolAdmin;
-    const isLearner = !isAdmin && !isTeacher;
     const hasSchool = auth?.user?.has_school_access !== false;
 
     return (
@@ -101,7 +101,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                     <span>AceDrill</span>
                 </Link>
                 <div className="flex items-center gap-2">
-                    <SyncStatus compact fallback={isLearner ? <OfflineReadinessBadge isOnline={isOnline} compact /> : null} />
+                    <SyncStatus compact fallback={<OfflineReadinessBadge isOnline={isOnline} compact />} />
                     <UserProfileMenu user={auth?.user} />
                 </div>
             </div>
@@ -226,7 +226,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                         )}
                     </div>
                     <div className="flex items-center gap-3 shrink-0 ml-4">
-                        <SyncStatus fallback={isLearner ? <OfflineReadinessBadge isOnline={isOnline} /> : null} />
+                        <SyncStatus fallback={<OfflineReadinessBadge isOnline={isOnline} />} />
                         <UserProfileMenu user={auth?.user} />
                     </div>
                 </header>

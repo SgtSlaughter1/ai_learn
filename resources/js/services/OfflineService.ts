@@ -25,6 +25,53 @@ export async function cacheSubjects(subjects: CachedSubject[]): Promise<void> {
     await db.subjects.bulkPut(subjects.map(s => ({ ...s, cached_at: new Date().toISOString() })));
 }
 
+/** One shape for subjects saved on the device, keeping the class they belong to. */
+export function toCachedSubject(s: any): CachedSubject {
+    return {
+        id: s.id,
+        school_id: s.school_id,
+        school_name: s.school_name,
+        class_id: s.class_id ?? null,
+        class_name: s.class_name ?? null,
+        class_grade_level: s.class_grade_level ?? null,
+        is_general_knowledge: s.is_general_knowledge,
+        name: s.name,
+        slug: s.slug,
+        description: s.description,
+        status: 'published',
+        sort_order: 0,
+        progress_percent: s.progress_percent || 0,
+        topics_count: s.topics_count || 0,
+        cached_at: new Date().toISOString(),
+    };
+}
+
+// ── Last server answer per screen (instant first paint) ──
+
+const RESPONSE_PREFIX = 'cached_learner_';
+
+/**
+ * Remember the last server answer for a screen so it can be shown on the very first
+ * paint next time (then refreshed), instead of a generic copy that changes a moment
+ * later. Per-user: cleared on sign-out.
+ */
+export function rememberResponse(key: string, data: unknown): void {
+    try {
+        localStorage.setItem(RESPONSE_PREFIX + key, JSON.stringify(data));
+    } catch {
+        // Storage full or unavailable: the screen just loads normally.
+    }
+}
+
+export function recallResponse<T>(key: string): T | null {
+    try {
+        const raw = localStorage.getItem(RESPONSE_PREFIX + key);
+        return raw ? (JSON.parse(raw) as T) : null;
+    } catch {
+        return null;
+    }
+}
+
 export async function getCachedSubjects(): Promise<CachedSubject[]> {
     return db.subjects.toArray();
 }
@@ -259,23 +306,28 @@ export async function getFailedSyncCount(userId: string | null = getSyncUser()):
 
 // ── Full Offline Preloading with Live Progress ──
 
+/** Progress of downloading what this user needs offline (any role). */
 export interface OfflinePreloadProgress {
     isPreloading: boolean;
     isComplete: boolean;
-    totalSubjects: number;
-    completedSubjects: number;
+    total: number;
+    completed: number;
     percent: number;
-    currentSubjectName?: string;
-    cachedSubjectsCount: number;
+    currentLabel?: string;
+    /** Short line once ready, e.g. "22 subjects saved" or "School data saved". */
+    savedSummary: string | null;
+    /** One sentence on what's available offline, for the badge's details. */
+    savedDetail: string | null;
 }
 
 let preloadState: OfflinePreloadProgress = {
     isPreloading: false,
     isComplete: false,
-    totalSubjects: 0,
-    completedSubjects: 0,
+    total: 0,
+    completed: 0,
     percent: 0,
-    cachedSubjectsCount: 0,
+    savedSummary: null,
+    savedDetail: null,
 };
 
 type PreloadListener = (state: OfflinePreloadProgress) => void;
@@ -300,6 +352,46 @@ function updatePreloadState(patch: Partial<OfflinePreloadProgress>) {
 
 let hasPreloadedThisSession = false;
 
+const CURRICULUM_DETAIL = 'Your subjects, quizzes and revision cards are saved on this device. Work done offline syncs automatically when you reconnect.';
+
+function curriculumSummary(count: number): string {
+    return `${count} subject${count === 1 ? '' : 's'} saved`;
+}
+
+export interface PreloadStep {
+    label: string;
+    run: () => Promise<unknown>;
+}
+
+/**
+ * Run download steps one after another, reporting progress to the readiness badge.
+ * A failed step is skipped (the rest still download); the summary is remembered so the
+ * badge shows "ready" on later visits without re-downloading first.
+ */
+export async function runPreloadSteps(steps: PreloadStep[], summary: string, detail: string): Promise<void> {
+    if (preloadState.isPreloading || hasPreloadedThisSession || !navigator.onLine || steps.length === 0) return;
+
+    updatePreloadState({ isPreloading: true, isComplete: false, total: steps.length, completed: 0, percent: 0 });
+    for (const [index, step] of steps.entries()) {
+        updatePreloadState({ currentLabel: step.label });
+        try {
+            await step.run();
+        } catch (e) {
+            console.warn(`[OfflineService] Offline download step "${step.label}" failed:`, e);
+        }
+        updatePreloadState({ completed: index + 1, percent: Math.round(((index + 1) / steps.length) * 100) });
+    }
+
+    hasPreloadedThisSession = true;
+    rememberResponse('offline_ready', { summary, detail });
+    updatePreloadState({ isPreloading: false, isComplete: true, savedSummary: summary, savedDetail: detail, currentLabel: undefined });
+}
+
+/** What the badge can show before this visit's download finishes. */
+export function rememberedReadiness(): { summary: string; detail: string } | null {
+    return recallResponse<{ summary: string; detail: string }>('offline_ready');
+}
+
 /**
  * 2-Stage Parallelized Offline Curriculum Preloader
  * Stage 1: Instant cache of routes & subjects index (< 1.5s)
@@ -312,7 +404,7 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
     updatePreloadState({
         isPreloading: true,
         isComplete: false,
-        cachedSubjectsCount: initialCachedCount,
+        savedSummary: initialCachedCount > 0 ? curriculumSummary(initialCachedCount) : null,
     });
 
     try {
@@ -348,31 +440,17 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
         }
 
         // Save subjects index to Dexie
-        await db.subjects.bulkPut(
-            subjectsList.map((s: any) => ({
-                id: s.id,
-                school_id: s.school_id,
-                school_name: s.school_name,
-                is_general_knowledge: s.is_general_knowledge,
-                name: s.name,
-                slug: s.slug,
-                description: s.description,
-                status: 'published',
-                sort_order: 0,
-                progress_percent: s.progress_percent || 0,
-                topics_count: s.topics_count || 0,
-                cached_at: new Date().toISOString(),
-            }))
-        );
+        await db.subjects.bulkPut(subjectsList.map(toCachedSubject));
 
         const totalSubjects = subjectsList.length;
         let completedSubjects = 0;
 
         updatePreloadState({
-            totalSubjects,
-            completedSubjects: 0,
+            total: totalSubjects,
+            completed: 0,
             percent: 0,
-            cachedSubjectsCount: totalSubjects,
+            savedSummary: curriculumSummary(totalSubjects),
+            savedDetail: CURRICULUM_DETAIL,
         });
 
         // ── STAGE 2: Concurrent Worker Pool for Topics & Quizzes (Pool of 4) ──
@@ -457,9 +535,9 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
             } finally {
                 completedSubjects++;
                 updatePreloadState({
-                    completedSubjects,
+                    completed: completedSubjects,
                     percent: Math.min(100, Math.round((completedSubjects / totalSubjects) * 100)),
-                    currentSubjectName: subject.name,
+                    currentLabel: subject.name,
                 });
             }
         };
@@ -497,8 +575,11 @@ export async function preloadFullOfflineCurriculum(): Promise<void> {
             isPreloading: false,
             isComplete: true,
             percent: 100,
-            completedSubjects: totalSubjects,
+            completed: totalSubjects,
+            savedSummary: curriculumSummary(totalSubjects),
+            savedDetail: CURRICULUM_DETAIL,
         });
+        rememberResponse('offline_ready', { summary: curriculumSummary(totalSubjects), detail: CURRICULUM_DETAIL });
         hasPreloadedThisSession = true;
         console.log('[OfflineService] 2-stage parallel offline curriculum preloading completed.');
 
@@ -579,7 +660,7 @@ export async function clearUserOfflineData(userId: string | null): Promise<void>
 
     try {
         // Per-user dashboard copies kept for offline display.
-        const privatePrefixes = ['cached_dashboard_', 'cached_admin_', 'cached_teacher_'];
+        const privatePrefixes = ['cached_dashboard_', 'cached_admin_', 'cached_teacher_', RESPONSE_PREFIX];
         Object.keys(localStorage)
             .filter(k => privatePrefixes.some(prefix => k.startsWith(prefix)))
             .forEach(k => localStorage.removeItem(k));

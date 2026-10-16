@@ -45,6 +45,14 @@ router.on('before', (event) => {
     const visit = event.detail.visit;
     lastVisit = { url: visit.url.href, method: visit.method };
 
+    // A new version was installed while this tab was open: move to it with one normal
+    // page load at the next visit, rather than reloading in the middle of the user's work.
+    if ((window as any).__acedrillUpdateReady && navigator.onLine && visit.method === 'get' && !visit.prefetch && !visit.only?.length) {
+        event.preventDefault();
+        window.location.assign(visit.url.href);
+        return false;
+    }
+
     if (navigator.onLine || visit.prefetch) return;
 
     // Known offline: skip the request entirely instead of waiting for it to fail.

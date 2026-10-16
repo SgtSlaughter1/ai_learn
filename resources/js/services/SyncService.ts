@@ -76,7 +76,9 @@ async function requestSession(): Promise<{ status: 'ok'; userId: string } | { st
         if (res.status === 401 || res.status === 419) return { status: 'auth' };
         if (!res.ok) return { status: 'offline' };
         const data = await res.json().catch(() => null);
-        return data?.user_id ? { status: 'ok', userId: String(data.user_id) } : { status: 'offline' };
+        if (!data || !('user_id' in data)) return { status: 'offline' };
+        // Reachable, but nobody is signed in on this browser.
+        return data.user_id ? { status: 'ok', userId: String(data.user_id) } : { status: 'auth' };
     } catch {
         return { status: 'offline' };
     }
@@ -545,6 +547,20 @@ export async function sendOrQueue<T = any>(input: {
     return { status: 'queued' };
 }
 
+/**
+ * Whether there's anything to sync under a signed-in session: someone is signed in on
+ * this browser, a sign-out is still to be completed, or unsynced work is stored here.
+ * Guests browsing public pages have none of these, so no session check is made for them.
+ */
+async function hasSessionWork(): Promise<boolean> {
+    if (getSyncUser() !== null || getPendingLogout() !== null) return true;
+    const [queued, attempts] = await Promise.all([
+        db.syncQueue.filter(q => !q.synced && q.status !== 'failed').count(),
+        db.quizAttempts.filter(a => !a.synced && a.sync_status !== 'failed').count(),
+    ]);
+    return queued + attempts > 0;
+}
+
 // ── Main sync orchestrator ──
 
 export async function syncAll(): Promise<{ synced: number; errors: number }> {
@@ -561,6 +577,7 @@ export async function syncAll(): Promise<{ synced: number; errors: number }> {
 
             // Feedback can come from guests, so it is sent before (and without) a session check.
             await flushFeedbackOutbox().catch(() => 0);
+            if (!(await hasSessionWork())) return;
 
             const session = await checkSession();
             const pendingLogout = getPendingLogout();

@@ -1,6 +1,7 @@
 import { db } from '../db/database';
 import { classifyResponse, describeError, enqueue, hasPendingQueueItems } from './SyncQueue';
 import { syncAll } from './SyncService';
+import { rememberResponse, type PreloadStep } from './OfflineService';
 import type {
     Learner,
     SchoolItem,
@@ -670,3 +671,85 @@ export async function executeAdminAction<T = any>(options: {
         };
     }
 }
+
+// ── Offline download for admins and teachers ──
+
+interface StaffAbilities {
+    accessAdmin?: boolean;
+    accessTeaching?: boolean;
+    managePlatform?: boolean;
+}
+
+async function getJson(path: string): Promise<any> {
+    const res = await fetch(path, { headers: getAdminAuthHeaders(), credentials: 'include' });
+    if (!res.ok) throw new Error(`${path} failed: ${res.status}`);
+    return res.json();
+}
+
+/** Fetch a list endpoint and store it with the same cache function its tab uses. */
+function listStep(label: string, path: string, key: string, cache: (items: any[]) => Promise<unknown>): PreloadStep {
+    return {
+        label,
+        run: async () => {
+            const data = await getJson(path);
+            await cache(data.data || data[key] || []);
+        },
+    };
+}
+
+/**
+ * Everything a school admin, platform admin or teacher needs to keep working offline,
+ * chosen from the abilities the server granted (auth.can).
+ */
+export function staffPreloadSteps(can: StaffAbilities, isTeacher: boolean): PreloadStep[] {
+    const steps: PreloadStep[] = [];
+
+    if (can.accessAdmin) {
+        steps.push({
+            label: 'Dashboard statistics',
+            run: async () => {
+                const data = await getJson('/api/v1/admin/stats');
+                localStorage.setItem('cached_admin_stats', JSON.stringify(data.status === 'success' ? data.data : data));
+            },
+        });
+        steps.push(listStep('Schools', '/api/v1/admin/schools', 'schools', cacheAdminSchools));
+        if (can.managePlatform) {
+            steps.push(listStep('School admins', '/api/v1/admin/school-admins', 'school_admins', cacheAdminSchoolAdmins));
+        }
+        steps.push(listStep('Teachers', '/api/v1/admin/teachers', 'teachers', cacheAdminTeachers));
+        steps.push(listStep('Classes', '/api/v1/admin/classes', 'classes', cacheAdminClasses));
+        steps.push(listStep('Learners', '/api/v1/admin/learners', 'learners', cacheAdminLearners));
+    }
+
+    if (isTeacher) {
+        steps.push({
+            label: 'Class statistics and rosters',
+            run: async () => {
+                const stats = await getJson('/api/v1/teacher/stats');
+                localStorage.setItem('cached_teacher_stats_all', JSON.stringify(stats));
+                const classes: Array<{ id: number }> = Array.isArray(stats.classes) ? stats.classes : Object.values(stats.classes ?? {});
+                for (const cls of classes) {
+                    const roster = await getJson(`/api/v1/teacher/classes/${cls.id}/learners`);
+                    rememberResponse(`teacher_roster_${cls.id}`, roster);
+                }
+            },
+        });
+    }
+
+    if (can.accessAdmin || can.accessTeaching) {
+        steps.push({
+            label: 'Subjects and topics',
+            run: async () => {
+                const data = await getJson('/api/v1/admin/subjects');
+                const subjects = data.subjects || data.data || [];
+                await cacheAdminSubjects(subjects);
+                const topics = subjects.flatMap((s: any) => s.topics || []);
+                if (topics.length) await cacheAdminTopics(topics);
+            },
+        });
+        steps.push(listStep('Question bank', '/api/v1/admin/questions', 'questions', cacheAdminQuestions));
+    }
+
+    return steps;
+}
+

@@ -22,9 +22,9 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 class SyncController extends Controller
 {
     /**
-     * Lightweight check the sync engine calls before draining its queue: confirms the
-     * session is still valid, refreshes the XSRF cookie, and tells the client which user
-     * owns the session so it never uploads another user's offline work.
+     * Lightweight check the sync engine calls before draining its queue: says which user
+     * owns the session (null when signed out) so the device never uploads another user's
+     * offline work, and refreshes the XSRF cookie.
      */
     public function session(): JsonResponse
     {
