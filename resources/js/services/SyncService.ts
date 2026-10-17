@@ -291,15 +291,17 @@ export function stopAutoSync(): void {
     window.removeEventListener('online', handleOnlineSync);
 }
 
+let onlineSyncTimeout: ReturnType<typeof setTimeout> | null = null;
+
 function handleOnlineSync(): void {
-    // 1. Immediately trigger sync upon reconnection
-    syncAll();
-    // 2. Secondary follow-up after 1.5s to ensure connection stability
-    setTimeout(() => {
-        if (navigator.onLine) {
+    if (onlineSyncTimeout) clearTimeout(onlineSyncTimeout);
+    // Apply randomized jitter (500ms to 7500ms) to spread traffic across 500+ simultaneous reconnections
+    const jitter = Math.floor(Math.random() * 7000) + 500;
+    onlineSyncTimeout = setTimeout(() => {
+        if (navigator.onLine && !syncInProgress) {
             syncAll();
         }
-    }, 1500);
+    }, jitter);
 }
 
 // ── Sync status type ──

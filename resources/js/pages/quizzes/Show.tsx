@@ -1,6 +1,6 @@
 import { Head, router } from '@inertiajs/react';
 import { useState, useEffect, FormEvent } from 'react';
-import { getFreshQuiz, saveLocalAttempt, cacheQuiz, markAttemptSynced } from '@/services/OfflineService';
+import { getFreshQuiz, saveLocalAttempt, cacheQuiz, markAttemptSynced, verifyOptionHash, findCorrectOptionId } from '@/services/OfflineService';
 import Result from './Result';
 import { QuizHeader } from '@/components/quiz/QuizHeader';
 import { QuestionCard, QuizQuestion } from '@/components/quiz/QuestionCard';
@@ -161,20 +161,36 @@ export default function Show({ quizId }: Props) {
         let calculatedScore = 0;
         const questionsToGrade = activeQuestions.length > 0 ? activeQuestions : quiz.questions.slice(0, 10);
 
-        const answerList = Object.entries(answers).map(([qId, oId]) => {
-            const questionId = parseInt(qId);
-            const question = questionsToGrade.find((q) => q.id === questionId);
-            const correctOption = (question?.options as any[])?.find((o) => o.is_correct);
-            const isCorrect = correctOption ? correctOption.id === oId : false;
-            if (isCorrect) calculatedScore++;
+        const answerList = await Promise.all(
+            questionsToGrade.map(async (question) => {
+                const questionId = question.id;
+                const oId = answers[questionId] ?? null;
 
-            return {
-                question_id: questionId,
-                selected_option_id: oId,
-                is_correct: isCorrect,
-                marks_awarded: isCorrect ? 1 : 0,
-            };
-        });
+                let isCorrect = false;
+                let correctOptId: number | null = null;
+
+                if (question.answer_hash && question.options) {
+                    if (oId) {
+                        isCorrect = await verifyOptionHash(questionId, oId, question.answer_hash);
+                    }
+                    correctOptId = await findCorrectOptionId(questionId, question.options, question.answer_hash);
+                } else {
+                    const correctOption = (question.options as any[])?.find((o) => o.is_correct);
+                    correctOptId = correctOption ? correctOption.id : null;
+                    isCorrect = correctOption && oId ? correctOption.id === oId : false;
+                }
+
+                if (isCorrect) calculatedScore++;
+
+                return {
+                    question_id: questionId,
+                    selected_option_id: oId,
+                    is_correct: isCorrect,
+                    marks_awarded: isCorrect ? 1 : 0,
+                    correct_option_id: correctOptId,
+                };
+            })
+        );
 
         try {
             await cacheQuiz({

@@ -40,8 +40,8 @@ export function useNetworkStatus(): NetworkStatus {
     useEffect(() => {
         const handleOnline = () => {
             setIsOnline(true);
-            // Auto-sync immediately when coming back online
-            triggerSync();
+            // SyncService's handleOnlineSync handles automatic reconnection with randomized jitter.
+            // When complete, the app:sync-completed event updates pendingSync.
         };
 
         const handleOffline = () => {

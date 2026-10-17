@@ -93,28 +93,72 @@ export async function getFreshTopics(
 
 // ── Quizzes ──
 
+/**
+ * Sanitize quiz object before saving or retrieving from IndexedDB so that options NEVER
+ * retain plaintext 'is_correct' flags (neither true nor false), preventing DevTools inspection.
+ */
+export function sanitizeQuizForOffline(quiz: CachedQuiz): CachedQuiz {
+    return {
+        ...quiz,
+        questions: (quiz.questions || []).map((q: any) => ({
+            ...q,
+            options: (q.options || []).map((o: any) => ({
+                id: o.id,
+                option_text: o.option_text,
+                ...(o.sort_order !== undefined ? { sort_order: o.sort_order } : {}),
+            })),
+        })),
+    };
+}
+
 export async function cacheQuiz(quiz: CachedQuiz): Promise<void> {
-    await db.quizzes.put({ ...quiz, cached_at: new Date().toISOString() });
+    // Older payloads/caches carry plaintext is_correct but no answer_hash. Derive the
+    // hash before stripping is_correct, otherwise the quiz could no longer be graded offline.
+    const withHashes: CachedQuiz = {
+        ...quiz,
+        questions: await Promise.all(
+            (quiz.questions || []).map(async (q: any) => {
+                if (q.answer_hash) return q;
+                const correct = (q.options || []).find((o: any) => o.is_correct);
+                if (!correct) return q;
+                try {
+                    return { ...q, answer_hash: await answerHashFor(q.id, correct.id) };
+                } catch {
+                    return q; // crypto.subtle is unavailable outside secure contexts
+                }
+            }),
+        ),
+    };
+    const clean = sanitizeQuizForOffline(withHashes);
+    await db.quizzes.put({ ...clean, cached_at: new Date().toISOString() });
 }
 
 export async function getCachedQuiz(
     id: number | string,
 ): Promise<CachedQuiz | undefined> {
     const numId = Number(id);
+    let quiz: CachedQuiz | undefined;
     if (!isNaN(numId)) {
-        const byNum = await db.quizzes.get(numId);
-        if (byNum) return byNum;
+        quiz = await db.quizzes.get(numId);
     }
-    return db.quizzes.get(String(id) as any);
+    if (!quiz) {
+        quiz = await db.quizzes.get(String(id) as any);
+    }
+    return quiz ? sanitizeQuizForOffline(quiz) : undefined;
 }
 
 export async function getFreshQuiz(
     id: number | string,
 ): Promise<CachedQuiz | null> {
     const cached = await getCachedQuiz(id);
-    if (cached && !isStale(cached.cached_at)) {
+    const hasDirtyOptions = cached?.questions?.some((q: any) =>
+        !q.answer_hash || q.options?.some((o: any) => o.is_correct !== undefined)
+    );
+
+    if (cached && !hasDirtyOptions && !isStale(cached.cached_at)) {
         return cached;
     }
+
     try {
         const numId = Number(id) || id;
         const res = await fetch(`/api/v1/quizzes/${numId}`);
@@ -122,10 +166,33 @@ export async function getFreshQuiz(
         const data = await res.json();
         const quiz: CachedQuiz = data.quiz;
         await cacheQuiz(quiz);
-        return quiz;
+        return sanitizeQuizForOffline(quiz);
     } catch {
         return cached || null;
     }
+}
+
+/**
+ * Automatically cleans any legacy cached quizzes in IndexedDB that may have
+ * stored plaintext is_correct flags.
+ */
+export async function sanitizeExistingCachedQuizzes(): Promise<void> {
+    try {
+        const quizzes = await db.quizzes.toArray();
+        for (const quiz of quizzes) {
+            const hasExposed = quiz.questions?.some((q: any) =>
+                q.options?.some((o: any) => o.is_correct !== undefined)
+            );
+            if (hasExposed) {
+                await cacheQuiz(quiz);
+            }
+        }
+    } catch {}
+}
+
+// Run background sanitization
+if (typeof window !== 'undefined') {
+    sanitizeExistingCachedQuizzes().catch(() => {});
 }
 
 // ── Flashcards ──
@@ -157,6 +224,53 @@ export async function getFreshFlashcards(): Promise<CachedFlashcard[]> {
     } catch {
         return cached;
     }
+}
+
+// ── Quiz Cryptographic Grading Helpers (Offline Safe) ──
+
+/**
+ * Verify whether an option is correct by comparing against the cryptographic salted hash.
+ * This ensures the client never needs plaintext 'is_correct: true' stored in IndexedDB.
+ */
+export async function verifyOptionHash(
+    questionId: number,
+    optionId: number,
+    answerHash?: string | null
+): Promise<boolean> {
+    if (!answerHash || !optionId) return false;
+    try {
+        return (await answerHashFor(questionId, optionId)) === answerHash;
+    } catch {
+        return false;
+    }
+}
+
+/** Same scheme as the server's answer_hash (QuizWebController / SubjectWebController). */
+async function answerHashFor(questionId: number, optionId: number): Promise<string> {
+    const data = new TextEncoder().encode(`acedrill_salt_q_${questionId}_opt_${optionId}`);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hashBuffer))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+/**
+ * Identify the correct option ID from a list of options using the salted hash.
+ * Used upon quiz submission to record which option was correct for the post-exam review screen.
+ */
+export async function findCorrectOptionId(
+    questionId: number,
+    options: Array<{ id: number; is_correct?: boolean }>,
+    answerHash?: string | null
+): Promise<number | null> {
+    if (answerHash) {
+        for (const opt of options) {
+            const isMatch = await verifyOptionHash(questionId, opt.id, answerHash);
+            if (isMatch) return opt.id;
+        }
+    }
+    const fallback = options.find((o) => Boolean(o.is_correct));
+    return fallback ? fallback.id : null;
 }
 
 // ── Quiz Attempts (Local) ──
@@ -267,7 +381,54 @@ export async function markGamificationSynced(id: number): Promise<void> {
     await db.gamification.update(id, { synced: true });
 }
 
-// ── User Profile (Cached) ──
+export async function getUnsyncedTotalCount(): Promise<{
+    total: number;
+    attempts: number;
+    progress: number;
+    queue: number;
+}> {
+    try {
+        const [attempts, progress, queue] = await Promise.all([
+            getUnsyncedAttempts().catch(() => []),
+            getUnsyncedProgress().catch(() => []),
+            db.syncQueue.filter((q) => !q.synced || (q.synced as any) === 0).toArray().catch(() => []),
+        ]);
+        const total = attempts.length + progress.length + queue.length;
+        return {
+            total,
+            attempts: attempts.length,
+            progress: progress.length,
+            queue: queue.length,
+        };
+    } catch {
+        return { total: 0, attempts: 0, progress: 0, queue: 0 };
+    }
+}
+
+export async function purgeUserCacheOnLogout(): Promise<void> {
+    try {
+        await Promise.all([
+            db.userProfile.clear().catch(() => {}),
+            db.learnerProgress.clear().catch(() => {}),
+            db.gamification.clear().catch(() => {}),
+            db.quizAttempts.clear().catch(() => {}),
+            db.syncQueue.clear().catch(() => {}),
+            db.adminSchools.clear().catch(() => {}),
+            db.adminLearners.clear().catch(() => {}),
+            db.adminClasses.clear().catch(() => {}),
+            db.adminQuestions.clear().catch(() => {}),
+            db.adminSchoolAdmins.clear().catch(() => {}),
+            db.adminTeachers.clear().catch(() => {}),
+        ]);
+        if (typeof localStorage !== 'undefined') {
+            localStorage.removeItem('cached_admin_stats');
+            localStorage.removeItem('cached_teacher_stats');
+            localStorage.removeItem('cached_learner_stats');
+        }
+    } catch (e) {
+        console.warn('[OfflineService] Failed purging local user cache on logout:', e);
+    }
+}
 
 export async function cacheUserProfile(
     profile: CachedUserProfile,
@@ -649,20 +810,37 @@ export async function preloadFullOfflineData(
         }
 
         // ── STAGE 3: Curriculum Catalog & Subjects Index ──
-        const subjectsEndpoint = isAnyAdmin
-            ? "/api/v1/admin/subjects"
-            : "/api/v1/subjects?scope=general";
-        const subjectsHeaders = isAnyAdmin ? adminHeaders : {};
-        const subjectsRes = await fetch(subjectsEndpoint, {
-            headers: subjectsHeaders,
-            credentials: "include",
-        }).catch(() => null);
+        // Learners and teachers need both their school's subjects (where class quizzes
+        // live) and the general-knowledge catalogue. Each subject remembers which scope
+        // it came from so its details are fetched with the same scope.
+        const fetchSubjectList = async (endpoint: string, scope: string | null) => {
+            const res = await fetch(endpoint, {
+                headers: isAnyAdmin ? adminHeaders : {},
+                credentials: "include",
+            }).catch(() => null);
+            if (!res || !res.ok) return null;
+            const data = await res.json();
+            const list = data?.subjects || data?.data || data || [];
+            return Array.isArray(list)
+                ? list.map((s: any) => ({ ...s, _scope: scope }))
+                : [];
+        };
+
+        const subjectLists = isAnyAdmin
+            ? [await fetchSubjectList("/api/v1/admin/subjects", null)]
+            : await Promise.all([
+                  fetchSubjectList("/api/v1/subjects", "school"),
+                  fetchSubjectList("/api/v1/subjects?scope=general", "general"),
+              ]);
 
         let subjectsList: any[] = [];
-        if (subjectsRes && subjectsRes.ok) {
-            const data = await subjectsRes.json();
-            subjectsList = data?.subjects || data?.data || data || [];
-            if (Array.isArray(subjectsList) && subjectsList.length > 0) {
+        if (subjectLists.some((list) => list !== null)) {
+            const byId = new Map<number, any>();
+            for (const s of subjectLists.flatMap((list) => list || [])) {
+                if (!byId.has(s.id)) byId.set(s.id, s);
+            }
+            subjectsList = [...byId.values()];
+            if (subjectsList.length > 0) {
                 if (isAnyAdmin) {
                     await cacheAdminSubjects(subjectsList);
                 } else {
@@ -733,9 +911,9 @@ export async function preloadFullOfflineData(
                     const slug = subject.slug || subject.id;
                     const [, subRes] = await Promise.all([
                         prewarmRoute(`/subjects/${slug}`),
-                        fetch(`/api/v1/subjects/${slug}?scope=general`).catch(
-                            () => null,
-                        ),
+                        fetch(
+                            `/api/v1/subjects/${slug}?scope=${subject._scope || "general"}`,
+                        ).catch(() => null),
                     ]);
 
                     if (subRes && subRes.ok) {
@@ -794,11 +972,9 @@ export async function preloadFullOfflineData(
                                             q.questions &&
                                             q.questions.length > 0
                                         ) {
-                                            await db.quizzes.put({
+                                            await cacheQuiz({
                                                 ...q,
                                                 status: "published",
-                                                cached_at:
-                                                    new Date().toISOString(),
                                             });
                                         } else {
                                             const quizRes = await fetch(
@@ -808,11 +984,9 @@ export async function preloadFullOfflineData(
                                                 const quizData =
                                                     await quizRes.json();
                                                 if (quizData.quiz) {
-                                                    await db.quizzes.put({
+                                                    await cacheQuiz({
                                                         ...quizData.quiz,
                                                         status: "published",
-                                                        cached_at:
-                                                            new Date().toISOString(),
                                                     });
                                                 }
                                             }

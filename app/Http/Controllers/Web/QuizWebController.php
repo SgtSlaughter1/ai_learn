@@ -43,7 +43,7 @@ class QuizWebController extends Controller
         return $this->showQuiz($request, $quiz);
     }
 
-    public function getQuizData(Quiz $quiz): JsonResponse
+    public function getQuizData(Request $request, Quiz $quiz): JsonResponse
     {
         // Eager load questions and options (including explanation and is_correct for offline caching)
         $quiz->load([
@@ -63,13 +63,19 @@ class QuizWebController extends Controller
             $questions = $questions->shuffle()->take(10)->values();
         }
 
+        $user = $request->user() ?? auth()->user() ?? request()->user();
+        $isStaff = $user && method_exists($user, 'isAnyAdmin') ? ($user->isAnyAdmin() || $user->isTeacher()) : false;
+
         return response()->json([
             'quiz' => [
                 'id' => $quiz->id,
                 'title' => $quiz->title,
                 'description' => $quiz->description,
                 'time_limit_minutes' => $quiz->time_limit_minutes,
-                'questions' => $questions->map(function ($q) {
+                'questions' => $questions->map(function ($q) use ($isStaff) {
+                    $correctOption = $q->options->firstWhere('is_correct', true);
+                    $answerHash = $correctOption ? hash('sha256', "acedrill_salt_q_{$q->id}_opt_{$correctOption->id}") : null;
+
                     return [
                         'id' => $q->id,
                         'topic_id' => $q->topic_id,
@@ -77,15 +83,17 @@ class QuizWebController extends Controller
                         'type' => $q->type,
                         'difficulty' => $q->difficulty,
                         'explanation' => $q->explanation,
-                        'options' => $q->options->map(function ($o) {
-                            return [
+                        'answer_hash' => $answerHash,
+                        'options' => $q->options->map(function ($o) use ($isStaff) {
+                            $optionData = [
                                 'id' => $o->id,
                                 'option_text' => $o->option_text,
-                                // is_correct is included so offline result grading works from Dexie cache.
-                                // The Show.tsx quiz UI never exposes this to the student during the attempt.
-                                // Server-side grading in submit() is still the authoritative source of truth.
-                                'is_correct' => (bool) $o->is_correct,
                             ];
+                            // Only staff (teachers/admins) get plaintext is_correct; learners grade via answer_hash to prevent DevTools peeking
+                            if ($isStaff) {
+                                $optionData['is_correct'] = (bool) $o->is_correct;
+                            }
+                            return $optionData;
                         })->values()->all(),
                     ];
                 })->values()->all(),

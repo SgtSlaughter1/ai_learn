@@ -49,6 +49,7 @@ export interface CachedQuestion {
     difficulty: string;
     explanation: string | null;
     status: string;
+    answer_hash?: string | null;
     options: CachedQuestionOption[];
 }
 
@@ -92,6 +93,7 @@ export interface LocalQuizAnswer {
     selected_option_id: number | null;
     is_correct: boolean;
     marks_awarded: number;
+    correct_option_id?: number | null;
     answered_at: string | null;
 }
 

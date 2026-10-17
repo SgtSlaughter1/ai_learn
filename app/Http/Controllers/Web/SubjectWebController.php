@@ -646,6 +646,8 @@ class SubjectWebController extends Controller
         ->orderBy('qo.sort_order')
         ->get();
 
+        $isStaff = $user && method_exists($user, 'isAnyAdmin') ? ($user->isAnyAdmin() || $user->isTeacher()) : false;
+
         // 3. Assemble clean payload in memory
         $groupedQuizzes = [];
         foreach ($quizRows as $row) {
@@ -671,21 +673,36 @@ class SubjectWebController extends Controller
                     'type' => $row->type,
                     'difficulty' => $row->difficulty,
                     'explanation' => $row->explanation,
+                    'correct_option_id' => null,
                     'options' => [],
                 ];
             }
 
             if ($row->option_id !== null) {
-                $groupedQuizzes[$row->quiz_id]['questions'][$row->question_id]['options'][] = [
+                if ($row->is_correct) {
+                    $groupedQuizzes[$row->quiz_id]['questions'][$row->question_id]['correct_option_id'] = (int) $row->option_id;
+                }
+
+                $optionData = [
                     'id' => (int) $row->option_id,
                     'option_text' => $row->option_text,
-                    'is_correct' => (bool) $row->is_correct,
                 ];
+                if ($isStaff) {
+                    $optionData['is_correct'] = (bool) $row->is_correct;
+                }
+                $groupedQuizzes[$row->quiz_id]['questions'][$row->question_id]['options'][] = $optionData;
             }
         }
 
         $formattedQuizzes = array_values(array_map(function ($q) {
-            $q['questions'] = array_values($q['questions']);
+            $q['questions'] = array_values(array_map(function ($question) {
+                $correctOptId = $question['correct_option_id'] ?? null;
+                $question['answer_hash'] = $correctOptId
+                    ? hash('sha256', "acedrill_salt_q_{$question['id']}_opt_{$correctOptId}")
+                    : null;
+                unset($question['correct_option_id']);
+                return $question;
+            }, $q['questions']));
             return $q;
         }, $groupedQuizzes));
 

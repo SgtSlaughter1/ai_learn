@@ -15,6 +15,7 @@ export interface QuizQuestion {
     type: string;
     difficulty?: string;
     explanation?: string;
+    answer_hash?: string | null;
     options: QuestionOption[];
 }
 

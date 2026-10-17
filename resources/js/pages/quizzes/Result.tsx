@@ -53,8 +53,11 @@ export default function Result({ attemptId }: Props) {
                     let calculatedScore = 0;
                     const answers: ResultAnswer[] = (localAttempt.answers || []).map((ans) => {
                         const question = questions.find((q) => q.id === ans.question_id);
+                        const correctOptId = (ans as any).correct_option_id;
                         const correctOption = question?.options.find((o) => o.is_correct);
-                        const isCorrect = correctOption ? correctOption.id === ans.selected_option_id : ans.is_correct;
+                        const isCorrect = correctOption
+                            ? correctOption.id === ans.selected_option_id
+                            : (correctOptId ? correctOptId === ans.selected_option_id : Boolean(ans.is_correct));
                         if (isCorrect) calculatedScore++;
 
                         return {
@@ -64,11 +67,11 @@ export default function Result({ attemptId }: Props) {
                             explanation: question?.explanation || '',
                             selected_option_id: ans.selected_option_id,
                             is_correct: Boolean(isCorrect),
-                            marks_awarded: isCorrect ? 1 : 0,
+                            marks_awarded: ans.marks_awarded ?? (isCorrect ? 1 : 0),
                             options: (question?.options || []).map((o) => ({
                                 id: o.id,
                                 option_text: o.option_text,
-                                is_correct: Boolean(o.is_correct),
+                                is_correct: Boolean(o.is_correct || (correctOptId && o.id === correctOptId)),
                             })),
                         };
                     });
@@ -143,10 +146,11 @@ export default function Result({ attemptId }: Props) {
                         cachedExplanation = foundQ.explanation;
                     }
                     if (options.length === 0 && foundQ.options) {
+                        const correctOptId = (ans as any)?.correct_option_id;
                         options = foundQ.options.map((o: any) => ({
                             id: o.id,
                             option_text: o.option_text,
-                            is_correct: Boolean(o.is_correct),
+                            is_correct: Boolean(o.is_correct || (correctOptId && o.id === correctOptId)),
                         }));
                     }
                     break;
@@ -168,9 +172,9 @@ export default function Result({ attemptId }: Props) {
 
             const selectedOption = selectedOptionId ? options.find((o) => o.id === selectedOptionId) : null;
             const correctOption = options.find((o) => o.is_correct);
-            const isCorrect = selectedOption && selectedOption.is_correct;
+            const isCorrect = ans?.is_correct !== undefined ? ans.is_correct : Boolean(selectedOption && selectedOption.is_correct);
 
-            if (isCorrect) {
+            if (isCorrect && selectedOption) {
                 let out = `### 1. Why Your Answer is Correct\n\n`;
                 out += `You chose **"${selectedOption.option_text}"**, which is the **correct answer**! Great work applying curriculum concepts in **${topicName || 'this topic'}**.\n\n`;
                 if (cachedExplanation && cachedExplanation.trim().length > 0) {
