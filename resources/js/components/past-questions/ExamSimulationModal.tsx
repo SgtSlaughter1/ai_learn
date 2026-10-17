@@ -6,7 +6,7 @@ import 'katex/dist/katex.min.css';
 import { PastQuestionItem, ExamSimulationResult } from '../../types/past-questions';
 import { formatMathText, extractLiteratureContext } from '../../utils/mathFormatter';
 import { BookOpen, Monitor, Keyboard } from 'lucide-react';
-import { db } from '@/db/database';
+import { enqueue, getSyncUser } from '@/services/SyncQueue';
 
 interface Props {
     questions: PastQuestionItem[];
@@ -16,6 +16,7 @@ interface Props {
     yearTitle?: string;
     durationMinutes: number;
     simulationId?: number;
+    simulationClientId?: string;
     onFinish: (result: ExamSimulationResult) => void;
     onCancel: () => void;
 }
@@ -28,6 +29,7 @@ export const ExamSimulationModal: React.FC<Props> = ({
     yearTitle,
     durationMinutes,
     simulationId,
+    simulationClientId,
     onFinish,
     onCancel,
 }) => {
@@ -158,6 +160,10 @@ export const ExamSimulationModal: React.FC<Props> = ({
 
         const submitPayload = {
             simulation_id: simulationId,
+            client_id: simulationClientId,
+            mode: 'simulation',
+            duration_seconds: durationMinutes * 60,
+            completed_at: new Date().toISOString(),
             exam_code: examCode,
             exam_year: currentQ?.exam_year,
             time_spent_seconds: timeSpentSeconds,
@@ -165,14 +171,20 @@ export const ExamSimulationModal: React.FC<Props> = ({
             question_ids: questions.map(q => q.id),
         };
 
+        // Same key for the online try and any queued retry, so the result is counted once.
+        const idempotencyKey = crypto.randomUUID();
+        let attemptedOnline = false;
+
         if (navigator.onLine) {
             try {
+                attemptedOnline = true;
                 const res = await fetch('/api/v1/past-questions/simulation/submit', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest',
+                        'Idempotency-Key': idempotencyKey,
                     },
                     body: JSON.stringify(submitPayload),
                 });
@@ -192,7 +204,9 @@ export const ExamSimulationModal: React.FC<Props> = ({
             let correctCount = 0;
             const detailed = questions.map((q) => {
                 const selectedId = selectedAnswers[q.id] ?? null;
-                const correctOpt = q.options.find(o => o.is_correct) || q.options[0];
+                // Only grade when the correct option is known locally; guessing the first
+                // option would show a wrong score until the server's result arrives.
+                const correctOpt = q.options.find(o => o.is_correct);
                 const isCorrect = selectedId !== null && selectedId === correctOpt?.id;
                 if (isCorrect) correctCount++;
                 const selectedOpt = q.options.find(o => o.id === selectedId);
@@ -207,7 +221,7 @@ export const ExamSimulationModal: React.FC<Props> = ({
                     subject: q.subject || { id: 1, name: subjectTitle, slug: 'subject' },
                     selected_option_id: selectedId,
                     selected_option_text: selectedOpt?.option_text,
-                    correct_option_id: correctOpt?.id || 1,
+                    correct_option_id: correctOpt?.id ?? 0, // 0 = not known offline
                     correct_option_text: correctOpt?.option_text,
                     is_correct: isCorrect,
                     options: q.options,
@@ -216,18 +230,20 @@ export const ExamSimulationModal: React.FC<Props> = ({
 
             const totalQ = questions.length;
             const scorePct = totalQ > 0 ? Math.round((correctCount / totalQ) * 100) : 0;
+            // Past-question answer keys are kept on the server, so offline the score can't be
+            // worked out on the device: say so instead of showing a misleading 0%.
+            const scoringPending = questions.some((q) => !q.options.some((o) => o.is_correct));
 
-            // Queue for background sync when back online
-            await db.syncQueue.add({
+            // Queue for background sync when back online (guests' results aren't stored).
+            if (getSyncUser()) await enqueue({
                 table_name: 'pastQuestionSimulations',
                 action: 'insert',
-                record_id: `sim_${simulationId || Date.now()}`,
+                record_id: `sim_${simulationClientId || crypto.randomUUID()}`,
                 endpoint: '/api/v1/past-questions/simulation/submit',
                 method: 'POST',
-                payload: JSON.stringify(submitPayload),
-                created_at: new Date().toISOString(),
-                synced: false,
-                retries: 0,
+                payload: submitPayload,
+                idempotency_key: idempotencyKey,
+                sent: attemptedOnline,
             });
 
             onFinish({
@@ -241,6 +257,8 @@ export const ExamSimulationModal: React.FC<Props> = ({
                 topic_breakdown: [],
                 weak_topics: [],
                 detailed_results: detailed,
+                scoring_pending: scoringPending,
+                answered_count: Object.keys(selectedAnswers).length,
             });
         } catch (localErr) {
             console.error('Offline grade error:', localErr);

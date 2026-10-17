@@ -24,11 +24,13 @@ class FeedbackController extends Controller
             'subject' => 'nullable|string|max:255',
             'message' => 'required|string|min:3|max:5000',
             'meta' => 'nullable|array',
+            'client_id' => 'nullable|string|max:64',
         ]);
 
-        $user = Auth::guard('sanctum')->user() ?? Auth::user();
+        // Session auth (the sanctum guard is not installed in this app, so asking for it threw).
+        $user = Auth::user();
 
-        $feedback = Feedback::create([
+        $attributes = [
             'user_id' => $user ? $user->id : null,
             'name' => $validated['name'] ?? ($user ? $user->name : null),
             'email' => $validated['email'] ?? ($user ? $user->email : null),
@@ -43,7 +45,13 @@ class FeedbackController extends Controller
                 'user_agent' => $request->userAgent(),
                 'submitted_at' => now()->toIso8601String(),
             ]),
-        ]);
+        ];
+
+        // Feedback written offline is resent until it gets through; the id it was given
+        // on the device makes the resend find the first copy instead of storing it twice.
+        $feedback = !empty($validated['client_id'])
+            ? Feedback::createOrFirst(['client_id' => $validated['client_id']], $attributes)
+            : Feedback::create($attributes);
 
         return response()->json([
             'status' => 'success',
@@ -55,6 +63,7 @@ class FeedbackController extends Controller
     /**
      * Admin: List all submitted feedbacks with filters.
      */
+    /** Platform admins only (route gate `manage-platform`): feedback includes visitors' emails. */
     public function index(Request $request): JsonResponse
     {
         $query = Feedback::with('user:id,name,email,role')

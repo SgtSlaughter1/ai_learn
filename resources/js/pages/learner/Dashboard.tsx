@@ -4,6 +4,7 @@ import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { db } from '@/db/database';
 import { preloadFullOfflineCurriculum, saveLocalGamification } from '@/services/OfflineService';
+import { belongsTo, getSyncUser } from '@/services/SyncQueue';
 import { StatsOverview } from '@/components/dashboard/StatsOverview';
 import { LevelProgressBar, GamificationData } from '@/components/dashboard/LevelProgressBar';
 import { OverallMasteryCard, RecentQuizActivityCard, DashboardAttempt } from '@/components/dashboard/RecentAttemptsList';
@@ -43,12 +44,188 @@ export default function LearnerDashboard() {
     useEffect(() => {
         let isMounted = true;
 
+        // Offline, or online but the server can't be reached: Dexie & cached server snapshots
+        const loadOffline = async () => {
+            const [subjects, gamCache, attempts, quizzes] = await Promise.all([
+                db.subjects.toArray(),
+                db.gamification.toCollection().first(),
+                db.quizAttempts.toArray().then((all) => {
+                    const userId = getSyncUser();
+                    return userId ? all.filter((a) => belongsTo(a.user_id, userId)) : all;
+                }),
+                db.quizzes.toArray(),
+            ]);
+
+            if (isMounted) {
+                let baseStats: DashboardStats = {
+                    totalSubjects: subjects.length,
+                    questionsAttempted: 0,
+                    questionsCorrect: 0,
+                    averageMastery: 0,
+                    completedTopics: 0,
+                };
+
+                const cachedStatsStr = localStorage.getItem('cached_dashboard_stats');
+                if (cachedStatsStr) {
+                    try {
+                        const parsed = JSON.parse(cachedStatsStr);
+                        baseStats = { ...baseStats, ...parsed };
+                    } catch {}
+                }
+
+                // Incorporate only un-synced offline attempts completed during this offline period
+                const unsyncedAttempts = attempts.filter((a) => !a.synced);
+                if (unsyncedAttempts.length > 0) {
+                    const unsyncedQuestions = unsyncedAttempts.reduce((s, a) => s + (a.total_marks || (a.answers ? a.answers.length : 0)), 0);
+                    const unsyncedCorrect = unsyncedAttempts.reduce((s, a) => s + (a.score || 0), 0);
+                    baseStats.questionsAttempted += unsyncedQuestions;
+                    baseStats.questionsCorrect += unsyncedCorrect;
+                    if (baseStats.questionsAttempted > 0) {
+                        baseStats.averageMastery = Math.round((baseStats.questionsCorrect / baseStats.questionsAttempted) * 100);
+                    }
+                }
+
+                if (subjects.length > 0) {
+                    baseStats.totalSubjects = Math.max(baseStats.totalSubjects, subjects.length);
+                }
+
+                setOfflineStats(baseStats);
+
+                // Hydrate full gamification from cached online snapshot
+                let fullGamification: GamificationData | null = null;
+                const cachedGamStr = localStorage.getItem('cached_dashboard_gamification');
+                if (cachedGamStr) {
+                    try {
+                        fullGamification = JSON.parse(cachedGamStr);
+                    } catch {}
+                }
+
+                if (fullGamification) {
+                    // Apply any local XP progression from Dexie if higher
+                    if (gamCache && gamCache.total_xp > fullGamification.total_xp) {
+                        const lvl = gamCache.level || fullGamification.level;
+                        const currThreshold = LEVEL_THRESHOLDS[lvl] ?? 0;
+                        const nextThreshold = LEVEL_THRESHOLDS[lvl + 1] ?? (currThreshold + 100);
+                        const xpIntoLevel = Math.max(0, gamCache.total_xp - currThreshold);
+                        const xpForNext = nextThreshold - currThreshold;
+                        const progressPercent = Math.min(100, Math.round((xpIntoLevel / xpForNext) * 100));
+
+                        fullGamification = {
+                            ...fullGamification,
+                            total_xp: gamCache.total_xp,
+                            level: lvl,
+                            tier: gamCache.tier || fullGamification.tier || 'Newcomer',
+                            tier_color: fullGamification.tier_color || '#94a3b8',
+                            current_streak: gamCache.current_streak || fullGamification.current_streak,
+                            longest_streak: Math.max(gamCache.longest_streak || 0, fullGamification.longest_streak),
+                            streak_freeze_count: gamCache.streak_freeze_count ?? fullGamification.streak_freeze_count,
+                            xp_progress_percent: progressPercent,
+                            xp_into_level: xpIntoLevel,
+                            xp_for_next_level: xpForNext,
+                            next_level: lvl + 1,
+                        };
+                    }
+                    setGamification(fullGamification);
+                } else if (gamCache) {
+                    const lvl = gamCache.level || 1;
+                    const currThreshold = LEVEL_THRESHOLDS[lvl] ?? 0;
+                    const nextThreshold = LEVEL_THRESHOLDS[lvl + 1] ?? (currThreshold + 100);
+                    const xpIntoLevel = Math.max(0, gamCache.total_xp - currThreshold);
+                    const xpForNext = nextThreshold - currThreshold;
+                    const progressPercent = Math.min(100, Math.round((xpIntoLevel / xpForNext) * 100));
+
+                    setGamification({
+                        total_xp: gamCache.total_xp,
+                        level: lvl,
+                        tier: gamCache.tier || 'Newcomer',
+                        tier_color: '#94a3b8',
+                        current_streak: gamCache.current_streak || 0,
+                        longest_streak: gamCache.longest_streak || 0,
+                        streak_freeze_count: gamCache.streak_freeze_count ?? 1,
+                        xp_progress_percent: progressPercent,
+                        xp_into_level: xpIntoLevel,
+                        xp_for_next_level: xpForNext,
+                        next_level: lvl + 1,
+                        recent_xp: [],
+                        achievements: [],
+                        locked_achievements: [],
+                        total_achievements: 0,
+                        earned_achievements: 0,
+                    });
+                }
+
+                // Merge local attempts with cached server attempts
+                let baseRecent: DashboardAttempt[] = [];
+                const cachedRecentStr = localStorage.getItem('cached_dashboard_recent_attempts');
+                if (cachedRecentStr) {
+                    try {
+                        const parsed = JSON.parse(cachedRecentStr);
+                        baseRecent = Array.isArray(parsed)
+                            ? parsed
+                            : parsed && typeof parsed === 'object'
+                            ? Object.values(parsed)
+                            : [];
+                    } catch {}
+                }
+
+                const quizTitleMap = new Map<number, string>();
+                quizzes.forEach((q) => {
+                    if (q.id && q.title) quizTitleMap.set(q.id, q.title);
+                });
+
+                const localAttemptsFormatted: DashboardAttempt[] = attempts
+                    .filter((a) => a.status === 'completed')
+                    .slice(-5)
+                    .reverse()
+                    .map((a) => {
+                        const knownTitle = a.quiz_title || quizTitleMap.get(a.quiz_id);
+                        const matchingCached = baseRecent.find(
+                            (b) => String(b.id) === String(a.id) || (knownTitle && b.quiz_title === knownTitle)
+                        );
+                        const title = knownTitle || matchingCached?.quiz_title || `Quiz Assessment #${a.quiz_id}`;
+
+                        const finalScore =
+                            matchingCached?.score !== null && matchingCached?.score !== undefined
+                                ? matchingCached.score
+                                : a.score ?? null;
+
+                        const finalTotalMarks =
+                            matchingCached?.total_marks !== null && matchingCached?.total_marks !== undefined
+                                ? matchingCached.total_marks
+                                : a.total_marks ?? null;
+
+                        return {
+                            id: String(a.id),
+                            quiz_title: title,
+                            status: a.status,
+                            score: finalScore,
+                            total_marks: finalTotalMarks,
+                            completed_at: a.completed_at || matchingCached?.completed_at || null,
+                        };
+                    });
+
+                const localIds = new Set(localAttemptsFormatted.map((a) => a.id));
+                const mergedRecent = [
+                    ...localAttemptsFormatted,
+                    ...baseRecent.filter((a) => !localIds.has(String(a.id))),
+                ].slice(0, 5);
+
+                setRecentAttempts(mergedRecent);
+                setLoading(false);
+            }
+        };
+
         const loadDashboard = async () => {
             if (isOnline) {
                 try {
+                    const fetchJson = async (path: string) => {
+                        const res = await fetch(path, { headers: { Accept: 'application/json' } });
+                        if (!res.ok) throw new Error(`${path} failed: ${res.status}`);
+                        return res.json();
+                    };
                     const [statsData, gamData] = await Promise.all([
-                        fetch('/api/v1/dashboard/stats').then((res) => res.json()),
-                        fetch('/api/v1/gamification/profile').then((res) => res.json()),
+                        fetchJson('/api/v1/dashboard/stats'),
+                        fetchJson('/api/v1/gamification/profile'),
                     ]);
 
                     if (isMounted) {
@@ -75,7 +252,7 @@ export default function LearnerDashboard() {
                         localStorage.setItem('cached_dashboard_gamification', JSON.stringify(gamData));
                         saveLocalGamification({
                             id: 1,
-                            user_id: 'current',
+                            user_id: getSyncUser() ?? 'current',
                             total_xp: gamData.total_xp,
                             level: gamData.level,
                             tier: gamData.tier || 'Newcomer',
@@ -90,174 +267,10 @@ export default function LearnerDashboard() {
                     // Background preload full offline curriculum (subjects, topics, quizzes, flashcards)
                     preloadFullOfflineCurriculum();
                 } catch {
-                    if (isMounted) setLoading(false);
+                    await loadOffline();
                 }
             } else {
-                // Offline: load from Dexie & cached server snapshots
-                const [subjects, gamCache, attempts, quizzes] = await Promise.all([
-                    db.subjects.toArray(),
-                    db.gamification.toCollection().first(),
-                    db.quizAttempts.toArray(),
-                    db.quizzes.toArray(),
-                ]);
-
-                if (isMounted) {
-                    let baseStats: DashboardStats = {
-                        totalSubjects: subjects.length,
-                        questionsAttempted: 0,
-                        questionsCorrect: 0,
-                        averageMastery: 0,
-                        completedTopics: 0,
-                    };
-
-                    const cachedStatsStr = localStorage.getItem('cached_dashboard_stats');
-                    if (cachedStatsStr) {
-                        try {
-                            const parsed = JSON.parse(cachedStatsStr);
-                            baseStats = { ...baseStats, ...parsed };
-                        } catch {}
-                    }
-
-                    // Incorporate only un-synced offline attempts completed during this offline period
-                    const unsyncedAttempts = attempts.filter((a) => !a.synced);
-                    if (unsyncedAttempts.length > 0) {
-                        const unsyncedQuestions = unsyncedAttempts.reduce((s, a) => s + (a.total_marks || (a.answers ? a.answers.length : 0)), 0);
-                        const unsyncedCorrect = unsyncedAttempts.reduce((s, a) => s + (a.score || 0), 0);
-                        baseStats.questionsAttempted += unsyncedQuestions;
-                        baseStats.questionsCorrect += unsyncedCorrect;
-                        if (baseStats.questionsAttempted > 0) {
-                            baseStats.averageMastery = Math.round((baseStats.questionsCorrect / baseStats.questionsAttempted) * 100);
-                        }
-                    }
-
-                    if (subjects.length > 0) {
-                        baseStats.totalSubjects = Math.max(baseStats.totalSubjects, subjects.length);
-                    }
-
-                    setOfflineStats(baseStats);
-
-                    // Hydrate full gamification from cached online snapshot
-                    let fullGamification: GamificationData | null = null;
-                    const cachedGamStr = localStorage.getItem('cached_dashboard_gamification');
-                    if (cachedGamStr) {
-                        try {
-                            fullGamification = JSON.parse(cachedGamStr);
-                        } catch {}
-                    }
-
-                    if (fullGamification) {
-                        // Apply any local XP progression from Dexie if higher
-                        if (gamCache && gamCache.total_xp > fullGamification.total_xp) {
-                            const lvl = gamCache.level || fullGamification.level;
-                            const currThreshold = LEVEL_THRESHOLDS[lvl] ?? 0;
-                            const nextThreshold = LEVEL_THRESHOLDS[lvl + 1] ?? (currThreshold + 100);
-                            const xpIntoLevel = Math.max(0, gamCache.total_xp - currThreshold);
-                            const xpForNext = nextThreshold - currThreshold;
-                            const progressPercent = Math.min(100, Math.round((xpIntoLevel / xpForNext) * 100));
-
-                            fullGamification = {
-                                ...fullGamification,
-                                total_xp: gamCache.total_xp,
-                                level: lvl,
-                                tier: gamCache.tier || fullGamification.tier || 'Newcomer',
-                                tier_color: fullGamification.tier_color || '#94a3b8',
-                                current_streak: gamCache.current_streak || fullGamification.current_streak,
-                                longest_streak: Math.max(gamCache.longest_streak || 0, fullGamification.longest_streak),
-                                streak_freeze_count: gamCache.streak_freeze_count ?? fullGamification.streak_freeze_count,
-                                xp_progress_percent: progressPercent,
-                                xp_into_level: xpIntoLevel,
-                                xp_for_next_level: xpForNext,
-                                next_level: lvl + 1,
-                            };
-                        }
-                        setGamification(fullGamification);
-                    } else if (gamCache) {
-                        const lvl = gamCache.level || 1;
-                        const currThreshold = LEVEL_THRESHOLDS[lvl] ?? 0;
-                        const nextThreshold = LEVEL_THRESHOLDS[lvl + 1] ?? (currThreshold + 100);
-                        const xpIntoLevel = Math.max(0, gamCache.total_xp - currThreshold);
-                        const xpForNext = nextThreshold - currThreshold;
-                        const progressPercent = Math.min(100, Math.round((xpIntoLevel / xpForNext) * 100));
-
-                        setGamification({
-                            total_xp: gamCache.total_xp,
-                            level: lvl,
-                            tier: gamCache.tier || 'Newcomer',
-                            tier_color: '#94a3b8',
-                            current_streak: gamCache.current_streak || 0,
-                            longest_streak: gamCache.longest_streak || 0,
-                            streak_freeze_count: gamCache.streak_freeze_count ?? 1,
-                            xp_progress_percent: progressPercent,
-                            xp_into_level: xpIntoLevel,
-                            xp_for_next_level: xpForNext,
-                            next_level: lvl + 1,
-                            recent_xp: [],
-                            achievements: [],
-                            locked_achievements: [],
-                            total_achievements: 0,
-                            earned_achievements: 0,
-                        });
-                    }
-
-                    // Merge local attempts with cached server attempts
-                    let baseRecent: DashboardAttempt[] = [];
-                    const cachedRecentStr = localStorage.getItem('cached_dashboard_recent_attempts');
-                    if (cachedRecentStr) {
-                        try {
-                            const parsed = JSON.parse(cachedRecentStr);
-                            baseRecent = Array.isArray(parsed)
-                                ? parsed
-                                : parsed && typeof parsed === 'object'
-                                ? Object.values(parsed)
-                                : [];
-                        } catch {}
-                    }
-
-                    const quizTitleMap = new Map<number, string>();
-                    quizzes.forEach((q) => {
-                        if (q.id && q.title) quizTitleMap.set(q.id, q.title);
-                    });
-
-                    const localAttemptsFormatted: DashboardAttempt[] = attempts
-                        .filter((a) => a.status === 'completed')
-                        .slice(-5)
-                        .reverse()
-                        .map((a) => {
-                            const knownTitle = a.quiz_title || quizTitleMap.get(a.quiz_id);
-                            const matchingCached = baseRecent.find(
-                                (b) => String(b.id) === String(a.id) || (knownTitle && b.quiz_title === knownTitle)
-                            );
-                            const title = knownTitle || matchingCached?.quiz_title || `Quiz Assessment #${a.quiz_id}`;
-
-                            const finalScore =
-                                matchingCached?.score !== null && matchingCached?.score !== undefined
-                                    ? matchingCached.score
-                                    : a.score ?? null;
-
-                            const finalTotalMarks =
-                                matchingCached?.total_marks !== null && matchingCached?.total_marks !== undefined
-                                    ? matchingCached.total_marks
-                                    : a.total_marks ?? null;
-
-                            return {
-                                id: String(a.id),
-                                quiz_title: title,
-                                status: a.status,
-                                score: finalScore,
-                                total_marks: finalTotalMarks,
-                                completed_at: a.completed_at || matchingCached?.completed_at || null,
-                            };
-                        });
-
-                    const localIds = new Set(localAttemptsFormatted.map((a) => a.id));
-                    const mergedRecent = [
-                        ...localAttemptsFormatted,
-                        ...baseRecent.filter((a) => !localIds.has(String(a.id))),
-                    ].slice(0, 5);
-
-                    setRecentAttempts(mergedRecent);
-                    setLoading(false);
-                }
+                await loadOffline();
             }
         };
 

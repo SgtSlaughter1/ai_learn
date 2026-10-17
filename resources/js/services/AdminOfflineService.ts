@@ -1,4 +1,7 @@
 import { db } from '../db/database';
+import { classifyResponse, describeError, enqueue, hasPendingQueueItems } from './SyncQueue';
+import { syncAll } from './SyncService';
+import { rememberResponse, type PreloadStep } from './OfflineService';
 import type {
     Learner,
     SchoolItem,
@@ -548,7 +551,8 @@ export interface AdminActionResult<T = any> {
 }
 
 export async function executeAdminAction<T = any>(options: {
-    table: 'adminLearners' | 'adminSchools' | 'adminClasses' | 'adminQuestions' | 'adminSchoolAdmins' | 'adminTeachers' | 'subjects' | 'topics';
+    // 'classMemberships' has no local table: callers keep their own cached roster up to date.
+    table: 'adminLearners' | 'adminSchools' | 'adminClasses' | 'adminQuestions' | 'adminSchoolAdmins' | 'adminTeachers' | 'subjects' | 'topics' | 'classMemberships';
     action: 'insert' | 'update' | 'delete';
     recordId: string;
     endpoint: string;
@@ -558,23 +562,33 @@ export async function executeAdminAction<T = any>(options: {
 }): Promise<AdminActionResult<T>> {
     const { table, action, recordId, endpoint, method, payload, optimisticRecord } = options;
 
+    // One key per user action, reused by every retry, so the server applies it exactly once.
+    const idempotencyKey = crypto.randomUUID();
+
+    // Go straight to the server only when nothing is waiting ahead of this change and the
+    // record already exists there; otherwise queue it behind earlier changes to keep order.
+    const mustQueue = recordId.startsWith('temp_') || await hasPendingQueueItems();
+    let requestMayHaveReachedServer = false;
+
     // 1. Try Online Request First if browser is online
-    if (navigator.onLine) {
+    if (navigator.onLine && !mustQueue) {
         try {
+            requestMayHaveReachedServer = true;
             const res = await fetch(endpoint, {
                 method,
-                headers: getAdminAuthHeaders(),
+                headers: { ...getAdminAuthHeaders(), 'Idempotency-Key': idempotencyKey },
                 credentials: 'include',
                 body: payload ? JSON.stringify(payload) : undefined,
             });
+            const data = await res.json().catch(() => ({}));
+            const outcome = classifyResponse(res.status, method, data);
 
-            if (res.ok) {
-                const data = await res.json().catch(() => ({}));
+            if (outcome === 'ok') {
                 try {
                     const tableObj = (db as any)[table];
                     if (tableObj) {
                         if (action === 'delete') {
-                            await tableObj.delete(recordId.startsWith('temp_') ? recordId : isNaN(Number(recordId)) ? recordId : Number(recordId));
+                            await tableObj.delete(isNaN(Number(recordId)) ? recordId : Number(recordId));
                         } else {
                             const saved = data.learner || data.subject || data.question || data.class || data.school || data.admin || data.teacher || data.topic || data.data;
                             if (saved) {
@@ -595,16 +609,17 @@ export async function executeAdminAction<T = any>(options: {
                     data,
                     message: data.message || (action === 'delete' ? 'Deleted successfully' : 'Saved successfully'),
                 };
-            } else {
-                if (res.status >= 400 && res.status < 500) {
-                    const errorData = await res.json().catch(() => ({}));
-                    return {
-                        success: false,
-                        synced: false,
-                        error: errorData.message || errorData.error || `Server responded with status ${res.status}`,
-                    };
-                }
             }
+
+            if (outcome === 'permanent') {
+                // Validation or permission problem: show it now, nothing to queue.
+                return {
+                    success: false,
+                    synced: false,
+                    error: describeError(res.status, data),
+                };
+            }
+            // 'auth' or 'transient': keep the change and let the sync engine retry it.
         } catch (netErr) {
             console.warn('[AdminOfflineService] Online request failed with network error, queuing offline:', netErr);
         }
@@ -622,26 +637,30 @@ export async function executeAdminAction<T = any>(options: {
             }
         }
 
-        await db.syncQueue.add({
+        await enqueue({
             table_name: table,
             action,
             record_id: String(recordId),
             endpoint,
             method,
-            payload: JSON.stringify(payload || {}),
-            created_at: new Date().toISOString(),
-            synced: false,
-            retries: 0,
+            payload: payload || {},
+            idempotency_key: idempotencyKey,
+            sent: requestMayHaveReachedServer,
         });
 
         notifyAdminDataChanged({ table, action });
+        if (navigator.onLine) {
+            void syncAll();
+        }
 
         return {
             success: true,
             synced: false,
             offline: true,
             data: optimisticRecord,
-            message: 'Saved offline. Changes will automatically sync when connection is restored.',
+            message: navigator.onLine
+                ? 'Saved. Syncing with the server…'
+                : 'Saved offline. Changes will automatically sync when connection is restored.',
         };
     } catch (dbErr) {
         console.error('[AdminOfflineService] Local database error:', dbErr);
@@ -652,3 +671,85 @@ export async function executeAdminAction<T = any>(options: {
         };
     }
 }
+
+// ── Offline download for admins and teachers ──
+
+interface StaffAbilities {
+    accessAdmin?: boolean;
+    accessTeaching?: boolean;
+    managePlatform?: boolean;
+}
+
+async function getJson(path: string): Promise<any> {
+    const res = await fetch(path, { headers: getAdminAuthHeaders(), credentials: 'include' });
+    if (!res.ok) throw new Error(`${path} failed: ${res.status}`);
+    return res.json();
+}
+
+/** Fetch a list endpoint and store it with the same cache function its tab uses. */
+function listStep(label: string, path: string, key: string, cache: (items: any[]) => Promise<unknown>): PreloadStep {
+    return {
+        label,
+        run: async () => {
+            const data = await getJson(path);
+            await cache(data.data || data[key] || []);
+        },
+    };
+}
+
+/**
+ * Everything a school admin, platform admin or teacher needs to keep working offline,
+ * chosen from the abilities the server granted (auth.can).
+ */
+export function staffPreloadSteps(can: StaffAbilities, isTeacher: boolean): PreloadStep[] {
+    const steps: PreloadStep[] = [];
+
+    if (can.accessAdmin) {
+        steps.push({
+            label: 'Dashboard statistics',
+            run: async () => {
+                const data = await getJson('/api/v1/admin/stats');
+                localStorage.setItem('cached_admin_stats', JSON.stringify(data.status === 'success' ? data.data : data));
+            },
+        });
+        steps.push(listStep('Schools', '/api/v1/admin/schools', 'schools', cacheAdminSchools));
+        if (can.managePlatform) {
+            steps.push(listStep('School admins', '/api/v1/admin/school-admins', 'school_admins', cacheAdminSchoolAdmins));
+        }
+        steps.push(listStep('Teachers', '/api/v1/admin/teachers', 'teachers', cacheAdminTeachers));
+        steps.push(listStep('Classes', '/api/v1/admin/classes', 'classes', cacheAdminClasses));
+        steps.push(listStep('Learners', '/api/v1/admin/learners', 'learners', cacheAdminLearners));
+    }
+
+    if (isTeacher) {
+        steps.push({
+            label: 'Class statistics and rosters',
+            run: async () => {
+                const stats = await getJson('/api/v1/teacher/stats');
+                localStorage.setItem('cached_teacher_stats_all', JSON.stringify(stats));
+                const classes: Array<{ id: number }> = Array.isArray(stats.classes) ? stats.classes : Object.values(stats.classes ?? {});
+                for (const cls of classes) {
+                    const roster = await getJson(`/api/v1/teacher/classes/${cls.id}/learners`);
+                    rememberResponse(`teacher_roster_${cls.id}`, roster);
+                }
+            },
+        });
+    }
+
+    if (can.accessAdmin || can.accessTeaching) {
+        steps.push({
+            label: 'Subjects and topics',
+            run: async () => {
+                const data = await getJson('/api/v1/admin/subjects');
+                const subjects = data.subjects || data.data || [];
+                await cacheAdminSubjects(subjects);
+                const topics = subjects.flatMap((s: any) => s.topics || []);
+                if (topics.length) await cacheAdminTopics(topics);
+            },
+        });
+        steps.push(listStep('Question bank', '/api/v1/admin/questions', 'questions', cacheAdminQuestions));
+    }
+
+    return steps;
+}
+

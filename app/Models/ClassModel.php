@@ -9,6 +9,9 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class ClassModel extends Model
 {
+    /** School grades in teaching order, for sorting classes and finding the next grades. */
+    public const GRADE_ORDER = ['CRECHE' => 1, 'KG1' => 2, 'KG2' => 3, 'NUR1' => 4, 'NUR2' => 5, 'PRI1' => 6, 'PRI2' => 7, 'PRI3' => 8, 'PRI4' => 9, 'PRI5' => 10, 'PRI6' => 11, 'JSS1' => 12, 'JSS2' => 13, 'JSS3' => 14, 'SS1' => 15, 'SS2' => 16, 'SS3' => 17];
+
     protected $table = 'classes';
 
     protected $guarded = [];

@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Link, router } from '@inertiajs/react';
+import { Link } from '@inertiajs/react';
 import { LogOut, ChevronDown, Sun, Moon, Shield, Sparkles, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
-import { getUnsyncedTotalCount, purgeUserCacheOnLogout } from '@/services/OfflineService';
-import { syncAll } from '@/services/SyncService';
+import { signOutSafely } from '@/services/SignOut';
 
 interface User {
     id: number;
@@ -23,21 +22,11 @@ export default function UserProfileMenu({ user }: UserProfileMenuProps) {
     const { isDark, toggleTheme } = useTheme();
     const { isOnline, pendingSync, isSyncing, triggerSync } = useNetworkStatus();
 
-    // Pre-logout guard states
-    const [isLoggingOut, setIsLoggingOut] = useState(false);
+    // Sign-out flow: final sync overlay, then a warning if anything is still unsynced.
+    const [isSigningOut, setIsSigningOut] = useState(false);
     const [isSyncingBeforeLogout, setIsSyncingBeforeLogout] = useState(false);
-    const [showUnsyncedModal, setShowUnsyncedModal] = useState(false);
-    const [unsyncedDetails, setUnsyncedDetails] = useState<{
-        total: number;
-        attempts: number;
-        progress: number;
-        queue: number;
-    }>({
-        total: 0,
-        attempts: 0,
-        progress: 0,
-        queue: 0,
-    });
+    const [unsyncedCount, setUnsyncedCount] = useState(0);
+    const unsyncedAnswer = useRef<((proceed: boolean) => void) | null>(null);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -71,58 +60,26 @@ export default function UserProfileMenu({ user }: UserProfileMenuProps) {
               .slice(0, 2)
         : 'U';
 
-    const handleLogoutInitiation = async () => {
+    const handleSignOut = async () => {
         setIsOpen(false);
-
+        setIsSigningOut(true);
         try {
-            const counts = await getUnsyncedTotalCount();
-            if (counts.total === 0) {
-                // Completely safe to log out immediately
-                setIsLoggingOut(true);
-                await purgeUserCacheOnLogout();
-                router.post('/logout');
-                return;
-            }
-
-            // Unsynced data exists!
-            setUnsyncedDetails(counts);
-
-            if (navigator.onLine) {
-                // Online: Auto-sync before completing logout
-                setIsSyncingBeforeLogout(true);
-                try {
-                    await syncAll();
-                    const remaining = await getUnsyncedTotalCount();
-                    if (remaining.total === 0) {
-                        setIsSyncingBeforeLogout(false);
-                        setIsLoggingOut(true);
-                        await purgeUserCacheOnLogout();
-                        router.post('/logout');
-                        return;
-                    }
-                    // Some items failed to sync
-                    setUnsyncedDetails(remaining);
-                    setIsSyncingBeforeLogout(false);
-                    setShowUnsyncedModal(true);
-                } catch {
-                    setIsSyncingBeforeLogout(false);
-                    setShowUnsyncedModal(true);
-                }
-            } else {
-                // Device is offline and has unsynced data: Prompt user with warning modal
-                setShowUnsyncedModal(true);
-            }
-        } catch {
-            await purgeUserCacheOnLogout();
-            router.post('/logout');
+            await signOutSafely({
+                onSyncing: setIsSyncingBeforeLogout,
+                confirmUnsynced: (pending) => new Promise<boolean>((resolve) => {
+                    unsyncedAnswer.current = resolve;
+                    setUnsyncedCount(pending);
+                }),
+            });
+        } finally {
+            setIsSigningOut(false);
         }
     };
 
-    const handleForceLogout = async () => {
-        setShowUnsyncedModal(false);
-        setIsLoggingOut(true);
-        await purgeUserCacheOnLogout();
-        router.post('/logout');
+    const answerUnsynced = (proceed: boolean) => {
+        setUnsyncedCount(0);
+        unsyncedAnswer.current?.(proceed);
+        unsyncedAnswer.current = null;
     };
 
     return (
@@ -258,16 +215,16 @@ export default function UserProfileMenu({ user }: UserProfileMenuProps) {
                     <div className="p-2">
                         <button
                             type="button"
-                            onClick={handleLogoutInitiation}
-                            disabled={isLoggingOut || isSyncingBeforeLogout}
+                            onClick={handleSignOut}
+                            disabled={isSigningOut}
                             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[var(--color-error)] hover:bg-[var(--color-error)]/10 transition-colors cursor-pointer text-left disabled:opacity-50"
                         >
-                            {isLoggingOut || isSyncingBeforeLogout ? (
+                            {isSigningOut ? (
                                 <Loader2 className="w-4 h-4 animate-spin text-[var(--color-error)]" />
                             ) : (
                                 <LogOut className="w-4 h-4 text-[var(--color-error)]" />
                             )}
-                            <span>{isSyncingBeforeLogout ? 'Syncing...' : isLoggingOut ? 'Signing Out...' : 'Sign Out'}</span>
+                            <span>{isSyncingBeforeLogout ? 'Syncing...' : isSigningOut ? 'Signing Out...' : 'Sign Out'}</span>
                         </button>
                     </div>
                 </div>
@@ -284,7 +241,7 @@ export default function UserProfileMenu({ user }: UserProfileMenuProps) {
                             Saving Your Offline Work
                         </h3>
                         <p className="text-xs text-[var(--color-muted)] mb-4 leading-relaxed">
-                            Uploading {unsyncedDetails.total} pending record{unsyncedDetails.total === 1 ? '' : 's'} to the school cloud before signing out...
+                            Uploading your pending work before signing out...
                         </p>
                         <div className="w-full bg-[var(--color-background)] h-1.5 rounded-full overflow-hidden">
                             <div className="bg-[var(--color-primary)] h-full w-2/3 animate-pulse rounded-full" />
@@ -293,8 +250,8 @@ export default function UserProfileMenu({ user }: UserProfileMenuProps) {
                 </div>
             )}
 
-            {/* Unsynced Offline Warning Modal */}
-            {showUnsyncedModal && (
+            {/* Unsynced Work Warning Modal */}
+            {unsyncedCount > 0 && (
                 <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
                     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 max-w-md w-full shadow-2xl animate-fade-in">
                         <div className="flex items-center gap-3.5 mb-4">
@@ -303,48 +260,37 @@ export default function UserProfileMenu({ user }: UserProfileMenuProps) {
                             </div>
                             <div>
                                 <h3 className="text-base font-bold text-[var(--color-text)]">
-                                    Unsynced Offline Data Detected
+                                    Work Not Synced Yet
                                 </h3>
                                 <p className="text-xs text-[var(--color-muted)]">
-                                    Action required before signing out
+                                    Choose before signing out
                                 </p>
                             </div>
                         </div>
 
                         <div className="p-4 rounded-2xl bg-[var(--color-background)] border border-[var(--color-border)] mb-5 space-y-2.5">
                             <p className="text-xs font-semibold text-[var(--color-text)]">
-                                You have <span className="text-amber-500 font-bold">{unsyncedDetails.total} unsynced item{unsyncedDetails.total === 1 ? '' : 's'}</span> saved on this device:
+                                You have <span className="text-amber-500 font-bold">{unsyncedCount} unsynced item{unsyncedCount === 1 ? '' : 's'}</span> on this device.
                             </p>
-                            <ul className="text-xs text-[var(--color-muted)] list-disc list-inside space-y-1">
-                                {unsyncedDetails.attempts > 0 && (
-                                    <li><strong className="text-[var(--color-text)]">{unsyncedDetails.attempts}</strong> completed quiz attempt{unsyncedDetails.attempts === 1 ? '' : 's'} &amp; scores</li>
-                                )}
-                                {unsyncedDetails.progress > 0 && (
-                                    <li><strong className="text-[var(--color-text)]">{unsyncedDetails.progress}</strong> topic mastery score{unsyncedDetails.progress === 1 ? '' : 's'}</li>
-                                )}
-                                {unsyncedDetails.queue > 0 && (
-                                    <li><strong className="text-[var(--color-text)]">{unsyncedDetails.queue}</strong> curriculum or admin change{unsyncedDetails.queue === 1 ? '' : 's'}</li>
-                                )}
-                            </ul>
                             <p className="text-[11px] text-[var(--color-muted)] pt-2 border-t border-[var(--color-border)]/50 leading-relaxed">
-                                ⚠️ If you sign out while offline on a shared computer, your local test answers cannot be verified by the school system and may be lost.
+                                If you sign out now, it stays on this device and syncs the next time you sign in here.
                             </p>
                         </div>
 
                         <div className="flex flex-col sm:flex-row gap-2.5">
                             <button
                                 type="button"
-                                onClick={() => setShowUnsyncedModal(false)}
+                                onClick={() => answerUnsynced(false)}
                                 className="flex-1 px-4 py-2.5 rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
                             >
-                                Stay Signed In (Keep Data)
+                                Stay Signed In
                             </button>
                             <button
                                 type="button"
-                                onClick={handleForceLogout}
+                                onClick={() => answerUnsynced(true)}
                                 className="px-4 py-2.5 rounded-xl bg-transparent hover:bg-rose-500/10 text-rose-500 border border-rose-500/20 text-xs font-bold transition-colors cursor-pointer"
                             >
-                                Discard &amp; Sign Out
+                                Sign Out Anyway
                             </button>
                         </div>
                     </div>

@@ -103,6 +103,42 @@ class GamificationService
     }
 
     /**
+     * When a learning activity happened, from a client-supplied timestamp (offline work
+     * synced later). Clamped so a wrong device clock can't move it into the future or
+     * more than 30 days back; missing or invalid values mean "now".
+     */
+    public static function activityTime(mixed $value): Carbon
+    {
+        if (!is_string($value) || $value === '') {
+            return now();
+        }
+        try {
+            $at = Carbon::parse($value);
+        } catch (\Throwable) {
+            return now();
+        }
+        if ($at->isFuture()) {
+            return now();
+        }
+        return $at->lt(now()->subDays(30)) ? now()->subDays(30) : $at;
+    }
+
+    /**
+     * Re-read the profile with a row lock (call inside a transaction) so concurrent XP
+     * writes for the same learner queue up instead of overwriting each other's totals.
+     */
+    private function lockProfile(User $user): UserGamification
+    {
+        $profile = $this->getProfile($user);
+
+        // Refresh the cached instance in place so every caller keeps sharing one object.
+        $locked = UserGamification::whereKey($profile->getKey())->lockForUpdate()->first();
+        $profile->setRawAttributes($locked->getAttributes(), true);
+
+        return $profile;
+    }
+
+    /**
      * Process XP awards, streaks, and achievements upon quiz completion.
      *
      * @param  User         $user
@@ -110,10 +146,10 @@ class GamificationService
      * @param  Quiz         $quiz
      * @return array        Newly earned achievements
      */
-    public function processQuizCompletion(User $user, QuizAttempt $attempt, Quiz $quiz): array
+    public function processQuizCompletion(User $user, QuizAttempt $attempt, Quiz $quiz, ?Carbon $activityAt = null): array
     {
-        return DB::transaction(function () use ($user, $attempt, $quiz) {
-            $profile = $this->getProfile($user);
+        return DB::transaction(function () use ($user, $attempt, $quiz, $activityAt) {
+            $profile = $this->lockProfile($user);
 
             $answers = $attempt->relationLoaded('answers') ? $attempt->answers : $attempt->answers()->get();
             $totalQuestions = $answers->count();
@@ -184,11 +220,32 @@ class GamificationService
             $this->recalculateLevel($profile);
             XpTransaction::insert($transactions);
 
-            // 5. Update streak
-            $this->updateStreak($user);
+            // 5. Update streak (offline attempts count towards the day they were taken)
+            $this->updateStreak($user, $activityAt);
 
             // 6. Check and award achievements
             return $this->checkAchievements($user);
+        });
+    }
+
+    /**
+     * Award an attempt's XP exactly once, however many times it is called (retried jobs,
+     * a sync racing the online submit).
+     *
+     * @return array Newly earned achievements (empty when already awarded)
+     */
+    public function awardQuizCompletionOnce(QuizAttempt $attempt, ?Carbon $activityAt = null): array
+    {
+        return DB::transaction(function () use ($attempt, $activityAt) {
+            // Atomic claim: only one caller can set it, and it's rolled back if awarding fails.
+            $claimed = QuizAttempt::whereKey($attempt->getKey())
+                ->whereNull('xp_awarded_at')
+                ->update(['xp_awarded_at' => now()]);
+            if ($claimed === 0) {
+                return [];
+            }
+
+            return $this->processQuizCompletion($attempt->user, $attempt, $attempt->quiz, $activityAt);
         });
     }
 
@@ -211,18 +268,18 @@ class GamificationService
      * @param  int   $cardsReviewed
      * @return array Progress summary (xp_earned, new_level, new_tier, new_achievements)
      */
-    public function processFlashcardCompletion(User $user, int $xpEarned, int $cardsReviewed): array
+    public function processFlashcardCompletion(User $user, int $xpEarned, int $cardsReviewed, ?Carbon $activityAt = null): array
     {
-        return DB::transaction(function () use ($user, $xpEarned, $cardsReviewed) {
-            $profile  = $this->getProfile($user);
+        return DB::transaction(function () use ($user, $xpEarned, $cardsReviewed, $activityAt) {
+            $profile  = $this->lockProfile($user);
             $oldLevel = $profile->level;
             $oldTier  = $profile->tier;
 
             if ($xpEarned > 0) {
-                $this->awardXp($user, $xpEarned, 'flashcard_review', "Reviewed {$cardsReviewed} flashcards");
+                $this->awardXpLocked($user, $xpEarned, 'flashcard_review', "Reviewed {$cardsReviewed} flashcards", $activityAt);
             }
 
-            $this->updateStreak($user);
+            $this->updateStreak($user, $activityAt);
             $newAchievements = $this->checkAchievements($user);
 
             return [
@@ -242,10 +299,10 @@ class GamificationService
      * @param  int   $totalQuestions
      * @return array Progress summary (bonus_xp, total_xp, level, tier, new_level, new_tier, new_achievements)
      */
-    public function processRevisionCompletion(User $user, int $correctCount, int $totalQuestions): array
+    public function processRevisionCompletion(User $user, int $correctCount, int $totalQuestions, ?Carbon $activityAt = null): array
     {
-        return DB::transaction(function () use ($user, $correctCount, $totalQuestions) {
-            $profile  = $this->getProfile($user);
+        return DB::transaction(function () use ($user, $correctCount, $totalQuestions, $activityAt) {
+            $profile  = $this->lockProfile($user);
             $oldLevel = $profile->level;
             $oldTier  = $profile->tier;
 
@@ -259,14 +316,15 @@ class GamificationService
             }
 
             if ($bonusXp > 0) {
-                $this->awardXp(
+                $this->awardXpLocked(
                     $user,
                     $bonusXp,
                     'daily_revision_bonus',
-                    "Daily Revision: {$correctCount}/{$totalQuestions} correct"
+                    "Daily Revision: {$correctCount}/{$totalQuestions} correct",
+                    $activityAt
                 );
             } else {
-                $this->updateStreak($user);
+                $this->updateStreak($user, $activityAt);
             }
 
             $newAchievements = $this->checkAchievements($user);
@@ -379,6 +437,7 @@ class GamificationService
     {
         $topUsersData = Cache::remember("gamification:leaderboard:top:{$limit}", now()->addMinutes(5), function () use ($limit) {
             return UserGamification::with('user:id,name')
+                ->whereHas('user')
                 ->orderByDesc('total_xp')
                 ->limit($limit)
                 ->get()
@@ -435,9 +494,14 @@ class GamificationService
      * @param  string|null  $description
      * @return array
      */
-    public function awardXp(User $user, int $amount, string $source, ?string $description = null): array
+    public function awardXp(User $user, int $amount, string $source, ?string $description = null, ?Carbon $activityAt = null): array
     {
-        $profile  = $this->getProfile($user);
+        return DB::transaction(fn () => $this->awardXpLocked($user, $amount, $source, $description, $activityAt));
+    }
+
+    private function awardXpLocked(User $user, int $amount, string $source, ?string $description, ?Carbon $activityAt = null): array
+    {
+        $profile  = $this->lockProfile($user);
         $oldLevel = $profile->level;
         $oldTier  = $profile->tier;
 
@@ -452,7 +516,7 @@ class GamificationService
             'description' => $description,
         ]);
 
-        $this->updateStreak($user);
+        $this->updateStreak($user, $activityAt);
         $newAchievements = $this->checkAchievements($user);
 
         return [
@@ -485,7 +549,7 @@ class GamificationService
             $status = 'inactive';
             $isProtected = false;
         } else {
-            $diffDays = $lastActive->diffInDays($today);
+            $diffDays = (int) $lastActive->diffInDays($today);
 
             if ($diffDays === 0) {
                 $status = 'active_today';
@@ -567,12 +631,18 @@ class GamificationService
      * @param  User  $user
      * @return void
      */
-    private function updateStreak(User $user): void
+    private function updateStreak(User $user, ?Carbon $activityAt = null): void
     {
         $profile = $this->getProfile($user);
-        $today   = Carbon::today();
+        // Activity synced from an offline device counts for the day it happened.
+        $today   = $activityAt ? $activityAt->copy()->startOfDay() : Carbon::today();
         /** @var Carbon|null $lastActive */
-        $lastActive = $profile->last_active_date ? Carbon::parse($profile->last_active_date) : null;
+        $lastActive = $profile->last_active_date ? Carbon::parse($profile->last_active_date)->startOfDay() : null;
+
+        if ($lastActive !== null && $today->lt($lastActive)) {
+            // Older than the last recorded activity (synced late): the streak already covers it.
+            return;
+        }
 
         if ($lastActive === null) {
             $profile->update([
@@ -583,7 +653,8 @@ class GamificationService
             return;
         }
 
-        $daysSinceLastActive = $lastActive->diffInDays($today);
+        // Carbon 3 returns a float here; cast so the === comparisons below match.
+        $daysSinceLastActive = (int) $lastActive->diffInDays($today);
 
         if ($daysSinceLastActive === 0) {
             return;
@@ -609,7 +680,7 @@ class GamificationService
             // Award weekly milestone streak bonus XP
             if ($newStreak % 7 === 0) {
                 $bonusXp = (int) (self::XP_STREAK_DAILY_BONUS * ($newStreak / 7));
-                $this->awardXp($user, $bonusXp, 'streak_bonus', "{$newStreak}-day streak milestone bonus!");
+                $this->awardXpLocked($user, $bonusXp, 'streak_bonus', "{$newStreak}-day streak milestone bonus!");
             }
         } elseif ($daysSinceLastActive === 2 && ($profile->streak_freeze_count ?? 0) > 0) {
             // Shield auto-deployed! Preserves the streak!
@@ -822,14 +893,21 @@ class GamificationService
 
         foreach ($pendingDefs as $def) {
             if ($this->checkAchievementCondition($user, $def['key'], $snapshot)) {
-                UserAchievement::create([
+                // insertOrIgnore: if a concurrent request already unlocked it, skip the reward
+                // instead of failing on the unique (user_id, achievement_key) index.
+                $inserted = UserAchievement::insertOrIgnore([
                     'user_id'         => $user->id,
                     'achievement_key' => $def['key'],
                     'name'            => $def['name'],
                     'description'     => $def['description'],
                     'icon'            => $def['icon'],
                     'earned_at'       => $now,
+                    'created_at'      => $now,
+                    'updated_at'      => $now,
                 ]);
+                if ($inserted === 0) {
+                    continue;
+                }
 
                 $rewardXp = $def['xp_reward'] ?? 25;
                 $achievementBonusXp += $rewardXp;

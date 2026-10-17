@@ -15,6 +15,7 @@ class StartExamSimulationRequest extends FormRequest
     {
         return [
             'exam_code' => ['required', 'string', 'max:30'],
+            'client_id' => ['nullable', 'string', 'max:64'],
             'exam_year' => ['nullable', 'integer'],
             'subject_ids' => ['nullable', 'array'],
             'mode' => ['nullable', 'in:simulation,practice'],

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { submitFeedback } from '@/services/FeedbackOutbox';
 
 interface FeedbackModalProps {
     isOpen: boolean;
@@ -42,38 +43,13 @@ export default function FeedbackModal({
         };
 
         try {
-            if (!navigator.onLine) {
-                const existingQueue = JSON.parse(localStorage.getItem('offline_feedbacks') || '[]');
-                existingQueue.push({ ...payload, queued_at: new Date().toISOString() });
-                localStorage.setItem('offline_feedbacks', JSON.stringify(existingQueue));
-
-                setSubmitted(true);
-                return;
-            }
-
-            const res = await fetch('/api/v1/feedback', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                credentials: 'include',
-                body: JSON.stringify(payload),
-            });
-
-            const data = await res.json();
-
-            if (res.ok && data.status === 'success') {
-                setSubmitted(true);
+            // Sent now, or kept and sent automatically once back online.
+            const result = await submitFeedback(payload);
+            if (result.status === 'rejected') {
+                setError(result.error);
             } else {
-                setError(data.message || 'Unable to send feedback. Please try again.');
+                setSubmitted(true);
             }
-        } catch {
-            const existingQueue = JSON.parse(localStorage.getItem('offline_feedbacks') || '[]');
-            existingQueue.push({ ...payload, queued_at: new Date().toISOString() });
-            localStorage.setItem('offline_feedbacks', JSON.stringify(existingQueue));
-            setSubmitted(true);
         } finally {
             setSubmitting(false);
         }

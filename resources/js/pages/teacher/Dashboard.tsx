@@ -10,12 +10,10 @@ import {
     cacheAdminTopics,
     getCachedAdminTopics,
     executeAdminAction,
-    getCachedAdminLearners,
     getAdminAuthHeaders,
     ADMIN_DATA_CHANGED_EVENT,
 } from '@/services/AdminOfflineService';
 import { syncAll } from '@/services/SyncService';
-import { preloadFullOfflineData } from '@/services/OfflineService';
 import QuestionBankTab from '@/components/admin/QuestionBankTab';
 import Pagination from '@/components/common/Pagination';
 import { getGradeLevelsForTeacher } from '@/utils/format';
@@ -26,6 +24,7 @@ import {
     SkeletonDistribution,
     SkeletonTable,
 } from '@/components/common/Skeleton';
+import { recallResponse, rememberResponse } from '@/services/OfflineService';
 
 export interface DiagnosticTopic {
     id: number;
@@ -137,7 +136,7 @@ const toArray = <T,>(val: any): T[] => {
     return [];
 };
 
-export default function Dashboard({ school, classes, selectedClass }: Props) {
+export default function Dashboard({ school, classes = [], selectedClass = null }: Props) {
     const [stats, setStats] = useState<Stats>(defaultStats);
     const [loading, setLoading] = useState(true);
     const [showLearnerModal, setShowLearnerModal] = useState(false);
@@ -269,7 +268,8 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                 headers: getAdminAuthHeaders(),
                 credentials: 'include',
             });
-            if (res.ok) {
+            if (!res.ok) throw new Error(`Teacher stats request failed: ${res.status}`);
+            {
                 const data = await res.json();
                 if (data && data.overview) {
                     setStats({
@@ -305,11 +305,8 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
 
     const handleManualRefresh = async () => {
         await fetchStats(true);
-        if (navigator.onLine) {
-            preloadFullOfflineData('teacher', true);
-        }
         setToastMessage({
-            text: 'Dashboard statistics refreshed & offline pack updated!',
+            text: 'Dashboard statistics refreshed with live data!',
             type: 'success',
         });
     };
@@ -397,17 +394,21 @@ export default function Dashboard({ school, classes, selectedClass }: Props) {
                 fetchStats(true);
                 fetchSubjects();
                 fetchQuestions();
-                preloadFullOfflineData('teacher', true);
             });
         };
 
+        // A sync pass runs every 30s; only refetch when it actually uploaded something.
+        const handleSyncCompleted = (event: Event) => {
+            if ((event as CustomEvent).detail?.synced > 0) handleDataChange();
+        };
+
         window.addEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
-        window.addEventListener('app:sync-completed', handleDataChange);
+        window.addEventListener('app:sync-completed', handleSyncCompleted);
         window.addEventListener('online', handleOnline);
 
         return () => {
             window.removeEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
-            window.removeEventListener('app:sync-completed', handleDataChange);
+            window.removeEventListener('app:sync-completed', handleSyncCompleted);
             window.removeEventListener('online', handleOnline);
         };
     }, [selectedClass]);
@@ -1737,32 +1738,27 @@ function ClassLearnersPanel({
             return;
         }
 
+        // Offline: the roster saved the last time it loaded (or by the offline download).
+        const showSavedRoster = () => {
+            const saved = recallResponse<{ learners?: any[]; class?: { name?: string } }>(`teacher_roster_${selectedClass}`);
+            setLearners(saved?.learners || []);
+            if (saved?.class?.name) setClassName(saved.class.name);
+        };
+
         const loadLearners = async () => {
             setLoading(true);
             try {
-                if (!navigator.onLine) {
-                    const cached = await getCachedAdminLearners();
-                    const matched = cached.filter((l: any) => String(l.class_id) === String(selectedClass));
-                    setLearners(matched as any[]);
-                    return;
-                }
                 const res = await fetch(`/api/v1/teacher/classes/${selectedClass}/learners`, {
                     headers: getAdminAuthHeaders(),
                     credentials: 'include',
                 });
-                if (res.ok) {
-                    const data = await res.json();
-                    setLearners(data.learners || []);
-                    setClassName(data.class?.name || '');
-                } else {
-                    const cached = await getCachedAdminLearners();
-                    const matched = cached.filter((l: any) => String(l.class_id) === String(selectedClass));
-                    setLearners(matched as any[]);
-                }
+                if (!res.ok) throw new Error(`Roster request failed: ${res.status}`);
+                const data = await res.json();
+                setLearners(data.learners || []);
+                setClassName(data.class?.name || '');
+                rememberResponse(`teacher_roster_${selectedClass}`, data);
             } catch {
-                const cached = await getCachedAdminLearners();
-                const matched = cached.filter((l: any) => String(l.class_id) === String(selectedClass));
-                setLearners(matched as any[]);
+                showSavedRoster();
             } finally {
                 setLoading(false);
             }

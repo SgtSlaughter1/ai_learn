@@ -4,93 +4,185 @@ import { createInertiaApp, router } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 import { startAutoSync } from './services/SyncService';
+import { setSyncUser } from './services/SyncQueue';
+import { cacheUserProfile } from './services/OfflineService';
+import {
+    buildOfflinePage,
+    OFFLINE_PROP,
+    rememberAuthUser,
+    renderOfflinePage,
+    saveSnapshot,
+    type AuthUser,
+} from './services/OfflineNavigation';
+import { prewarmPagesForUser, refreshAppShell, removeLegacyCaches } from './services/OfflinePrewarm';
+import { reportServerReachable } from './services/Connectivity';
+import { GlobalNotices, OFFLINE_ACTION_BLOCKED_EVENT } from './components/sync/GlobalNotices';
 
 const appName = import.meta.env.VITE_APP_NAME || 'AceDrill';
 
-// Handle offline navigation for Inertia.js:
-// The Service Worker caches both Inertia JSON and full HTML views.
-// Client-side Inertia transitions work smoothly offline from the SW cache.
 
+// ── Offline navigation ──
+//
+// Page visits that can't reach the server are rendered on the device (see
+// OfflineNavigation.ts) instead of reloading into the service worker. Form posts
+// that can't reach the server are reported, never turned into page reloads.
 
-// Helper to reliably extract the target navigation URL across Inertia v1 & v2 events
-function extractTargetUrl(detail: any): string | null {
-    if (!detail) return null;
+let lastVisit: { url: string; method: string } | null = null;
 
-    // 1. Inertia v2 RequestParams (URL object) or visit URL
-    const requestUrl = detail.response?.requestParams?.all?.()?.url || detail.visit?.url;
-    if (requestUrl) {
-        return typeof requestUrl === 'string' ? requestUrl : requestUrl.href || requestUrl.pathname;
+/** Show a page offline, or the offline notice when this URL can't be shown offline. */
+async function showOffline(url: string): Promise<void> {
+    if (!(await renderOfflinePage(url))) {
+        window.location.assign('/offline.html');
     }
-
-    // 2. Underlying Axios response config / error config
-    const axiosUrl =
-        detail.response?.response?.config?.url ||
-        detail.response?.config?.url ||
-        detail.exception?.config?.url ||
-        detail.response?.url;
-    if (axiosUrl) {
-        return axiosUrl;
-    }
-
-    return null;
 }
 
-// 2. 'invalid' fires if SW returns cached HTML for an XHR request (e.g. offline route fallback).
-//    We redirect to the target URL to load the HTML layout properly.
-router.on('invalid', (event) => {
-    const detail = (event.detail as any);
-    const targetUrl = extractTargetUrl(detail);
+function reportBlockedAction(): void {
+    // Shown by <GlobalNotices />.
+    window.dispatchEvent(new CustomEvent(OFFLINE_ACTION_BLOCKED_EVENT));
+}
 
-    if (targetUrl && !targetUrl.startsWith('/api/')) {
+router.on('before', (event) => {
+    const visit = event.detail.visit;
+    lastVisit = { url: visit.url.href, method: visit.method };
+
+    // A new version was installed while this tab was open: move to it with one normal
+    // page load at the next visit, rather than reloading in the middle of the user's work.
+    if ((window as any).__acedrillUpdateReady && navigator.onLine && visit.method === 'get' && !visit.prefetch && !visit.only?.length) {
         event.preventDefault();
-        if (targetUrl !== window.location.href) {
-            window.location.href = targetUrl;
-            return false;
-        }
+        window.location.assign(visit.url.href);
+        return false;
     }
-    return true;
+
+    if (navigator.onLine || visit.prefetch) return;
+
+    // Known offline: skip the request entirely instead of waiting for it to fail.
+    event.preventDefault();
+    if (visit.method !== 'get') {
+        reportBlockedAction();
+    } else if (!visit.only?.length && !visit.except?.length) {
+        // (Partial reloads just keep the current data.)
+        void showOffline(visit.url.href);
+    }
+    return false;
 });
 
-// 3. 'exception' fires if a network error occurred during an in-flight visit.
-//    We catch network connection failures and perform standard navigation
-//    so the Service Worker can serve cached pages or the offline fallback.
 router.on('exception', (event) => {
-    const detail = (event.detail as any);
-    const exception = detail?.exception;
-    const isNetworkError =
-        !exception?.response ||
-        exception?.message === 'Network Error' ||
-        exception?.code === 'ERR_NETWORK';
+    const exception = event.detail.exception as { response?: unknown } | undefined;
+    // Only connection failures are handled here; real server errors keep Inertia's default.
+    if (exception?.response || !lastVisit) return;
 
-    if (isNetworkError) {
-        const targetUrl = extractTargetUrl(detail);
-        if (targetUrl && !targetUrl.startsWith('/api/')) {
-            event.preventDefault();
-            if (targetUrl !== window.location.href) {
-                window.location.href = targetUrl;
-                return false;
-            }
-        }
+    event.preventDefault();
+    reportServerReachable(false);
+    if (lastVisit.method === 'get') {
+        void showOffline(lastVisit.url);
+    } else {
+        reportBlockedAction();
     }
-    return true;
+    return false;
 });
 
-createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
-    resolve: (name) =>
-        resolvePageComponent(
-            `./pages/${name}.tsx`,
-            import.meta.glob('./pages/**/*.tsx'),
-        ),
-    setup({ el, App, props }) {
-        const root = createRoot(el);
-        root.render(<App {...props} />);
+// ── Signed-in user & page snapshots ──
 
-        // Boot background auto-sync: syncs offline data every 30s when online,
-        // and immediately when connectivity is restored.
-        startAutoSync(30000);
-    },
-    progress: {
-        color: '#183B2B',
-    },
+// Only real server pages are trusted to say who is signed in; pages built on the device
+// reuse the remembered user and must not overwrite it (sign-out clears it explicitly).
+let preparedForUserId: string | null | undefined;
+
+/**
+ * Refresh the app shell and the role's page data whenever a different user is seen
+ * (first load, and right after signing in, which is an in-app navigation).
+ */
+function prepareOfflineFor(user: AuthUser | null, inertiaVersion: string | undefined): void {
+    const id = user?.id ?? null;
+    if (!navigator.onLine || preparedForUserId === id) return;
+    preparedForUserId = id;
+    void refreshAppShell(user);
+    if (user) void prewarmPagesForUser(user, inertiaVersion);
+}
+
+function rememberServerPage(page: any): void {
+    if (!page || page.props?.[OFFLINE_PROP]) return;
+    reportServerReachable(true);
+
+    void saveSnapshot(page);
+
+    const user = page.props?.auth?.user as AuthUser | null | undefined;
+    const authUser: AuthUser | null = user?.id ? { ...user, id: String(user.id) } : null;
+    prepareOfflineFor(authUser, page.version);
+    if (!authUser) return;
+    rememberAuthUser(authUser, page.props?.auth?.can);
+    setSyncUser(authUser.id);
+    cacheUserProfile({
+        id: authUser.id,
+        name: authUser.name,
+        email: authUser.email,
+        role: authUser.role,
+        cached_at: new Date().toISOString(),
+    }).catch(() => {});
+}
+
+router.on('navigate', (event) => {
+    rememberServerPage((event.detail as any)?.page);
 });
+
+// ── Boot ──
+
+function readServerPage(): any {
+    try {
+        const script = document.querySelector('script[data-page="app"][type="application/json"]');
+        const raw = script?.textContent || document.getElementById('app')?.getAttribute('data-page');
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
+}
+
+async function boot(): Promise<void> {
+    const serverPage = readServerPage();
+    const here = window.location.pathname + window.location.search;
+    let initialPage = serverPage;
+
+    // Opened offline: the service worker served the cached app shell, whose page is
+    // some other URL. Build the page that was actually requested on the device.
+    if (serverPage && serverPage.url !== here) {
+        const offlinePage = await buildOfflinePage(window.location.href);
+        if (!offlinePage) {
+            window.location.replace('/offline.html');
+            return;
+        }
+        initialPage = { ...serverPage, ...offlinePage };
+    }
+
+    await createInertiaApp({
+        title: (title) => `${title} - ${appName}`,
+        page: initialPage ?? undefined,
+        resolve: (name) =>
+            resolvePageComponent(
+                `./pages/${name}.tsx`,
+                import.meta.glob('./pages/**/*.tsx'),
+            ),
+        setup({ el, App, props }) {
+            const root = createRoot(el);
+            root.render(
+                <>
+                    <App {...props} />
+                    <GlobalNotices />
+                </>
+            );
+
+            // Boot background auto-sync: syncs offline data every 30s when online,
+            // and immediately when connectivity is restored.
+            startAutoSync(30000);
+        },
+        progress: {
+            color: '#183B2B',
+        },
+    });
+
+    if (initialPage === serverPage) {
+        // Online start: also refreshes what the device needs to open the app offline.
+        rememberServerPage(serverPage);
+        if (navigator.onLine) void removeLegacyCaches();
+    }
+}
+
+void boot();

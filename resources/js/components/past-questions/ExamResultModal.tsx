@@ -29,6 +29,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
     };
 
     const score = result.score_percentage || 0;
+    const scoringPending = Boolean(result.scoring_pending);
     const isPass = score >= 50;
     const isExcellence = score >= 75;
 
@@ -57,7 +58,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                 </div>
 
                 {/* Tab Navigation */}
-                <div className="flex border-b border-[var(--color-border)] px-4 sm:px-6 bg-[var(--color-surface)] overflow-x-auto no-scrollbar whitespace-nowrap">
+                <div className={`flex border-b border-[var(--color-border)] px-4 sm:px-6 bg-[var(--color-surface)] overflow-x-auto no-scrollbar whitespace-nowrap ${scoringPending ? 'hidden' : ''}`}>
                     <button
                         onClick={() => setActiveTab('summary')}
                         className={`py-3.5 px-3 sm:px-4 font-bold text-xs uppercase tracking-wider border-b-2 transition-all cursor-pointer shrink-0 ${
@@ -95,7 +96,19 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
 
                 {/* Tab Body */}
                 <div className="p-4 sm:p-6 md:p-8 overflow-y-auto flex-1 space-y-6">
-                    {activeTab === 'summary' && (
+                    {scoringPending && (
+                        <div className="p-8 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-hover)] text-center space-y-3">
+                            <div className="inline-block px-3.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider shadow-xs bg-[var(--color-surface)] border border-[var(--color-border)]">
+                                Saved offline
+                            </div>
+                            <p className="text-2xl font-extrabold text-[var(--color-text)]">Your answers are saved</p>
+                            <p className="text-sm text-[var(--color-muted)] max-w-md mx-auto leading-relaxed">
+                                You answered {result.answered_count ?? 0} of {result.total_questions} questions in {formatTime(result.time_spent_seconds)}.
+                                Your score and topic breakdown will be worked out when you're back online, and will appear in your exam history.
+                            </p>
+                        </div>
+                    )}
+                    {!scoringPending && activeTab === 'summary' && (
                         <div className="space-y-6">
                             {/* Score Card Hero */}
                             <div className={`p-8 rounded-3xl border text-center relative overflow-hidden ${
@@ -195,7 +208,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                         </div>
                     )}
 
-                    {activeTab === 'topics' && (
+                    {!scoringPending && activeTab === 'topics' && (
                         <div className="space-y-4">
                             <p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider font-extrabold">
                                 Curriculum Topic Mastery Breakdown:
@@ -247,7 +260,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                         </div>
                     )}
 
-                    {activeTab === 'review' && (
+                    {!scoringPending && activeTab === 'review' && (
                         <div className="space-y-4">
                             {result.detailed_results?.map((q, idx) => {
                                 const isExpanded = expandedQuestion === idx;

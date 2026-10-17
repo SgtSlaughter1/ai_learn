@@ -12,10 +12,11 @@ export function OfflineReadinessBadge({ isOnline, className = '', compact = fals
     const {
         isPreloading,
         isComplete,
-        totalSubjects,
-        completedSubjects,
+        total,
+        completed,
         percent,
-        cachedSubjectsCount,
+        savedSummary,
+        savedDetail,
     } = useOfflinePreloadStatus();
 
     const [showInfo, setShowInfo] = useState(false);
@@ -50,7 +51,7 @@ export function OfflineReadinessBadge({ isOnline, className = '', compact = fals
                     <span>Offline</span>
                     {!compact && (
                         <span className="text-[10px] text-amber-600/80 dark:text-amber-400/80 font-normal">
-                            • {cachedSubjectsCount > 0 ? `${cachedSubjectsCount} items saved` : 'Saved data active'}
+                            • {savedSummary ?? 'Saved data active'}
                         </span>
                     )}
                 </button>
@@ -65,9 +66,7 @@ export function OfflineReadinessBadge({ isOnline, className = '', compact = fals
                             <span>Operating Offline</span>
                         </div>
                         <p className="text-[var(--color-muted)] leading-relaxed">
-                            {cachedSubjectsCount > 0
-                                ? `You have ${cachedSubjectsCount} curriculum items and records saved in local device storage. Practice attempts, questions, and changes will sync automatically when reconnected.`
-                                : 'You are currently disconnected. All downloaded curriculum, quizzes, and dashboard records remain available offline.'}
+                            {savedDetail ?? 'You are currently disconnected. Pages you have opened before remain available, and your changes sync when you reconnect.'}
                         </p>
                     </div>
                 )}
@@ -83,7 +82,7 @@ export function OfflineReadinessBadge({ isOnline, className = '', compact = fals
                     className={`inline-flex items-center gap-1.5 rounded-full font-semibold bg-sky-500/10 border border-sky-500/25 text-sky-700 dark:text-sky-300 shadow-2xs select-none transition-all ${
                         compact ? 'px-2 py-0.5 text-[11px]' : 'px-3 py-1 text-xs gap-2'
                     }`}
-                    title={`Downloading offline pack (${percent}%)`}
+                    title={`Saving for offline use (${percent}%)`}
                 >
                     {/* Pulsing Signal Beacon */}
                     <span className="relative flex h-2 w-2 shrink-0">
@@ -93,10 +92,10 @@ export function OfflineReadinessBadge({ isOnline, className = '', compact = fals
 
                     <span className="flex items-center gap-1">
                         <CloudDownload className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-sky-500 shrink-0`} />
-                        <span>{compact ? 'Syncing' : 'Preparing offline pack'}</span>
-                        {totalSubjects > 0 && (
+                        <span>{compact ? 'Caching' : 'Preparing pack'}</span>
+                        {total > 0 && (
                             <span className="tabular-nums font-bold text-[10px]">
-                                ({completedSubjects}/{totalSubjects})
+                                ({completed}/{total})
                             </span>
                         )}
                     </span>
@@ -120,7 +119,7 @@ export function OfflineReadinessBadge({ isOnline, className = '', compact = fals
     }
 
     // 3. Fully Offline-Ready State
-    if (isComplete || cachedSubjectsCount > 0) {
+    if (isComplete || savedSummary) {
         return (
             <div ref={popoverRef} className={`relative inline-flex items-center ${className}`}>
                 <button
@@ -129,7 +128,7 @@ export function OfflineReadinessBadge({ isOnline, className = '', compact = fals
                     className={`inline-flex items-center gap-1.5 rounded-full font-semibold bg-emerald-500/10 border border-emerald-500/25 text-emerald-700 dark:text-emerald-400 shadow-2xs select-none transition-all cursor-pointer hover:bg-emerald-500/15 ${
                         compact ? 'px-2 py-0.5 text-[11px]' : 'px-3 py-1 text-xs'
                     }`}
-                    title="Curriculum, quizzes, questions, and records are stored offline - click for details"
+                    title="Saved for offline use - click for details"
                     aria-label="Offline Ready"
                 >
                     <CheckCircle2 className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-emerald-500 shrink-0`} />
@@ -151,7 +150,7 @@ export function OfflineReadinessBadge({ isOnline, className = '', compact = fals
                             <span>Full Offline Storage Ready</span>
                         </div>
                         <p className="text-[var(--color-muted)] leading-relaxed">
-                            Curriculum, quizzes, questions, and dashboard records are safely stored in your device storage. You can turn off your internet connection anytime to work offline with 0 mobile data.
+                            {savedDetail ?? 'Your data is saved on this device.'} You can turn off your internet connection at any time.
                         </p>
                     </div>
                 )}

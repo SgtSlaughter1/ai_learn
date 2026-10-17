@@ -16,6 +16,8 @@ export interface QuizQuestion {
     difficulty?: string;
     explanation?: string;
     answer_hash?: string | null;
+    /** Marks this question is worth in its quiz (from the server; 1 if unknown). */
+    marks?: number;
     options: QuestionOption[];
 }
 

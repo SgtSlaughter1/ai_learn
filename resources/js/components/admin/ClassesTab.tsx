@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { ClassItem, ClassLearner, SchoolItem } from '@/types/admin';
 import { executeAdminAction } from '@/services/AdminOfflineService';
+import { db } from '@/db/database';
 import ClassFilterBar from './classes/ClassFilterBar';
 import ClassCard from './classes/ClassCard';
 import ClassFormModal, { type ClassFormData } from './classes/ClassFormModal';
@@ -138,6 +139,23 @@ export default function ClassesTab({ classes, schools, loading, onRefresh, showT
         }
     };
 
+    // The roster of each class opened online is kept on the device for offline viewing.
+    const rosterCacheKey = (classId: number | string) => `cached_admin_roster_${classId}`;
+    const readCachedRoster = (classId: number | string): ClassLearner[] => {
+        try {
+            const cached = JSON.parse(localStorage.getItem(rosterCacheKey(classId)) || '[]');
+            return Array.isArray(cached) ? cached : [];
+        } catch {
+            return [];
+        }
+    };
+    const updateRoster = (classId: number | string, learners: ClassLearner[]) => {
+        setClassLearners(learners);
+        try {
+            localStorage.setItem(rosterCacheKey(classId), JSON.stringify(learners));
+        } catch {}
+    };
+
     const openClassRoster = async (cls: ClassItem) => {
         setSelectedClassForRoster(cls);
         setIsRosterModalOpen(true);
@@ -147,11 +165,15 @@ export default function ClassesTab({ classes, schools, loading, onRefresh, showT
                 headers: getAuthHeaders(),
                 credentials: 'include',
             });
+            if (!res.ok) throw new Error(`Roster request failed: ${res.status}`);
             const data = await res.json();
-            setClassLearners(data.learners || []);
-        } catch (err) {
-            console.error(err);
-            showToast('Failed to load class roster', 'error');
+            updateRoster(cls.id, data.learners || []);
+        } catch {
+            const cached = readCachedRoster(cls.id);
+            setClassLearners(cached);
+            if (cached.length === 0) {
+                showToast("This class roster hasn't been saved for offline use yet", 'error');
+            }
         } finally {
             setLoadingClassLearners(false);
         }
@@ -161,27 +183,48 @@ export default function ClassesTab({ classes, schools, loading, onRefresh, showT
         e.preventDefault();
         if (!selectedClassForRoster || !enrollLearnerEmail.trim()) return;
 
+        const cls = selectedClassForRoster;
+        const email = enrollLearnerEmail.trim();
         setEnrollingLearner(true);
         try {
-            const res = await fetch(`/api/v1/admin/classes/${selectedClassForRoster.id}/enroll`, {
+            const res = await executeAdminAction({
+                table: 'classMemberships',
+                action: 'insert',
+                recordId: `${cls.id}:${email}`,
+                endpoint: `/api/v1/admin/classes/${cls.id}/enroll`,
                 method: 'POST',
-                headers: getAuthHeaders(),
-                credentials: 'include',
-                body: JSON.stringify({ email: enrollLearnerEmail.trim() }),
+                payload: { email },
             });
 
-            const data = await res.json();
-            if (res.ok) {
+            if (!res.success) {
+                showToast(res.error || 'Failed to enroll learner', 'error');
+                return;
+            }
+
+            setEnrollLearnerEmail('');
+            if (res.synced) {
                 showToast('Learner enrolled successfully');
-                setEnrollLearnerEmail('');
-                openClassRoster(selectedClassForRoster);
+                openClassRoster(cls);
                 onRefresh();
             } else {
-                showToast(data.error || data.message || 'Failed to enroll learner', 'error');
+                // Saved to sync later: show the learner in the roster now.
+                const known = await db.adminLearners.where('email').equals(email).first().catch(() => undefined);
+                const pending: ClassLearner = {
+                    id: known?.id ? String(known.id) : `pending_${email}`,
+                    name: known?.name || email,
+                    email,
+                    level: 1,
+                    total_xp: 0,
+                    streak: 0,
+                    topics_covered: 0,
+                    avg_mastery: 0,
+                    total_attempted: 0,
+                    total_correct: 0,
+                };
+                const current = classLearners.filter((l) => l.email !== email);
+                updateRoster(cls.id, [...current, pending]);
+                showToast(res.message || 'Saved offline. The enrolment will sync automatically.');
             }
-        } catch (err) {
-            console.error(err);
-            showToast('Error enrolling learner', 'error');
         } finally {
             setEnrollingLearner(false);
         }
@@ -224,23 +267,29 @@ export default function ClassesTab({ classes, schools, loading, onRefresh, showT
         if (!selectedClassForRoster) return;
         if (!confirm('Remove this learner from the class?')) return;
 
-        try {
-            const res = await fetch(`/api/v1/admin/classes/${selectedClassForRoster.id}/learners/${learnerId}`, {
-                method: 'DELETE',
-                headers: getAuthHeaders(),
-                credentials: 'include',
-            });
+        const cls = selectedClassForRoster;
+        // Keyed by email like the enrolment, so removing someone enrolled offline (not yet
+        // synced) cancels that enrolment in the queue instead of sending both.
+        const email = classLearners.find((l) => l.id === learnerId)?.email ?? learnerId;
+        const res = await executeAdminAction({
+            table: 'classMemberships',
+            action: 'delete',
+            recordId: `${cls.id}:${email}`,
+            endpoint: `/api/v1/admin/classes/${cls.id}/learners/${learnerId}`,
+            method: 'DELETE',
+        });
 
-            if (res.ok) {
-                showToast('Learner removed from class');
-                openClassRoster(selectedClassForRoster);
-                onRefresh();
-            } else {
-                showToast('Failed to remove learner', 'error');
-            }
-        } catch (err) {
-            console.error(err);
-            showToast('Error removing learner', 'error');
+        if (!res.success) {
+            showToast(res.error || 'Failed to remove learner', 'error');
+            return;
+        }
+        if (res.synced) {
+            showToast('Learner removed from class');
+            openClassRoster(cls);
+            onRefresh();
+        } else {
+            updateRoster(cls.id, classLearners.filter((l) => l.id !== learnerId));
+            showToast(res.message || 'Saved offline. The change will sync automatically.');
         }
     };
 

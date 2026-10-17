@@ -75,7 +75,8 @@ class SpacedRepetitionController extends Controller
         $gamificationResult = $this->gamificationService->processRevisionCompletion(
             $user,
             $correctCount,
-            $completedCount
+            $completedCount,
+            \App\Services\Gamification\GamificationService::activityTime($validated['completed_at'] ?? null)
         );
 
         return response()->json([

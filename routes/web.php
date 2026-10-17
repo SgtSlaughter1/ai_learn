@@ -13,7 +13,7 @@ use App\Http\Controllers\Web\FlashcardController;
 use App\Http\Controllers\Web\GamificationController;
 use App\Http\Controllers\Web\SyncController;
 use App\Http\Controllers\Web\TeacherDashboardController;
-use App\Http\Controllers\Web\AdminDashboardController;
+use App\Http\Controllers\Admin;
 use App\Http\Controllers\Api\PastQuestionController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -95,20 +95,20 @@ Route::get('/llms-full.txt', function () {
 // Authentication & Password Reset Routes
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'show'])->name('login');
-    Route::post('/login', [LoginController::class, 'store']);
+    Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:login');
     Route::get('/register', [RegisterController::class, 'show'])->name('register');
-    Route::post('/register', [RegisterController::class, 'store']);
+    Route::post('/register', [RegisterController::class, 'store'])->middleware('throttle:login');
     Route::get('/signup', [RegisterController::class, 'show'])->name('signup');
-    Route::post('/signup', [RegisterController::class, 'store']);
+    Route::post('/signup', [RegisterController::class, 'store'])->middleware('throttle:login');
     Route::get('/forgot-password', [PasswordResetLinkController::class, 'show'])->name('password.request');
-    Route::post('/forgot-password', [PasswordResetLinkController::class, 'store'])->name('password.email');
+    Route::post('/forgot-password', [PasswordResetLinkController::class, 'store'])->name('password.email')->middleware('throttle:login');
     Route::get('/reset-password/{token}', [NewPasswordController::class, 'show'])->name('password.reset');
     Route::post('/reset-password', [NewPasswordController::class, 'store'])->name('password.update');
 });
 Route::post('/logout', [LoginController::class, 'destroy']);
 
 // Standalone API Auth Endpoints
-Route::prefix('api/v1/auth')->group(function () {
+Route::prefix('api/v1/auth')->middleware('throttle:login')->group(function () {
     Route::post('/login', [LoginController::class, 'login']);
     Route::post('/register', [RegisterController::class, 'store']);
     Route::get('/user', [LoginController::class, 'getUser']);
@@ -120,10 +120,12 @@ Route::prefix('api/v1/auth')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'showLearnerDashboard']);
     Route::get('/learner/dashboard', fn() => \Inertia\Inertia::render('learner/Dashboard'));
-    Route::get('/admin/dashboard', [AdminDashboardController::class, 'showAdminDashboard']);
-    Route::get('/super-admin/dashboard', [AdminDashboardController::class, 'showAdminDashboard']);
-    Route::get('/school-admin/dashboard', [AdminDashboardController::class, 'showAdminDashboard']);
-    Route::get('/teacher/dashboard', [TeacherDashboardController::class, 'showTeacherDashboard']);
+    Route::middleware('can:access-admin')->group(function () {
+        Route::get('/admin/dashboard', [Admin\DashboardController::class, 'show']);
+        Route::get('/super-admin/dashboard', [Admin\DashboardController::class, 'show']);
+        Route::get('/school-admin/dashboard', [Admin\DashboardController::class, 'show']);
+    });
+    Route::get('/teacher/dashboard', [TeacherDashboardController::class, 'showTeacherDashboard'])->middleware('can:access-teaching');
     Route::get('/subjects', [SubjectWebController::class, 'showSubjectsPage']);
     Route::get('/general-knowledge', [SubjectWebController::class, 'showGeneralKnowledgePage']);
     Route::get('/subjects/{subject}', [SubjectWebController::class, 'showSubject']);
@@ -137,10 +139,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/flashcards', [FlashcardController::class, 'showFlashcardsPage']);
 
     // Separate JSON Data Routes
-    Route::prefix('api/v1')->group(function () {
+    Route::prefix('api/v1')->middleware('throttle:api')->group(function () {
         Route::get('/dashboard/stats', [DashboardController::class, 'getLearnerStats']);
-        Route::get('/admin/stats', [AdminDashboardController::class, 'getAdminStats']);
-        Route::get('/teacher/stats', [TeacherDashboardController::class, 'getTeacherStats']);
+        Route::get('/teacher/stats', [TeacherDashboardController::class, 'getTeacherStats'])->middleware('can:access-teaching');
         Route::get('/classes', [SubjectWebController::class, 'getClasses']);
         Route::get('/subjects', [SubjectWebController::class, 'getSubjects']);
         Route::get('/subjects/{subject}', [SubjectWebController::class, 'getSubjectDetails']);
@@ -155,9 +156,11 @@ Route::middleware('auth')->group(function () {
         Route::post('/quizzes/{quiz}/adaptive/answer', [AdaptiveQuizController::class, 'answer']);
 
         // AI Tutoring & Assistance
-        Route::post('/ai/explain', [AIWebController::class, 'explain']);
-        Route::get('/ai/similar-question', [AIWebController::class, 'similarQuestion']);
-        Route::post('/ai/chat', [AIWebController::class, 'chat']);
+        Route::middleware('throttle:ai')->group(function () {
+            Route::post('/ai/explain', [AIWebController::class, 'explain']);
+            Route::get('/ai/similar-question', [AIWebController::class, 'similarQuestion']);
+            Route::post('/ai/chat', [AIWebController::class, 'chat']);
+        });
 
         // Spaced Repetition (Daily 5-Min Smart Revision)
         Route::get('/revision/today', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'getTodayQueue']);
@@ -174,67 +177,85 @@ Route::middleware('auth')->group(function () {
         Route::get('/gamification/leaderboard', [GamificationController::class, 'leaderboard']);
 
         // Offline Sync Endpoints (called by SyncService.ts when coming back online)
+        Route::post('/sync/batch', [SyncController::class, 'batch'])->middleware('throttle:sync-batch');
+
         Route::post('/progress/sync', [SyncController::class, 'syncProgress']);
         Route::post('/gamification/sync', [SyncController::class, 'syncGamification']);
 
-        // Teacher Dashboard & Class Management
-        Route::get('/teacher/classes/{classId}/learners', [TeacherDashboardController::class, 'getClassLearners']);
-        Route::get('/teacher/classes/{classId}/diagnostics', [TeacherDashboardController::class, 'getClassDiagnostics']);
-        Route::post('/teacher/interventions/assign', [TeacherDashboardController::class, 'assignIntervention']);
-        Route::post('/teacher/classes', [TeacherDashboardController::class, 'createClass']);
-        Route::post('/teacher/classes/{classId}/enroll', [TeacherDashboardController::class, 'enrollLearner']);
-        Route::post('/teacher/learners', [TeacherDashboardController::class, 'saveLearner']);
-        Route::delete('/teacher/classes/{classId}/learners/{learnerId}', [TeacherDashboardController::class, 'removeLearner']);
+        // ── Teaching tools (teachers and admins) ──
+        // Role gates guard each group; policies decide per record (see AppServiceProvider).
+        Route::middleware('can:access-teaching')->group(function () {
+            Route::get('/teacher/classes/{classId}/learners', [TeacherDashboardController::class, 'getClassLearners']);
+            Route::get('/teacher/classes/{classId}/diagnostics', [TeacherDashboardController::class, 'getClassDiagnostics']);
+            Route::post('/teacher/interventions/assign', [TeacherDashboardController::class, 'assignIntervention']);
+            Route::post('/teacher/classes', [TeacherDashboardController::class, 'createClass']);
+            Route::post('/teacher/classes/{classId}/enroll', [TeacherDashboardController::class, 'enrollLearner']);
+            Route::post('/teacher/learners', [TeacherDashboardController::class, 'saveLearner']);
+            Route::delete('/teacher/classes/{classId}/learners/{learnerId}', [TeacherDashboardController::class, 'removeLearner']);
 
-        // Admin Management: Categories, Schools, School Admins, Teachers, Classes, Learners, Subjects, Topics, Questions
-        Route::get('/admin/categories', [AdminDashboardController::class, 'getCategories']);
-        Route::get('/admin/schools', [AdminDashboardController::class, 'getSchools']);
-        Route::post('/admin/schools', [AdminDashboardController::class, 'saveSchool']);
-        Route::put('/admin/schools/{id}', [AdminDashboardController::class, 'updateSchool']);
-        Route::delete('/admin/schools/{id}', [AdminDashboardController::class, 'deleteSchool']);
+            // Curriculum and question bank (writes to subjects/topics are admin-only via policies)
+            Route::get('/admin/programs', [Admin\LookupController::class, 'programs']);
+            Route::get('/admin/classes', [Admin\ClassController::class, 'index']);
+            Route::get('/admin/subjects', [Admin\SubjectController::class, 'index']);
+            Route::get('/admin/topics', [Admin\TopicController::class, 'index']);
 
-        Route::get('/admin/school-admins', [AdminDashboardController::class, 'getSchoolAdmins']);
-        Route::post('/admin/school-admins', [AdminDashboardController::class, 'saveSchoolAdmin']);
-        Route::put('/admin/school-admins/{id}', [AdminDashboardController::class, 'updateSchoolAdmin']);
-        Route::delete('/admin/school-admins/{id}', [AdminDashboardController::class, 'deleteSchoolAdmin']);
+            Route::get('/admin/questions', [Admin\QuestionController::class, 'index']);
+            Route::post('/admin/questions', [Admin\QuestionController::class, 'store']);
+            Route::post('/admin/questions/bulk', [Admin\QuestionController::class, 'bulkStore']);
+            Route::put('/admin/questions/{id}', [Admin\QuestionController::class, 'update']);
+            Route::delete('/admin/questions/{id}', [Admin\QuestionController::class, 'destroy']);
+            Route::post('/admin/questions/upload-image', [Admin\QuestionToolsController::class, 'uploadImage']);
+            Route::post('/admin/questions/ai-extract', [Admin\QuestionToolsController::class, 'extract'])->middleware('throttle:ai');
+            Route::post('/admin/questions/ai-generate', [Admin\QuestionToolsController::class, 'generate'])->middleware('throttle:ai');
+        });
 
-        Route::get('/admin/teachers', [AdminDashboardController::class, 'getTeachers']);
-        Route::post('/admin/teachers', [AdminDashboardController::class, 'saveTeacher']);
-        Route::put('/admin/teachers/{id}', [AdminDashboardController::class, 'updateTeacher']);
-        Route::delete('/admin/teachers/{id}', [AdminDashboardController::class, 'deleteTeacher']);
+        // ── Administration (school admins: their own school; platform admins: everything) ──
+        Route::middleware('can:access-admin')->group(function () {
+            Route::get('/admin/stats', [Admin\DashboardController::class, 'stats']);
+            Route::get('/admin/categories', [Admin\LookupController::class, 'categories']);
+            Route::get('/admin/schools', [Admin\SchoolController::class, 'index']);
 
-        Route::get('/admin/programs', [AdminDashboardController::class, 'getPrograms']);
-        Route::get('/admin/classes', [AdminDashboardController::class, 'getClasses']);
-        Route::post('/admin/classes', [AdminDashboardController::class, 'saveClass']);
-        Route::put('/admin/classes/{id}', [AdminDashboardController::class, 'updateClass']);
-        Route::delete('/admin/classes/{id}', [AdminDashboardController::class, 'deleteClass']);
-        Route::get('/admin/classes/{classId}/learners', [AdminDashboardController::class, 'getClassLearners']);
-        Route::post('/admin/classes/{classId}/enroll', [AdminDashboardController::class, 'enrollClassLearner']);
-        Route::delete('/admin/classes/{classId}/learners/{learnerId}', [AdminDashboardController::class, 'removeClassLearner']);
+            Route::get('/admin/teachers', [Admin\TeacherController::class, 'index']);
+            Route::post('/admin/teachers', [Admin\TeacherController::class, 'store']);
+            Route::put('/admin/teachers/{id}', [Admin\TeacherController::class, 'update']);
+            Route::delete('/admin/teachers/{id}', [Admin\TeacherController::class, 'destroy']);
 
-        Route::get('/admin/learners', [AdminDashboardController::class, 'getLearners']);
-        Route::post('/admin/learners', [AdminDashboardController::class, 'saveLearner']);
-        Route::put('/admin/learners/{id}', [AdminDashboardController::class, 'updateLearner']);
-        Route::delete('/admin/learners/{id}', [AdminDashboardController::class, 'deleteLearner']);
+            Route::get('/admin/learners', [Admin\LearnerController::class, 'index']);
+            Route::post('/admin/learners', [Admin\LearnerController::class, 'store']);
+            Route::put('/admin/learners/{id}', [Admin\LearnerController::class, 'update']);
+            Route::delete('/admin/learners/{id}', [Admin\LearnerController::class, 'destroy']);
 
-        Route::get('/admin/subjects', [AdminDashboardController::class, 'getSubjects']);
-        Route::post('/admin/subjects', [AdminDashboardController::class, 'saveSubject']);
-        Route::put('/admin/subjects/{id}', [AdminDashboardController::class, 'updateSubject']);
-        Route::delete('/admin/subjects/{id}', [AdminDashboardController::class, 'deleteSubject']);
+            Route::post('/admin/classes', [Admin\ClassController::class, 'store']);
+            Route::put('/admin/classes/{id}', [Admin\ClassController::class, 'update']);
+            Route::delete('/admin/classes/{id}', [Admin\ClassController::class, 'destroy']);
+            Route::get('/admin/classes/{classId}/learners', [Admin\ClassLearnerController::class, 'index']);
+            Route::post('/admin/classes/{classId}/enroll', [Admin\ClassLearnerController::class, 'store']);
+            Route::delete('/admin/classes/{classId}/learners/{learnerId}', [Admin\ClassLearnerController::class, 'destroy']);
 
-        Route::get('/admin/topics', [AdminDashboardController::class, 'getTopics']);
-        Route::post('/admin/topics', [AdminDashboardController::class, 'saveTopic']);
-        Route::put('/admin/topics/{id}', [AdminDashboardController::class, 'updateTopic']);
-        Route::delete('/admin/topics/{id}', [AdminDashboardController::class, 'deleteTopic']);
+            Route::post('/admin/subjects', [Admin\SubjectController::class, 'store']);
+            Route::put('/admin/subjects/{id}', [Admin\SubjectController::class, 'update']);
+            Route::delete('/admin/subjects/{id}', [Admin\SubjectController::class, 'destroy']);
 
-        Route::get('/admin/questions', [AdminDashboardController::class, 'getQuestions']);
-        Route::post('/admin/questions', [AdminDashboardController::class, 'saveQuestion']);
-        Route::post('/admin/questions/upload-image', [AdminDashboardController::class, 'uploadQuestionImage']);
-        Route::post('/admin/questions/ai-extract', [AdminDashboardController::class, 'aiExtractQuestions']);
-        Route::post('/admin/questions/ai-generate', [AdminDashboardController::class, 'aiGenerateQuestions']);
-        Route::post('/admin/questions/bulk', [AdminDashboardController::class, 'bulkSaveQuestions']);
-        Route::put('/admin/questions/{id}', [AdminDashboardController::class, 'updateQuestion']);
-        Route::delete('/admin/questions/{id}', [AdminDashboardController::class, 'deleteQuestion']);
+            Route::post('/admin/topics', [Admin\TopicController::class, 'store']);
+            Route::put('/admin/topics/{id}', [Admin\TopicController::class, 'update']);
+            Route::delete('/admin/topics/{id}', [Admin\TopicController::class, 'destroy']);
+        });
+
+        // ── Platform administration (platform admins only) ──
+        Route::middleware('can:manage-platform')->group(function () {
+            Route::post('/admin/schools', [Admin\SchoolController::class, 'store']);
+            Route::put('/admin/schools/{id}', [Admin\SchoolController::class, 'update']);
+            Route::delete('/admin/schools/{id}', [Admin\SchoolController::class, 'destroy']);
+
+            Route::get('/admin/school-admins', [Admin\SchoolAdminController::class, 'index']);
+            Route::post('/admin/school-admins', [Admin\SchoolAdminController::class, 'store']);
+            Route::put('/admin/school-admins/{id}', [Admin\SchoolAdminController::class, 'update']);
+            Route::delete('/admin/school-admins/{id}', [Admin\SchoolAdminController::class, 'destroy']);
+
+            Route::get('/admin/feedbacks', [\App\Http\Controllers\Api\FeedbackController::class, 'index']);
+            Route::put('/admin/feedbacks/{id}/status', [\App\Http\Controllers\Api\FeedbackController::class, 'updateStatus']);
+        });
+
         // Past Questions & National Exam Simulation Hub
         Route::get('/past-questions/meta', [PastQuestionController::class, 'getMeta']);
         Route::get('/past-questions/questions', [PastQuestionController::class, 'getQuestions']);
@@ -247,14 +268,15 @@ Route::middleware('auth')->group(function () {
 });
 
 // Past questions public API endpoints (accessible without strict session login for guest practice)
-Route::prefix('api/v1/past-questions')->group(function () {
+// Open to guests (CBT practice); these registrations take precedence over the signed-in ones above.
+Route::prefix('api/v1/past-questions')->middleware('throttle:api')->group(function () {
     Route::get('/meta', [PastQuestionController::class, 'getMeta']);
     Route::get('/questions', [PastQuestionController::class, 'getQuestions']);
     Route::post('/verify-answer', [PastQuestionController::class, 'verifyAnswer']);
     Route::post('/simulation/start', [PastQuestionController::class, 'startSimulation']);
     Route::post('/simulation/submit', [PastQuestionController::class, 'submitSimulation']);
     Route::get('/history', [PastQuestionController::class, 'getHistory']);
-    Route::post('/explain', [PastQuestionController::class, 'explain']);
+    Route::post('/explain', [PastQuestionController::class, 'explain'])->middleware('throttle:ai');
 });
 
 Route::get('/api/health', function () {
@@ -515,5 +537,9 @@ Route::get('/run-past-questions-seed', function () use ($guardMaintenance) {
 });
 
 // Feedback Submission Web Endpoint
-Route::post('/api/v1/feedback', [\App\Http\Controllers\Api\FeedbackController::class, 'store']);
+Route::post('/api/v1/feedback', [\App\Http\Controllers\Api\FeedbackController::class, 'store'])->middleware('throttle:public-feedback');
+
+// Who is signed in (null for guests). Public so the sync engine can ask on any page
+// without the browser logging a 401 for signed-out visitors.
+Route::get('/api/v1/sync/session', [\App\Http\Controllers\Web\SyncController::class, 'session'])->middleware('throttle:api');
 

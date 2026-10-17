@@ -192,6 +192,12 @@ export interface Learner {
     _offlineDeleted?: boolean;
 }
 
+/** What the current user may do with a record, computed by the server's policies. */
+export interface RecordAbilities {
+    update: boolean;
+    delete: boolean;
+}
+
 export interface TopicItem {
     id: number;
     subject_id: number;
@@ -205,6 +211,7 @@ export interface TopicItem {
     subject?: { id: number; name: string; slug: string; class_id?: number | null };
     _pendingSync?: boolean;
     _offlineDeleted?: boolean;
+    can?: RecordAbilities;
 }
 
 export interface SubjectItem {
@@ -224,6 +231,7 @@ export interface SubjectItem {
     topics?: TopicItem[];
     _pendingSync?: boolean;
     _offlineDeleted?: boolean;
+    can?: RecordAbilities;
 }
 
 export interface QuestionOptionItem {
@@ -262,4 +270,5 @@ export interface QuestionItem {
     };
     _pendingSync?: boolean;
     _offlineDeleted?: boolean;
+    can?: RecordAbilities;
 }

@@ -15,6 +15,10 @@ class SubmitExamSimulationRequest extends FormRequest
     {
         return [
             'simulation_id' => ['nullable', 'integer'],
+            'client_id' => ['nullable', 'string', 'max:64'],
+            'mode' => ['nullable', 'in:simulation,practice'],
+            'duration_seconds' => ['nullable', 'integer'],
+            'completed_at' => ['nullable', 'date'],
             'exam_code' => ['required', 'string'],
             'exam_year' => ['nullable', 'integer'],
             'time_spent_seconds' => ['nullable', 'integer'],

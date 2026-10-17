@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Notifications\Notifiable;
 
 use App\Enums\UserRole;
@@ -20,7 +21,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, HasUuids;
+    // SoftDeletes = archiving: archived users keep their quiz history but cannot sign in.
+    use HasFactory, Notifiable, HasUuids, SoftDeletes;
 
     protected $guarded = [];
 
@@ -138,24 +140,114 @@ class User extends Authenticatable
         return $this->role === UserRole::LEARNER || $this->role === 'learner';
     }
 
+    // ── School scope: the one rule every policy and query scope uses ──
+
+    private bool $managedSchoolResolved = false;
+    private ?int $managedSchoolIdCache = null;
+
     /**
-     * Get the primary school for this user (first school found).
+     * The school this account belongs to: the school a school admin administers, a
+     * teacher's profile school, or a learner's profile/class school. Null when the
+     * account has none (and for platform admins, who are not bound to one school).
+     */
+    public function managedSchoolId(): ?int
+    {
+        if (!$this->managedSchoolResolved) {
+            $id = match (true) {
+                $this->isSchoolAdmin() => $this->administeredSchool()->value('id'),
+                $this->isTeacher() => $this->teacherProfile()->value('school_id'),
+                $this->isLearner() => $this->learnerProfile()->whereNotNull('school_id')->value('school_id')
+                    ?? $this->classes()->where('classes.is_active', true)->value('classes.school_id'),
+                default => null,
+            };
+            $this->managedSchoolIdCache = $id !== null ? (int) $id : null;
+            $this->managedSchoolResolved = true;
+        }
+        return $this->managedSchoolIdCache;
+    }
+
+    /**
+     * Whether this account may act on data of the given school. Platform admins may act
+     * on any school and on global (school-less) content; everyone else only on their own
+     * school, never on global content.
+     */
+    public function canAccessSchool(int|string|null $schoolId): bool
+    {
+        if ($this->isPlatformAdmin()) {
+            return true;
+        }
+        return $schoolId !== null && $this->managedSchoolId() !== null && (int) $schoolId === $this->managedSchoolId();
+    }
+
+    /** @var array<int, int>|null */
+    private ?array $taughtClassIdsCache = null;
+
+    /** Classes this user teaches: active teacher memberships of active classes (loaded once per request). */
+    public function taughtClassIds(): array
+    {
+        if ($this->taughtClassIdsCache === null) {
+            $this->taughtClassIdsCache = !$this->isTeacher() ? [] : ClassMembership::where('user_id', $this->id)
+                ->where('role', 'teacher')
+                ->where('is_active', true)
+                ->whereHas('schoolClass', fn ($q) => $q->where('is_active', true))
+                ->pluck('class_id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        }
+        return $this->taughtClassIdsCache;
+    }
+
+    public function teachesClass(int|string|null $classId): bool
+    {
+        return $classId !== null && in_array((int) $classId, $this->taughtClassIds(), true);
+    }
+
+    /** Whether this (learner or teacher) account belongs to the school, through its profile or a class. */
+    public function belongsToSchool(int $schoolId): bool
+    {
+        return static::whereKey($this->id)->belongingToSchool($schoolId)->exists();
+    }
+
+    /** Accounts attached to the school through a learner/teacher profile or a class membership. */
+    public function scopeBelongingToSchool($query, int $schoolId)
+    {
+        return $query->where(function ($q) use ($schoolId) {
+            $q->whereHas('learnerProfile', fn ($p) => $p->where('school_id', $schoolId))
+                ->orWhereHas('teacherProfile', fn ($p) => $p->where('school_id', $schoolId))
+                ->orWhereHas('classMemberships', fn ($m) => $m->whereIn('class_id', ClassModel::where('school_id', $schoolId)->select('id')));
+        });
+    }
+
+    /**
+     * The school a record created by this user belongs to: platform admins choose (or
+     * leave it global with null); everyone else always creates in their own school.
+     */
+    public function schoolForNewRecord(int|string|null $requested = null): ?int
+    {
+        if ($this->isPlatformAdmin()) {
+            return $requested !== null && $requested !== '' ? (int) $requested : null;
+        }
+        return $this->managedSchoolId();
+    }
+
+    /** Accounts the actor may see in admin lists: all for platform admins, else their school's. */
+    public function scopeManagedBy($query, User $actor)
+    {
+        return $actor->isPlatformAdmin() ? $query : $query->belongingToSchool($actor->managedSchoolId() ?? 0);
+    }
+
+    /**
+     * The school record for this account. Platform admins get the first school as a
+     * default context for school-level screens; everyone else gets their own school or
+     * null (never someone else's school).
      */
     public function primarySchool(): ?School
     {
         if ($this->isPlatformAdmin()) {
             return School::first();
         }
-        if ($this->isSchoolAdmin()) {
-            return $this->administeredSchool()->first() ?? School::first();
-        }
-        if ($this->isTeacher()) {
-            return $this->teacherProfile()->first()?->school ?? School::first();
-        }
-        if ($this->isLearner()) {
-            return $this->learnerProfile()->first()?->school;
-        }
-        return null;
+        $schoolId = $this->managedSchoolId();
+        return $schoolId ? School::find($schoolId) : null;
     }
 
     /**
@@ -167,17 +259,7 @@ class User extends Authenticatable
         if ($this->isPlatformAdmin()) {
             return true;
         }
-        if ($this->isSchoolAdmin()) {
-            return true;
-        }
-        if ($this->isTeacher()) {
-            return (bool) $this->teacherProfile()->first()?->school_id;
-        }
-        if ($this->isLearner()) {
-            return (bool) ($this->learnerProfile()->first()?->school_id
-                ?? $this->classes()->where('classes.is_active', true)->first()?->school_id);
-        }
-        return false;
+        return $this->managedSchoolId() !== null;
     }
 
     /**
@@ -198,11 +280,7 @@ class User extends Authenticatable
             return [];
         }
 
-        $gradeOrder = [
-            'CRECHE' => 1, 'KG1' => 2, 'KG2' => 3, 'NUR1' => 4, 'NUR2' => 5,
-            'PRI1' => 6, 'PRI2' => 7, 'PRI3' => 8, 'PRI4' => 9, 'PRI5' => 10, 'PRI6' => 11,
-            'JSS1' => 12, 'JSS2' => 13, 'JSS3' => 14, 'SS1' => 15, 'SS2' => 16, 'SS3' => 17,
-        ];
+        $gradeOrder = ClassModel::GRADE_ORDER;
 
         // 1. Program Track (e.g., SS1-SS3 Science / Business / Humanities)
         if ($currentClass->program_id) {
@@ -334,65 +412,26 @@ class User extends Authenticatable
     }
 
     /**
-     * Check if user can manage a given class.
+     * Delete this account, or archive it when it has quiz history (attempts must stay
+     * valid for reports and cannot be deleted). Archived users cannot sign in and no
+     * longer appear anywhere; their email is freed for a new account.
+     *
+     * @return bool true when the account was archived rather than deleted
      */
-    public function canManageClass(?int $classId): bool
+    public function removeAccount(): bool
     {
-        if (!$classId) {
+        if (!QuizAttempt::where('user_id', $this->id)->exists()) {
+            $this->forceDelete();
             return false;
         }
-        if ($this->isPlatformAdmin()) {
-            return true;
-        }
-        if ($this->isSchoolAdmin()) {
-            $schoolId = $this->primarySchool()?->id;
-            return ClassModel::where('id', $classId)->where('school_id', $schoolId)->exists();
-        }
-        if ($this->isTeacher()) {
-            return $this->classes()->where('classes.id', $classId)->where('classes.is_active', true)->exists();
-        }
-        return false;
-    }
 
-    /**
-     * Check if user can manage a given subject.
-     */
-    public function canManageSubject(?Subject $subject): bool
-    {
-        if (!$subject) {
-            return false;
-        }
-        if ($this->isPlatformAdmin()) {
-            return true;
-        }
-        if ($this->isSchoolAdmin()) {
-            $schoolId = $this->primarySchool()?->id;
-            return $subject->school_id === $schoolId || is_null($subject->school_id);
-        }
-        if ($this->isTeacher()) {
-            return $subject->class_id && $this->classes()->where('classes.id', $subject->class_id)->where('classes.is_active', true)->exists();
-        }
-        return false;
-    }
+        $this->forceFill([
+            'archived_email' => $this->email,
+            'email' => 'archived+' . $this->id . '@archived.invalid',
+            'remember_token' => null,
+        ])->save();
+        $this->delete();
 
-    /**
-     * Check if user can manage a given topic.
-     */
-    public function canManageTopic(?Topic $topic): bool
-    {
-        if (!$topic) {
-            return false;
-        }
-        if ($this->isPlatformAdmin()) {
-            return true;
-        }
-        $subject = $topic->subject ?? Subject::find($topic->subject_id);
-        if (!$this->canManageSubject($subject)) {
-            return false;
-        }
-        if ($topic->level && !$this->supportsGradeLevel($topic->level)) {
-            return false;
-        }
         return true;
     }
 }

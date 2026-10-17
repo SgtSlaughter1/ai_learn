@@ -152,13 +152,16 @@
                             console.error('[SW] ServiceWorker registration failed:', err);
                         });
 
-                    // When a new SW activates and claims clients, reload once while online
-                    // so the open tab does not attempt to request orphaned chunk hashes
-                    let refreshing = false;
+                    // A service worker taking control doesn't need a reload:
+                    //  - first visit: it just starts controlling this page (reloading here made
+                    //    every first visit load twice);
+                    //  - a new version: reloading on the spot would throw away whatever the
+                    //    user is doing. Instead the app switches to the new build at the next
+                    //    page visit with one normal full load (see app.tsx).
+                    const hadController = !!navigator.serviceWorker.controller;
                     navigator.serviceWorker.addEventListener('controllerchange', () => {
-                        if (!refreshing && navigator.onLine) {
-                            refreshing = true;
-                            window.location.reload();
+                        if (hadController) {
+                            window.__acedrillUpdateReady = true;
                         }
                     });
                 });

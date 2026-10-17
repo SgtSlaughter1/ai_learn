@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { usePage } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import LearnerDashboard from './learner/Dashboard';
 
 export default function DashboardDispatcher() {
@@ -8,10 +8,11 @@ export default function DashboardDispatcher() {
     const role = auth?.user?.role;
 
     useEffect(() => {
+        // App navigation (not a full reload) so this also works offline.
         if (role === 'platform_admin' || role === 'school_admin') {
-            window.location.href = '/admin/dashboard';
+            router.visit('/admin/dashboard', { replace: true });
         } else if (role === 'teacher') {
-            window.location.href = '/teacher/dashboard';
+            router.visit('/teacher/dashboard', { replace: true });
         }
     }, [role]);
 

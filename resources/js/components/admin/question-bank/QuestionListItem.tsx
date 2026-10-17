@@ -59,29 +59,33 @@ export default function QuestionListItem({ question: q, onEdit, onDelete, isDele
 
                 {/* Edit & Delete Actions */}
                 <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-                    <button
-                        type="button"
-                        onClick={() => onEdit(q)}
-                        disabled={isDeleting}
-                        className="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs font-bold text-[var(--color-primary)] hover:bg-[var(--color-primary-5)] active:scale-[0.98] disabled:opacity-50 cursor-pointer rounded-lg transition-all border border-[var(--color-border)]"
-                    >
-                        Edit
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => onDelete(q)}
-                        disabled={isDeleting}
-                        className="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs font-bold text-[var(--color-error)] hover:bg-[var(--color-error-5)] active:scale-[0.98] disabled:opacity-50 cursor-pointer rounded-lg transition-all flex items-center gap-1"
-                    >
-                        {isDeleting ? (
-                            <>
-                                <span className="w-3 h-3 border-2 border-[var(--color-error)]/30 border-t-[var(--color-error)] rounded-full animate-spin"></span>
-                                <span>Deleting...</span>
-                            </>
-                        ) : (
-                            <span>Delete</span>
-                        )}
-                    </button>
+                    {q.can?.update !== false && (
+                        <button
+                            type="button"
+                            onClick={() => onEdit(q)}
+                            disabled={isDeleting}
+                            className="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs font-bold text-[var(--color-primary)] hover:bg-[var(--color-primary-5)] active:scale-[0.98] disabled:opacity-50 cursor-pointer rounded-lg transition-all border border-[var(--color-border)]"
+                        >
+                            Edit
+                        </button>
+                    )}
+                    {q.can?.delete !== false && (
+                        <button
+                            type="button"
+                            onClick={() => onDelete(q)}
+                            disabled={isDeleting}
+                            className="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs font-bold text-[var(--color-error)] hover:bg-[var(--color-error-5)] active:scale-[0.98] disabled:opacity-50 cursor-pointer rounded-lg transition-all flex items-center gap-1"
+                        >
+                            {isDeleting ? (
+                                <>
+                                    <span className="w-3 h-3 border-2 border-[var(--color-error)]/30 border-t-[var(--color-error)] rounded-full animate-spin"></span>
+                                    <span>Deleting...</span>
+                                </>
+                            ) : (
+                                <span>Delete</span>
+                            )}
+                        </button>
+                    )}
                 </div>
             </div>
 

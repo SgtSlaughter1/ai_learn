@@ -23,7 +23,6 @@ import {
     ADMIN_DATA_CHANGED_EVENT,
 } from '@/services/AdminOfflineService';
 import { syncAll } from '@/services/SyncService';
-import { preloadFullOfflineData } from '@/services/OfflineService';
 import OverviewTab from '@/components/admin/OverviewTab';
 import SchoolsTab from '@/components/admin/SchoolsTab';
 import SchoolAdminsTab from '@/components/admin/SchoolAdminsTab';
@@ -32,9 +31,10 @@ import ClassesTab from '@/components/admin/ClassesTab';
 import LearnersTab from '@/components/admin/LearnersTab';
 import SubjectsTab from '@/components/admin/SubjectsTab';
 import QuestionBankTab from '@/components/admin/QuestionBankTab';
+import type { Abilities } from '@/types';
 
 export default function Dashboard() {
-    const { auth } = usePage<{ auth: { user: { id: number; name: string; email: string; role: string } } }>().props;
+    const { auth } = usePage<{ auth: { user: { id: number; name: string; email: string; role: string }; can?: Abilities | null } }>().props;
     const { url } = usePage();
 
     const parseTabFromUrl = (targetUrl?: string): 'overview' | 'schools' | 'school_admins' | 'teachers' | 'classes' | 'learners' | 'subjects' | 'questions' => {
@@ -79,7 +79,8 @@ export default function Dashboard() {
     const [stats, setStats] = useState<Stats | null>(null);
     const [loadingStats, setLoadingStats] = useState(true);
     
-    const isSuperAdmin = auth?.user?.role === 'platform_admin' || (stats?.is_super_admin === true);
+    // From the server's gates (HandleInertiaRequests), not a role-string comparison.
+    const isSuperAdmin = auth?.can?.managePlatform === true;
     
     const [schools, setSchools] = useState<SchoolItem[]>([]);
     const [loadingSchools, setLoadingSchools] = useState(false);
@@ -121,15 +122,14 @@ export default function Dashboard() {
                 headers: getAdminAuthHeaders(),
                 credentials: 'include',
             });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.status === 'success') {
-                    setStats(data.data);
-                    localStorage.setItem('cached_admin_stats', JSON.stringify(data.data));
-                } else if (data.overview) {
-                    setStats(data);
-                    localStorage.setItem('cached_admin_stats', JSON.stringify(data));
-                }
+            if (!res.ok) throw new Error(`Stats request failed: ${res.status}`);
+            const data = await res.json();
+            if (data.status === 'success') {
+                setStats(data.data);
+                localStorage.setItem('cached_admin_stats', JSON.stringify(data.data));
+            } else if (data.overview) {
+                setStats(data);
+                localStorage.setItem('cached_admin_stats', JSON.stringify(data));
             }
         } catch (e) {
             console.warn('Failed to load stats online, checking local cache:', e);
@@ -373,9 +373,6 @@ export default function Dashboard() {
         fetchLearners();
         fetchSubjects();
         fetchQuestions();
-        if (navigator.onLine) {
-            preloadFullOfflineData(isSuperAdmin ? 'platform_admin' : 'school_admin');
-        }
 
         const handleDataChange = () => {
             fetchStats();
@@ -393,17 +390,21 @@ export default function Dashboard() {
         const handleOnline = () => {
             syncAll().then(() => {
                 handleDataChange();
-                preloadFullOfflineData(isSuperAdmin ? 'platform_admin' : 'school_admin', true);
             });
         };
 
+        // A sync pass runs every 30s; only refetch when it actually uploaded something.
+        const handleSyncCompleted = (event: Event) => {
+            if ((event as CustomEvent).detail?.synced > 0) handleDataChange();
+        };
+
         window.addEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
-        window.addEventListener('app:sync-completed', handleDataChange);
+        window.addEventListener('app:sync-completed', handleSyncCompleted);
         window.addEventListener('online', handleOnline);
 
         return () => {
             window.removeEventListener(ADMIN_DATA_CHANGED_EVENT, handleDataChange);
-            window.removeEventListener('app:sync-completed', handleDataChange);
+            window.removeEventListener('app:sync-completed', handleSyncCompleted);
             window.removeEventListener('online', handleOnline);
         };
     }, [isSuperAdmin]);

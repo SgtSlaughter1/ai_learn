@@ -6,10 +6,10 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class CreateTeacherClassRequest extends FormRequest
 {
+    /** Authorized by the route's role gate and the controller's policy checks. */
     public function authorize(): bool
     {
-        $user = $this->user();
-        return $user && ($user->isAnyAdmin() || $user->isTeacher() || $user->teacherProfile()->exists());
+        return true;
     }
 
     public function rules(): array

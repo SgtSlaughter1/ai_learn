@@ -3,6 +3,7 @@ import { Head, Link } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import { db } from '@/db/database';
 import { Skeleton, SkeletonText } from '@/components/common/Skeleton';
+import { recallResponse, rememberResponse, toCachedSubject } from '@/services/OfflineService';
 
 interface Subject {
     id: number;
@@ -31,12 +32,14 @@ interface UserSchool {
     name: string;
 }
 
+interface SubjectsResponse {
+    subjects: Subject[];
+    user_school?: UserSchool | null;
+}
+
+const responseKey = (classId: number | null) => `subjects_school_${classId ?? 'all'}`;
+
 export default function Index() {
-    const [loading, setLoading] = useState<boolean>(true);
-    const [subjects, setSubjects] = useState<Subject[]>([]);
-    const [classes, setClasses] = useState<ClassItem[]>([]);
-    const [userSchool, setUserSchool] = useState<UserSchool | null>(null);
-    const [searchQuery, setSearchQuery] = useState('');
     const [selectedClassId, setSelectedClassId] = useState<number | null>(() => {
         if (typeof window !== 'undefined') {
             const urlParam = new URLSearchParams(window.location.search).get('class_id');
@@ -46,6 +49,14 @@ export default function Index() {
         }
         return null;
     });
+    // First paint uses the last server answer for this same filter, so the page doesn't
+    // show a generic list (school names instead of classes) and then change.
+    const [initial] = useState(() => recallResponse<SubjectsResponse>(responseKey(selectedClassId)));
+    const [loading, setLoading] = useState<boolean>(!initial);
+    const [subjects, setSubjects] = useState<Subject[]>(initial?.subjects ?? []);
+    const [classes, setClasses] = useState<ClassItem[]>(() => recallResponse<ClassItem[]>('class_options') ?? []);
+    const [userSchool, setUserSchool] = useState<UserSchool | null>(initial?.user_school ?? null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     const handleClassSelect = (classId: number | null) => {
         setSelectedClassId(classId);
@@ -63,44 +74,54 @@ export default function Index() {
     };
 
     useEffect(() => {
+
         fetch('/api/v1/classes')
-            .then((res) => res.json())
+            .then((res) => {
+                if (!res.ok) throw new Error(`Classes request failed: ${res.status}`);
+                return res.json();
+            })
             .then((data) => {
                 if (data.classes && data.classes.length > 0) {
                     setClasses(data.classes);
+                    rememberResponse('class_options', data.classes);
                 }
             })
-            .catch(() => {});
+            .catch(() => {
+                // Offline: use the class list from the last time this page loaded online.
+                const cached = recallResponse<ClassItem[]>('class_options');
+                if (cached?.length) setClasses(cached);
+            });
     }, []);
 
     useEffect(() => {
         let isMounted = true;
 
         async function loadSubjects() {
-            setLoading(true);
-
-            // 1. Try reading from Dexie first (instant offline/cached render)
-            try {
-                const local = await db.subjects.toArray();
-                if (local.length > 0 && isMounted) {
-                    const filteredLocal = local.filter((s) => s.school_id !== null && s.school_id !== undefined);
-                    if (filteredLocal.length > 0) {
-                        setSubjects(filteredLocal.map((s: any) => ({
-                            id: s.id,
-                            school_id: s.school_id,
-                            school_name: s.school_name,
-                            is_general_knowledge: s.is_general_knowledge,
-                            name: s.name,
-                            slug: s.slug,
+            const remembered = recallResponse<SubjectsResponse>(responseKey(selectedClassId));
+            if (remembered) {
+                // 1a. The last server answer for this filter: identical to what's coming.
+                setSubjects(remembered.subjects);
+                if (remembered.user_school) setUserSchool(remembered.user_school);
+                setLoading(false);
+            } else {
+                // 1b. First visit to this filter: school subjects saved on the device.
+                setLoading(true);
+                try {
+                    const local = await db.subjects.toArray();
+                    const schoolSubjects = local.filter((s) => s.school_id !== null && s.school_id !== undefined
+                        && (!selectedClassId || s.class_id === selectedClassId));
+                    if (schoolSubjects.length > 0 && isMounted) {
+                        setSubjects(schoolSubjects.map((s) => ({
+                            ...s,
                             description: s.description,
                             progress_percent: s.progress_percent || 0,
                             topics_count: s.topics_count || 0,
                         })));
                         setLoading(false);
                     }
+                } catch (e) {
+                    console.error('Dexie read error:', e);
                 }
-            } catch (e) {
-                console.error('Dexie read error:', e);
             }
 
             // 2. Fetch fresh data from network if online
@@ -119,24 +140,10 @@ export default function Index() {
                         }
                         setLoading(false);
                     }
+                    rememberResponse(responseKey(selectedClassId), { subjects: data.subjects || [], user_school: data.user_school ?? null });
                     // Save to Dexie for offline use
                     if (data.subjects && data.subjects.length > 0) {
-                        await db.subjects.bulkPut(
-                            data.subjects.map((s: any) => ({
-                                id: s.id,
-                                school_id: s.school_id,
-                                school_name: s.school_name,
-                                is_general_knowledge: s.is_general_knowledge,
-                                name: s.name,
-                                slug: s.slug,
-                                description: s.description,
-                                status: 'published',
-                                sort_order: 0,
-                                progress_percent: s.progress_percent || 0,
-                                topics_count: s.topics_count || 0,
-                                cached_at: new Date().toISOString(),
-                            }))
-                        );
+                        await db.subjects.bulkPut(data.subjects.map(toCachedSubject));
                     }
                 }
             } catch (err) {

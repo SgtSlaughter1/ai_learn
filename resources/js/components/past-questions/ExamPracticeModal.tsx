@@ -29,6 +29,8 @@ export const ExamPracticeModal: React.FC<Props> = ({
         isCorrect: boolean;
         correctOptionId: number | null;
         explanation?: string | null;
+        /** Offline without the answer key: the answer can't be checked yet. */
+        unverified?: boolean;
     }>>({});
     const [bookmarked, setBookmarked] = useState<Record<number, boolean>>({});
 
@@ -103,14 +105,15 @@ export const ExamPracticeModal: React.FC<Props> = ({
             }
         }
 
-        // Offline / Network Fallback: preserve interaction gracefully
-        const fallbackOpt = currentQ.options.find(o => o.id === optId);
+        // Offline: answer keys stay on the server, so say the answer can't be checked yet
+        // rather than marking it wrong and pointing at an arbitrary option.
         setVerifiedAnswers(prev => ({
             ...prev,
             [currentQ.id]: {
-                isCorrect: Boolean(fallbackOpt?.is_correct),
-                correctOptionId: currentQ.options[0]?.id || optId,
+                isCorrect: false,
+                correctOptionId: null,
                 explanation: currentQ.explanation,
+                unverified: true,
             },
         }));
     };
@@ -409,7 +412,12 @@ export const ExamPracticeModal: React.FC<Props> = ({
                             let optionStyle = 'border-[var(--color-border)] bg-[var(--color-background)]/40 hover:bg-[var(--color-surface-hover)] hover:border-[var(--color-primary-light)]';
                             let badgeStyle = 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)]';
 
-                            if (isAnswered) {
+                            if (isAnswered && verification?.unverified) {
+                                // Not checked yet (offline): just show which option was picked.
+                                optionStyle = isSelected
+                                    ? 'border-[var(--color-primary)] bg-[var(--color-primary-5)] ring-2 ring-[var(--color-primary)]/30'
+                                    : 'border-[var(--color-border)] opacity-60 bg-[var(--color-background)]/20';
+                            } else if (isAnswered) {
                                 if (isOptionCorrect) {
                                     optionStyle = 'border-[var(--color-success)] bg-[var(--color-success-10)] text-[var(--color-success)] ring-2 ring-[var(--color-success)]/30';
                                     badgeStyle = 'bg-[var(--color-success)] text-white font-bold border-transparent';
@@ -458,8 +466,17 @@ export const ExamPracticeModal: React.FC<Props> = ({
                         })}
                     </div>
 
+                    {isAnswered && verification?.unverified && (
+                        <div className="p-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-hover)] text-sm text-[var(--color-text)] animate-fade-in">
+                            <p className="font-bold">Answer recorded</p>
+                            <p className="text-xs text-[var(--color-muted)] mt-1 leading-relaxed">
+                                You're offline, and answers are checked by the server, so this one can't be marked right now. Reconnect to see the correct answer and working.
+                            </p>
+                        </div>
+                    )}
+
                     {/* Instant Explanation & Solution Card */}
-                    {isAnswered && (
+                    {isAnswered && !verification?.unverified && (
                         <div className={`p-5 md:p-6 rounded-2xl border transition-all animate-fade-in ${
                             isCorrect
                                 ? 'bg-[var(--color-success-5)] border-[var(--color-success)]/30 space-y-3'

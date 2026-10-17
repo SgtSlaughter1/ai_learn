@@ -291,4 +291,10 @@ class School extends Model
     {
         return $this->hasManyThrough(User::class, LearnerProfile::class, 'school_id', 'id', null, 'user_id');
     }
+
+    /** Schools the user may see in admin screens: all for platform admins, else their own. */
+    public function scopeVisibleTo($query, User $user)
+    {
+        return $user->isPlatformAdmin() ? $query : $query->whereKey($user->managedSchoolId() ?? 0);
+    }
 }

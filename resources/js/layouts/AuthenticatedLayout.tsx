@@ -3,8 +3,10 @@ import React, { useEffect, useState } from 'react';
 import ChatWidget from '@/components/ui/ChatWidget';
 import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt';
 import UserProfileMenu from '@/components/ui/UserProfileMenu';
-import { preloadFullOfflineData } from '@/services/OfflineService';
+import { prepareOfflineData } from '@/services/OfflinePrewarm';
 import { OfflineReadinessBadge } from '@/components/dashboard/OfflineReadinessBadge';
+import { SyncStatus } from '@/components/sync/SyncStatus';
+import { SessionExpiredBanner } from '@/components/sync/SessionExpiredBanner';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 
 interface User {
@@ -18,6 +20,7 @@ interface User {
 interface PageProps {
     auth: {
         user: User;
+        can?: Record<string, boolean> | null;
     };
     [key: string]: any;
 }
@@ -47,12 +50,9 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
     }, []);
 
     useEffect(() => {
-        // Trigger background offline data preloading for user role whenever online
-        if (isOnline) {
-            const role = auth?.user?.role || (isLearner ? 'learner' : isTeacher ? 'teacher' : 'admin');
-            preloadFullOfflineData(role);
-        }
-    }, [isOnline, auth?.user?.role]);
+        // Download what this role needs offline (curriculum for learners, school data for staff).
+        prepareOfflineData(auth?.user?.role, auth?.can);
+    }, []);
 
     const activeRouteClass = (path: string) => {
         const currentUrl = url || (typeof window !== 'undefined' ? (window.location.pathname + window.location.search) : '');
@@ -87,8 +87,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
     const isSuperAdmin = auth?.user?.role === 'platform_admin';
     const isSchoolAdmin = auth?.user?.role === 'school_admin';
     const isTeacher = auth?.user?.role === 'teacher';
-    const isAdmin = isSchoolAdmin;
-    const isLearner = !isSuperAdmin && !isAdmin && !isTeacher;
+    const isAdmin = isSuperAdmin || isSchoolAdmin;
     const hasSchool = auth?.user?.has_school_access !== false;
 
     return (
@@ -102,7 +101,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                     <span>AceDrill</span>
                 </Link>
                 <div className="flex items-center gap-2">
-                    <OfflineReadinessBadge isOnline={isOnline} compact />
+                    <SyncStatus compact fallback={<OfflineReadinessBadge isOnline={isOnline} compact />} />
                     <UserProfileMenu user={auth?.user} />
                 </div>
             </div>
@@ -237,13 +236,14 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                         )}
                     </div>
                     <div className="flex items-center gap-3 shrink-0 ml-4">
-                        <OfflineReadinessBadge isOnline={isOnline} />
+                        <SyncStatus fallback={<OfflineReadinessBadge isOnline={isOnline} />} />
                         <UserProfileMenu user={auth?.user} />
                     </div>
                 </header>
 
                 {/* Main Content Body */}
                 <main className="flex-1 px-3.5 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 max-w-7xl w-full mx-auto pb-28 md:pb-16">
+                    <SessionExpiredBanner />
                     {children}
                 </main>
             </div>

@@ -1,6 +1,8 @@
 import { Head, router } from '@inertiajs/react';
 import { useState, useEffect, FormEvent } from 'react';
-import { getFreshQuiz, saveLocalAttempt, cacheQuiz, markAttemptSynced, verifyOptionHash, findCorrectOptionId } from '@/services/OfflineService';
+import { getFreshQuiz, saveLocalAttempt, cacheQuiz, verifyOptionHash, findCorrectOptionId } from '@/services/OfflineService';
+import { getSyncUser } from '@/services/SyncQueue';
+import { syncAll } from '@/services/SyncService';
 import Result from './Result';
 import { QuizHeader } from '@/components/quiz/QuizHeader';
 import { QuestionCard, QuizQuestion } from '@/components/quiz/QuestionCard';
@@ -159,34 +161,38 @@ export default function Show({ quizId }: Props) {
 
         const attemptId = crypto.randomUUID();
         let calculatedScore = 0;
+        let totalMarks = 0;
         const questionsToGrade = activeQuestions.length > 0 ? activeQuestions : quiz.questions.slice(0, 10);
 
+        // Every question shown is recorded (unanswered ones too) and weighted by its marks,
+        // exactly as the server grades it, so the offline result matches the synced one.
+        // Learners only hold answer hashes; staff payloads still carry is_correct.
         const answerList = await Promise.all(
             questionsToGrade.map(async (question) => {
-                const questionId = question.id;
-                const oId = answers[questionId] ?? null;
+                const marks = question.marks ?? 1;
+                const selected = answers[question.id] ?? null;
 
                 let isCorrect = false;
                 let correctOptId: number | null = null;
-
-                if (question.answer_hash && question.options) {
-                    if (oId) {
-                        isCorrect = await verifyOptionHash(questionId, oId, question.answer_hash);
+                if (question.answer_hash) {
+                    if (selected !== null) {
+                        isCorrect = await verifyOptionHash(question.id, selected, question.answer_hash);
                     }
-                    correctOptId = await findCorrectOptionId(questionId, question.options, question.answer_hash);
+                    correctOptId = await findCorrectOptionId(question.id, question.options, question.answer_hash);
                 } else {
                     const correctOption = (question.options as any[])?.find((o) => o.is_correct);
                     correctOptId = correctOption ? correctOption.id : null;
-                    isCorrect = correctOption && oId ? correctOption.id === oId : false;
+                    isCorrect = selected !== null && correctOption ? correctOption.id === selected : false;
                 }
 
-                if (isCorrect) calculatedScore++;
+                totalMarks += marks;
+                if (isCorrect) calculatedScore += marks;
 
                 return {
-                    question_id: questionId,
-                    selected_option_id: oId,
+                    question_id: question.id,
+                    selected_option_id: selected,
                     is_correct: isCorrect,
-                    marks_awarded: isCorrect ? 1 : 0,
+                    marks_awarded: isCorrect ? marks : 0,
                     correct_option_id: correctOptId,
                 };
             })
@@ -203,49 +209,31 @@ export default function Show({ quizId }: Props) {
                 cached_at: new Date().toISOString(),
             });
 
+            const completedAt = new Date().toISOString();
             await saveLocalAttempt({
                 id: attemptId,
-                user_id: 'current',
+                user_id: getSyncUser() ?? 'current',
                 quiz_id: quiz.id,
                 quiz_title: quiz.title,
                 status: 'completed',
                 score: calculatedScore,
-                total_marks: questionsToGrade.length,
+                total_marks: totalMarks,
                 started_at: new Date(Date.now() - secondsElapsed * 1000).toISOString(),
-                completed_at: new Date().toISOString(),
+                completed_at: completedAt,
                 duration_seconds: secondsElapsed,
                 answers: answerList.map((a) => ({
                     ...a,
                     id: crypto.randomUUID(),
                     quiz_attempt_id: attemptId,
-                    answered_at: new Date().toISOString(),
+                    answered_at: completedAt,
                 })),
                 synced: false,
             });
 
+            // Saved locally first; the sync engine uploads it now if online, or later.
+            // The attempt id is generated here, so a retry can never create a second copy.
             if (navigator.onLine) {
-                try {
-                    const res = await fetch(`/api/v1/quizzes/attempts/${attemptId}/sync`, {
-                        method: 'POST',
-                        credentials: 'same-origin',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            Accept: 'application/json',
-                            'X-XSRF-TOKEN': getCsrfToken(),
-                        },
-                        body: JSON.stringify({
-                            quiz_id: quiz.id,
-                            answers: answerList,
-                            duration_seconds: secondsElapsed,
-                        }),
-                    });
-
-                    if (res.ok) {
-                        await markAttemptSynced(attemptId);
-                    }
-                } catch {
-                    // Stored locally for background auto-sync
-                }
+                void syncAll();
             }
         } catch (err) {
             console.error('Local attempt save error:', err);

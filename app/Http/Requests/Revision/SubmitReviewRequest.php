@@ -18,6 +18,7 @@ class SubmitReviewRequest extends FormRequest
             'selected_option_id' => ['nullable', 'integer'],
             'rating' => ['nullable', 'in:again,hard,good,easy'],
             'time_spent_seconds' => ['nullable', 'integer'],
+            'reviewed_at' => ['nullable', 'date'],
         ];
     }
 }

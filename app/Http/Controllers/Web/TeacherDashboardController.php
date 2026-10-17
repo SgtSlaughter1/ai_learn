@@ -39,9 +39,6 @@ class TeacherDashboardController extends Controller
     public function showTeacherDashboard(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
-        if (!$user || (!$user->isAnyAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
-            abort(403);
-        }
 
         // If user is a school admin or platform admin and not explicitly a teacher, route to admin portal
         if ($user->isAnyAdmin() && !$user->isTeacher() && !$request->has('as_teacher')) {
@@ -49,8 +46,7 @@ class TeacherDashboardController extends Controller
         }
 
         // Get teacher's school
-        $teacherProfile = $user->teacherProfile()->with('school')->first();
-        $school = $teacherProfile?->school ?? ($user->isAnyAdmin() ? $user->primarySchool() : null);
+        $school = $user->primarySchool();
 
         if (!$school) {
             // Teacher without a school — show setup page
@@ -61,11 +57,7 @@ class TeacherDashboardController extends Controller
             ]);
         }
 
-        $gradeOrder = [
-            'CRECHE' => 1, 'KG1' => 2, 'KG2' => 3, 'NUR1' => 4, 'NUR2' => 5,
-            'PRI1' => 6, 'PRI2' => 7, 'PRI3' => 8, 'PRI4' => 9, 'PRI5' => 10, 'PRI6' => 11,
-            'JSS1' => 12, 'JSS2' => 13, 'JSS3' => 14, 'SS1' => 15, 'SS2' => 16, 'SS3' => 17,
-        ];
+        $gradeOrder = ClassModel::GRADE_ORDER;
 
         // Get teacher's classes scoped by permissions
         $classesQuery = ClassModel::forUser($user)
@@ -131,12 +123,8 @@ class TeacherDashboardController extends Controller
     public function getTeacherStats(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user || (!$user->isAnyAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
-            abort(403);
-        }
 
-        $teacherProfile = $user->teacherProfile()->first();
-        $school = $teacherProfile?->school ?? ($user->isAnyAdmin() ? $user->primarySchool() : null);
+        $school = $user->primarySchool();
 
         if (!$school) {
             return response()->json([
@@ -150,6 +138,9 @@ class TeacherDashboardController extends Controller
         }
 
         $selectedClassId = $request->get('class_id');
+        if ($selectedClassId) {
+            Gate::authorize('view', ClassModel::findOrFail($selectedClassId));
+        }
         $cacheKey = "analytics:teacher:{$user->id}:class:" . ($selectedClassId ?? 'all');
 
         if ($request->boolean('refresh')) {
@@ -284,11 +275,7 @@ class TeacherDashboardController extends Controller
 
     private function fetchTeacherClasses(User $user, School $school): Collection
     {
-        $gradeOrder = [
-            'CRECHE' => 1, 'KG1' => 2, 'KG2' => 3, 'NUR1' => 4, 'NUR2' => 5,
-            'PRI1' => 6, 'PRI2' => 7, 'PRI3' => 8, 'PRI4' => 9, 'PRI5' => 10, 'PRI6' => 11,
-            'JSS1' => 12, 'JSS2' => 13, 'JSS3' => 14, 'SS1' => 15, 'SS2' => 16, 'SS3' => 17,
-        ];
+        $gradeOrder = ClassModel::GRADE_ORDER;
 
         return ClassModel::where('school_id', $school->id)
             ->where('is_active', true)
@@ -327,17 +314,7 @@ class TeacherDashboardController extends Controller
      */
     public function getClassLearners(Request $request, int $classId): JsonResponse
     {
-        $user = $request->user();
-
-        // Verify teacher has access to this class
-        $membership = ClassMembership::where('class_id', $classId)
-            ->where('user_id', $user->id)
-            ->where('role', 'teacher')
-            ->first();
-
-        if (!$membership) {
-            return response()->json(['error' => 'Access denied'], 403);
-        }
+        Gate::authorize('view', ClassModel::findOrFail($classId));
 
         $class = DB::table('classes')->where('id', $classId)->select(['id', 'name'])->first();
 
@@ -446,12 +423,8 @@ class TeacherDashboardController extends Controller
     public function saveLearner(SaveTeacherLearnerRequest $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user || (!$user->isAnyAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
-            abort(403);
-        }
 
-        $teacherProfile = $user->teacherProfile()->first();
-        $school = $teacherProfile?->school ?? ($user->isAnyAdmin() ? $user->primarySchool() : null);
+        $school = $user->primarySchool();
 
         if (!$school) {
             return response()->json(['error' => 'No school associated with this account.'], 400);
@@ -526,16 +499,7 @@ class TeacherDashboardController extends Controller
     public function enrollLearner(EnrollLearnerRequest $request, int $classId): JsonResponse
     {
         $user = $request->user();
-
-        // Verify teacher has access
-        $membership = ClassMembership::where('class_id', $classId)
-            ->where('user_id', $user->id)
-            ->where('role', 'teacher')
-            ->first();
-
-        if (!$membership && !$user->isAnyAdmin()) {
-            return response()->json(['error' => 'Access denied'], 403);
-        }
+        $class = ClassModel::findOrFail($classId);
 
         $validated = $request->validated();
 
@@ -553,6 +517,7 @@ class TeacherDashboardController extends Controller
         if (!$learner->isLearner()) {
             return response()->json(['error' => 'User is not a learner'], 400);
         }
+        Gate::authorize('enrol', [$learner, $class]);
 
         // Check if already enrolled
         $exists = ClassMembership::where('class_id', $classId)
@@ -572,7 +537,6 @@ class TeacherDashboardController extends Controller
             ]);
 
             // Create learner profile in the school if not exists
-            $class = ClassModel::find($classId);
             if (!$learner->learnerProfile()->where('school_id', $class->school_id)->exists()) {
                 \App\Models\LearnerProfile::create([
                     'user_id' => $learner->id,
@@ -590,18 +554,10 @@ class TeacherDashboardController extends Controller
     /**
      * Remove a learner from a class.
      */
-    public function removeLearner(Request $request, int $classId, int $learnerId): JsonResponse
+    public function removeLearner(Request $request, int $classId, string $learnerId): JsonResponse
     {
         $user = $request->user();
-
-        $membership = ClassMembership::where('class_id', $classId)
-            ->where('user_id', $user->id)
-            ->where('role', 'teacher')
-            ->first();
-
-        if (!$membership) {
-            return response()->json(['error' => 'Access denied'], 403);
-        }
+        Gate::authorize('manage', ClassModel::findOrFail($classId));
 
         ClassMembership::where('class_id', $classId)
             ->where('user_id', $learnerId)
@@ -618,24 +574,8 @@ class TeacherDashboardController extends Controller
      */
     public function getClassDiagnostics(Request $request, int $classId): JsonResponse
     {
-        $user = $request->user();
-        if (!$user || (!$user->isAnyAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
-            abort(403);
-        }
-
-        // Verify access
-        if (!$user->isAnyAdmin()) {
-            $membership = ClassMembership::where('class_id', $classId)
-                ->where('user_id', $user->id)
-                ->where('role', 'teacher')
-                ->first();
-
-            if (!$membership) {
-                return response()->json(['error' => 'Access denied'], 403);
-            }
-        }
-
-        $class = ClassModel::find($classId);
+        $class = ClassModel::findOrFail($classId);
+        Gate::authorize('view', $class);
         $schoolId = $class?->school_id;
 
         $learnerIds = ClassMembership::where('class_id', $classId)
@@ -658,14 +598,13 @@ class TeacherDashboardController extends Controller
     public function assignIntervention(AssignInterventionRequest $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user || (!$user->isAnyAdmin() && !$user->isTeacher() && !$user->teacherProfile()->exists())) {
-            return response()->json(['error' => 'Forbidden'], 403);
-        }
 
         $validated = $request->validated();
 
         $learner = User::findOrFail($validated['learner_id']);
+        Gate::authorize('coach', $learner);
         $topic = Topic::with('subject')->findOrFail($validated['topic_id']);
+        Gate::authorize('view', $topic);
         $count = (int) ($validated['question_count'] ?? 10);
 
         // Fetch active questions in this topic

@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Jobs\AwardQuizCompletionXp;
 use App\Services\Gamification\GamificationService;
 
 class QuizWebController extends Controller
@@ -83,6 +84,7 @@ class QuizWebController extends Controller
                         'type' => $q->type,
                         'difficulty' => $q->difficulty,
                         'explanation' => $q->explanation,
+                        'marks' => (int) ($q->pivot->marks ?? 1),
                         'answer_hash' => $answerHash,
                         'options' => $q->options->map(function ($o) use ($isStaff) {
                             $optionData = [
@@ -146,7 +148,7 @@ class QuizWebController extends Controller
 
         try {
             $answersToInsert = [];
-            $topicIdsEvaluated = [];
+            $topicTallies = [];
 
             foreach ($questionsToGrade as $question) {
                 $questionId = $question->id;
@@ -190,7 +192,9 @@ class QuizWebController extends Controller
                     'updated_at' => now(),
                 ];
 
-                $topicIdsEvaluated[$question->topic_id] = true;
+                $topicTallies[$question->topic_id] ??= ['attempted' => 0, 'correct' => 0];
+                $topicTallies[$question->topic_id]['attempted']++;
+                $topicTallies[$question->topic_id]['correct'] += $isCorrect ? 1 : 0;
             }
 
             // Create the attempt
@@ -208,38 +212,8 @@ class QuizWebController extends Controller
             // Save all quiz answers
             QuizAnswer::insert($answersToInsert);
 
-            // Batch compute all evaluated topic stats in ONE query instead of 2N correlated whereHas subqueries
-            $topicStats = DB::table('quiz_answers as qa')
-                ->join('quiz_attempts as qat', 'qa.quiz_attempt_id', '=', 'qat.id')
-                ->join('questions as q', 'qa.question_id', '=', 'q.id')
-                ->where('qat.user_id', $user->id)
-                ->whereIn('q.topic_id', array_keys($topicIdsEvaluated))
-                ->groupBy('q.topic_id')
-                ->selectRaw('
-                    q.topic_id,
-                    COUNT(*) as questions_attempted,
-                    SUM(CASE WHEN qa.is_correct = 1 THEN 1 ELSE 0 END) as questions_correct
-                ')
-                ->get()
-                ->keyBy('topic_id');
-
-            $now = now();
-            foreach (array_keys($topicIdsEvaluated) as $topicId) {
-                $stat = $topicStats->get($topicId);
-                $attempted = (int) ($stat?->questions_attempted ?? 0);
-                $correct   = (int) ($stat?->questions_correct ?? 0);
-                $masteryScore = $attempted > 0 ? (int) round(($correct / $attempted) * 100) : 0;
-
-                LearnerProgress::updateOrCreate(
-                    ['user_id' => $user->id, 'topic_id' => $topicId],
-                    [
-                        'questions_attempted' => $attempted,
-                        'questions_correct'   => $correct,
-                        'mastery_score'       => $masteryScore,
-                        'last_attempted_at'   => $now,
-                    ]
-                );
-            }
+            // Add this attempt's results to topic progress (atomic, independent of history size).
+            LearnerProgress::recordResults($user->id, $topicTallies, now());
 
             DB::commit();
         } catch (\Exception $e) {
@@ -251,9 +225,9 @@ class QuizWebController extends Controller
         }
 
         // Process gamification rewards (XP, streaks, achievements)
-        $attempt = QuizAttempt::find($attemptId);
+        $attempt = QuizAttempt::find($attemptId)->setRelation('user', $user)->setRelation('quiz', $quiz);
         $gamificationService = app(GamificationService::class);
-        $newAchievements = $gamificationService->processQuizCompletion($user, $attempt, $quiz);
+        $newAchievements = $gamificationService->awardQuizCompletionOnce($attempt);
 
         // Auto-record questions into Spaced Repetition memory engine
         try {
@@ -320,16 +294,26 @@ class QuizWebController extends Controller
      */
     public function syncQuizAttempt(SyncQuizAttemptRequest $request, string $attemptId): JsonResponse
     {
-        $validated = $request->validated();
+        $request->validated();
         $user = auth()->user();
 
-        // Idempotency: if already synced, return the existing attempt
-        $existing = QuizAttempt::where('id', $attemptId)
-            ->where('user_id', $user->id)
-            ->first();
+        if (!Str::isUuid($attemptId)) {
+            return response()->json(['success' => false, 'code' => 'invalid_attempt_id', 'message' => 'Attempt id must be a UUID.'], 422);
+        }
 
+        // Idempotency: the attempt id is generated on the device, so a retry finds the row it already created.
+        $existing = QuizAttempt::find($attemptId);
         if ($existing) {
-            return response()->json(['success' => true, 'attempt_id' => $existing->id, 'already_synced' => true]);
+            if ($existing->user_id !== $user->id) {
+                return response()->json(['success' => false, 'code' => 'attempt_owner_mismatch', 'message' => 'This attempt belongs to a different account.'], 409);
+            }
+            return response()->json([
+                'success' => true,
+                'attempt_id' => $existing->id,
+                'score' => $existing->score,
+                'total_marks' => $existing->total_marks,
+                'already_synced' => true,
+            ]);
         }
 
         $quiz = Quiz::with([
@@ -337,123 +321,128 @@ class QuizWebController extends Controller
             'questions.options',
         ])->findOrFail($request->quiz_id);
 
-        $submittedQuestionIds = collect($request->answers)->map(function ($val, $key) {
-            return is_array($val) && isset($val['question_id']) ? $val['question_id'] : $key;
-        })->filter()->values()->all();
+        $submittedAnswers = collect($request->answers)
+            ->filter(fn ($a) => is_array($a) && isset($a['question_id']))
+            ->keyBy(fn ($a) => (int) $a['question_id']);
 
-        $questionsToGrade = !empty($submittedQuestionIds)
-            ? $quiz->questions->whereIn('id', $submittedQuestionIds)
-            : $quiz->questions;
-
+        // Grade only questions the learner actually saw. If none of them still exist
+        // (the quiz was rebuilt while the device was offline) report it instead of
+        // recording a score of zero.
+        $questionsToGrade = $quiz->questions->whereIn('id', $submittedAnswers->keys()->all());
         if ($questionsToGrade->isEmpty()) {
-            $questionsToGrade = $quiz->questions;
+            return response()->json([
+                'success' => false,
+                'code' => 'quiz_content_changed',
+                'message' => 'The questions in this attempt are no longer part of the quiz.',
+            ], 409);
         }
+
+        // Keep the time the learner actually finished, so streaks and history reflect
+        // offline days. Clamp it so a wrong device clock cannot push it into the future
+        // or far into the past.
+        $completedAt = $request->filled('completed_at')
+            ? \Illuminate\Support\Carbon::parse($request->completed_at)
+            : now();
+        if ($completedAt->isFuture()) {
+            $completedAt = now();
+        }
+        if ($completedAt->lt(now()->subDays(30))) {
+            $completedAt = now()->subDays(30);
+        }
+        $durationSeconds = (int) $request->input('duration_seconds', 300);
+        $startedAt = $completedAt->copy()->subSeconds($durationSeconds);
 
         $score      = 0;
         $totalMarks = 0;
         $answersToInsert    = [];
-        $topicIdsEvaluated  = [];
+        $topicTallies       = [];
 
-        DB::beginTransaction();
+        foreach ($questionsToGrade as $question) {
+            $pivotMarks = $question->pivot->marks ?? 1;
+            $totalMarks += $pivotMarks;
 
-        try {
-            foreach ($questionsToGrade as $question) {
-                $pivotMarks = $question->pivot->marks ?? 1;
-                $totalMarks += $pivotMarks;
+            $selected = $submittedAnswers->get($question->id)['selected_option_id'] ?? null;
+            $validOptionIds = $question->options->pluck('id')->map(fn ($id) => (int) $id);
+            $isCorrect = false;
 
-                // SyncService sends answers keyed by question_id or in array
-                $submittedAnswer = collect($request->answers)
-                    ->firstWhere('question_id', $question->id);
-
-                if (!$submittedAnswer && isset($request->answers[$question->id])) {
-                    $submittedAnswer = ['selected_option_id' => $request->answers[$question->id]];
-                }
-
-                $selectedOptionId = $submittedAnswer['selected_option_id'] ?? null;
-                $isCorrect        = false;
-                $marksAwarded     = 0;
-
-                if ($selectedOptionId) {
-                    $option = $question->options->firstWhere('id', $selectedOptionId);
-                    if ($option && $option->is_correct) {
-                        $isCorrect    = true;
-                        $marksAwarded = $pivotMarks;
-                        $score       += $pivotMarks;
-                    }
-                }
-
-                $answersToInsert[] = [
-                    'id'              => (string) Str::uuid(),
-                    'quiz_attempt_id' => $attemptId,
-                    'question_id'     => $question->id,
-                    'selected_option_id' => $selectedOptionId,
-                    'is_correct'      => $isCorrect,
-                    'marks_awarded'   => $marksAwarded,
-                    'answered_at'     => now(),
-                    'created_at'      => now(),
-                    'updated_at'      => now(),
-                ];
-
-                $topicIdsEvaluated[$question->topic_id] = true;
+            if (is_array($selected)) {
+                $studentOptionIds = collect($selected)->map(fn ($id) => (int) $id)
+                    ->filter(fn ($id) => $validOptionIds->contains($id))
+                    ->sort()->values()->all();
+                $correctOptionIds = $question->options->where('is_correct', true)
+                    ->pluck('id')->map(fn ($id) => (int) $id)->sort()->values()->all();
+                $isCorrect = !empty($correctOptionIds) && $correctOptionIds === $studentOptionIds;
+                $recordedOptionId = $studentOptionIds[0] ?? null;
+            } else {
+                // An option id the question no longer has is stored as "no answer",
+                // never as a dangling foreign key.
+                $recordedOptionId = $selected !== null && $validOptionIds->contains((int) $selected) ? (int) $selected : null;
+                $isCorrect = $recordedOptionId !== null
+                    && (bool) $question->options->firstWhere('id', $recordedOptionId)?->is_correct;
             }
 
-            QuizAttempt::create([
-                'id'           => $attemptId,
-                'user_id'      => $user->id,
-                'quiz_id'      => $quiz->id,
-                'status'       => 'completed',
-                'score'        => $score,
-                'total_marks'  => $totalMarks,
-                'started_at'   => now()->subSeconds($request->input('duration_seconds', 300)),
-                'completed_at' => now(),
-            ]);
+            $marksAwarded = $isCorrect ? $pivotMarks : 0;
+            $score += $marksAwarded;
 
-            QuizAnswer::insert($answersToInsert);
+            $answersToInsert[] = [
+                'id'              => (string) Str::uuid(),
+                'quiz_attempt_id' => $attemptId,
+                'question_id'     => $question->id,
+                'selected_option_id' => $recordedOptionId,
+                'is_correct'      => $isCorrect,
+                'marks_awarded'   => $marksAwarded,
+                'answered_at'     => $completedAt,
+                'created_at'      => now(),
+                'updated_at'      => now(),
+            ];
 
-            // Batch compute all evaluated topic stats in ONE query instead of 2N correlated whereHas subqueries
-            $topicStats = DB::table('quiz_answers as qa')
-                ->join('quiz_attempts as qat', 'qa.quiz_attempt_id', '=', 'qat.id')
-                ->join('questions as q', 'qa.question_id', '=', 'q.id')
-                ->where('qat.user_id', $user->id)
-                ->whereIn('q.topic_id', array_keys($topicIdsEvaluated))
-                ->groupBy('q.topic_id')
-                ->selectRaw('
-                    q.topic_id,
-                    COUNT(*) as questions_attempted,
-                    SUM(CASE WHEN qa.is_correct = 1 THEN 1 ELSE 0 END) as questions_correct
-                ')
-                ->get()
-                ->keyBy('topic_id');
-
-            $now = now();
-            foreach (array_keys($topicIdsEvaluated) as $topicId) {
-                $stat = $topicStats->get($topicId);
-                $attempted = (int) ($stat?->questions_attempted ?? 0);
-                $correct   = (int) ($stat?->questions_correct ?? 0);
-                $masteryScore = $attempted > 0 ? (int) round(($correct / $attempted) * 100) : 0;
-
-                LearnerProgress::updateOrCreate(
-                    ['user_id' => $user->id, 'topic_id' => $topicId],
-                    [
-                        'questions_attempted' => $attempted,
-                        'questions_correct'   => $correct,
-                        'mastery_score'       => $masteryScore,
-                        'last_attempted_at'   => $now,
-                    ]
-                );
-            }
-
-            DB::commit();
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['success' => false, 'error' => $e->getMessage()], 422);
+            $topicTallies[$question->topic_id] ??= ['attempted' => 0, 'correct' => 0];
+            $topicTallies[$question->topic_id]['attempted']++;
+            $topicTallies[$question->topic_id]['correct'] += $isCorrect ? 1 : 0;
         }
 
-        $attempt = QuizAttempt::find($attemptId);
-        $gamificationService = app(GamificationService::class);
-        $gamificationService->processQuizCompletion($user, $attempt, $quiz);
+        try {
+            DB::transaction(function () use ($user, $quiz, $attemptId, $score, $totalMarks, $startedAt, $completedAt, $answersToInsert, $topicTallies) {
+                $attempt = QuizAttempt::create([
+                    'id'           => $attemptId,
+                    'user_id'      => $user->id,
+                    'quiz_id'      => $quiz->id,
+                    'status'       => 'completed',
+                    'score'        => $score,
+                    'total_marks'  => $totalMarks,
+                    'started_at'   => $startedAt,
+                    'completed_at' => $completedAt,
+                ]);
 
-        return response()->json(['success' => true, 'attempt_id' => $attemptId]);
+                QuizAnswer::insert($answersToInsert);
+
+                // Add this attempt's results to topic progress (atomic, independent of history size).
+                LearnerProgress::recordResults($user->id, $topicTallies, $completedAt);
+
+                // XP, streak and achievements are queued (dispatched once this commits), so a
+                // classroom syncing at once isn't slowed down by them. The job is idempotent
+                // through quiz_attempts.xp_awarded_at, so retries never award twice.
+                AwardQuizCompletionXp::dispatch($attemptId, $completedAt->toIso8601String());
+            });
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            // Another request (second tab, or the page's own submit) synced this attempt first.
+            $existing = QuizAttempt::find($attemptId);
+            if ($existing && $existing->user_id === $user->id) {
+                return response()->json(['success' => true, 'attempt_id' => $attemptId, 'already_synced' => true]);
+            }
+            report($e);
+            return response()->json(['success' => false, 'code' => 'sync_conflict', 'message' => 'Could not save this attempt.'], 409);
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json(['success' => false, 'code' => 'sync_failed', 'message' => 'Could not save this attempt. It will be retried.'], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'attempt_id' => $attemptId,
+            'score' => $score,
+            'total_marks' => $totalMarks,
+        ]);
     }
 
     /**
