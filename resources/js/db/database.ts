@@ -140,7 +140,7 @@ export interface SyncQueueItem {
     action: 'insert' | 'update' | 'delete';
     record_id: string;
     endpoint: string;
-    method: 'POST' | 'PUT' | 'DELETE';
+    method: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
     payload: string;
     created_at: string;
     synced: boolean;

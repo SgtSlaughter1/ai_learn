@@ -64,7 +64,7 @@ export default function ClassesTab({ classes, schools, loading, onRefresh, showT
             const endpoint = editingClass
                 ? `/api/v1/admin/classes/${editingClass.id}`
                 : '/api/v1/admin/classes';
-            const method = editingClass ? 'PUT' : 'POST';
+            const method = editingClass ? 'PATCH' : 'POST';
             const tempId = editingClass ? String(editingClass.id) : `temp_cls_${Date.now()}`;
 
             const selectedSchool = schools.find((s) => String(s.id) === String(classForm.school_id));

@@ -81,7 +81,7 @@ export default function SchoolAdminsTab({
         const endpoint = editingAdmin
             ? `/api/v1/admin/school-admins/${editingAdmin.id}`
             : '/api/v1/admin/school-admins';
-        const method = editingAdmin ? 'PUT' : 'POST';
+        const method = editingAdmin ? 'PATCH' : 'POST';
         const tempId = editingAdmin ? String(editingAdmin.id) : `temp_admin_${Date.now()}`;
 
         const selectedSchool = schools.find(s => String(s.id) === String(formData.school_id));

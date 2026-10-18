@@ -101,7 +101,7 @@ const BATCH_SIZE = 25;
 
 interface BatchItem {
     key: string;
-    method: 'POST' | 'PUT' | 'DELETE';
+    method: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
     path: string;
     body: unknown;
 }
@@ -297,7 +297,9 @@ async function applyToLocalTable(item: SyncQueueItem, data: any): Promise<void> 
         }
         const saved = extractSavedRecord(data);
         if (item.action === 'insert' && item.record_id.startsWith('temp_')) {
+            // The placeholder is stored under the temp id or under a local id tagged with it.
             await tableObj.delete(item.record_id);
+            await tableObj.filter((r: any) => r._tempId === item.record_id).delete();
             if (saved) {
                 await tableObj.put({ ...saved, _pendingSync: false });
             } else if (Array.isArray(data?.questions)) {
@@ -509,7 +511,7 @@ export type SendOrQueueResult<T = any> =
 export async function sendOrQueue<T = any>(input: {
     table_name: string;
     endpoint: string;
-    method: 'POST' | 'PUT' | 'DELETE';
+    method: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
     payload: unknown;
 }): Promise<SendOrQueueResult<T>> {
     const idempotencyKey = crypto.randomUUID();

@@ -17,7 +17,7 @@ class SyncBatchRequest extends FormRequest
         return [
             'items' => ['required', 'array', 'min:1', 'max:25'],
             'items.*.key' => ['required', 'string', 'max:100', 'regex:/^[A-Za-z0-9_\-:.]+$/', 'distinct'],
-            'items.*.method' => ['required', 'in:POST,PUT,DELETE'],
+            'items.*.method' => ['required', 'in:POST,PATCH,PUT,DELETE'],
             'items.*.path' => ['required', 'string', 'max:255', 'starts_with:/api/v1/'],
             'items.*.body' => ['nullable', 'array'],
         ];

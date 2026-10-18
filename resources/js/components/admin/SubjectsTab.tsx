@@ -79,7 +79,7 @@ export default function SubjectsTab({
             const endpoint = editingSubject
                 ? `/api/v1/admin/subjects/${editingSubject.id}`
                 : '/api/v1/admin/subjects';
-            const method = editingSubject ? 'PUT' : 'POST';
+            const method = editingSubject ? 'PATCH' : 'POST';
             const tempId = editingSubject ? String(editingSubject.id) : `temp_subj_${Date.now()}`;
 
             const payloadData = {
@@ -196,7 +196,7 @@ export default function SubjectsTab({
             const endpoint = editingTopic
                 ? `/api/v1/admin/topics/${editingTopic.id}`
                 : '/api/v1/admin/topics';
-            const method = editingTopic ? 'PUT' : 'POST';
+            const method = editingTopic ? 'PATCH' : 'POST';
             const tempId = editingTopic ? String(editingTopic.id) : `temp_topic_${Date.now()}`;
 
             const optimisticTopic: TopicItem = {

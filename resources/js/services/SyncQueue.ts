@@ -94,12 +94,18 @@ export interface EnqueueInput {
     action: 'insert' | 'update' | 'delete';
     record_id: string;
     endpoint: string;
-    method: 'POST' | 'PUT' | 'DELETE';
+    method: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
     payload?: unknown;
     /** Reuse the key of a request that was already sent, so a replay cannot apply twice. */
     idempotency_key?: string;
     /** True when a request with this key may already have reached the server. */
     sent?: boolean;
+}
+
+/** Edit forms send a blank password to mean "unchanged"; it must not wipe a pending one. */
+function withoutBlankPasswords(payload: unknown): Record<string, unknown> {
+    const entries = Object.entries((payload ?? {}) as Record<string, unknown>);
+    return Object.fromEntries(entries.filter(([key, value]) => !(/password/i.test(key) && (value === '' || value === null))));
 }
 
 function parsePayload(payload: string): Record<string, unknown> {
@@ -142,7 +148,7 @@ async function enqueueItem(input: EnqueueInput): Promise<number | null> {
         if (input.action === 'update' && !input.sent) {
             const target = unsentInsert ?? unsent.filter((q) => q.action === 'update').pop();
             if (target?.id) {
-                const merged = { ...parsePayload(target.payload), ...(payload as object) };
+                const merged = { ...parsePayload(target.payload), ...withoutBlankPasswords(payload) };
                 await db.syncQueue.update(target.id, { payload: JSON.stringify(merged) });
                 return target.id;
             }

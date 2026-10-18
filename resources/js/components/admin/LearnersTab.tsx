@@ -57,7 +57,7 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
 
         try {
             const endpoint = editingLearner ? `/api/v1/admin/learners/${editingLearner.id}` : '/api/v1/admin/learners';
-            const method = editingLearner ? 'PUT' : 'POST';
+            const method = editingLearner ? 'PATCH' : 'POST';
             const tempId = editingLearner ? editingLearner.id : `temp_lrn_${Date.now()}`;
 
             const selectedSchool = schools.find((s) => String(s.id) === String(learnerForm.school_id));

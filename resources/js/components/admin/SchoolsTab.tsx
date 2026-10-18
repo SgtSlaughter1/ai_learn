@@ -98,7 +98,7 @@ export default function SchoolsTab({
         const endpoint = editingSchool
             ? `/api/v1/admin/schools/${editingSchool.id}`
             : '/api/v1/admin/schools';
-        const method = editingSchool ? 'PUT' : 'POST';
+        const method = editingSchool ? 'PATCH' : 'POST';
         const tempId = editingSchool ? String(editingSchool.id) : `temp_school_${Date.now()}`;
 
         const optimisticSchool: SchoolItem = {

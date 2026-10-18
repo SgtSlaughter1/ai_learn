@@ -371,7 +371,7 @@ export default function QuestionBankTab({
 
         try {
             const endpoint = editingQuestion ? `/api/v1/admin/questions/${editingQuestion.id}` : '/api/v1/admin/questions';
-            const method = editingQuestion ? 'PUT' : 'POST';
+            const method = editingQuestion ? 'PATCH' : 'POST';
             const tempId = editingQuestion ? String(editingQuestion.id) : `temp_q_${Date.now()}`;
 
             const selectedTopic = allTopics.find((t) => String(t.id) === String(questionForm.topic_id));

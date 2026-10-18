@@ -119,7 +119,7 @@ export default function TeachersTab({
         const endpoint = editingTeacher
             ? `/api/v1/admin/teachers/${editingTeacher.id}`
             : '/api/v1/admin/teachers';
-        const method = editingTeacher ? 'PUT' : 'POST';
+        const method = editingTeacher ? 'PATCH' : 'POST';
         const tempId = editingTeacher ? String(editingTeacher.id) : `temp_teacher_${Date.now()}`;
 
         const selectedSchool = schools.find(s => String(s.id) === String(formData.school_id));

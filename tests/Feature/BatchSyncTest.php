@@ -92,6 +92,32 @@ class BatchSyncTest extends TestCase
         $this->assertSame([403, 200], array_column($response->json('results'), 'status'));
     }
 
+    public function test_edits_sync_as_patch_and_legacy_put_still_applies(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::PLATFORM_ADMIN]);
+        $subject = Subject::factory()->create();
+        $path = "/api/v1/admin/subjects/{$subject->id}";
+
+        $response = $this->actingAs($admin)->postJson('/api/v1/sync/batch', ['items' => [
+            ['key' => 'edit-patch', 'method' => 'PATCH', 'path' => $path, 'body' => ['name' => 'Patched']],
+            // Queued on a device before edits switched to PATCH.
+            ['key' => 'edit-put', 'method' => 'PUT', 'path' => $path, 'body' => ['name' => 'Put later']],
+        ]])->assertOk();
+
+        $this->assertSame([200, 200], array_column($response->json('results'), 'status'));
+        $this->assertSame('Put later', $subject->fresh()->name);
+    }
+
+    public function test_patch_edits_are_still_validated_and_authorized(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::PLATFORM_ADMIN]);
+        $subject = Subject::factory()->create();
+
+        $this->actingAs($admin)->patchJson("/api/v1/admin/subjects/{$subject->id}", ['name' => ''])->assertUnprocessable();
+        $this->actingAs($this->learner)->patchJson("/api/v1/admin/subjects/{$subject->id}", ['name' => 'Hijacked'])->assertForbidden();
+        $this->assertNotSame('Hijacked', $subject->fresh()->name);
+    }
+
     public function test_only_sync_endpoints_can_be_batched(): void
     {
         $response = $this->actingAs($this->learner)->postJson('/api/v1/sync/batch', ['items' => [

@@ -68,6 +68,13 @@ describe('enqueue', () => {
         expect(await pending()).toHaveLength(2);
     });
 
+    it('keeps the password of a pending create when an edit leaves it blank', async () => {
+        await enqueue({ table_name: 'adminLearners', action: 'insert', record_id: 'temp_lrn_1', endpoint: '/api/v1/admin/learners', method: 'POST', payload: { name: 'Ada', password: 'secret-1' } });
+        await enqueue({ table_name: 'adminLearners', action: 'update', record_id: 'temp_lrn_1', endpoint: '/api/v1/admin/learners/temp_lrn_1', method: 'PUT', payload: { name: 'Ada L.', password: '' } });
+
+        expect(JSON.parse((await pending())[0].payload)).toEqual({ name: 'Ada L.', password: 'secret-1' });
+    });
+
     it('collapses repeated edits of the same record', async () => {
         await enqueue({ table_name: 'adminLearners', action: 'update', record_id: 'u1', endpoint: '/x/u1', method: 'PUT', payload: { name: 'A', email: 'a@x.ng' } });
         await enqueue({ table_name: 'adminLearners', action: 'update', record_id: 'u1', endpoint: '/x/u1', method: 'PUT', payload: { name: 'B' } });

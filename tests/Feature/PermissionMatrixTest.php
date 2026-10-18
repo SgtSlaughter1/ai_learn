@@ -36,19 +36,19 @@ class PermissionMatrixTest extends TestCase
      */
     private const MATRIX = [
         // ── Accounts ──
-        'update own-school learner' => ['PUT', '/api/v1/admin/learners/{learnerA}', 'person:learnerA', ['platform' => true, 'schoolAdmin' => true, 'orphanAdmin' => false, 'teacher' => false, 'learner' => false]],
-        'update other-school learner' => ['PUT', '/api/v1/admin/learners/{learnerB}', 'person:learnerB', ['platform' => true, 'schoolAdmin' => false]],
+        'update own-school learner' => ['PATCH', '/api/v1/admin/learners/{learnerA}', 'person:learnerA', ['platform' => true, 'schoolAdmin' => true, 'orphanAdmin' => false, 'teacher' => false, 'learner' => false]],
+        'update other-school learner' => ['PATCH', '/api/v1/admin/learners/{learnerB}', 'person:learnerB', ['platform' => true, 'schoolAdmin' => false]],
         'delete other-school learner' => ['DELETE', '/api/v1/admin/learners/{learnerB}', null, ['schoolAdmin' => false]],
-        'update own-school teacher' => ['PUT', '/api/v1/admin/teachers/{teacherA}', 'person:teacherA', ['platform' => true, 'schoolAdmin' => true, 'teacher' => false]],
+        'update own-school teacher' => ['PATCH', '/api/v1/admin/teachers/{teacherA}', 'person:teacherA', ['platform' => true, 'schoolAdmin' => true, 'teacher' => false]],
         'delete other-school teacher' => ['DELETE', '/api/v1/admin/teachers/{teacherB}', null, ['platform' => true, 'schoolAdmin' => false]],
-        'update a school admin' => ['PUT', '/api/v1/admin/school-admins/{adminB}', 'person:adminB', ['platform' => true, 'schoolAdmin' => false]],
-        'update a platform admin via school-admin route' => ['PUT', '/api/v1/admin/school-admins/{platform}', 'person:platform', ['platform' => 'hidden']],
-        'update own school record' => ['PUT', '/api/v1/admin/schools/{schoolA}', 'named', ['platform' => true, 'schoolAdmin' => false]],
+        'update a school admin' => ['PATCH', '/api/v1/admin/school-admins/{adminB}', 'person:adminB', ['platform' => true, 'schoolAdmin' => false]],
+        'update a platform admin via school-admin route' => ['PATCH', '/api/v1/admin/school-admins/{platform}', 'person:platform', ['platform' => 'hidden']],
+        'update own school record' => ['PATCH', '/api/v1/admin/schools/{schoolA}', 'named', ['platform' => true, 'schoolAdmin' => false]],
         'delete another school' => ['DELETE', '/api/v1/admin/schools/{schoolB}', null, ['platform' => true, 'schoolAdmin' => false]],
         'read feedback inbox' => ['GET', '/api/v1/admin/feedbacks', null, ['platform' => true, 'schoolAdmin' => false, 'teacher' => false]],
 
         // ── Classes and rosters ──
-        'update own-school class' => ['PUT', '/api/v1/admin/classes/{classA}', 'class', ['platform' => true, 'schoolAdmin' => true, 'orphanAdmin' => false, 'teacher' => false]],
+        'update own-school class' => ['PATCH', '/api/v1/admin/classes/{classA}', 'class', ['platform' => true, 'schoolAdmin' => true, 'orphanAdmin' => false, 'teacher' => false]],
         'delete other-school class' => ['DELETE', '/api/v1/admin/classes/{classB}', null, ['platform' => true, 'schoolAdmin' => false]],
         'view own-school roster (admin)' => ['GET', '/api/v1/admin/classes/{classA}/learners', null, ['schoolAdmin' => true, 'orphanAdmin' => false, 'teacher' => false]],
         'enrol other-school learner' => ['POST', '/api/v1/admin/classes/{classA}/enroll', 'enrol:learnerB', ['platform' => true, 'schoolAdmin' => false]],
@@ -60,10 +60,10 @@ class PermissionMatrixTest extends TestCase
         'teacher stats for other-school class' => ['GET', '/api/v1/teacher/stats?class_id={classB}', null, ['teacher' => false]],
 
         // ── Curriculum ──
-        'update own-school subject' => ['PUT', '/api/v1/admin/subjects/{subjectA}', 'named', ['platform' => true, 'schoolAdmin' => true, 'teacher' => false]],
-        'update global subject' => ['PUT', '/api/v1/admin/subjects/{subjectGlobal}', 'named', ['platform' => true, 'schoolAdmin' => false]],
+        'update own-school subject' => ['PATCH', '/api/v1/admin/subjects/{subjectA}', 'named', ['platform' => true, 'schoolAdmin' => true, 'teacher' => false]],
+        'update global subject' => ['PATCH', '/api/v1/admin/subjects/{subjectGlobal}', 'named', ['platform' => true, 'schoolAdmin' => false]],
         'delete other-school subject' => ['DELETE', '/api/v1/admin/subjects/{subjectB}', null, ['schoolAdmin' => false]],
-        'update own-school topic' => ['PUT', '/api/v1/admin/topics/{topicA}', 'named', ['schoolAdmin' => true, 'teacher' => false]],
+        'update own-school topic' => ['PATCH', '/api/v1/admin/topics/{topicA}', 'named', ['schoolAdmin' => true, 'teacher' => false]],
         'delete global topic' => ['DELETE', '/api/v1/admin/topics/{topicGlobal}', null, ['platform' => true, 'schoolAdmin' => false]],
 
         // ── Question bank ──

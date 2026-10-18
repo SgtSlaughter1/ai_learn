@@ -193,6 +193,8 @@ Route::middleware('auth')->group(function () {
             Route::post('/teacher/learners', [TeacherDashboardController::class, 'saveLearner']);
             Route::delete('/teacher/classes/{classId}/learners/{learnerId}', [TeacherDashboardController::class, 'removeLearner']);
 
+            // Edits are PATCH; PUT is still accepted so edits queued offline before the
+            // switch can sync. Both verbs run the same policy and validation.
             // Curriculum and question bank (writes to subjects/topics are admin-only via policies)
             Route::get('/admin/programs', [Admin\LookupController::class, 'programs']);
             Route::get('/admin/classes', [Admin\ClassController::class, 'index']);
@@ -202,7 +204,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/admin/questions', [Admin\QuestionController::class, 'index']);
             Route::post('/admin/questions', [Admin\QuestionController::class, 'store']);
             Route::post('/admin/questions/bulk', [Admin\QuestionController::class, 'bulkStore']);
-            Route::put('/admin/questions/{id}', [Admin\QuestionController::class, 'update']);
+            Route::match(['patch', 'put'], '/admin/questions/{id}', [Admin\QuestionController::class, 'update']);
             Route::delete('/admin/questions/{id}', [Admin\QuestionController::class, 'destroy']);
             Route::post('/admin/questions/upload-image', [Admin\QuestionToolsController::class, 'uploadImage']);
             Route::post('/admin/questions/ai-extract', [Admin\QuestionToolsController::class, 'extract'])->middleware('throttle:ai');
@@ -217,43 +219,43 @@ Route::middleware('auth')->group(function () {
 
             Route::get('/admin/teachers', [Admin\TeacherController::class, 'index']);
             Route::post('/admin/teachers', [Admin\TeacherController::class, 'store']);
-            Route::put('/admin/teachers/{id}', [Admin\TeacherController::class, 'update']);
+            Route::match(['patch', 'put'], '/admin/teachers/{id}', [Admin\TeacherController::class, 'update']);
             Route::delete('/admin/teachers/{id}', [Admin\TeacherController::class, 'destroy']);
 
             Route::get('/admin/learners', [Admin\LearnerController::class, 'index']);
             Route::post('/admin/learners', [Admin\LearnerController::class, 'store']);
-            Route::put('/admin/learners/{id}', [Admin\LearnerController::class, 'update']);
+            Route::match(['patch', 'put'], '/admin/learners/{id}', [Admin\LearnerController::class, 'update']);
             Route::delete('/admin/learners/{id}', [Admin\LearnerController::class, 'destroy']);
 
             Route::post('/admin/classes', [Admin\ClassController::class, 'store']);
-            Route::put('/admin/classes/{id}', [Admin\ClassController::class, 'update']);
+            Route::match(['patch', 'put'], '/admin/classes/{id}', [Admin\ClassController::class, 'update']);
             Route::delete('/admin/classes/{id}', [Admin\ClassController::class, 'destroy']);
             Route::get('/admin/classes/{classId}/learners', [Admin\ClassLearnerController::class, 'index']);
             Route::post('/admin/classes/{classId}/enroll', [Admin\ClassLearnerController::class, 'store']);
             Route::delete('/admin/classes/{classId}/learners/{learnerId}', [Admin\ClassLearnerController::class, 'destroy']);
 
             Route::post('/admin/subjects', [Admin\SubjectController::class, 'store']);
-            Route::put('/admin/subjects/{id}', [Admin\SubjectController::class, 'update']);
+            Route::match(['patch', 'put'], '/admin/subjects/{id}', [Admin\SubjectController::class, 'update']);
             Route::delete('/admin/subjects/{id}', [Admin\SubjectController::class, 'destroy']);
 
             Route::post('/admin/topics', [Admin\TopicController::class, 'store']);
-            Route::put('/admin/topics/{id}', [Admin\TopicController::class, 'update']);
+            Route::match(['patch', 'put'], '/admin/topics/{id}', [Admin\TopicController::class, 'update']);
             Route::delete('/admin/topics/{id}', [Admin\TopicController::class, 'destroy']);
         });
 
         // ── Platform administration (platform admins only) ──
         Route::middleware('can:manage-platform')->group(function () {
             Route::post('/admin/schools', [Admin\SchoolController::class, 'store']);
-            Route::put('/admin/schools/{id}', [Admin\SchoolController::class, 'update']);
+            Route::match(['patch', 'put'], '/admin/schools/{id}', [Admin\SchoolController::class, 'update']);
             Route::delete('/admin/schools/{id}', [Admin\SchoolController::class, 'destroy']);
 
             Route::get('/admin/school-admins', [Admin\SchoolAdminController::class, 'index']);
             Route::post('/admin/school-admins', [Admin\SchoolAdminController::class, 'store']);
-            Route::put('/admin/school-admins/{id}', [Admin\SchoolAdminController::class, 'update']);
+            Route::match(['patch', 'put'], '/admin/school-admins/{id}', [Admin\SchoolAdminController::class, 'update']);
             Route::delete('/admin/school-admins/{id}', [Admin\SchoolAdminController::class, 'destroy']);
 
             Route::get('/admin/feedbacks', [\App\Http\Controllers\Api\FeedbackController::class, 'index']);
-            Route::put('/admin/feedbacks/{id}/status', [\App\Http\Controllers\Api\FeedbackController::class, 'updateStatus']);
+            Route::match(['patch', 'put'], '/admin/feedbacks/{id}/status', [\App\Http\Controllers\Api\FeedbackController::class, 'updateStatus']);
         });
 
         // Past Questions & National Exam Simulation Hub
