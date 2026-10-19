@@ -28,6 +28,8 @@ return new class extends Migration
             $table->json('topic_breakdown')->nullable(); // Performance analyzed by curriculum topic
             $table->timestamp('completed_at')->nullable();
             $table->timestamps();
+            // Id generated on the device, so a simulation submitted offline is recorded once.
+            $table->string('client_id', 64)->nullable()->unique();
 
             $table->index('user_id');
             $table->index('school_id');

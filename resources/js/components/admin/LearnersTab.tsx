@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { confirmAction } from '@/components/common/ConfirmModal';
 import type { Learner, SchoolItem, ClassItem } from '@/types/admin';
-import { executeAdminAction } from '@/services/AdminOfflineService';
+import { executeAdminAction, setAccountActive } from '@/services/AdminOfflineService';
+import { InactiveBadge } from '@/components/common/InactiveBadge';
 import { getGradeLevelsForSchool, formatClassOptionLabel } from '@/utils/format';
 import Pagination from '@/components/common/Pagination';
 import { Skeleton } from '@/components/common/Skeleton';
@@ -53,6 +55,9 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
     const handleSaveLearner = async (e: React.FormEvent) => {
         e.preventDefault();
         if (isSavingLearner) return;
+        if (!(await confirmAction(editingLearner
+            ? { title: 'Save changes?', message: `Save changes to "${learnerForm.name}"?`, confirmLabel: 'Save changes' }
+            : { title: 'Create learner?', message: `Create learner "${learnerForm.name}"?`, confirmLabel: 'Create learner' }))) return;
         setIsSavingLearner(true);
 
         try {
@@ -110,8 +115,16 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
         }
     };
 
+    const handleToggleActive = async (learner: Learner) => {
+        const activate = learner.is_active === false;
+        if (!activate && !(await confirmAction({ title: 'Deactivate learner?', message: `${learner.name} won't be able to sign in until you activate them again. Nothing is deleted.`, confirmLabel: 'Deactivate', tone: 'warning' }))) return;
+        const res = await setAccountActive('user', 'adminLearners', learner, activate);
+        showToast(res.success ? (res.message || (activate ? 'Learner activated' : 'Learner deactivated')) : (res.error || 'Could not change the account status'), res.success ? 'success' : 'error');
+        if (res.success) onRefresh();
+    };
+
     const handleDeleteLearner = async (learner: Learner) => {
-        if (!confirm(`Are you sure you want to delete learner ${learner.name}?`)) return;
+        if (!(await confirmAction({ title: 'Delete learner?', message: `Delete ${learner.name}? The account is archived (not erased) and can no longer sign in.`, confirmLabel: 'Delete learner', tone: 'danger' }))) return;
         setDeletingLearnerId(learner.id);
         try {
             const res = await executeAdminAction({
@@ -318,7 +331,7 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
                                     <tr key={learner.id} className={`hover:bg-[var(--color-primary-5)]/20 transition-colors ${openActionDropdownId === learner.id ? 'relative z-30' : ''}`}>
                                         <td className="py-3.5 px-4">
                                             <div className="flex items-center gap-2">
-                                                <p className="font-bold text-[var(--color-text)]">{learner.name}</p>
+                                                <p className="font-bold text-[var(--color-text)]">{learner.name}<InactiveBadge show={learner.is_active === false} /></p>
                                                 {learner._pendingSync && (
                                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
                                                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
@@ -450,6 +463,19 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                                 </svg>
                                                                 <span>Edit Profile</span>
+                                                            </button>
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setOpenActionDropdownId(null);
+                                                                    setDropdownCoords(null);
+                                                                    void handleToggleActive(learner);
+                                                                }}
+                                                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-primary-10)] transition-colors cursor-pointer text-left"
+                                                            >
+                                                                <span className={`w-2 h-2 rounded-full ${learner.is_active === false ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                                                                <span>{learner.is_active === false ? 'Activate' : 'Deactivate'}</span>
                                                             </button>
 
                                                             <div className="h-px bg-[var(--color-border)] my-1" />

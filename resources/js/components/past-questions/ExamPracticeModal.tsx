@@ -7,6 +7,7 @@ import { PastQuestionItem } from '../../types/past-questions';
 import { AiExplanationDrawer } from '../quiz/AiExplanationDrawer';
 import { Sparkles, Lightbulb, BookOpen } from 'lucide-react';
 import { formatMathText, extractLiteratureContext } from '../../utils/mathFormatter';
+import { reviewAnswer } from '@/services/AnswerKey';
 
 interface Props {
     questions: PastQuestionItem[];
@@ -72,6 +73,23 @@ export const ExamPracticeModal: React.FC<Props> = ({
                 },
             }));
             return;
+        }
+
+        // Checked on the device from the answer hash (works offline, no request needed);
+        // the correct option and explanation are only unlocked by checking.
+        if (currentQ.answer_hash) {
+            const review = await reviewAnswer('pq', currentQ, optId);
+            if (review.correctOptionId !== null) {
+                setVerifiedAnswers(prev => ({
+                    ...prev,
+                    [currentQ.id]: {
+                        isCorrect: review.isCorrect,
+                        correctOptionId: review.correctOptionId,
+                        explanation: review.explanation,
+                    },
+                }));
+                return;
+            }
         }
 
         // Server-side secure verification without leaking answers in advance

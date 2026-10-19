@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Notifications\Notifiable;
 
 use App\Enums\UserRole;
@@ -37,6 +38,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'role' => UserRole::class,
+            'is_active' => 'boolean',
         ];
     }
 
@@ -412,19 +414,32 @@ class User extends Authenticatable
     }
 
     /**
-     * Delete this account, or archive it when it has quiz history (attempts must stay
-     * valid for reports and cannot be deleted). Archived users cannot sign in and no
-     * longer appear anywhere; their email is freed for a new account.
+     * Delete this account with everything that ties it to classes and schools: it leaves its
+     * class rosters, a teacher's staff profile is removed and a school admin is unlinked from
+     * the school. The account itself is archived (see removeAccount). Used by admins and by
+     * users deleting their own account.
+     */
+    public function deleteAccount(): void
+    {
+        DB::transaction(function () {
+            ClassMembership::where('user_id', $this->id)->delete();
+            if ($this->isTeacher()) {
+                $this->teacherProfile()->delete();
+            }
+            School::where('admin_user_id', $this->id)->update(['admin_user_id' => null]);
+            $this->removeAccount();
+        });
+    }
+
+    /**
+     * Delete this account. Deletes are always soft (archived): the account can't sign in
+     * and no longer appears anywhere, but its record and history are kept. The email is
+     * freed so it can be used for a new account.
      *
-     * @return bool true when the account was archived rather than deleted
+     * @return bool always true (the account was archived, not erased)
      */
     public function removeAccount(): bool
     {
-        if (!QuizAttempt::where('user_id', $this->id)->exists()) {
-            $this->forceDelete();
-            return false;
-        }
-
         $this->forceFill([
             'archived_email' => $this->email,
             'email' => 'archived+' . $this->id . '@archived.invalid',
@@ -433,5 +448,25 @@ class User extends Authenticatable
         $this->delete();
 
         return true;
+    }
+
+    /**
+     * Why this account may not sign in right now, or null when it may: the account itself
+     * is deactivated, or it belongs to a school that is. Platform admins have no school.
+     * Deactivated accounts keep everything and work again once reactivated.
+     */
+    public function signInBlockedReason(): ?string
+    {
+        // Only an explicit false counts: a just-created model hasn't loaded the default yet.
+        if ($this->is_active === false) {
+            return 'This account has been deactivated. Please contact your school administrator.';
+        }
+
+        $schoolId = $this->isPlatformAdmin() ? null : $this->managedSchoolId();
+        if ($schoolId !== null && School::whereKey($schoolId)->where('is_active', false)->exists()) {
+            return 'Your school\'s account has been deactivated. Please contact your school administrator.';
+        }
+
+        return null;
     }
 }

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { confirmAction } from '@/components/common/ConfirmModal';
 import type { QuestionItem, SubjectItem, TopicItem, ClassItem } from '@/types/admin';
 import { executeAdminAction, getAdminAuthHeaders } from '@/services/AdminOfflineService';
 import { parseQuestionsOffline, generateOfflineQuestionsForTopic, type ExtractedQuestion } from '@/utils/questionParser';
@@ -261,6 +262,7 @@ export default function QuestionBankTab({
 
     const handleSaveBulkQuestions = async () => {
         if (!bulkTopicId || extractedQuestions.length === 0) return;
+        if (!(await confirmAction({ title: 'Import questions?', message: `Add ${extractedQuestions.length} question${extractedQuestions.length === 1 ? '' : 's'} to the question bank?`, confirmLabel: 'Import' }))) return;
 
         setIsSubmittingBulk(true);
         try {
@@ -367,6 +369,9 @@ export default function QuestionBankTab({
             e.preventDefault();
         }
         if (isSavingQuestion) return;
+        if (!(await confirmAction(editingQuestion
+            ? { title: 'Save changes?', message: 'Save the changes to this question?', confirmLabel: 'Save changes' }
+            : { title: 'Add question?', message: 'Add this question to the question bank?', confirmLabel: 'Add question' }))) return;
         setIsSavingQuestion(true);
 
         try {
@@ -449,7 +454,7 @@ export default function QuestionBankTab({
     };
 
     const handleDeleteQuestion = async (q: QuestionItem) => {
-        if (!confirm('Are you sure you want to delete this question?')) return;
+        if (!(await confirmAction({ title: 'Delete question?', message: 'Delete this question? Past results that used it are kept.', confirmLabel: 'Delete question', tone: 'danger' }))) return;
         setDeletingQuestionId(q.id);
         try {
             const res = await executeAdminAction({

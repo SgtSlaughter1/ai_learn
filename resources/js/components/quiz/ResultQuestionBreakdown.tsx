@@ -24,11 +24,14 @@ export interface ResultAnswer {
 
 interface ResultQuestionBreakdownProps {
     answers: ResultAnswer[];
+    /** Offline view: correct answers and explanations only come with the verified result. */
+    answersHidden?: boolean;
     onAskAi: (questionId: number, questionText: string, selectedOptionId: number | null, answerObj?: ResultAnswer) => void;
 }
 
 export function ResultQuestionBreakdown({
     answers,
+    answersHidden = false,
     onAskAi,
 }: ResultQuestionBreakdownProps) {
     return (
@@ -87,7 +90,7 @@ export function ResultQuestionBreakdown({
                                 )}
                             </div>
 
-                            <div className="shrink-0 self-start sm:self-auto">
+                            {!answersHidden && (<div className="shrink-0 self-start sm:self-auto">
                                 {!answer.is_correct ? (
                                     <button
                                         type="button"
@@ -107,7 +110,7 @@ export function ResultQuestionBreakdown({
                                         <span>AI Breakdown</span>
                                     </button>
                                 )}
-                            </div>
+                            </div>)}
                         </div>
 
                         {/* Mistake Comparison Summary (for incorrect answers) */}
@@ -135,12 +138,14 @@ export function ResultQuestionBreakdown({
                                         Correct Answer:
                                     </span>
                                     <div className="text-xs font-bold text-[var(--color-text)] chat-markdown [&_p]:inline">
-                                        {correctOpt ? (
+                                        {answersHidden ? (
+                                            <span className="text-[var(--color-muted)] italic font-normal">Shown once your attempt is verified online</span>
+                                        ) : correctOpt ? (
                                             <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                                                 {formatMathText(correctOpt.option_text)}
                                             </Markdown>
                                         ) : (
-                                            <span className="text-[var(--color-muted)] italic">Option A</span>
+                                            <span className="text-[var(--color-muted)] italic">Not available</span>
                                         )}
                                     </div>
                                 </div>

@@ -10,6 +10,7 @@ use App\Models\Quiz;
 use App\Models\School;
 use App\Models\Subject;
 use App\Models\User;
+use App\Support\OfflineAnswerKey;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -521,24 +522,18 @@ class SubjectWebController extends Controller
         }
         $level = $gradeLevel ? strtolower($gradeLevel) : null;
 
-        $subject = DB::table('subjects as s')
-            ->leftJoin('schools as sc', 'sc.id', '=', 's.school_id')
-            ->where('s.slug', $slug)
-            ->where('s.status', 'active')
-            ->select([
-                's.id',
-                's.school_id',
-                'sc.name as school_name',
-                's.name',
-                's.slug',
-                's.description',
-            ])
+        // One query for the subject (with its school's name), used for the policy check too.
+        $subject = Subject::query()
+            ->leftJoin('schools as sc', 'sc.id', '=', 'subjects.school_id')
+            ->where('subjects.slug', $slug)
+            ->where('subjects.status', 'active')
+            ->select(['subjects.*', 'sc.name as school_name'])
             ->first();
 
         if (!$subject) {
             return response()->json(['message' => 'Subject not found'], 404);
         }
-        Gate::authorize('view', Subject::findOrFail($subject->id));
+        Gate::authorize('view', $subject);
 
         // 1. Efficient single-join query for topics and user progress
         $topics = DB::table('topics as t')
@@ -656,7 +651,8 @@ class SubjectWebController extends Controller
                     'question_text' => $row->question_text,
                     'type' => $row->type,
                     'difficulty' => $row->difficulty,
-                    'explanation' => $row->explanation,
+                    'explanation' => $isStaff ? $row->explanation : null,
+                    '_explanation' => $row->explanation,
                     'correct_option_id' => null,
                     // Marks in this quiz, so offline grading matches the server's.
                     'marks' => (int) ($row->question_marks ?? 1),
@@ -682,11 +678,14 @@ class SubjectWebController extends Controller
 
         $formattedQuizzes = array_values(array_map(function ($q) {
             $q['questions'] = array_values(array_map(function ($question) {
-                $correctOptId = $question['correct_option_id'] ?? null;
-                $question['answer_hash'] = $correctOptId
-                    ? hash('sha256', "acedrill_salt_q_{$question['id']}_opt_{$correctOptId}")
-                    : null;
-                unset($question['correct_option_id']);
+                // Learners grade and review offline from these (see OfflineAnswerKey).
+                $question += OfflineAnswerKey::forQuestion(
+                    OfflineAnswerKey::QUIZ,
+                    (int) $question['id'],
+                    $question['correct_option_id'] ?? null,
+                    $question['_explanation'],
+                );
+                unset($question['correct_option_id'], $question['_explanation']);
                 return $question;
             }, $q['questions']));
             return $q;

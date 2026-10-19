@@ -785,3 +785,26 @@ export function staffPreloadSteps(can: StaffAbilities, isTeacher: boolean): Prel
     return steps;
 }
 
+
+/**
+ * Activate or deactivate a user account or a whole school (works offline: queued like any
+ * other admin change). Deactivated users, and every user of a deactivated school, cannot
+ * sign in until reactivated. Nothing is deleted.
+ */
+export async function setAccountActive(
+    kind: 'user' | 'school',
+    table: 'adminLearners' | 'adminTeachers' | 'adminSchoolAdmins' | 'adminSchools',
+    record: { id: string | number },
+    isActive: boolean,
+): Promise<AdminActionResult> {
+    const resource = kind === 'school' ? 'schools' : 'users';
+    return executeAdminAction({
+        table,
+        action: 'update',
+        recordId: String(record.id),
+        endpoint: `/api/v1/admin/${resource}/${record.id}/status`,
+        method: 'PATCH',
+        payload: { is_active: isActive },
+        optimisticRecord: { ...record, is_active: isActive },
+    });
+}

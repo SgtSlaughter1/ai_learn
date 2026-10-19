@@ -137,6 +137,7 @@ Route::middleware('auth')->group(function () {
 
     // Active Recall Flashcards
     Route::get('/flashcards', [FlashcardController::class, 'showFlashcardsPage']);
+    Route::get('/profile', [\App\Http\Controllers\Web\AccountController::class, 'show']);
 
     // Separate JSON Data Routes
     Route::prefix('api/v1')->middleware('throttle:api')->group(function () {
@@ -180,6 +181,12 @@ Route::middleware('auth')->group(function () {
         Route::post('/sync/batch', [SyncController::class, 'batch'])->middleware('throttle:sync-batch');
 
         Route::post('/progress/sync', [SyncController::class, 'syncProgress']);
+
+        // The user's own account (profile page Danger Zone); password-checked, so rate limited.
+        Route::middleware('throttle:10,1')->group(function () {
+            Route::post('/account/deactivate', [\App\Http\Controllers\Web\AccountController::class, 'deactivate']);
+            Route::delete('/account', [\App\Http\Controllers\Web\AccountController::class, 'destroy']);
+        });
         Route::post('/gamification/sync', [SyncController::class, 'syncGamification']);
 
         // ── Teaching tools (teachers and admins) ──
@@ -222,6 +229,8 @@ Route::middleware('auth')->group(function () {
             Route::match(['patch', 'put'], '/admin/teachers/{id}', [Admin\TeacherController::class, 'update']);
             Route::delete('/admin/teachers/{id}', [Admin\TeacherController::class, 'destroy']);
 
+            Route::patch('/admin/users/{id}/status', [Admin\AccountStatusController::class, 'updateUser']);
+
             Route::get('/admin/learners', [Admin\LearnerController::class, 'index']);
             Route::post('/admin/learners', [Admin\LearnerController::class, 'store']);
             Route::match(['patch', 'put'], '/admin/learners/{id}', [Admin\LearnerController::class, 'update']);
@@ -246,6 +255,7 @@ Route::middleware('auth')->group(function () {
         // ── Platform administration (platform admins only) ──
         Route::middleware('can:manage-platform')->group(function () {
             Route::post('/admin/schools', [Admin\SchoolController::class, 'store']);
+            Route::patch('/admin/schools/{id}/status', [Admin\AccountStatusController::class, 'updateSchool']);
             Route::match(['patch', 'put'], '/admin/schools/{id}', [Admin\SchoolController::class, 'update']);
             Route::delete('/admin/schools/{id}', [Admin\SchoolController::class, 'destroy']);
 
@@ -288,14 +298,21 @@ Route::get('/api/health', function () {
 // ── Shared Hosting & Maintenance Utilities ──
 //
 // InfinityFree has no SSH, so Artisan commands have to be triggered over HTTP.
-// If you set MAINTENANCE_TOKEN in your .env, every route below requires
-// ?token=YOUR_TOKEN before it will do anything.
+// Every route below is disabled (404) unless MAINTENANCE_TOKEN is set to at least
+// 32 characters and sent as the X-Maintenance-Token header or ?token=.
+// Generate one with: openssl rand -hex 32
 
-// Optional shared-secret guard for the maintenance routes below
-$guardMaintenance = function () {
-    $token = env('MAINTENANCE_TOKEN');
-    if ($token !== null && $token !== '' && ! hash_equals((string) $token, (string) request()->query('token', ''))) {
-        abort(403, 'Invalid or missing maintenance token.');
+$guardMaintenance = function (bool $destructive = false) {
+    $token = (string) config('app.maintenance_token');
+    $provided = (string) (request()->header('X-Maintenance-Token') ?? request()->query('token', ''));
+
+    // Fail closed: no (or weak) token configured means these routes don't exist.
+    if (strlen($token) < 32 || ! hash_equals($token, $provided)) {
+        abort(404);
+    }
+
+    if ($destructive && app()->isProduction() && ! config('app.allow_destructive_maintenance')) {
+        abort(403, 'Wiping the database is disabled in production.');
     }
 };
 
@@ -336,7 +353,7 @@ Route::get('/run-migrations', function () use ($guardMaintenance) {
 // The response includes a diagnostic report so privilege problems are visible
 // instead of showing up as a confusing "table already exists" error.
 Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
-    $guardMaintenance();
+    $guardMaintenance(destructive: true);
 
     // Best-effort: long drop + migrate + seed jobs can outlive PHP defaults
     @set_time_limit(300);
@@ -398,6 +415,7 @@ Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
             '2026_08_24_000005_create_past_questions_tables',
             '2026_09_24_000001_create_spaced_repetition_items_table',
             '2026_09_27_000001_create_feedbacks_table',
+            '2026_10_15_000001_create_idempotency_keys_table',
         ];
 
         // Auto-purge only known old/stale merged migration files from server disk
@@ -405,6 +423,10 @@ Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
             '2026_08_23_000001_create_schools_table',
             '2026_08_24_000002_create_categories_table_and_update_schools',
             '2026_08_24_000003_add_exam_fields_to_questions_table',
+            // Merged into their create migrations
+            '2026_10_15_000002_add_archiving_and_sync_constraints',
+            '2026_10_15_000003_add_client_ids_for_offline_sync',
+            '2026_10_15_000004_add_xp_awarded_at_to_quiz_attempts',
         ];
         $purgedExtraFiles = [];
         foreach ($staleMergedFiles as $staleBase) {
@@ -492,6 +514,8 @@ Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
 });
 
 // Run seeders only
+// Every seeder is idempotent (updateOrCreate; past questions skip once present), so this
+// only adds or refreshes the test accounts and sample content; it never wipes anything.
 Route::get('/run-seed', function () use ($guardMaintenance) {
     $guardMaintenance();
 

@@ -216,12 +216,8 @@ class LearnerController extends Controller
         $user = User::where('id', $id)->where('role', 'learner')->firstOrFail();
         Gate::authorize('delete', $user);
 
-        $archived = DB::transaction(function () use ($user) {
-            ClassMembership::where('user_id', $user->id)->delete();
+        $user->deleteAccount();
 
-            return $user->removeAccount();
-        });
-
-        return response()->json(['message' => 'Learner deleted successfully', 'archived' => $archived]);
+        return response()->json(['message' => 'Learner deleted successfully', 'archived' => true]);
     }
 }

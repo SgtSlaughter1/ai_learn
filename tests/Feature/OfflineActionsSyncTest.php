@@ -118,6 +118,37 @@ class OfflineActionsSyncTest extends TestCase
         $this->assertTrue($item->next_review_at->equalTo($reviewedAt->copy()->addDays(3)));
     }
 
+    public function test_revision_cards_carry_no_plain_answers(): void
+    {
+        $question = Question::factory()->create(['topic_id' => $this->topic->id, 'explanation' => 'Because the answer is Photosynthesis.']);
+        $correct = QuestionOption::factory()->create(['question_id' => $question->id, 'is_correct' => true]);
+        QuestionOption::factory()->create(['question_id' => $question->id, 'is_correct' => false]);
+        $item = SpacedRepetitionItem::create(['user_id' => $this->learner->id, 'question_id' => $question->id, 'topic_id' => $this->topic->id, 'next_review_at' => now()]);
+
+        $card = app(\App\Services\SpacedRepetition\SpacedRepetitionService::class)->formatQueueItem($item->fresh());
+
+        $this->assertArrayNotHasKey('explanation', $card);
+        foreach ($card['options'] as $option) {
+            $this->assertArrayNotHasKey('is_correct', $option);
+        }
+        $this->assertSame(\App\Support\OfflineAnswerKey::hash('q', $question->id, $correct->id), $card['answer_hash']);
+        $this->assertNotEmpty($card['explanation_sealed']);
+        $this->assertStringNotContainsString('Photosynthesis', json_encode($card));
+    }
+
+    public function test_a_wrong_revision_answer_earns_nothing_whatever_the_rating(): void
+    {
+        $question = Question::factory()->create(['topic_id' => $this->topic->id]);
+        QuestionOption::factory()->create(['question_id' => $question->id, 'is_correct' => true]);
+        $wrong = QuestionOption::factory()->create(['question_id' => $question->id, 'is_correct' => false]);
+        $item = SpacedRepetitionItem::create(['user_id' => $this->learner->id, 'question_id' => $question->id, 'topic_id' => $this->topic->id, 'next_review_at' => now()]);
+
+        $this->actingAs($this->learner)
+            ->postJson('/api/v1/revision/submit', ['item_id' => $item->id, 'selected_option_id' => $wrong->id, 'rating' => 'easy'])
+            ->assertOk()
+            ->assertJson(['data' => ['is_correct' => false, 'xp_earned' => 0]]);
+    }
+
     public function test_revision_session_counts_are_validated(): void
     {
         $this->actingAs($this->learner)

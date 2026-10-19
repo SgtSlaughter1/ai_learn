@@ -3,7 +3,7 @@ import '../css/app.css';
 import { createInertiaApp, router } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
-import { startAutoSync } from './services/SyncService';
+import { confirmSignedIn, startAutoSync } from './services/SyncService';
 import { setSyncUser } from './services/SyncQueue';
 import { cacheUserProfile } from './services/OfflineService';
 import {
@@ -17,6 +17,7 @@ import {
 import { prewarmPagesForUser, refreshAppShell, removeLegacyCaches } from './services/OfflinePrewarm';
 import { reportServerReachable } from './services/Connectivity';
 import { GlobalNotices, OFFLINE_ACTION_BLOCKED_EVENT } from './components/sync/GlobalNotices';
+import { ConfirmHost } from './components/common/ConfirmModal';
 
 const appName = import.meta.env.VITE_APP_NAME || 'AceDrill';
 
@@ -111,6 +112,7 @@ function rememberServerPage(page: any): void {
     if (!authUser) return;
     rememberAuthUser(authUser, page.props?.auth?.can);
     setSyncUser(authUser.id);
+    confirmSignedIn();
     cacheUserProfile({
         id: authUser.id,
         name: authUser.name,
@@ -166,6 +168,7 @@ async function boot(): Promise<void> {
                 <>
                     <App {...props} />
                     <GlobalNotices />
+                    <ConfirmHost />
                 </>
             );
 

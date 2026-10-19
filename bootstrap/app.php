@@ -24,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'api/*',
         ]);
         $middleware->web(append: [
+            \App\Http\Middleware\EnsureAccountIsActive::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
             \App\Http\Middleware\EnsureIdempotentRequest::class,
         ]);

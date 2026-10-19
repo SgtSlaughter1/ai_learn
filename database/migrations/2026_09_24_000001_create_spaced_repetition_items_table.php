@@ -38,6 +38,10 @@ return new class extends Migration
             $table->index(['user_id', 'question_id']);
             $table->index(['user_id', 'past_question_id']);
             $table->index(['user_id', 'reason_tag']);
+
+            // One item per learner per question, so concurrent reviews/syncs cannot duplicate rows.
+            $table->unique(['user_id', 'question_id'], 'srs_user_question_unique');
+            $table->unique(['user_id', 'past_question_id'], 'srs_user_past_question_unique');
         });
     }
 

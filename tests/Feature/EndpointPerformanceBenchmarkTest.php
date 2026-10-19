@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\EnsureAccountIsActive;
 use App\Enums\UserRole;
 use App\Models\ClassModel;
 use App\Models\ClassMembership;
@@ -35,6 +36,8 @@ class EndpointPerformanceBenchmarkTest extends TestCase
 
     private function benchmark(string $name, callable $requestFn, int $maxAllowedQueries = 6): mixed
     {
+        // Measure the endpoint itself: the once-a-minute account check is covered by AccountStatusTest.
+        $this->withSession([EnsureAccountIsActive::SESSION_KEY => now()->getTimestamp()]);
         DB::flushQueryLog();
         $startTime = hrtime(true);
 

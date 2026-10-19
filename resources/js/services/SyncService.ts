@@ -94,6 +94,17 @@ export function isSyncAuthRequired(): boolean {
     return authRequired;
 }
 
+/**
+ * The server just sent a page for a signed-in user, so the session is valid. Clear a
+ * "session ended" warning left from before signing in (e.g. a sync that ran on the login
+ * page) and send the work that was waiting for it.
+ */
+export function confirmSignedIn(): void {
+    if (!authRequired) return;
+    setAuthRequired(false);
+    if (navigator.onLine) void syncAll();
+}
+
 // ── Batches ──
 
 /** Changes per batch request (the server accepts up to 25). */
@@ -211,7 +222,11 @@ async function syncQuizAttempts(userId: string): Promise<{ result: PassResult; s
             const outcome = classifyResponse(result.status, 'POST', result.body);
             if (outcome === 'ok') {
                 await markAttemptSynced(attempt.id);
-                await db.quizAttempts.update(attempt.id, { user_id: userId, sync_status: undefined, sync_error: null });
+                // The server's grade is the verified result; it replaces the provisional one.
+                const verified = result.body?.score != null
+                    ? { score: Number(result.body.score), total_marks: Number(result.body.total_marks ?? attempt.total_marks), verified: true }
+                    : {};
+                await db.quizAttempts.update(attempt.id, { user_id: userId, sync_status: undefined, sync_error: null, ...verified });
                 synced++;
                 continue;
             }

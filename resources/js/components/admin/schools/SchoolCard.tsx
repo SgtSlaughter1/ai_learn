@@ -5,9 +5,11 @@ interface SchoolCardProps {
     school: SchoolItem;
     onEdit: (school: SchoolItem) => void;
     onDelete: (school: SchoolItem) => void;
+    /** Deactivating a school stops all of its users (admins, teachers, learners) signing in. */
+    onToggleActive?: (school: SchoolItem) => void;
 }
 
-export default function SchoolCard({ school, onEdit, onDelete }: SchoolCardProps) {
+export default function SchoolCard({ school, onEdit, onDelete, onToggleActive }: SchoolCardProps) {
 
     return (
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-[var(--color-primary-light)] rounded-2xl p-5 flex flex-col justify-between transition-all duration-200 hover:shadow-md group">
@@ -107,6 +109,15 @@ export default function SchoolCard({ school, onEdit, onDelete }: SchoolCardProps
                 >
                     Edit School
                 </button>
+                {onToggleActive && (
+                    <button
+                        type="button"
+                        onClick={() => onToggleActive(school)}
+                        className="px-3 py-1.5 text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-lg transition-colors cursor-pointer active:scale-[0.98]"
+                    >
+                        {school.is_active === false ? 'Activate' : 'Deactivate'}
+                    </button>
+                )}
                 <button
                     type="button"
                     onClick={() => onDelete(school)}

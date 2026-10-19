@@ -146,7 +146,13 @@ async function enqueueItem(input: EnqueueInput): Promise<number | null> {
         const unsentInsert = unsent.find((q) => q.action === 'insert');
 
         if (input.action === 'update' && !input.sent) {
-            const target = unsentInsert ?? unsent.filter((q) => q.action === 'update').pop();
+            // Only merge changes sent to the same place: an edit of the record folds into its
+            // pending create or edit, but e.g. a status change (…/status) stays its own request.
+            const sameResource = (q: SyncQueueItem) => q.action === 'insert'
+                ? input.endpoint === `${q.endpoint}/${input.record_id}`
+                : q.endpoint === input.endpoint;
+            const target = (unsentInsert && sameResource(unsentInsert) ? unsentInsert : null)
+                ?? unsent.filter((q) => q.action === 'update' && sameResource(q)).pop();
             if (target?.id) {
                 const merged = { ...parsePayload(target.payload), ...withoutBlankPasswords(payload) };
                 await db.syncQueue.update(target.id, { payload: JSON.stringify(merged) });

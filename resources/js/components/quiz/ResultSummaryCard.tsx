@@ -6,6 +6,8 @@ interface ResultSummaryCardProps {
     score: number;
     totalMarks: number;
     percentage: number;
+    /** Graded on this device; the server's verified score replaces it after syncing. */
+    provisional?: boolean;
     feedback: {
         title: string;
         desc: string;
@@ -18,6 +20,7 @@ export function ResultSummaryCard({
     score,
     totalMarks,
     percentage,
+    provisional = false,
     feedback,
 }: ResultSummaryCardProps) {
     return (
@@ -26,7 +29,7 @@ export function ResultSummaryCard({
             <div className="flex flex-col md:flex-row items-center justify-between gap-6 bg-[var(--color-surface)] border border-[var(--color-border)] p-6 md:p-8 rounded-3xl backdrop-blur-md">
                 <div className="space-y-3 text-center md:text-left">
                     <span className="text-[10px] font-extrabold px-2.5 py-1 bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20 rounded-md tracking-wider uppercase">
-                        Assessment Completed
+                        {provisional ? 'Provisional score' : 'Assessment Completed'}
                     </span>
                     <h1 className="text-2xl md:text-3xl font-extrabold text-[var(--color-text)] leading-tight">
                         {quizTitle}
@@ -34,6 +37,11 @@ export function ResultSummaryCard({
                     <p className="text-[var(--color-muted)] text-sm max-w-xl leading-relaxed">
                         {feedback.desc}
                     </p>
+                    {provisional && (
+                        <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 max-w-xl leading-relaxed">
+                            Marked on this device while offline. Your official score and XP are confirmed automatically when you're back online.
+                        </p>
+                    )}
                 </div>
 
                 {/* Circular Radial Score Dial */}

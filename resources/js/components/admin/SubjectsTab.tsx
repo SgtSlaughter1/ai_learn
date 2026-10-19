@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { confirmAction } from '@/components/common/ConfirmModal';
 import type { SubjectItem, TopicItem, ClassItem } from '@/types/admin';
 import { executeAdminAction, cacheAdminTopics, getCachedAdminTopics } from '@/services/AdminOfflineService';
 import SubjectFilterBar from './subjects/SubjectFilterBar';
@@ -73,6 +74,9 @@ export default function SubjectsTab({
     const handleSaveSubject = async (e: React.FormEvent) => {
         e.preventDefault();
         if (isSavingSubject) return;
+        if (!(await confirmAction(editingSubject
+            ? { title: 'Save changes?', message: `Save changes to "${subjectForm.name}"?`, confirmLabel: 'Save changes' }
+            : { title: 'Create subject?', message: `Create subject "${subjectForm.name}"?`, confirmLabel: 'Create subject' }))) return;
         setIsSavingSubject(true);
 
         try {
@@ -133,7 +137,7 @@ export default function SubjectsTab({
     };
 
     const handleDeleteSubject = async (subject: SubjectItem) => {
-        if (!confirm(`Delete subject "${subject.name}"? This will also remove its topics.`)) return;
+        if (!(await confirmAction({ title: 'Delete subject?', message: `Delete "${subject.name}"? This also removes its topics.`, confirmLabel: 'Delete subject', tone: 'danger' }))) return;
         setDeletingSubjectId(subject.id);
         try {
             const res = await executeAdminAction({
@@ -190,6 +194,9 @@ export default function SubjectsTab({
     const handleSaveTopic = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedSubjectForTopics || isSavingTopic) return;
+        if (!(await confirmAction(editingTopic
+            ? { title: 'Save changes?', message: `Save changes to "${topicForm.name}"?`, confirmLabel: 'Save changes' }
+            : { title: 'Create topic?', message: `Create topic "${topicForm.name}"?`, confirmLabel: 'Create topic' }))) return;
         setIsSavingTopic(true);
 
         try {
@@ -242,7 +249,7 @@ export default function SubjectsTab({
     };
 
     const handleDeleteTopic = async (topic: TopicItem) => {
-        if (!confirm(`Delete topic "${topic.name}"?`)) return;
+        if (!(await confirmAction({ title: 'Delete topic?', message: `Delete "${topic.name}"?`, confirmLabel: 'Delete topic', tone: 'danger' }))) return;
         try {
             const res = await executeAdminAction({
                 table: 'topics',

@@ -5,9 +5,10 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { db } from '@/db/database';
 import { preloadFullOfflineCurriculum, saveLocalGamification } from '@/services/OfflineService';
 import { belongsTo, getSyncUser } from '@/services/SyncQueue';
+import { SYNC_COMPLETED_EVENT } from '@/services/SyncService';
 import { StatsOverview } from '@/components/dashboard/StatsOverview';
 import { LevelProgressBar, GamificationData } from '@/components/dashboard/LevelProgressBar';
-import { OverallMasteryCard, RecentQuizActivityCard, DashboardAttempt } from '@/components/dashboard/RecentAttemptsList';
+import { OverallMasteryCard, RecentQuizActivityCard, DashboardAttempt, mergeRecentAttempts } from '@/components/dashboard/RecentAttemptsList';
 import { DashboardRevisionCard } from '@/components/dashboard/DashboardRevisionCard';
 import { MilestoneRoadmapModal } from '@/components/dashboard/MilestoneRoadmapModal';
 import 'katex/dist/katex.min.css';
@@ -173,44 +174,7 @@ export default function LearnerDashboard() {
                     if (q.id && q.title) quizTitleMap.set(q.id, q.title);
                 });
 
-                const localAttemptsFormatted: DashboardAttempt[] = attempts
-                    .filter((a) => a.status === 'completed')
-                    .slice(-5)
-                    .reverse()
-                    .map((a) => {
-                        const knownTitle = a.quiz_title || quizTitleMap.get(a.quiz_id);
-                        const matchingCached = baseRecent.find(
-                            (b) => String(b.id) === String(a.id) || (knownTitle && b.quiz_title === knownTitle)
-                        );
-                        const title = knownTitle || matchingCached?.quiz_title || `Quiz Assessment #${a.quiz_id}`;
-
-                        const finalScore =
-                            matchingCached?.score !== null && matchingCached?.score !== undefined
-                                ? matchingCached.score
-                                : a.score ?? null;
-
-                        const finalTotalMarks =
-                            matchingCached?.total_marks !== null && matchingCached?.total_marks !== undefined
-                                ? matchingCached.total_marks
-                                : a.total_marks ?? null;
-
-                        return {
-                            id: String(a.id),
-                            quiz_title: title,
-                            status: a.status,
-                            score: finalScore,
-                            total_marks: finalTotalMarks,
-                            completed_at: a.completed_at || matchingCached?.completed_at || null,
-                        };
-                    });
-
-                const localIds = new Set(localAttemptsFormatted.map((a) => a.id));
-                const mergedRecent = [
-                    ...localAttemptsFormatted,
-                    ...baseRecent.filter((a) => !localIds.has(String(a.id))),
-                ].slice(0, 5);
-
-                setRecentAttempts(mergedRecent);
+                setRecentAttempts(mergeRecentAttempts(attempts, baseRecent, (id) => quizTitleMap.get(id)));
                 setLoading(false);
             }
         };
@@ -236,7 +200,14 @@ export default function LearnerDashboard() {
                             : rawAttempts && typeof rawAttempts === 'object'
                             ? (Array.isArray((rawAttempts as any).data) ? (rawAttempts as any).data : Object.values(rawAttempts))
                             : [];
-                        setRecentAttempts(safeAttempts);
+                        // Attempts made offline and not synced yet aren't on the server: keep them in view.
+                        const localAttempts = await db.quizAttempts.toArray().catch(() => []);
+                        const userId = getSyncUser();
+                        setRecentAttempts(mergeRecentAttempts(
+                            userId ? localAttempts.filter((a) => belongsTo(a.user_id, userId)) : localAttempts,
+                            safeAttempts,
+                            () => undefined,
+                        ));
                         setGamification(gamData);
                         setLoading(false);
                     }
@@ -275,9 +246,15 @@ export default function LearnerDashboard() {
         };
 
         loadDashboard();
+        // When a sync sent something, the server has verified it: reload scores, stats and XP.
+        const onSynced = (e: Event) => {
+            if ((e as CustomEvent<{ synced?: number }>).detail?.synced) loadDashboard();
+        };
+        window.addEventListener(SYNC_COMPLETED_EVENT, onSynced);
 
         return () => {
             isMounted = false;
+            window.removeEventListener(SYNC_COMPLETED_EVENT, onSynced);
         };
     }, [isOnline]);
 

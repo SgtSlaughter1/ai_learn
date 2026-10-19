@@ -55,6 +55,8 @@ export interface CachedQuestion {
     explanation: string | null;
     status: string;
     answer_hash?: string | null;
+    /** Explanation encrypted with a key derived from the correct option (see AnswerKey.ts). */
+    explanation_sealed?: string | null;
     marks?: number;
     options: CachedQuestionOption[];
 }
@@ -83,8 +85,11 @@ export interface LocalQuizAttempt {
     quiz_id: number;
     quiz_title?: string;
     status: 'started' | 'completed';
+    /** Provisional (graded on the device) until `verified`; then the server's score. */
     score: number | null;
     total_marks: number | null;
+    /** True once the server has re-graded the attempt and its score replaced the device's. */
+    verified?: boolean;
     started_at: string;
     completed_at: string | null;
     duration_seconds: number | null;
@@ -103,7 +108,6 @@ export interface LocalQuizAnswer {
     selected_option_id: number | null;
     is_correct: boolean;
     marks_awarded: number;
-    correct_option_id?: number | null;
     answered_at: string | null;
 }
 

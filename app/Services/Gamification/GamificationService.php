@@ -271,22 +271,26 @@ class GamificationService
     public function processFlashcardCompletion(User $user, int $xpEarned, int $cardsReviewed, ?Carbon $activityAt = null): array
     {
         return DB::transaction(function () use ($user, $xpEarned, $cardsReviewed, $activityAt) {
-            $profile  = $this->lockProfile($user);
-            $oldLevel = $profile->level;
-            $oldTier  = $profile->tier;
+            $this->lockProfile($user); // one session update at a time per learner
 
+            // Awarding XP already updates the streak and checks achievements; only do it
+            // here when there was no XP to award.
             if ($xpEarned > 0) {
-                $this->awardXpLocked($user, $xpEarned, 'flashcard_review', "Reviewed {$cardsReviewed} flashcards", $activityAt);
+                $award = $this->awardXpLocked($user, $xpEarned, 'flashcard_review', "Reviewed {$cardsReviewed} flashcards", $activityAt);
+
+                return [
+                    'xp_earned'        => $xpEarned,
+                    'new_level'        => $award['new_level'],
+                    'new_tier'         => $award['new_tier'],
+                    'new_achievements' => $award['new_achievements'],
+                ];
             }
 
-            $this->updateStreak($user, $activityAt);
-            $newAchievements = $this->checkAchievements($user);
-
             return [
-                'xp_earned'        => $xpEarned,
-                'new_level'        => $profile->level > $oldLevel ? $profile->level : null,
-                'new_tier'         => $profile->tier !== $oldTier ? $profile->tier : null,
-                'new_achievements' => $newAchievements,
+                'xp_earned'        => 0,
+                'new_level'        => null,
+                'new_tier'         => null,
+                'new_achievements' => $this->recordActivityWithoutXp($user, $activityAt),
             ];
         });
     }
@@ -315,19 +319,16 @@ class GamificationService
                 }
             }
 
-            if ($bonusXp > 0) {
-                $this->awardXpLocked(
+            // Awarding XP already updates the streak and checks achievements.
+            $newAchievements = $bonusXp > 0
+                ? $this->awardXpLocked(
                     $user,
                     $bonusXp,
                     'daily_revision_bonus',
                     "Daily Revision: {$correctCount}/{$totalQuestions} correct",
                     $activityAt
-                );
-            } else {
-                $this->updateStreak($user, $activityAt);
-            }
-
-            $newAchievements = $this->checkAchievements($user);
+                )['new_achievements']
+                : $this->recordActivityWithoutXp($user, $activityAt);
 
             return [
                 'bonus_xp'         => $bonusXp,
@@ -497,6 +498,14 @@ class GamificationService
     public function awardXp(User $user, int $amount, string $source, ?string $description = null, ?Carbon $activityAt = null): array
     {
         return DB::transaction(fn () => $this->awardXpLocked($user, $amount, $source, $description, $activityAt));
+    }
+
+    /** A session that earned no XP still counts towards the streak and achievements. */
+    private function recordActivityWithoutXp(User $user, ?Carbon $activityAt): array
+    {
+        $this->updateStreak($user, $activityAt);
+
+        return $this->checkAchievements($user);
     }
 
     private function awardXpLocked(User $user, int $amount, string $source, ?string $description, ?Carbon $activityAt = null): array

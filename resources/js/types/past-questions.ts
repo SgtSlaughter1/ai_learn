@@ -50,6 +50,9 @@ export interface PastQuestionItem {
     image_url?: string;
     difficulty: string;
     explanation?: string;
+    /** Offline grading (see AnswerKey.ts): hash of the correct option and the sealed explanation. */
+    answer_hash?: string | null;
+    explanation_sealed?: string | null;
     topic: PastQuestionTopic;
     subject: PastQuestionSubject;
     options: PastQuestionOption[];
@@ -100,5 +103,7 @@ export interface ExamSimulationResult {
     detailed_results: DetailedQuestionResult[];
     /** Taken offline without the answer key: saved, and scored by the server once it syncs. */
     scoring_pending?: boolean;
+    /** Marked on the device while offline; the server confirms the official score when it syncs. */
+    provisional?: boolean;
     answered_count?: number;
 }

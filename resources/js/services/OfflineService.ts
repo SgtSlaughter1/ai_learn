@@ -1,4 +1,5 @@
 import { belongsTo, getSyncUser } from './SyncQueue';
+import { answerHash } from './AnswerKey';
 import { clearSnapshots, forgetAuthUser } from './OfflineNavigation';
 import { APP_SHELL_CACHE } from './OfflinePrewarm';
 import { db } from '../db/database';
@@ -134,6 +135,8 @@ export function sanitizeQuizForOffline(quiz: CachedQuiz): CachedQuiz {
         ...quiz,
         questions: (quiz.questions || []).map((q: any) => ({
             ...q,
+            // Explanations usually state the answer; they come back with the verified result.
+            explanation: null,
             options: (q.options || []).map((o: any) => ({
                 id: o.id,
                 option_text: o.option_text,
@@ -154,7 +157,7 @@ export async function cacheQuiz(quiz: CachedQuiz): Promise<void> {
                 const correct = (q.options || []).find((o: any) => o.is_correct);
                 if (!correct) return q;
                 try {
-                    return { ...q, answer_hash: await answerHashFor(q.id, correct.id) };
+                    return { ...q, answer_hash: await answerHash('q', q.id, correct.id) };
                 } catch {
                     return q; // crypto.subtle is unavailable outside secure contexts
                 }
@@ -203,7 +206,7 @@ export async function sanitizeExistingCachedQuizzes(): Promise<void> {
         const quizzes = await db.quizzes.toArray();
         for (const quiz of quizzes) {
             const exposed = quiz.questions?.some((q: any) =>
-                q.options?.some((o: any) => o.is_correct !== undefined)
+                q.explanation || q.options?.some((o: any) => o.is_correct !== undefined)
             );
             if (exposed) {
                 await cacheQuiz(quiz);
@@ -216,46 +219,6 @@ export async function sanitizeExistingCachedQuizzes(): Promise<void> {
 
 if (typeof window !== 'undefined') {
     sanitizeExistingCachedQuizzes().catch(() => {});
-}
-
-// ── Offline grading with answer hashes ──
-
-/** Same scheme as the server's answer_hash (QuizWebController / SubjectWebController). */
-async function answerHashFor(questionId: number, optionId: number): Promise<string> {
-    const data = new TextEncoder().encode(`acedrill_salt_q_${questionId}_opt_${optionId}`);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    return Array.from(new Uint8Array(hashBuffer))
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
-}
-
-/** Whether optionId is the correct answer, checked against the question's answer hash. */
-export async function verifyOptionHash(
-    questionId: number,
-    optionId: number,
-    answerHash?: string | null,
-): Promise<boolean> {
-    if (!answerHash || !optionId) return false;
-    try {
-        return (await answerHashFor(questionId, optionId)) === answerHash;
-    } catch {
-        return false;
-    }
-}
-
-/** The correct option's id, for the review screen after submitting. */
-export async function findCorrectOptionId(
-    questionId: number,
-    options: Array<{ id: number; is_correct?: boolean }>,
-    answerHash?: string | null,
-): Promise<number | null> {
-    if (answerHash) {
-        for (const opt of options) {
-            if (await verifyOptionHash(questionId, opt.id, answerHash)) return opt.id;
-        }
-    }
-    const fallback = options.find((o) => Boolean(o.is_correct));
-    return fallback ? fallback.id : null;
 }
 
 // ── Flashcards ──

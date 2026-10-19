@@ -34,7 +34,9 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         return array_merge(parent::share($request), [
-            'auth' => [
+            // Lazy: this middleware runs on every web request, including JSON API calls that
+            // never render a page; a closure is only evaluated when Inertia renders one.
+            'auth' => fn () => [
                 'user' => $request->user() ? [
                     'id' => $request->user()->id,
                     'name' => $request->user()->name,

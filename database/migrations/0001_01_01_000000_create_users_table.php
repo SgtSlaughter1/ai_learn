@@ -18,8 +18,14 @@ return new class extends Migration
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->string('role', 50)->default('learner')->index();
+            // Inactive accounts (or accounts in an inactive school) cannot sign in.
+            $table->boolean('is_active')->default(true)->index();
             $table->rememberToken();
             $table->timestamps();
+            // Users with quiz history are archived (soft deleted) instead of hard deleted,
+            // because quiz_attempts.user_id restricts deletes.
+            $table->softDeletes();
+            $table->string('archived_email', 191)->nullable();
         });
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {

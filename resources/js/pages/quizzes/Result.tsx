@@ -1,6 +1,8 @@
 import { Head } from '@inertiajs/react';
 import { useState, useEffect, useRef } from 'react';
 import { db } from '@/db/database';
+import { SYNC_COMPLETED_EVENT } from '@/services/SyncService';
+import { reviewAnswer } from '@/services/AnswerKey';
 import { ResultSummaryCard } from '@/components/quiz/ResultSummaryCard';
 import { ResultQuestionBreakdown, ResultAnswer } from '@/components/quiz/ResultQuestionBreakdown';
 import { AiExplanationDrawer } from '@/components/quiz/AiExplanationDrawer';
@@ -12,6 +14,10 @@ interface Attempt {
     total_marks: number;
     completed_at: string | null;
     answers: ResultAnswer[];
+    /** Score worked out on this device, not yet verified by the server. */
+    provisional?: boolean;
+    /** Local view: correct answers and explanations are not on this device. */
+    answersHidden?: boolean;
 }
 
 interface Props {
@@ -43,76 +49,89 @@ export default function Result({ attemptId }: Props) {
         let isMounted = true;
 
         async function loadAttempt() {
-            // 1. Try reading from Dexie first (instant offline render)
-            try {
-                const localAttempt = await db.quizAttempts.get(effectiveAttemptId);
-                if (localAttempt && isMounted) {
-                    const localQuiz = await db.quizzes.get(localAttempt.quiz_id);
-                    const questions = localQuiz?.questions || [];
+            // 1. The attempt saved on this device, reviewed offline: right/wrong, the correct
+            //    option and its explanation are worked out from the answer hashes (nothing
+            //    readable is stored). The score stays provisional until the server verifies it.
+            const localAttempt = await db.quizAttempts.get(effectiveAttemptId).catch(() => undefined);
+            if (localAttempt && isMounted) {
+                const localQuiz = await db.quizzes.get(localAttempt.quiz_id).catch(() => undefined);
+                const questions = localQuiz?.questions || [];
+                let reviewable = true;
 
-                    let calculatedScore = 0;
-                    const answers: ResultAnswer[] = (localAttempt.answers || []).map((ans) => {
-                        const question = questions.find((q) => q.id === ans.question_id);
-                        const correctOptId = (ans as any).correct_option_id;
-                        const correctOption = question?.options.find((o) => o.is_correct);
-                        const isCorrect = correctOption
-                            ? correctOption.id === ans.selected_option_id
-                            : (correctOptId ? correctOptId === ans.selected_option_id : Boolean(ans.is_correct));
-                        if (isCorrect) calculatedScore++;
+                const answers: ResultAnswer[] = await Promise.all((localAttempt.answers || []).map(async (ans) => {
+                    const question = questions.find((q) => q.id === ans.question_id);
+                    const review = question?.answer_hash
+                        ? await reviewAnswer('q', question, ans.selected_option_id)
+                        : null;
+                    if (!review?.correctOptionId) reviewable = false;
 
-                        return {
-                            id: ans.id,
-                            question_id: ans.question_id,
-                            question_text: question?.question_text || `Question #${ans.question_id}`,
-                            explanation: question?.explanation || '',
-                            selected_option_id: ans.selected_option_id,
-                            is_correct: Boolean(isCorrect),
-                            marks_awarded: ans.marks_awarded ?? (isCorrect ? 1 : 0),
-                            options: (question?.options || []).map((o) => ({
-                                id: o.id,
-                                option_text: o.option_text,
-                                is_correct: Boolean(o.is_correct || (correctOptId && o.id === correctOptId)),
-                            })),
-                        };
-                    });
+                    return {
+                        id: ans.id,
+                        question_id: ans.question_id,
+                        question_text: question?.question_text || `Question #${ans.question_id}`,
+                        explanation: review?.explanation ?? '',
+                        selected_option_id: ans.selected_option_id,
+                        is_correct: review ? review.isCorrect : Boolean(ans.is_correct),
+                        marks_awarded: ans.marks_awarded ?? 0,
+                        options: (question?.options || []).map((o) => ({
+                            id: o.id,
+                            option_text: o.option_text,
+                            is_correct: review ? o.id === review.correctOptionId : false,
+                        })),
+                    };
+                }));
 
+                if (isMounted) {
                     setAttempt({
                         id: localAttempt.id,
-                        quiz_title:
-                            localAttempt.quiz_title || localQuiz?.title || `Quiz Assessment #${localAttempt.quiz_id}`,
-                        score: localAttempt.score ?? calculatedScore,
-                        total_marks: localAttempt.total_marks ?? (questions.length || answers.length),
+                        quiz_title: localAttempt.quiz_title || localQuiz?.title || `Quiz Assessment #${localAttempt.quiz_id}`,
+                        score: localAttempt.score ?? 0,
+                        total_marks: localAttempt.total_marks ?? answers.length,
                         completed_at: localAttempt.completed_at,
-                        answers: answers,
+                        answers,
+                        provisional: !localAttempt.verified,
+                        // Only when this quiz has no answer hashes on the device (e.g. not downloaded).
+                        answersHidden: !reviewable,
                     });
                     setLoading(false);
                 }
-            } catch (e) {
-                console.error('Dexie attempt load error:', e);
             }
 
-            // 2. Fetch fresh from network if online
+            // 2. The verified result from the server (once the attempt has synced).
             try {
-                const res = await fetch(`/api/v1/quizzes/attempts/${attemptId}`);
+                const res = await fetch(`/api/v1/quizzes/attempts/${effectiveAttemptId}`, { headers: { Accept: 'application/json' } });
                 if (res.ok) {
                     const data = await res.json();
                     if (isMounted) {
-                        setAttempt(data.attempt);
-                        setLoading(false);
+                        setAttempt({ ...data.attempt, provisional: false, answersHidden: false });
+                    }
+                    if (localAttempt && !localAttempt.verified) {
+                        await db.quizAttempts.update(localAttempt.id, {
+                            score: Number(data.attempt.score),
+                            total_marks: Number(data.attempt.total_marks),
+                            verified: true,
+                            synced: true,
+                        });
                     }
                 }
             } catch {
-                console.log('Offline mode: loaded quiz result from local database');
+                // Offline: keep showing the provisional result from this device.
             } finally {
                 if (isMounted) setLoading(false);
             }
         }
 
         loadAttempt();
+        // When the attempt syncs while this page is open, swap in the verified result.
+        const onSynced = (e: Event) => {
+            if ((e as CustomEvent<{ synced?: number }>).detail?.synced) void loadAttempt();
+        };
+        window.addEventListener(SYNC_COMPLETED_EVENT, onSynced);
         return () => {
             isMounted = false;
+            window.removeEventListener(SYNC_COMPLETED_EVENT, onSynced);
         };
-    }, [attemptId]);
+    }, [effectiveAttemptId]);
 
     const getCsrfToken = () => {
         return (
@@ -131,6 +150,9 @@ export default function Result({ attemptId }: Props) {
         answerObj?: ResultAnswer
     ): Promise<string> => {
         try {
+            if (attempt?.answersHidden) {
+                return `### Available once you're back online\n\nThe correct answer and a full explanation for this question appear after your attempt is verified. Your work is saved on this device and syncs automatically when the connection returns.`;
+            }
             const ans = answerObj || attempt?.answers?.find((a) => a.question_id === questionId);
 
             let topicId: number | undefined;
@@ -146,11 +168,10 @@ export default function Result({ attemptId }: Props) {
                         cachedExplanation = foundQ.explanation;
                     }
                     if (options.length === 0 && foundQ.options) {
-                        const correctOptId = (ans as any)?.correct_option_id;
                         options = foundQ.options.map((o: any) => ({
                             id: o.id,
                             option_text: o.option_text,
-                            is_correct: Boolean(o.is_correct || (correctOptId && o.id === correctOptId)),
+                            is_correct: Boolean(o.is_correct),
                         }));
                     }
                     break;
@@ -370,12 +391,14 @@ export default function Result({ attemptId }: Props) {
                     score={attempt.score}
                     totalMarks={attempt.total_marks}
                     percentage={percentage}
+                    provisional={attempt.provisional}
                     feedback={feedback}
                 />
 
                 {/* Questions Review Breakdown */}
                 <ResultQuestionBreakdown
                     answers={attempt.answers}
+                    answersHidden={attempt.answersHidden}
                     onAskAi={handleAskAI}
                 />
             </div>

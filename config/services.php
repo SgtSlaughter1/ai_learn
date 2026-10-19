@@ -40,4 +40,14 @@ return [
         'api_url' => env('ALOC_API_URL', 'https://dev.aloc.com.ng/api/v1'),
     ],
 
+    // Read through config so the keys still work after `php artisan config:cache`.
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY') ?: env('GOOGLE_API_KEY') ?: env('AI_API_KEY'),
+        'model' => env('MODEL_NAME', 'gemini-3.1-flash-lite'),
+    ],
+
+    'ai' => [
+        'provider' => env('AI_PROVIDER'),
+    ],
+
 ];

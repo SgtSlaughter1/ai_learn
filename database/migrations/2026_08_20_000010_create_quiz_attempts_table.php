@@ -18,6 +18,8 @@ return new class extends Migration
             $table->timestamp('started_at');
             $table->timestamp('completed_at')->nullable();
             $table->timestamps();
+            // Set when the attempt's XP is awarded, so it is awarded exactly once.
+            $table->timestamp('xp_awarded_at')->nullable();
 
             $table->index('user_id');
             $table->index('quiz_id');

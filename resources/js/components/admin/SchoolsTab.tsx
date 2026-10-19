@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { confirmAction } from '@/components/common/ConfirmModal';
 import type { SchoolItem } from '@/types/admin';
-import { executeAdminAction } from '@/services/AdminOfflineService';
+import { executeAdminAction, setAccountActive } from '@/services/AdminOfflineService';
 import SchoolMetrics from './schools/SchoolMetrics';
 import SchoolFilterBar from './schools/SchoolFilterBar';
 import SchoolCard from './schools/SchoolCard';
 import SchoolFormModal, { type SchoolFormData } from './schools/SchoolFormModal';
-import SchoolDeleteModal from './schools/SchoolDeleteModal';
 import Pagination from '@/components/common/Pagination';
 import { SkeletonCardGrid } from '@/components/common/Skeleton';
 
@@ -31,7 +31,6 @@ export default function SchoolsTab({
     // Modals
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [editingSchool, setEditingSchool] = useState<SchoolItem | null>(null);
-    const [deletingSchool, setDeletingSchool] = useState<SchoolItem | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
     // Form state
@@ -93,6 +92,9 @@ export default function SchoolsTab({
 
     const handleSaveSchool = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!(await confirmAction(editingSchool
+            ? { title: 'Save changes?', message: `Save changes to "${formData.name}"?`, confirmLabel: 'Save changes' }
+            : { title: 'Create school?', message: `Create school "${formData.name}"?`, confirmLabel: 'Create school' }))) return;
         setSubmitting(true);
 
         const endpoint = editingSchool
@@ -140,22 +142,21 @@ export default function SchoolsTab({
         }
     };
 
-    const handleDeleteSchool = async () => {
-        if (!deletingSchool) return;
+    const handleDeleteSchool = async (school: SchoolItem) => {
+        if (!(await confirmAction({ title: 'Delete school?', message: `Delete ${school.name}? This unlinks its classes and members. To stop its users signing in without deleting anything, deactivate it instead.`, confirmLabel: 'Delete school', tone: 'danger' }))) return;
         setSubmitting(true);
 
         const res = await executeAdminAction({
             table: 'adminSchools',
             action: 'delete',
-            recordId: String(deletingSchool.id),
-            endpoint: `/api/v1/admin/schools/${deletingSchool.id}`,
+            recordId: String(school.id),
+            endpoint: `/api/v1/admin/schools/${school.id}`,
             method: 'DELETE',
         });
 
         setSubmitting(false);
         if (res.success) {
             showToast(res.message || 'School removed successfully', 'success');
-            setDeletingSchool(null);
             onRefresh();
         } else {
             showToast(res.error || 'Failed to delete school', 'error');
@@ -198,6 +199,15 @@ export default function SchoolsTab({
 
     const activeCount = schools.filter((s) => s.is_active !== false).length;
     const assignedAdminCount = schools.filter((s) => !!s.admin).length;
+
+
+    const handleToggleActive = async (school: SchoolItem) => {
+        const activate = school.is_active === false;
+        if (!activate && !(await confirmAction({ title: 'Deactivate school?', message: `${school.name}'s school admin, teachers and learners won't be able to sign in until you activate it again. Nothing is deleted.`, confirmLabel: 'Deactivate school', tone: 'warning' }))) return;
+        const res = await setAccountActive('school', 'adminSchools', school, activate);
+        showToast(res.success ? (res.message || (activate ? 'School activated' : 'School deactivated')) : (res.error || 'Could not change the school status'), res.success ? 'success' : 'error');
+        if (res.success) onRefresh();
+    };
 
     return (
         <div className="space-y-6">
@@ -250,7 +260,8 @@ export default function SchoolsTab({
                                 key={school.id}
                                 school={school}
                                 onEdit={openEditModal}
-                                onDelete={(s) => setDeletingSchool(s)}
+                                onDelete={(s) => void handleDeleteSchool(s)}
+                                onToggleActive={handleToggleActive}
                             />
                         ))}
                     </div>
@@ -281,13 +292,6 @@ export default function SchoolsTab({
                 onSubmit={handleSaveSchool}
             />
 
-            {/* Delete Confirmation Modal */}
-            <SchoolDeleteModal
-                deletingSchool={deletingSchool}
-                submitting={submitting}
-                onClose={() => setDeletingSchool(null)}
-                onConfirmDelete={handleDeleteSchool}
-            />
         </div>
     );
 }

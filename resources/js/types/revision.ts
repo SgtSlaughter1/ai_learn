@@ -26,6 +26,9 @@ export interface RevisionQueueItem {
     passage_text?: string | null;
     image_url?: string | null;
     explanation?: string | null;
+    /** Offline marking (see AnswerKey.ts): hash of the correct option and the sealed explanation. */
+    answer_hash?: string | null;
+    explanation_sealed?: string | null;
     repetition_level: number;
     consecutive_correct: number;
     interval_days: number;

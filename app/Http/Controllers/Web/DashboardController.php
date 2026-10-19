@@ -15,6 +15,9 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
+    /** Per-learner stats cache; cleared whenever one of their quiz attempts is saved. */
+    public const LEARNER_STATS_CACHE = 'analytics:learner:';
+
     /**
      * Render the learner home dashboard.
      */
@@ -45,7 +48,7 @@ class DashboardController extends Controller
     public function getLearnerStats(Request $request): JsonResponse
     {
         $user = $request->user();
-        $cacheKey = "analytics:learner:{$user->id}";
+        $cacheKey = self::LEARNER_STATS_CACHE.$user->id;
 
         $data = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($user) {
             $totalSubjects = Subject::where('status', 'active')->count();

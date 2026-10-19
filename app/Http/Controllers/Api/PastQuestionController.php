@@ -16,6 +16,7 @@ use App\Models\Topic;
 use App\Services\AIService;
 use Illuminate\Http\JsonResponse;
 use App\Services\Gamification\GamificationService;
+use App\Support\OfflineAnswerKey;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -260,6 +261,13 @@ class PastQuestionController extends Controller
                 'image_url' => $q->image_url,
                 'difficulty' => $q->difficulty,
                 'explanation' => $hideAnswers ? null : $q->explanation,
+                // Learners grade and review offline from these instead of plain answers.
+                ...($hideAnswers ? OfflineAnswerKey::forQuestion(
+                    OfflineAnswerKey::PAST_QUESTION,
+                    $q->id,
+                    $q->options->firstWhere('is_correct', true)?->id,
+                    $q->explanation,
+                ) : []),
                 'topic' => [
                     'id' => $q->topic?->id,
                     'name' => $q->topic?->name,

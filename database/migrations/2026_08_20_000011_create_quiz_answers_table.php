@@ -12,7 +12,9 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignUuid('quiz_attempt_id')->constrained()->cascadeOnDelete();
             $table->foreignId('question_id')->constrained()->restrictOnDelete();
-            $table->foreignId('selected_option_id')->nullable()->constrained('question_options')->restrictOnDelete();
+            // Removing an option must not fail because a learner once picked it; the answer
+            // keeps its is_correct / marks_awarded, only the option link is cleared.
+            $table->foreignId('selected_option_id')->nullable()->constrained('question_options')->nullOnDelete();
             $table->boolean('is_correct')->default(false);
             $table->integer('marks_awarded')->default(0);
             $table->timestamp('answered_at')->nullable();

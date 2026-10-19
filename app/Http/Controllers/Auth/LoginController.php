@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -24,8 +25,22 @@ class LoginController extends Controller
         $credentials = $request->validated();
 
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
-            $request->session()->regenerate();
             $user = Auth::user();
+
+            // Correct password, but the account or its school is deactivated.
+            if ($reason = $user->signInBlockedReason()) {
+                Auth::guard('web')->logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+
+                if ($request->wantsJson()) {
+                    return response()->json(['message' => $reason, 'code' => 'account_inactive'], 403);
+                }
+                throw ValidationException::withMessages(['email' => $reason]);
+            }
+
+            $request->session()->regenerate();
+            EnsureAccountIsActive::markChecked($request);
             $role = $user->role instanceof \BackedEnum ? $user->role->value : ($user->role ?? 'learner');
 
             $redirectPath = $user->isSuperAdmin()

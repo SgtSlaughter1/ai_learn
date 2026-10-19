@@ -17,6 +17,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | HTTP Maintenance Routes
+    |--------------------------------------------------------------------------
+    |
+    | Shared hosting without SSH runs migrations through /run-* routes. They are
+    | disabled (404) unless a token of at least 32 characters is set. Wiping or
+    | demo-seeding the database is refused in production unless explicitly allowed.
+    |
+    */
+
+    'maintenance_token' => env('MAINTENANCE_TOKEN'),
+
+    'allow_destructive_maintenance' => (bool) env('ALLOW_DESTRUCTIVE_MAINTENANCE', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Environment
     |--------------------------------------------------------------------------
     |

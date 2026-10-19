@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { confirmAction } from '@/components/common/ConfirmModal';
 import type { SchoolAdminItem, SchoolItem } from '@/types/admin';
-import { executeAdminAction } from '@/services/AdminOfflineService';
+import { executeAdminAction, setAccountActive } from '@/services/AdminOfflineService';
+import { InactiveBadge } from '@/components/common/InactiveBadge';
 import Pagination from '@/components/common/Pagination';
 import { SkeletonTable } from '@/components/common/Skeleton';
 
@@ -42,7 +44,6 @@ export default function SchoolAdminsTab({
     // Modals
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [editingAdmin, setEditingAdmin] = useState<SchoolAdminItem | null>(null);
-    const [deletingAdmin, setDeletingAdmin] = useState<SchoolAdminItem | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
     // Form state
@@ -76,6 +77,9 @@ export default function SchoolAdminsTab({
 
     const handleSaveAdmin = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!(await confirmAction(editingAdmin
+            ? { title: 'Save changes?', message: `Save changes to "${formData.name}"?`, confirmLabel: 'Save changes' }
+            : { title: 'Create school admin?', message: `Create school admin "${formData.name}"?`, confirmLabel: 'Create school admin' }))) return;
         setSubmitting(true);
 
         const endpoint = editingAdmin
@@ -124,22 +128,29 @@ export default function SchoolAdminsTab({
         }
     };
 
-    const handleDeleteAdmin = async () => {
-        if (!deletingAdmin) return;
+    const handleToggleActive = async (admin: SchoolAdminItem) => {
+        const activate = admin.is_active === false;
+        if (!activate && !(await confirmAction({ title: 'Deactivate school admin?', message: `${admin.name} won't be able to sign in until you activate them again. Nothing is deleted.`, confirmLabel: 'Deactivate', tone: 'warning' }))) return;
+        const res = await setAccountActive('user', 'adminSchoolAdmins', admin, activate);
+        showToast(res.success ? (res.message || (activate ? 'Admin activated' : 'Admin deactivated')) : (res.error || 'Could not change the account status'), res.success ? 'success' : 'error');
+        if (res.success) onRefresh();
+    };
+
+    const handleDeleteAdmin = async (admin: SchoolAdminItem) => {
+        if (!(await confirmAction({ title: 'Remove school admin?', message: `Remove ${admin.name}? The account is archived (not erased), can no longer sign in, and is unlinked from its school.`, confirmLabel: 'Remove admin', tone: 'danger' }))) return;
         setSubmitting(true);
 
         const res = await executeAdminAction({
             table: 'adminSchoolAdmins',
             action: 'delete',
-            recordId: String(deletingAdmin.id),
-            endpoint: `/api/v1/admin/school-admins/${deletingAdmin.id}`,
+            recordId: String(admin.id),
+            endpoint: `/api/v1/admin/school-admins/${admin.id}`,
             method: 'DELETE',
         });
 
         setSubmitting(false);
         if (res.success) {
             showToast(res.message || 'School admin removed successfully', 'success');
-            setDeletingAdmin(null);
             onRefresh();
         } else {
             showToast(res.error || 'Failed to delete school admin', 'error');
@@ -277,7 +288,7 @@ export default function SchoolAdminsTab({
                                                     </div>
                                                     <div>
                                                         <div className="flex items-center gap-2">
-                                                            <span className="font-bold text-[var(--color-text)]">{admin.name}</span>
+                                                            <span className="font-bold text-[var(--color-text)]">{admin.name}<InactiveBadge show={admin.is_active === false} /></span>
                                                             {admin._pendingSync && (
                                                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
                                                                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
@@ -410,6 +421,19 @@ export default function SchoolAdminsTab({
                                                                     <span>Edit Admin</span>
                                                                 </button>
 
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setOpenActionDropdownId(null);
+                                                                        setDropdownCoords(null);
+                                                                        void handleToggleActive(admin);
+                                                                    }}
+                                                                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-primary-10)] transition-colors cursor-pointer text-left"
+                                                                >
+                                                                    <span className={`w-2 h-2 rounded-full ${admin.is_active === false ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                                                                    <span>{admin.is_active === false ? 'Activate' : 'Deactivate'}</span>
+                                                                </button>
+
                                                                 <div className="h-px bg-[var(--color-border)] my-1" />
 
                                                                 <button
@@ -417,7 +441,7 @@ export default function SchoolAdminsTab({
                                                                     onClick={() => {
                                                                         setOpenActionDropdownId(null);
                                                                         setDropdownCoords(null);
-                                                                        setDeletingAdmin(admin);
+                                                                        void handleDeleteAdmin(admin);
                                                                     }}
                                                                     className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[var(--color-error)] hover:bg-[var(--color-error-10)] transition-colors cursor-pointer text-left"
                                                                 >
@@ -561,45 +585,6 @@ export default function SchoolAdminsTab({
                 </div>
             )}
 
-            {/* Delete Confirmation Modal */}
-            {deletingAdmin && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
-                    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-scale-up p-6 space-y-4">
-                        <div className="w-12 h-12 rounded-2xl bg-[var(--color-error-10)] text-[var(--color-error)] flex items-center justify-center mx-auto border border-[var(--color-error-20)]">
-                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                        </div>
-                        <div className="text-center">
-                            <h3 className="text-lg font-bold text-[var(--color-text)]">Remove {deletingAdmin.name}?</h3>
-                            <p className="text-sm text-[var(--color-muted)] mt-1">
-                                Are you sure you want to remove this school administrator? Their school assignments will be detached.
-                            </p>
-                        </div>
-                        <div className="flex items-center justify-end gap-3 pt-3">
-                            <button
-                                onClick={() => setDeletingAdmin(null)}
-                                className="px-4 py-2 text-sm font-semibold text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] rounded-xl transition-colors cursor-pointer"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleDeleteAdmin}
-                                disabled={submitting}
-                                className="px-5 py-2 text-sm font-semibold bg-[var(--color-error)] text-white hover:opacity-90 rounded-xl transition-all duration-200 cursor-pointer active:scale-[0.98] disabled:opacity-50 flex items-center gap-2"
-                            >
-                                {submitting && (
-                                    <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                    </svg>
-                                )}
-                                <span>{submitting ? 'Deleting...' : 'Confirm Remove'}</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

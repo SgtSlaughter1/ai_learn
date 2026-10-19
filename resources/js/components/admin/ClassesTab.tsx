@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { confirmAction } from '@/components/common/ConfirmModal';
 import type { ClassItem, ClassLearner, SchoolItem } from '@/types/admin';
 import { executeAdminAction } from '@/services/AdminOfflineService';
 import { db } from '@/db/database';
@@ -58,6 +59,9 @@ export default function ClassesTab({ classes, schools, loading, onRefresh, showT
     const handleSaveClass = async (e: React.FormEvent) => {
         e.preventDefault();
         if (isSavingClass) return;
+        if (!(await confirmAction(editingClass
+            ? { title: 'Save changes?', message: `Save changes to "${classForm.name}"?`, confirmLabel: 'Save changes' }
+            : { title: 'Create class?', message: `Create class "${classForm.name}"?`, confirmLabel: 'Create class' }))) return;
         setIsSavingClass(true);
 
         try {
@@ -115,7 +119,7 @@ export default function ClassesTab({ classes, schools, loading, onRefresh, showT
     };
 
     const handleDeleteClass = async (cls: ClassItem) => {
-        if (!confirm(`Are you sure you want to delete class ${cls.name}?`)) return;
+        if (!(await confirmAction({ title: 'Delete class?', message: `Delete class "${cls.name}"? Learners stay enrolled in the school but leave this class.`, confirmLabel: 'Delete class', tone: 'danger' }))) return;
         setDeletingClassId(cls.id);
         try {
             const res = await executeAdminAction({
@@ -185,6 +189,7 @@ export default function ClassesTab({ classes, schools, loading, onRefresh, showT
 
         const cls = selectedClassForRoster;
         const email = enrollLearnerEmail.trim();
+        if (!(await confirmAction({ title: 'Enrol learner?', message: `Enrol ${email} in ${cls.name}?`, confirmLabel: 'Enrol' }))) return;
         setEnrollingLearner(true);
         try {
             const res = await executeAdminAction({
@@ -232,6 +237,7 @@ export default function ClassesTab({ classes, schools, loading, onRefresh, showT
 
     const handleCreateNewLearnerInClass = async (learnerData: { name: string; email: string; password?: string; student_id?: string }) => {
         if (!selectedClassForRoster) return;
+        if (!(await confirmAction({ title: 'Create learner?', message: `Create "${learnerData.name}" and add them to ${selectedClassForRoster.name}?`, confirmLabel: 'Create learner' }))) return;
         setEnrollingLearner(true);
 
         const payload = {
@@ -265,7 +271,7 @@ export default function ClassesTab({ classes, schools, loading, onRefresh, showT
 
     const handleRemoveLearnerFromClass = async (learnerId: string) => {
         if (!selectedClassForRoster) return;
-        if (!confirm('Remove this learner from the class?')) return;
+        if (!(await confirmAction({ title: 'Remove learner?', message: 'Remove this learner from the class? Their account and results are kept.', confirmLabel: 'Remove', tone: 'danger' }))) return;
 
         const cls = selectedClassForRoster;
         // Keyed by email like the enrolment, so removing someone enrolled offline (not yet

@@ -2,9 +2,40 @@ import { Link } from '@inertiajs/react';
 import { FileText, ArrowRight } from 'lucide-react';
 import { Skeleton } from '@/components/common/Skeleton';
 
+/**
+ * Combine attempts saved on this device with the server's list: one row per attempt id,
+ * newest first. Device attempts not yet verified by the server show as provisional.
+ */
+export function mergeRecentAttempts(
+    local: Array<{ id: string; quiz_id: number; quiz_title?: string; status: string; score: number | null; total_marks: number | null; completed_at: string | null; verified?: boolean; synced: boolean }>,
+    server: DashboardAttempt[],
+    titleFor: (quizId: number) => string | undefined,
+    limit = 5,
+): DashboardAttempt[] {
+    const byId = new Map<string, DashboardAttempt>();
+    for (const attempt of server) {
+        if (attempt?.id) byId.set(String(attempt.id), attempt);
+    }
+    for (const a of local) {
+        if (a.status !== 'completed' || byId.has(String(a.id))) continue; // the server's row wins
+        byId.set(String(a.id), {
+            id: String(a.id),
+            quiz_title: a.quiz_title || titleFor(a.quiz_id) || `Quiz Assessment #${a.quiz_id}`,
+            status: a.verified || a.synced ? 'completed' : 'provisional',
+            score: a.score ?? null,
+            total_marks: a.total_marks ?? null,
+            completed_at: a.completed_at,
+        });
+    }
+    return [...byId.values()]
+        .sort((x, y) => (y.completed_at ?? '').localeCompare(x.completed_at ?? ''))
+        .slice(0, limit);
+}
+
 export interface DashboardAttempt {
     id: string;
     quiz_title: string;
+    /** 'completed', 'in_progress', or 'provisional' (graded on the device, awaiting server verification). */
     status: string;
     score: number | null;
     total_marks: number | null;
@@ -168,7 +199,7 @@ export function RecentQuizActivityCard({
                     <div className="space-y-3">
                         {attemptList.map((attempt, index) => (
                             <div
-                                key={attempt.id ? `attempt-${attempt.id}-${index}` : `attempt-idx-${index}`}
+                                key={attempt.id ? `attempt-${attempt.id}` : `attempt-idx-${index}`}
                                 className="flex items-center justify-between p-3.5 bg-[var(--color-background)] border border-[var(--color-border)] hover:border-[var(--color-primary-light)] rounded-xl transition-all"
                             >
                                 <div className="flex items-center space-x-3 min-w-0">
@@ -180,7 +211,9 @@ export function RecentQuizActivityCard({
                                             {attempt.quiz_title}
                                         </h3>
                                         <p className="text-[10px] text-[var(--color-muted)] font-semibold uppercase tracking-wider">
-                                            {attempt.status === 'completed' ? 'Completed' : 'In Progress'}
+                                            {attempt.status === 'provisional'
+                                                ? 'Provisional · verified when online'
+                                                : attempt.status === 'completed' ? 'Completed' : 'In Progress'}
                                         </p>
                                     </div>
                                 </div>

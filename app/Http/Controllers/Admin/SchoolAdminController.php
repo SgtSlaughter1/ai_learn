@@ -29,6 +29,7 @@ class SchoolAdminController extends Controller
                     'name' => $u->name,
                     'email' => $u->email,
                     'role' => $u->role?->value ?? $u->role,
+                    'is_active' => (bool) $u->is_active,
                     'created_at' => $u->created_at?->toIso8601String(),
                     'administered_school' => $u->administeredSchool,
                     'school_id' => $u->administeredSchool?->id,
@@ -127,11 +128,9 @@ class SchoolAdminController extends Controller
         $user = User::where('id', $id)->where('role', 'school_admin')->firstOrFail();
         Gate::authorize('delete', $user);
 
-        // Unlink school admin from schools
-        School::where('admin_user_id', $user->id)->update(['admin_user_id' => null]);
-        $archived = $user->removeAccount();
+        $user->deleteAccount();
 
-        return response()->json(['message' => 'School Admin removed successfully', 'archived' => $archived]);
+        return response()->json(['message' => 'School Admin removed successfully', 'archived' => true]);
     }
 
     // ──────────────────────────────────────────────────────────────────────────

@@ -108,6 +108,11 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                             </p>
                         </div>
                     )}
+                    {result.provisional && (
+                        <p className="px-4 py-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                            Marked on this device while offline. Your official score is confirmed automatically when you're back online.
+                        </p>
+                    )}
                     {!scoringPending && activeTab === 'summary' && (
                         <div className="space-y-6">
                             {/* Score Card Hero */}

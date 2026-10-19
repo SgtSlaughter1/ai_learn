@@ -1,6 +1,8 @@
 import { Head, router } from '@inertiajs/react';
 import { useState, useEffect, FormEvent } from 'react';
-import { getFreshQuiz, saveLocalAttempt, cacheQuiz, verifyOptionHash, findCorrectOptionId } from '@/services/OfflineService';
+import { getFreshQuiz, saveLocalAttempt, cacheQuiz } from '@/services/OfflineService';
+import { isCorrectOption } from '@/services/AnswerKey';
+import { confirmAction } from '@/components/common/ConfirmModal';
 import { getSyncUser } from '@/services/SyncQueue';
 import { syncAll } from '@/services/SyncService';
 import Result from './Result';
@@ -157,6 +159,18 @@ export default function Show({ quizId }: Props) {
     const handleStandardSubmit = async (e?: FormEvent) => {
         if (e) e.preventDefault();
         if (isSubmitting || !quiz) return;
+
+        const shown = activeQuestions.length > 0 ? activeQuestions.length : Math.min(quiz.questions.length, 10);
+        const unanswered = shown - Object.keys(answers).length;
+        if (!(await confirmAction({
+            title: 'Submit your answers?',
+            message: unanswered > 0
+                ? `You have ${unanswered} unanswered question${unanswered === 1 ? '' : 's'}; they will be marked wrong. You can't change your answers after submitting.`
+                : "You can't change your answers after submitting.",
+            confirmLabel: 'Submit',
+            cancelLabel: 'Keep working',
+            tone: unanswered > 0 ? 'warning' : 'primary',
+        }))) return;
         setIsSubmitting(true);
 
         const attemptId = crypto.randomUUID();
@@ -164,26 +178,20 @@ export default function Show({ quizId }: Props) {
         let totalMarks = 0;
         const questionsToGrade = activeQuestions.length > 0 ? activeQuestions : quiz.questions.slice(0, 10);
 
-        // Every question shown is recorded (unanswered ones too) and weighted by its marks,
-        // exactly as the server grades it, so the offline result matches the synced one.
-        // Learners only hold answer hashes; staff payloads still carry is_correct.
+        // Provisional offline score: every question shown is recorded (unanswered ones too)
+        // and weighted by its marks, exactly as the server grades it. Only whether the chosen
+        // option matches the answer hash is checked; the correct option itself is never
+        // stored. The server re-grades the attempt when it syncs and its score replaces this one.
         const answerList = await Promise.all(
             questionsToGrade.map(async (question) => {
                 const marks = question.marks ?? 1;
                 const selected = answers[question.id] ?? null;
 
-                let isCorrect = false;
-                let correctOptId: number | null = null;
-                if (question.answer_hash) {
-                    if (selected !== null) {
-                        isCorrect = await verifyOptionHash(question.id, selected, question.answer_hash);
-                    }
-                    correctOptId = await findCorrectOptionId(question.id, question.options, question.answer_hash);
-                } else {
-                    const correctOption = (question.options as any[])?.find((o) => o.is_correct);
-                    correctOptId = correctOption ? correctOption.id : null;
-                    isCorrect = selected !== null && correctOption ? correctOption.id === selected : false;
-                }
+                const isCorrect = selected === null
+                    ? false
+                    : question.answer_hash
+                        ? await isCorrectOption('q', question.id, selected, question.answer_hash)
+                        : Boolean((question.options as any[])?.find((o) => o.id === selected)?.is_correct);
 
                 totalMarks += marks;
                 if (isCorrect) calculatedScore += marks;
@@ -193,7 +201,6 @@ export default function Show({ quizId }: Props) {
                     selected_option_id: selected,
                     is_correct: isCorrect,
                     marks_awarded: isCorrect ? marks : 0,
-                    correct_option_id: correctOptId,
                 };
             })
         );

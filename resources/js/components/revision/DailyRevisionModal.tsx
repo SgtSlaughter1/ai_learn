@@ -12,6 +12,7 @@ import {
 import { enqueue, getSyncUser } from '../../services/SyncQueue';
 import { sendOrQueue, syncAll } from '../../services/SyncService';
 import { formatMathText, extractLiteratureContext } from '../../utils/mathFormatter';
+import { reviewAnswer } from '../../services/AnswerKey';
 import { AiExplanationDrawer } from '../quiz/AiExplanationDrawer';
 import {
     Sparkles,
@@ -89,14 +90,19 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
     };
 
     // Shown straight away, online or offline; the server applies the same rules when the review syncs.
-    const localReviewResult = (isCorrect: boolean, rating: 'again' | 'hard' | 'good' | 'easy'): RevisionSubmitResult => {
+    const localReviewResult = (
+        isCorrect: boolean,
+        rating: 'again' | 'hard' | 'good' | 'easy',
+        correctOptionId: number | undefined,
+        explanation: string | undefined,
+    ): RevisionSubmitResult => {
         const recalled = isCorrect && rating !== 'again';
         const interval = recalled ? Math.max(3, currentItem.interval_days * 2) : 1;
         return {
             success: true,
             is_correct: isCorrect,
-            correct_option_id: currentItem.options.find((o) => o.is_correct)?.id,
-            explanation: currentItem.explanation ?? undefined,
+            correct_option_id: correctOptionId,
+            explanation,
             new_interval_days: interval,
             next_review_in: interval === 1 ? 'Tomorrow' : `${interval} days`,
             is_mastered: false,
@@ -106,9 +112,19 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
 
     const handleSelectOption = async (optionId: number) => {
         if (isSubmitted || isSubmitting) return;
+        setIsSubmitting(true);
 
         setSelectedOptionId(optionId);
-        const isCorr = Boolean(currentItem.options.find((o) => o.id === optionId)?.is_correct);
+        // Marked on the device from the answer hash (offline too): right/wrong, the correct
+        // option and the unlocked explanation. The server re-checks the choice on sync.
+        const scope = currentItem.item_type === 'past_question' ? 'pq' : 'q';
+        const questionId = (currentItem.item_type === 'past_question' ? currentItem.past_question_id : currentItem.question_id) ?? 0;
+        const review = currentItem.answer_hash
+            ? await reviewAnswer(scope, { id: questionId, answer_hash: currentItem.answer_hash, explanation_sealed: currentItem.explanation_sealed, options: currentItem.options }, optionId)
+            : null;
+        const correctOptionId = review?.correctOptionId ?? currentItem.options.find((o) => o.is_correct)?.id;
+        const isCorr = correctOptionId !== undefined && correctOptionId === optionId;
+        const explanation = review?.explanation ?? currentItem.explanation ?? undefined;
         const rating = isCorr ? 'good' : 'again';
 
         pendingReviewRef.current = {
@@ -117,9 +133,10 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
             rating,
             reviewed_at: new Date().toISOString(),
         };
-        setSubmitResult(localReviewResult(isCorr, rating));
+        setSubmitResult(localReviewResult(isCorr, rating, correctOptionId, explanation));
         setUserRating(rating);
         setIsSubmitted(true);
+        setIsSubmitting(false);
         if (isCorr) setCorrectCount((prev) => prev + 1);
     };
 
@@ -128,7 +145,7 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
         if (pendingReviewRef.current) {
             pendingReviewRef.current = { ...pendingReviewRef.current, rating };
         }
-        setSubmitResult(localReviewResult(Boolean(submitResult?.is_correct), rating));
+        setSubmitResult(localReviewResult(Boolean(submitResult?.is_correct), rating, submitResult?.correct_option_id, submitResult?.explanation));
     };
 
     const handleClose = () => {
@@ -179,10 +196,10 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
                 explanationCacheRef.current[cacheKey] = data.explanation;
                 setAiTutorContent(data.explanation);
             } else {
-                setAiTutorContent(currentItem.explanation || 'Review the core concept to resolve this misconception.');
+                setAiTutorContent(submitResult?.explanation || 'Review the core concept to resolve this misconception.');
             }
         } catch {
-            setAiTutorContent(currentItem.explanation || 'Review the core concept to resolve this misconception.');
+            setAiTutorContent(submitResult?.explanation || 'Review the core concept to resolve this misconception.');
         } finally {
             setAiTutorLoading(false);
         }
@@ -235,7 +252,7 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
         }
     };
 
-    const litContext = currentItem ? extractLiteratureContext(currentItem.explanation || '') : null;
+    const litContext = currentItem ? extractLiteratureContext(currentItem.explanation || submitResult?.explanation || '') : null;
     const earnedBonusXp = completionResult?.bonus_xp !== undefined ? completionResult.bonus_xp : correctCount;
 
     return createPortal(

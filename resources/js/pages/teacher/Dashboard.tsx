@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { confirmAction } from '@/components/common/ConfirmModal';
 import { Head, router, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import type { QuestionItem, SubjectItem, TopicItem, ClassItem as AdminClassItem } from '@/types/admin';
@@ -441,6 +442,7 @@ export default function Dashboard({ school, classes = [], selectedClass = null }
 
     const handleSaveLearner = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!(await confirmAction({ title: 'Add learner?', message: `Create "${learnerForm.name}" and add them to your class?`, confirmLabel: 'Add learner' }))) return;
         setSavingLearner(true);
 
         try {
@@ -501,7 +503,8 @@ export default function Dashboard({ school, classes = [], selectedClass = null }
         }
     };
 
-    const handleAssignIntervention = async (learnerId: string, topicId: number, questionCount: number = 10) => {
+    const handleAssignIntervention = async (learnerId: string, topicId: number, questionCount: number = 10, confirmFirst: boolean = true) => {
+        if (confirmFirst && !(await confirmAction({ title: 'Send practice?', message: `Send ${questionCount} practice questions on this topic to the learner?`, confirmLabel: 'Send practice' }))) return;
         const key = `${learnerId}-${topicId}`;
         setAssigningMap((prev) => ({ ...prev, [key]: 'loading' }));
 
@@ -547,13 +550,15 @@ export default function Dashboard({ school, classes = [], selectedClass = null }
     const handleAssignAllInterventions = async () => {
         const candidates = strugglingLearners.filter((l) => l.recommended_intervention);
         if (candidates.length === 0) return;
+        if (!(await confirmAction({ title: 'Send practice to all?', message: `Send targeted practice to ${candidates.length} learner${candidates.length === 1 ? '' : 's'}?`, confirmLabel: 'Send to all' }))) return;
 
         for (const learner of candidates) {
             if (learner.recommended_intervention) {
                 await handleAssignIntervention(
                     learner.id,
                     learner.recommended_intervention.topic_id,
-                    learner.recommended_intervention.question_count || 10
+                    learner.recommended_intervention.question_count || 10,
+                    false, // already confirmed once for the whole batch
                 );
             }
         }

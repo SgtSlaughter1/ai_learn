@@ -7,6 +7,8 @@ import { PastQuestionItem, ExamSimulationResult } from '../../types/past-questio
 import { formatMathText, extractLiteratureContext } from '../../utils/mathFormatter';
 import { BookOpen, Monitor, Keyboard } from 'lucide-react';
 import { enqueue, getSyncUser } from '@/services/SyncQueue';
+import { reviewAnswer } from '@/services/AnswerKey';
+import { confirmAction } from '@/components/common/ConfirmModal';
 
 interface Props {
     questions: PastQuestionItem[];
@@ -38,7 +40,6 @@ export const ExamSimulationModal: React.FC<Props> = ({
     const [flagged, setFlagged] = useState<Record<number, boolean>>({});
     const [secondsRemaining, setSecondsRemaining] = useState<number>(durationMinutes * 60);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-    const [showSubmitConfirm, setShowSubmitConfirm] = useState<boolean>(false);
     const [showCalculator, setShowCalculator] = useState<boolean>(false);
     const [calcDisplay, setCalcDisplay] = useState<string>('0');
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -117,17 +118,16 @@ export const ExamSimulationModal: React.FC<Props> = ({
                 toggleFlag();
             } else if (key === 'S' && (e.ctrlKey || e.metaKey || isJambView)) {
                 e.preventDefault();
-                setShowSubmitConfirm(true);
+                void requestSubmit();
             } else if (key === 'ESCAPE') {
                 e.preventDefault();
-                if (showSubmitConfirm) setShowSubmitConfirm(false);
-                else if (showCalculator) setShowCalculator(false);
+                if (showCalculator) setShowCalculator(false);
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [currentIndex, currentQ, questions.length, showSubmitConfirm, showCalculator, isJambView]);
+    }, [currentIndex, currentQ, questions.length, showCalculator, isJambView, selectedAnswers, flagged]);
 
     const formatTime = (secs: number) => {
         const m = Math.floor(secs / 60);
@@ -151,6 +151,19 @@ export const ExamSimulationModal: React.FC<Props> = ({
             ...prev,
             [currentQ.id]: !prev[currentQ.id],
         }));
+    };
+
+    /** Ask before ending the exam, with a summary of what is still unanswered. */
+    const requestSubmit = async () => {
+        if (isSubmitting) return;
+        const confirmed = await confirmAction({
+            title: 'Submit examination?',
+            message: `Answered: ${answeredCount} of ${questions.length}\nFlagged for review: ${flaggedCount}\nUnanswered: ${unansweredCount}${unansweredCount > 0 ? ' (marked wrong)' : ''}\n\nYou can't change your answers after submitting.`,
+            confirmLabel: 'Submit',
+            cancelLabel: 'Return to exam',
+            tone: unansweredCount > 0 ? 'warning' : 'primary',
+        });
+        if (confirmed) await handleFinalSubmit();
     };
 
     const handleFinalSubmit = async () => {
@@ -201,38 +214,53 @@ export const ExamSimulationModal: React.FC<Props> = ({
 
         // ── 100% Offline-First Fallback: Local grading and queue ──
         try {
+            // Marked on the device from the answer hashes: right/wrong, the correct option and
+            // its explanation, with nothing readable stored. The server re-grades on sync.
             let correctCount = 0;
-            const detailed = questions.map((q) => {
+            const topicStats = new Map<number, { topic_name: string; subject_name: string; total: number; correct: number }>();
+            const detailed = await Promise.all(questions.map(async (q) => {
                 const selectedId = selectedAnswers[q.id] ?? null;
-                // Only grade when the correct option is known locally; guessing the first
-                // option would show a wrong score until the server's result arrives.
-                const correctOpt = q.options.find(o => o.is_correct);
-                const isCorrect = selectedId !== null && selectedId === correctOpt?.id;
-                if (isCorrect) correctCount++;
+                const review = q.answer_hash
+                    ? await reviewAnswer('pq', q, selectedId)
+                    : { isCorrect: selectedId !== null && selectedId === q.options.find(o => o.is_correct)?.id, correctOptionId: q.options.find(o => o.is_correct)?.id ?? null, explanation: q.explanation ?? null };
+                if (review.isCorrect) correctCount++;
+
+                const topicId = q.topic?.id ?? 0;
+                const stat = topicStats.get(topicId) ?? { topic_name: q.topic?.name ?? 'Core Assessment', subject_name: q.subject?.name ?? subjectTitle, total: 0, correct: 0 };
+                stat.total++;
+                if (review.isCorrect) stat.correct++;
+                topicStats.set(topicId, stat);
+
                 const selectedOpt = q.options.find(o => o.id === selectedId);
+                const correctOpt = q.options.find(o => o.id === review.correctOptionId);
                 return {
                     question_id: q.id,
                     question_number: q.question_number,
                     question_text: q.question_text,
                     passage_text: q.passage_text,
                     image_url: q.image_url,
-                    explanation: q.explanation,
+                    explanation: review.explanation ?? '',
                     topic: q.topic || { id: 1, name: 'Core Assessment' },
                     subject: q.subject || { id: 1, name: subjectTitle, slug: 'subject' },
                     selected_option_id: selectedId,
                     selected_option_text: selectedOpt?.option_text,
-                    correct_option_id: correctOpt?.id ?? 0, // 0 = not known offline
+                    correct_option_id: review.correctOptionId ?? 0, // 0 = not known offline
                     correct_option_text: correctOpt?.option_text,
-                    is_correct: isCorrect,
-                    options: q.options,
+                    is_correct: review.isCorrect,
+                    options: q.options.map(o => ({ ...o, is_correct: o.id === review.correctOptionId })),
                 };
+            }));
+
+            // Same topic rules as the server's scorecard.
+            const topicBreakdown = [...topicStats.entries()].map(([topic_id, stat]) => {
+                const accuracy = Math.round((stat.correct / stat.total) * 1000) / 10;
+                return { topic_id, ...stat, accuracy, status: (accuracy >= 70 ? 'strong' : accuracy >= 40 ? 'moderate' : 'weak') as 'strong' | 'moderate' | 'weak' };
             });
 
             const totalQ = questions.length;
             const scorePct = totalQ > 0 ? Math.round((correctCount / totalQ) * 100) : 0;
-            // Past-question answer keys are kept on the server, so offline the score can't be
-            // worked out on the device: say so instead of showing a misleading 0%.
-            const scoringPending = questions.some((q) => !q.options.some((o) => o.is_correct));
+            // Only when the questions came without answer hashes (an older download).
+            const scoringPending = questions.some((q) => !q.answer_hash && !q.options.some((o) => o.is_correct));
 
             // Queue for background sync when back online (guests' results aren't stored).
             if (getSyncUser()) await enqueue({
@@ -254,10 +282,11 @@ export const ExamSimulationModal: React.FC<Props> = ({
                 wrong_answers: totalQ - correctCount,
                 score_percentage: scorePct,
                 time_spent_seconds: timeSpentSeconds,
-                topic_breakdown: [],
-                weak_topics: [],
+                topic_breakdown: topicBreakdown,
+                weak_topics: topicBreakdown.filter((t) => t.accuracy < 60),
                 detailed_results: detailed,
                 scoring_pending: scoringPending,
+                provisional: !scoringPending,
                 answered_count: Object.keys(selectedAnswers).length,
             });
         } catch (localErr) {
@@ -363,7 +392,7 @@ export const ExamSimulationModal: React.FC<Props> = ({
 
                     {/* Submit Button */}
                     <button
-                        onClick={() => setShowSubmitConfirm(true)}
+                        onClick={() => void requestSubmit()}
                         className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-[var(--color-success)] hover:opacity-90 text-white font-bold text-xs sm:text-sm transition-opacity shadow-sm cursor-pointer shrink-0 whitespace-nowrap"
                     >
                         Submit Test
@@ -645,60 +674,6 @@ export const ExamSimulationModal: React.FC<Props> = ({
                 )}
             </div>
 
-            {/* Submit Confirmation Dialog */}
-            {showSubmitConfirm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)] backdrop-blur-md p-3 sm:p-4 animate-fade-in">
-                    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8 max-w-md w-full shadow-2xl text-center space-y-4 sm:space-y-5 max-h-[92vh] overflow-y-auto">
-                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[var(--color-accent-10)] text-[var(--color-accent)] border border-[var(--color-accent-20)] flex items-center justify-center mx-auto">
-                            <svg className="w-6 h-6 sm:w-7 sm:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                        </div>
-
-                        <div>
-                            <h3 className="text-base sm:text-lg font-bold text-[var(--color-text)]">Submit Examination?</h3>
-                            <p className="text-xs text-[var(--color-muted)] mt-1">
-                                Are you sure you want to end this test simulation?
-                            </p>
-                        </div>
-
-                        <div className="bg-[var(--color-background)] border border-[var(--color-border)] rounded-2xl p-4 text-xs space-y-2 text-left">
-                            <div className="flex justify-between">
-                                <span className="text-[var(--color-muted)] font-medium">Total Questions:</span>
-                                <strong className="text-[var(--color-text)]">{questions.length}</strong>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-[var(--color-success)] font-bold">Answered:</span>
-                                <strong className="text-[var(--color-success)]">{answeredCount}</strong>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-[var(--color-accent)] font-bold">Flagged for Review:</span>
-                                <strong className="text-[var(--color-accent)]">{flaggedCount}</strong>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-[var(--color-error)] font-bold">Unanswered:</span>
-                                <strong className="text-[var(--color-error)]">{unansweredCount}</strong>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-2">
-                            <button
-                                onClick={() => setShowSubmitConfirm(false)}
-                                className="w-full sm:flex-1 py-2.5 rounded-xl border border-[var(--color-border)] text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] cursor-pointer text-center"
-                            >
-                                Return to Exam
-                            </button>
-                            <button
-                                disabled={isSubmitting}
-                                onClick={handleFinalSubmit}
-                                className="w-full sm:flex-1 py-2.5 rounded-xl bg-[var(--color-success)] text-white text-xs font-bold hover:opacity-90 disabled:opacity-50 cursor-pointer shadow-sm text-center"
-                            >
-                                {isSubmitting ? 'Grading...' : 'Yes, Submit'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

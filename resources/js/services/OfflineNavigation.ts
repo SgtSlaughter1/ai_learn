@@ -64,6 +64,7 @@ const OFFLINE_ROUTES: OfflineRoute[] = [
     { pattern: /^\/quizzes\/attempts\/([^/]+)$/, component: 'quizzes/Result', auth: true, params: (m) => ({ attemptId: m[1] }) },
     { pattern: /^\/quizzes\/(\d+)$/, component: 'quizzes/Show', auth: true, params: (m) => ({ quizId: Number(m[1]) }) },
     { pattern: /^\/flashcards$/, component: 'Flashcards/Index', auth: true },
+    { pattern: /^\/profile$/, component: 'Profile', auth: true, defaults: { profile: { school_name: null, member_since: null } } },
 ];
 
 /** Paths each role should be able to open offline straight after signing in. */
@@ -71,11 +72,11 @@ export function homePathsForRole(role: string | undefined): string[] {
     switch (role) {
         case 'platform_admin':
         case 'school_admin':
-            return ['/admin/dashboard'];
+            return ['/admin/dashboard', '/profile'];
         case 'teacher':
-            return ['/teacher/dashboard'];
+            return ['/teacher/dashboard', '/profile'];
         default:
-            return ['/dashboard', '/subjects', '/general-knowledge', '/flashcards', '/past-questions'];
+            return ['/dashboard', '/subjects', '/general-knowledge', '/flashcards', '/past-questions', '/profile'];
     }
 }
 

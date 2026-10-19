@@ -24,6 +24,8 @@ return new class extends Migration
             $table->string('status')->default('new'); // new, reviewed, resolved
             $table->json('meta')->nullable(); // platform, browser, offline_synced, etc.
             $table->timestamps();
+            // Id generated on the device, so a feedback resent after an offline retry is stored once.
+            $table->string('client_id', 64)->nullable()->unique();
         });
     }
 

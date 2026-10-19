@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { confirmAction } from '@/components/common/ConfirmModal';
 import type { TeacherItem, SchoolItem, ClassItem } from '@/types/admin';
-import { executeAdminAction } from '@/services/AdminOfflineService';
+import { executeAdminAction, setAccountActive } from '@/services/AdminOfflineService';
+import { InactiveBadge } from '@/components/common/InactiveBadge';
 import Pagination from '@/components/common/Pagination';
 import { Skeleton } from '@/components/common/Skeleton';
 
@@ -47,7 +49,6 @@ export default function TeachersTab({
     // Modals
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [editingTeacher, setEditingTeacher] = useState<TeacherItem | null>(null);
-    const [deletingTeacher, setDeletingTeacher] = useState<TeacherItem | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
     // Form state
@@ -114,6 +115,9 @@ export default function TeachersTab({
 
     const handleSaveTeacher = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!(await confirmAction(editingTeacher
+            ? { title: 'Save changes?', message: `Save changes to "${formData.name}"?`, confirmLabel: 'Save changes' }
+            : { title: 'Create teacher?', message: `Create teacher "${formData.name}"?`, confirmLabel: 'Create teacher' }))) return;
         setSubmitting(true);
 
         const endpoint = editingTeacher
@@ -183,20 +187,27 @@ export default function TeachersTab({
         }
     };
 
-    const handleDeleteTeacher = async () => {
-        if (!deletingTeacher) return;
+    const handleToggleActive = async (teacher: TeacherItem) => {
+        const activate = teacher.is_active === false;
+        if (!activate && !(await confirmAction({ title: 'Deactivate teacher?', message: `${teacher.name} won't be able to sign in until you activate them again. Nothing is deleted.`, confirmLabel: 'Deactivate', tone: 'warning' }))) return;
+        const res = await setAccountActive('user', 'adminTeachers', teacher, activate);
+        showToast(res.success ? (res.message || (activate ? 'Teacher activated' : 'Teacher deactivated')) : (res.error || 'Could not change the account status'), res.success ? 'success' : 'error');
+        if (res.success) onRefresh();
+    };
+
+    const handleDeleteTeacher = async (teacher: TeacherItem) => {
+        if (!(await confirmAction({ title: 'Remove teacher?', message: `Remove ${teacher.name}? The account is archived (not erased): they can no longer sign in and lose access to class rosters.`, confirmLabel: 'Remove teacher', tone: 'danger' }))) return;
         setSubmitting(true);
 
         const res = await executeAdminAction({
             table: 'adminTeachers',
             action: 'delete',
-            recordId: String(deletingTeacher.id),
-            endpoint: `/api/v1/admin/teachers/${deletingTeacher.id}`,
+            recordId: String(teacher.id),
+            endpoint: `/api/v1/admin/teachers/${teacher.id}`,
             method: 'DELETE',
         });
 
         setSubmitting(false);
-        setDeletingTeacher(null);
 
         if (res.success) {
             showToast('Teacher removed successfully', 'success');
@@ -387,6 +398,7 @@ export default function TeachersTab({
                                                 <div>
                                                     <p className="font-bold text-sm text-[var(--color-text)] flex items-center gap-1.5">
                                                         {teacher.name}
+                                                        <InactiveBadge show={teacher.is_active === false} />
                                                         {teacher._pendingSync && (
                                                             <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-md">
                                                                 Pending Sync
@@ -512,6 +524,19 @@ export default function TeachersTab({
                                                                 <span>Edit Teacher</span>
                                                             </button>
 
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setOpenActionDropdownId(null);
+                                                                    setDropdownCoords(null);
+                                                                    void handleToggleActive(teacher);
+                                                                }}
+                                                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-primary-10)] transition-colors cursor-pointer text-left"
+                                                            >
+                                                                <span className={`w-2 h-2 rounded-full ${teacher.is_active === false ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                                                                <span>{teacher.is_active === false ? 'Activate' : 'Deactivate'}</span>
+                                                            </button>
+
                                                             <div className="h-px bg-[var(--color-border)] my-1" />
 
                                                             <button
@@ -519,7 +544,7 @@ export default function TeachersTab({
                                                                 onClick={() => {
                                                                     setOpenActionDropdownId(null);
                                                                     setDropdownCoords(null);
-                                                                    setDeletingTeacher(teacher);
+                                                                    void handleDeleteTeacher(teacher);
                                                                 }}
                                                                 className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[var(--color-error)] hover:bg-[var(--color-error-10)] transition-colors cursor-pointer text-left"
                                                             >
@@ -729,39 +754,6 @@ export default function TeachersTab({
                 </div>
             )}
 
-            {/* Delete Confirmation Modal */}
-            {deletingTeacher && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
-                    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl w-full max-w-md p-5 shadow-2xl animate-scale-up space-y-4">
-                        <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center mx-auto border border-red-500/20">
-                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                        </div>
-                        <div className="text-center">
-                            <h3 className="text-base font-bold text-[var(--color-text)]">Remove Teacher</h3>
-                            <p className="text-xs text-[var(--color-muted)] mt-1.5">
-                                Are you sure you want to remove <strong className="text-[var(--color-text)]">{deletingTeacher.name}</strong>? They will lose access to class rosters and teacher intervention dashboards.
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-2.5 pt-2">
-                            <button
-                                onClick={() => setDeletingTeacher(null)}
-                                className="flex-1 py-2.5 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] text-xs font-semibold text-[var(--color-text)] transition-colors cursor-pointer"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleDeleteTeacher}
-                                disabled={submitting}
-                                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
-                            >
-                                {submitting ? 'Removing...' : 'Yes, Remove'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from '@inertiajs/react';
-import { LogOut, ChevronDown, Sun, Moon, Shield, Sparkles, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
+import { LogOut, ChevronDown, Sun, Moon, Shield, Sparkles, Loader2, RefreshCw, UserCircle } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { signOutSafely } from '@/services/SignOut';
@@ -25,8 +25,6 @@ export default function UserProfileMenu({ user }: UserProfileMenuProps) {
     // Sign-out flow: final sync overlay, then a warning if anything is still unsynced.
     const [isSigningOut, setIsSigningOut] = useState(false);
     const [isSyncingBeforeLogout, setIsSyncingBeforeLogout] = useState(false);
-    const [unsyncedCount, setUnsyncedCount] = useState(0);
-    const unsyncedAnswer = useRef<((proceed: boolean) => void) | null>(null);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -64,23 +62,12 @@ export default function UserProfileMenu({ user }: UserProfileMenuProps) {
         setIsOpen(false);
         setIsSigningOut(true);
         try {
-            await signOutSafely({
-                onSyncing: setIsSyncingBeforeLogout,
-                confirmUnsynced: (pending) => new Promise<boolean>((resolve) => {
-                    unsyncedAnswer.current = resolve;
-                    setUnsyncedCount(pending);
-                }),
-            });
+            await signOutSafely({ onSyncing: setIsSyncingBeforeLogout });
         } finally {
             setIsSigningOut(false);
         }
     };
 
-    const answerUnsynced = (proceed: boolean) => {
-        setUnsyncedCount(0);
-        unsyncedAnswer.current?.(proceed);
-        unsyncedAnswer.current = null;
-    };
 
     return (
         <div className="relative" ref={dropdownRef}>
@@ -209,6 +196,15 @@ export default function UserProfileMenu({ user }: UserProfileMenuProps) {
                             <Sparkles className="w-4 h-4 text-[var(--color-primary-light)]" />
                             <span>Dashboard Home</span>
                         </Link>
+
+                        <Link
+                            href="/profile"
+                            onClick={() => setIsOpen(false)}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
+                        >
+                            <UserCircle className="w-4 h-4 text-[var(--color-primary-light)]" />
+                            <span>My Profile</span>
+                        </Link>
                     </div>
 
                     {/* Logout Footer with Pre-Logout Guard */}
@@ -250,52 +246,6 @@ export default function UserProfileMenu({ user }: UserProfileMenuProps) {
                 </div>
             )}
 
-            {/* Unsynced Work Warning Modal */}
-            {unsyncedCount > 0 && (
-                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-                    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 max-w-md w-full shadow-2xl animate-fade-in">
-                        <div className="flex items-center gap-3.5 mb-4">
-                            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
-                                <AlertTriangle className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <h3 className="text-base font-bold text-[var(--color-text)]">
-                                    Work Not Synced Yet
-                                </h3>
-                                <p className="text-xs text-[var(--color-muted)]">
-                                    Choose before signing out
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="p-4 rounded-2xl bg-[var(--color-background)] border border-[var(--color-border)] mb-5 space-y-2.5">
-                            <p className="text-xs font-semibold text-[var(--color-text)]">
-                                You have <span className="text-amber-500 font-bold">{unsyncedCount} unsynced item{unsyncedCount === 1 ? '' : 's'}</span> on this device.
-                            </p>
-                            <p className="text-[11px] text-[var(--color-muted)] pt-2 border-t border-[var(--color-border)]/50 leading-relaxed">
-                                If you sign out now, it stays on this device and syncs the next time you sign in here.
-                            </p>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row gap-2.5">
-                            <button
-                                type="button"
-                                onClick={() => answerUnsynced(false)}
-                                className="flex-1 px-4 py-2.5 rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
-                            >
-                                Stay Signed In
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => answerUnsynced(true)}
-                                className="px-4 py-2.5 rounded-xl bg-transparent hover:bg-rose-500/10 text-rose-500 border border-rose-500/20 text-xs font-bold transition-colors cursor-pointer"
-                            >
-                                Sign Out Anyway
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

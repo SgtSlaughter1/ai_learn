@@ -173,14 +173,9 @@ class TeacherController extends Controller
         $teacherUser = User::where('id', $id)->where('role', 'teacher')->firstOrFail();
         Gate::authorize('delete', $teacherUser);
 
-        $archived = DB::transaction(function () use ($teacherUser) {
-            ClassMembership::where('user_id', $teacherUser->id)->delete();
-            $teacherUser->teacherProfile()->delete();
+        $teacherUser->deleteAccount();
 
-            return $teacherUser->removeAccount();
-        });
-
-        return response()->json(['message' => 'Teacher deleted successfully', 'archived' => $archived]);
+        return response()->json(['message' => 'Teacher deleted successfully', 'archived' => true]);
     }
 
     /**

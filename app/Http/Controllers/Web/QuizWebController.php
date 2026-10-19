@@ -7,6 +7,7 @@ use App\Http\Requests\Quiz\SubmitQuizAttemptRequest;
 use App\Http\Requests\Quiz\SyncQuizAttemptRequest;
 use App\Models\LearnerProgress;
 use App\Models\Quiz;
+use App\Support\OfflineAnswerKey;
 use App\Models\QuizAttempt;
 use App\Models\QuizAnswer;
 use App\Models\Question;
@@ -60,8 +61,8 @@ class QuizWebController extends Controller
 
         $questions = $quiz->questions;
         // School curriculum & topic practice: deliver 10 random questions per try if the question bank has more
-        if ($questions->count() > 10) {
-            $questions = $questions->shuffle()->take(10)->values();
+        if ($questions->count() > Quiz::QUESTIONS_PER_ATTEMPT) {
+            $questions = $questions->shuffle()->take(Quiz::QUESTIONS_PER_ATTEMPT)->values();
         }
 
         $user = $request->user() ?? auth()->user() ?? request()->user();
@@ -75,7 +76,6 @@ class QuizWebController extends Controller
                 'time_limit_minutes' => $quiz->time_limit_minutes,
                 'questions' => $questions->map(function ($q) use ($isStaff) {
                     $correctOption = $q->options->firstWhere('is_correct', true);
-                    $answerHash = $correctOption ? hash('sha256', "acedrill_salt_q_{$q->id}_opt_{$correctOption->id}") : null;
 
                     return [
                         'id' => $q->id,
@@ -83,9 +83,11 @@ class QuizWebController extends Controller
                         'question_text' => $q->question_text,
                         'type' => $q->type,
                         'difficulty' => $q->difficulty,
-                        'explanation' => $q->explanation,
+                        // Learners get the explanation sealed (see OfflineAnswerKey): readable on the
+                        // device only after grading reveals the correct option, never in storage.
+                        'explanation' => $isStaff ? $q->explanation : null,
                         'marks' => (int) ($q->pivot->marks ?? 1),
-                        'answer_hash' => $answerHash,
+                        ...OfflineAnswerKey::forQuestion(OfflineAnswerKey::QUIZ, $q->id, $correctOption?->id, $q->explanation),
                         'options' => $q->options->map(function ($o) use ($isStaff) {
                             $optionData = [
                                 'id' => $o->id,
@@ -131,14 +133,7 @@ class QuizWebController extends Controller
             'questions.options'
         ]);
 
-        $submittedQuestionIds = array_keys($submittedAnswers);
-        $questionsToGrade = !empty($submittedQuestionIds)
-            ? $quiz->questions->whereIn('id', $submittedQuestionIds)
-            : $quiz->questions;
-
-        if ($questionsToGrade->isEmpty()) {
-            $questionsToGrade = $quiz->questions->take(10);
-        }
+        $questionsToGrade = $quiz->questionsForAttempt(array_keys($submittedAnswers));
 
         $score = 0;
         $totalMarks = 0;
@@ -325,17 +320,17 @@ class QuizWebController extends Controller
             ->filter(fn ($a) => is_array($a) && isset($a['question_id']))
             ->keyBy(fn ($a) => (int) $a['question_id']);
 
-        // Grade only questions the learner actually saw. If none of them still exist
-        // (the quiz was rebuilt while the device was offline) report it instead of
-        // recording a score of zero.
-        $questionsToGrade = $quiz->questions->whereIn('id', $submittedAnswers->keys()->all());
-        if ($questionsToGrade->isEmpty()) {
+        // If none of the questions the learner saw still exist (the quiz was rebuilt
+        // while the device was offline) report it instead of recording a score of zero.
+        if ($quiz->questions->whereIn('id', $submittedAnswers->keys()->all())->isEmpty()) {
             return response()->json([
                 'success' => false,
                 'code' => 'quiz_content_changed',
                 'message' => 'The questions in this attempt are no longer part of the quiz.',
             ], 409);
         }
+
+        $questionsToGrade = $quiz->questionsForAttempt($submittedAnswers->keys()->all());
 
         // Keep the time the learner actually finished, so streaks and history reflect
         // offline days. Clamp it so a wrong device clock cannot push it into the future

@@ -10,6 +10,7 @@ use App\Models\QuestionOption;
 use App\Models\SpacedRepetitionItem;
 use App\Models\User;
 use App\Services\Gamification\GamificationService;
+use App\Support\OfflineAnswerKey;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -494,7 +495,6 @@ class SpacedRepetitionService
                 'key' => strtolower($letter),
                 'label' => $letter,
                 'option_text' => $opt->option_text,
-                'is_correct' => (bool) $opt->is_correct,
             ];
         })->values()->all();
 
@@ -510,7 +510,14 @@ class SpacedRepetitionService
             'question_text' => $qObj->question_text,
             'passage_text' => $pastQuestion?->passage_text,
             'image_url' => $qObj->image_url,
-            'explanation' => $qObj->explanation,
+            // No plain answers: the device marks the card from these (see OfflineAnswerKey),
+            // and the server re-checks the chosen option when the review syncs.
+            ...OfflineAnswerKey::forQuestion(
+                $isPq ? OfflineAnswerKey::PAST_QUESTION : OfflineAnswerKey::QUIZ,
+                $qObj->id,
+                $qObj->options->firstWhere('is_correct', true)?->id,
+                $qObj->explanation,
+            ),
             'repetition_level' => $item->repetition_level,
             'consecutive_correct' => $item->consecutive_correct,
             'interval_days' => $item->interval_days,
@@ -551,9 +558,14 @@ class SpacedRepetitionService
             }
         }
 
-        // If explicit rating was passed (flashcard recall rating)
-        if ($rating) {
-            $isCorrect = in_array($rating, ['hard', 'good', 'easy']);
+        // For multiple-choice cards the chosen option decides correctness; the learner's rating
+        // only says how easily they recalled a right answer. A rating alone counts only for
+        // cards without a known correct option (pure recall), so XP can't be claimed for a
+        // wrong answer.
+        if ($correctOption && $selectedOptionId) {
+            $rating = $isCorrect ? (in_array($rating, ['hard', 'good', 'easy'], true) ? $rating : 'good') : 'again';
+        } elseif ($rating) {
+            $isCorrect = in_array($rating, ['hard', 'good', 'easy'], true);
         } else {
             $rating = $isCorrect ? 'good' : 'again';
         }

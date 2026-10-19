@@ -4,6 +4,46 @@ This guide walks you through the steps to successfully deploy this Laravel + Rea
 
 ---
 
+## 0. Production Checklist (do every item before going live)
+
+### Release
+- [ ] All work is committed, merged into `main`, and that is the code being deployed.
+- [ ] `npm ci && npm run build` was run, and `public/build/` (including `sw.js`) is uploaded.
+- [ ] `composer install --no-dev --optimize-autoloader` was run.
+
+### `.env`
+- [ ] `APP_ENV=production` and `APP_DEBUG=false` (debug pages leak secrets and SQL).
+- [ ] `APP_KEY` is set (generate once with `php artisan key:generate`; never change it afterwards).
+- [ ] `APP_URL=https://your-domain` — **HTTPS is required**: without it the service worker does not run (no offline mode) and offline quiz grading marks every answer wrong.
+- [ ] `SESSION_SECURE_COOKIE=true`.
+- [ ] `SESSION_DRIVER=database`, `CACHE_STORE=database`, `QUEUE_CONNECTION=database` (or `redis` for all three on a VPS). Not `file`/`sync`.
+- [ ] `LOG_LEVEL=warning`.
+- [ ] Database credentials for a production database user.
+- [ ] Mail settings (`MAIL_*`) so password resets work.
+- [ ] `GEMINI_API_KEY` (or `AI_API_KEY`), `AI_PROVIDER`, `MODEL_NAME` if AI features are used.
+- [ ] `MAINTENANCE_TOKEN` left **empty** if you can run Artisan over SSH. Only on hosts without SSH: set it to `openssl rand -hex 32`, use it, then empty it again.
+- [ ] `ALLOW_DESTRUCTIVE_MAINTENANCE`: `true` only while you are still testing and want `/run-migrate-fresh-seed` (drops **every** table, then migrates and seeds the test accounts). Set it back to `false` once real schools have data on the site.
+
+### Database
+- [ ] Migrations applied (`php artisan migrate --force`, or `/run-migrations` with the token on hosts without SSH).
+- [ ] **Do not import your local database** (a local export carries your own test records). Seed instead.
+- [ ] Test accounts: `php artisan db:seed --force` (or `/run-seed` with the token) creates one account per role for checking the live site, all with the password `password`: `platformadmin@example.com`, `schooladmin@example.com`, `teacher@example.com`, `learner@example.com` (plus a few more teachers and learners). Re-running it is safe; it also resets these accounts' passwords to `password`.
+- [ ] Before real schools use the site: create your own platform admin, then deactivate or delete the `@example.com` accounts (Admin → Users), since anyone who knows the demo password can sign in with them.
+- [ ] Automatic daily database backups are enabled.
+
+### Server processes
+- [ ] After every deploy: `php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan event:cache`, then `php artisan queue:restart`.
+- [ ] A queue worker runs permanently (Supervisor/systemd): `php artisan queue:work --tries=3 --max-time=3600`. Without it, queued jobs (quiz XP) never run.
+- [ ] Cron: `* * * * * cd /path/to/app && php artisan schedule:run >> /dev/null 2>&1` (prunes old sync idempotency keys daily).
+- [ ] InfinityFree cannot run a worker or cron: there keep `QUEUE_CONNECTION=sync` (works, slower) and expect limited concurrency. Use a VPS for real school traffic (see section 7).
+
+### Smoke test after deploying
+- [ ] `/run-migrations`, `/run-migrate-fresh-seed`, `/run-seed`, `/clear-cache` return **404** without the token, and `/run-migrate-fresh-seed` returns **403** in production unless `ALLOW_DESTRUCTIVE_MAINTENANCE=true`.
+- [ ] Sign in as each role (learner, teacher, school admin, platform admin) and open their dashboard.
+- [ ] The header shows **Offline Ready**; on a phone over HTTPS, switch to airplane mode, reload, take a quiz, reconnect, and confirm the score and XP appear.
+
+---
+
 ## 1. How the 403 Forbidden Error is Resolved
 On InfinityFree, the web root is fixed to the `htdocs` directory. However, Laravel expects requests to serve from the `public/` directory (where `index.php` and your compiled assets reside).
 
@@ -48,8 +88,8 @@ composer install --no-dev --optimize-autoloader
 
 You cannot run `php artisan migrate` on InfinityFree because SSH access is not available.
 
-1. **Export Local Database:**
-   Export your local database schema (e.g., using phpMyAdmin at `http://localhost/phpmyadmin` or your database manager) into a `.sql` file.
+1. **Export Local Database Structure Only:**
+   Export your local database **structure only (no data)** (e.g., in phpMyAdmin choose *Export → Custom → Structure*) into a `.sql` file. Exporting data would copy local test records and demo accounts (password `password`) into production. Alternatively use `/run-migrations` with a `MAINTENANCE_TOKEN` (see section 0).
 2. **Create Database on InfinityFree:**
    Go to the InfinityFree Control Panel, click **MySQL Databases**, and create a new database.
 3. **Import SQL File:**

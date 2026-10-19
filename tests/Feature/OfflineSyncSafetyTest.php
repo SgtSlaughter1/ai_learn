@@ -302,14 +302,16 @@ class OfflineSyncSafetyTest extends TestCase
         $this->assertSame(0, User::withTrashed()->where('email', $email)->count());
     }
 
-    public function test_learner_without_history_is_deleted(): void
+    public function test_learner_without_history_is_archived_too(): void
     {
+        // Deletes are always soft: nothing is erased, even without quiz history.
         $this->actingAs($this->admin)
             ->deleteJson("/api/v1/admin/learners/{$this->learner->id}")
             ->assertOk()
-            ->assertJsonPath('archived', false);
+            ->assertJsonPath('archived', true);
 
-        $this->assertSame(0, User::withTrashed()->whereKey($this->learner->id)->count());
+        $this->assertSame(1, User::withTrashed()->whereKey($this->learner->id)->count());
+        $this->assertSame(0, User::whereKey($this->learner->id)->count());
     }
 
     public function test_recreating_a_deleted_subject_does_not_hit_slug_unique_index(): void

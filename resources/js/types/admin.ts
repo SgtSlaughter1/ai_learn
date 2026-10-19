@@ -55,6 +55,8 @@ export interface SchoolAdminItem {
     id: string;
     name: string;
     email: string;
+    /** False when deactivated: the account cannot sign in. */
+    is_active?: boolean;
     role: string;
     created_at?: string;
     administered_school?: {
@@ -72,6 +74,8 @@ export interface TeacherItem {
     id: string;
     name: string;
     email: string;
+    /** False when deactivated: the account cannot sign in. */
+    is_active?: boolean;
     role: string;
     teacher_profile?: {
         id: number;
@@ -174,6 +178,8 @@ export interface Learner {
     id: string;
     name: string;
     email: string;
+    /** False when deactivated: the account cannot sign in. */
+    is_active?: boolean;
     learner_profile?: {
         id: number;
         school_id: number | null;

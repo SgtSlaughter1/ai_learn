@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { confirmAction } from '@/components/common/ConfirmModal';
 import { AlertTriangle, CheckCircle2, CloudUpload, LogIn, RefreshCw, RotateCcw, Trash2, WifiOff, X } from 'lucide-react';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import {
@@ -80,7 +81,12 @@ export function SyncStatus({ compact = false, fallback = null }: { compact?: boo
     }
 
     const act = async (item: AttentionItem, action: 'retry' | 'discard') => {
-        if (action === 'discard' && !window.confirm(`Discard "${item.title}${item.detail ? `: ${item.detail}` : ''}"? This change will be lost.`)) {
+        if (action === 'discard' && !(await confirmAction({
+            title: 'Discard this change?',
+            message: `"${item.title}${item.detail ? `: ${item.detail}` : ''}" will not be saved to the server. This can't be undone.`,
+            confirmLabel: 'Discard',
+            tone: 'danger',
+        }))) {
             return;
         }
         setBusyKey(item.key);
