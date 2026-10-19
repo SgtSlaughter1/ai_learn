@@ -34,7 +34,7 @@ export default function PastQuestionsIndex() {
     // Guest / Public visitor layout
     return (
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] font-sans">
-            <Head title="Past Questions & CBT Exam Practice | AceDrill" />
+            <Head title="WAEC, JAMB and NECO Past Questions with CBT Practice | AceDrill" />
 
             {/* Glassmorphic Header */}
             <header className="sticky top-0 z-50 w-full px-2.5 sm:px-6 pt-2.5 sm:pt-3 pb-2">

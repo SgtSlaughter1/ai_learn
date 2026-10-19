@@ -29,10 +29,7 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
 
     return (
         <div className="min-h-screen lg:h-screen w-full bg-[var(--color-background)] text-[var(--color-text)] flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
-            <Head>
-                <title>Set New Password | AceDrill</title>
-                <meta name="description" content="Create a new secure password for your AceDrill account." />
-            </Head>
+            <Head title="Set New Password | AceDrill" />
 
             {/* ═══════════════════════════════════════════════════════════
                LEFT COLUMN: Brand Hero (Desktop Only, Hidden on Mobile)

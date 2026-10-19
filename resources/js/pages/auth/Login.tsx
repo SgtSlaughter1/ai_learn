@@ -25,10 +25,7 @@ export default function Login({ status }: LoginProps) {
 
     return (
         <div className="min-h-screen lg:h-screen w-full bg-[var(--color-background)] text-[var(--color-text)] flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
-            <Head>
-                <title>Sign In | AceDrill</title>
-                <meta name="description" content="Sign in to your AceDrill portal to access offline learning materials and practice questions." />
-            </Head>
+            <Head title="Sign In | AceDrill" />
 
             {/* ═══════════════════════════════════════════════════════════
                LEFT COLUMN: Brand Hero (Desktop Only, Hidden on Mobile)

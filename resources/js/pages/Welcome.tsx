@@ -24,6 +24,8 @@ interface WelcomeStats {
 interface WelcomeProps {
     subjects?: SubjectItem[];
     stats?: WelcomeStats;
+    /** From App\Support\Seo::faqs(), the same text published as FAQPage structured data. */
+    faqs?: { question: string; answer: string }[];
 }
 
 function getSubjectIcon(name: string) {
@@ -77,7 +79,7 @@ function getSubjectIcon(name: string) {
     );
 }
 
-export default function Welcome({ subjects = [], stats }: WelcomeProps) {
+export default function Welcome({ subjects = [], stats, faqs }: WelcomeProps) {
     const [openFaq, setOpenFaq] = useState<number | null>(0);
     const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
 
@@ -152,37 +154,11 @@ export default function Welcome({ subjects = [], stats }: WelcomeProps) {
         },
     ];
 
-    const faqData = [
-        {
-            question: "How does AceDrill work without an internet connection?",
-            answer: "AceDrill is built as a Progressive Web App. When you open the platform, lesson notes, flashcards, practice quizzes, and past questions are saved securely on your phone, tablet, or computer. You can practice and learn anywhere even in airplane mode."
-        },
-        {
-            question: "Can I practice actual WAEC, JAMB, and NECO past questions?",
-            answer: "Yes. AceDrill includes verified past questions organized by subject, year, and topic. Each question includes step by step explanations so you understand the concepts behind every answer."
-        },
-        {
-            question: "Does the AI tutor work when my data is turned off?",
-            answer: "Yes. AceDrill contains an offline explanation engine and formula guide that provides step by step math working and concept breakdowns without connecting to the internet."
-        },
-        {
-            question: "How do teachers and schools track student progress?",
-            answer: "Teachers and school administrators have dedicated portals with class mastery analytics, automated grading, and test reports. Student scores recorded offline automatically sync to school records when a connection is available."
-        },
-        {
-            question: "Is there any cost to get started?",
-            answer: "Students can sign up and start practicing core subjects, flashcards, and past questions for free. Schools and tutorial centres can request a pilot deployment for multi-class management and offline campus servers."
-        }
-    ];
+    const faqData = faqs ?? [];
 
     return (
         <>
-            <Head>
-                <title>AceDrill | Offline Learning Platform and AI Tutor for Students</title>
-                <meta name="description" content="Master secondary school subjects and practice WAEC, JAMB, and NECO exams offline. Step by step AI explanations, active recall flashcards, and authentic CBT past questions." />
-                <meta property="og:title" content="AceDrill: Offline Learning Platform & AI Tutor" />
-                <meta property="og:description" content="Study secondary school subjects offline with curriculum lessons, quizzes, AI explanations, and past questions." />
-            </Head>
+            <Head title="AceDrill | Offline Past Questions and AI Tutor for WAEC, JAMB and NECO" />
 
             <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] font-sans antialiased">
                 {/* ── 1. NAVBAR (CLEAN & UNCONGESTED) ─────────────── */}

@@ -20,10 +20,7 @@ export default function ForgotPassword({ status }: ForgotPasswordProps) {
 
     return (
         <div className="min-h-screen lg:h-screen w-full bg-[var(--color-background)] text-[var(--color-text)] flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
-            <Head>
-                <title>Forgot Password | AceDrill</title>
-                <meta name="description" content="Reset your AceDrill password to regain access to your offline-first secondary curriculum." />
-            </Head>
+            <Head title="Forgot Password | AceDrill" />
 
             {/* ═══════════════════════════════════════════════════════════
                LEFT COLUMN: Brand Hero (Desktop Only, Hidden on Mobile)

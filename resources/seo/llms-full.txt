@@ -1,46 +1,41 @@
-# AceDrill - Comprehensive Platform & Architecture Specification
+# AceDrill: full description
 
 ## Overview
-AceDrill is an offline-first educational technology system designed to democratize high-quality secondary education across regions with low or intermittent internet connectivity. It combines local Progressive Web App caching, client-side IndexedDB databases, dynamic question solving algorithms, and multi-model AI logic.
+AceDrill helps secondary school students in Nigeria prepare for WAEC (WASSCE), NECO, JAMB (UTME) and Post-UTME exams. It is an installable web app that keeps working without internet access, so students can keep practising where data is expensive or the connection drops.
 
 ---
 
-## 1. Pedagogical Methodology
-- **Mastery-Based Learning**: Students must achieve at least 80% mastery on foundational topics before advanced concepts are recommended.
-- **Formative Feedback Loop**: Every question includes distractor analysis explaining not only why the correct choice is right, but why alternative options are incorrect.
-- **Spaced Repetition & Active Recall**: Flashcard modules track review intervals to maximize long-term retention.
-- **Adaptive Diagnostic Testing**: Algorithmic assessment adjusting question difficulty according to real-time learner response latency and accuracy.
+## How students learn
+- **Mastery first**: students work through topics and are pointed to the ones they have not yet mastered.
+- **Instant feedback**: after each answer, students see whether they were right and an explanation of the correct answer, online or offline.
+- **Active recall and spaced repetition**: flashcards and a short daily revision set bring back questions at the right time so they are remembered for the exam.
+- **Exam practice**: authentic past questions by subject and year, and timed CBT simulations that feel like the real exam.
 
 ---
 
-## 2. Supported Curriculum & Subject Areas
-- **STEM Sciences**:
-  - Mathematics: Linear equations, quadratic factorization, trigonometry, plane geometry, calculus fundamentals, statistics.
-  - Physics: Kinematics, Newtonian mechanics, optics, thermodynamics, electromagnetic induction.
-  - Chemistry: Periodic table trends, chemical stoichiometry, atomic structure, acids, bases, and salts.
-  - Biology: Cell organization, genetics, ecology, plant physiology, circulatory systems.
-- **Commercial & Humanities**:
-  - English Language: Lexis and structure, grammatical concord, comprehension, literature in English.
-  - Economics: Microeconomics, macroeconomics, demand & supply elasticity, fiscal policies.
-  - Financial Accounting: Double entry principles, ledger accounts, trial balances, final accounts.
-  - Government: Constitutional developments, democratic institutions, civic rights.
+## Subjects covered
+- **Sciences**:
+  - Mathematics: linear equations, quadratic factorisation, trigonometry, plane geometry, introductory calculus, statistics.
+  - Physics: motion, Newton's laws, optics, heat, electromagnetic induction.
+  - Chemistry: the periodic table, stoichiometry, atomic structure, acids, bases and salts.
+  - Biology: cells, genetics, ecology, plant physiology, circulation.
+- **Commercial and humanities**:
+  - English Language: lexis and structure, concord, comprehension, literature in English.
+  - Economics: micro and macroeconomics, demand and supply, fiscal policy.
+  - Financial Accounting: double entry, ledgers, trial balance, final accounts.
+  - Government: constitutional development, democratic institutions, civic rights.
 
 ---
 
-## 3. Offline-First & Sync Architecture
-1. **PWA Precaching**: Core assets (scripts, styles, fonts, KaTeX assets, and UI components) are cached by Service Workers (`public/sw.js`).
-2. **Local Dexie.js Storage**: Stores topics, subject notes, user progress, flashcards, and question bank records in IndexedDB.
-3. **Queue & Auto-Sync**: Quiz submissions and XP gains are logged locally while offline; when network connectivity is restored, the `SyncService` synchronizes attempts back to the server seamlessly.
-4. **Dual AI Tutor Engine**:
-   - Online Mode: Utilizes Google Gemini for open-ended pedagogical inquiries and lesson planning.
-   - Offline Mode: Utilizes a deterministic pedagogical evaluation engine that inspects student answers, matches question bank items, and produces step-by-step mathematical solutions without network overhead.
+## Working offline
+1. On the first visit with internet, the app saves the student's subjects, topics, quizzes, flashcards and past questions on their device.
+2. After that, quizzes, CBT practice and revision work without data, with answers and explanations shown straight away.
+3. When the device reconnects, results are checked and synced to the student's school record automatically.
 
 ---
 
-## 4. Multi-Tenant Privacy & Data Protection
-- **School Scoping**: Learners and school administrators only interact with records and question bank items assigned to their specific institution or global national curriculum standards.
-- **Strict Role-Based Access Control**:
-  - `platform_admin`: Platform-wide oversight and curriculum management.
-  - `school_admin`: Institutional analytics, cohort management, and question bank imports.
-  - `teacher`: Classroom roster monitoring and diagnostic intervention review.
-  - `learner`: Personalized learning pathways, gamified streaks, and study companions.
+## For schools
+- **Learners** practise, track their progress, and earn streaks and achievements.
+- **Teachers** follow their classes' progress and see which topics need attention.
+- **School administrators** manage their school's classes, teachers, learners and question bank.
+- Each school's records are visible only to that school.

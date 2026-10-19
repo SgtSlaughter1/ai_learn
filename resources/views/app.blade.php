@@ -8,15 +8,14 @@
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
         <meta name="apple-mobile-web-app-title" content="AceDrill">
-        <meta name="description" content="AceDrill is an offline-first adaptive AI learning platform. Study curriculum subjects, solve interactive practice problems with step-by-step explanations, and master topics without internet access.">
-        <meta name="keywords" content="offline learning, AI tutor, secondary education, adaptive quiz, WAEC, NECO, curriculum, study companion, offline study app">
-        <meta name="author" content="AceDrill Platform">
-        <meta name="robots" content="index, follow">
+        @php($seo = \App\Support\Seo::forRequest(request()))
+        <title inertia>{{ $seo['title'] }}</title>
+        <meta name="description" content="{{ $seo['description'] }}">
+        <meta name="robots" content="{{ $seo['robots'] }}">
 
-        <title inertia>{{ config('app.name', 'AceDrill') }}</title>
-
-        <!-- Theme Initialization (Anti-FOUC) -->
+        {{-- Theme Initialization (Anti-FOUC) --}}
         <script>
+            document.documentElement.classList.add('js');
             (function() {
                 try {
                     var theme = localStorage.getItem('theme');
@@ -32,108 +31,56 @@
             })();
         </script>
 
-        <!-- Canonical & Base Metadata -->
-        <link rel="canonical" href="{{ url()->current() }}">
-
-        <!-- Open Graph / Facebook -->
+        {{-- Search & answer engines (App\Support\Seo) --}}
+        <link rel="canonical" href="{{ $seo['canonical'] }}">
+        <link rel="alternate" type="text/plain" title="LLM summary" href="{{ \App\Support\Seo::url('/llms.txt') }}">
         <meta property="og:type" content="website">
         <meta property="og:site_name" content="AceDrill">
-        <meta property="og:url" content="{{ url()->current() }}">
-        <meta property="og:title" content="AceDrill — Offline-First Adaptive AI Learning Platform">
-        <meta property="og:description" content="Master secondary school subjects offline with adaptive quizzes, smart flashcards, and an intelligent offline AI study companion.">
-        <meta property="og:image" content="{{ asset('images/screenshot-desktop.png') }}">
+        <meta property="og:url" content="{{ $seo['canonical'] }}">
+        <meta property="og:title" content="{{ $seo['title'] }}">
+        <meta property="og:description" content="{{ $seo['description'] }}">
+        <meta property="og:image" content="{{ $seo['image'] }}">
         <meta property="og:image:width" content="1280">
         <meta property="og:image:height" content="720">
-        <meta property="og:image:alt" content="AceDrill Adaptive Learning Dashboard">
-        <meta property="og:locale" content="en_US">
-
-        <!-- Twitter / X Cards -->
+        <meta property="og:image:alt" content="AceDrill learner dashboard">
+        <meta property="og:locale" content="en_NG">
         <meta name="twitter:card" content="summary_large_image">
-        <meta name="twitter:title" content="AceDrill — Offline-First Adaptive AI Learning Platform">
-        <meta name="twitter:description" content="Master secondary school subjects offline with adaptive quizzes, smart flashcards, and an intelligent offline AI study companion.">
-        <meta name="twitter:image" content="{{ asset('images/screenshot-desktop.png') }}">
+        <meta name="twitter:title" content="{{ $seo['title'] }}">
+        <meta name="twitter:description" content="{{ $seo['description'] }}">
+        <meta name="twitter:image" content="{{ $seo['image'] }}">
+        <script type="application/ld+json">{!! json_encode($seo['jsonLd'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) !!}</script>
+        {{-- The plain-HTML copy below is for crawlers without JavaScript; the app replaces it. --}}
+        <style>.js #seo-content{display:none}</style>
 
-        <!-- Schema.org JSON-LD Structured Data (EducationalOrganization, WebSite & WebApplication) -->
-        <script type="application/ld+json">
-        {
-            "@@context": "https://schema.org",
-            "@@graph": [
-                {
-                    "@@type": "EducationalOrganization",
-                    "@@id": "{{ url('/') }}/#organization",
-                    "name": "AceDrill",
-                    "url": "{{ url('/') }}",
-                    "logo": "{{ asset('images/icon-512x512.png') }}",
-                    "description": "AceDrill is an offline-first adaptive learning platform empowering secondary school students with personalized AI tutoring and curriculum mastery.",
-                    "inLanguage": "en"
-                },
-                {
-                    "@@type": "WebSite",
-                    "@@id": "{{ url('/') }}/#website",
-                    "url": "{{ url('/') }}",
-                    "name": "AceDrill",
-                    "publisher": {
-                        "@@id": "{{ url('/') }}/#organization"
-                    },
-                    "potentialAction": {
-                        "@@type": "SearchAction",
-                        "target": "{{ url('/subjects') }}?search={search_term_string}",
-                        "query-input": "required name=search_term_string"
-                    }
-                },
-                {
-                    "@@type": "WebApplication",
-                    "@@id": "{{ url('/') }}/#webapp",
-                    "name": "AceDrill Web App",
-                    "url": "{{ url('/') }}",
-                    "applicationCategory": "EducationalApplication",
-                    "operatingSystem": "All modern browsers (Chrome, Safari, Edge, Firefox), Android, iOS, Windows, macOS",
-                    "offers": {
-                        "@@type": "Offer",
-                        "price": "0",
-                        "priceCurrency": "USD"
-                    },
-                    "description": "Progressive Web Application (PWA) enabling fully offline secondary education, quizzes, active recall flashcards, and offline AI tutoring.",
-                    "browserRequirements": "Requires JavaScript. Service Worker support recommended for offline mode.",
-                    "featureList": [
-                        "100% Offline Study Library",
-                        "Step-by-Step AI Problem Walkthroughs",
-                        "Curriculum-Aligned Assessments",
-                        "Active Recall Flashcard System",
-                        "Real-Time Automatic Sync"
-                    ]
-                }
-            ]
-        }
-        </script>
-
-        <!-- Favicons -->
+        {{-- Favicons --}}
         <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
         <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
         <link rel="shortcut icon" href="/favicon.ico">
 
-        <!-- PWA Manifest -->
+        {{-- PWA Manifest --}}
         <link rel="manifest" href="/manifest.webmanifest">
         <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
 
-        <!-- Scripts -->
+        {{-- Scripts --}}
         @viteReactRefresh
         @vite(['resources/css/app.css', 'resources/js/app.tsx'])
         @inertiaHead
     </head>
     <body class="font-sans antialiased">
         @inertia
-        {{-- PWA Service Worker Registration
-             vite-plugin-pwa generates the SW at /build/sw.js with a Service-Worker-Allowed: /
-             header served via our Laravel route, so it can control the full / scope.
-             We do NOT use /sw.js (the old manual route) to avoid double-registration.
-        --}}
+        @if (\App\Support\Seo::isPublic(request()))
+            @include('seo.content')
+        @endif
+        {{-- Comments live in Blade comments so they are not sent to the browser.
+             The SW is registered from /sw.js (root path) so it controls the full / scope
+             without a Service-Worker-Allowed header (the PHP dev server strips it).
+             A SW taking control doesn't need a reload: on a first visit it just starts
+             controlling this page; for a new version, reloading on the spot would throw
+             away the user's work, so the app switches to the new build at the next page
+             visit with one normal full load (see app.tsx). --}}
         <script>
             if ('serviceWorker' in navigator) {
                 window.addEventListener('load', () => {
-                    // Register SW from /sw.js (root path) so it naturally controls
-                    // the full / scope without needing Service-Worker-Allowed header.
-                    // The /build/sw.js path requires that header which PHP dev server strips.
                     navigator.serviceWorker.register('/sw.js', { scope: '/' })
                         .then((reg) => {
                             console.log('[SW] ServiceWorker registered, scope:', reg.scope);
@@ -152,12 +99,6 @@
                             console.error('[SW] ServiceWorker registration failed:', err);
                         });
 
-                    // A service worker taking control doesn't need a reload:
-                    //  - first visit: it just starts controlling this page (reloading here made
-                    //    every first visit load twice);
-                    //  - a new version: reloading on the spot would throw away whatever the
-                    //    user is doing. Instead the app switches to the new build at the next
-                    //    page visit with one normal full load (see app.tsx).
                     const hadController = !!navigator.serviceWorker.controller;
                     navigator.serviceWorker.addEventListener('controllerchange', () => {
                         if (hadController) {

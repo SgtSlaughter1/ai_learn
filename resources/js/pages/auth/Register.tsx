@@ -24,10 +24,7 @@ export default function Register() {
 
     return (
         <div className="min-h-screen lg:h-screen w-full bg-[var(--color-background)] text-[var(--color-text)] flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
-            <Head>
-                <title>Create Learner Account | AceDrill</title>
-                <meta name="description" content="Sign up for a free AceDrill learner account to access offline learning materials, past questions, and AI tutoring." />
-            </Head>
+            <Head title="Create a Free Learner Account | AceDrill" />
 
             {/* ═══════════════════════════════════════════════════════════
                LEFT COLUMN: Brand Hero (Desktop Only, Hidden on Mobile)

@@ -155,7 +155,8 @@ async function boot(): Promise<void> {
     }
 
     await createInertiaApp({
-        title: (title) => `${title} - ${appName}`,
+        // Public pages already name the brand in their title (matching App\Support\Seo).
+        title: (title) => (title.includes(appName) ? title : `${title} - ${appName}`),
         page: initialPage ?? undefined,
         resolve: (name) =>
             resolvePageComponent(

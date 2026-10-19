@@ -33,6 +33,7 @@ Route::get('/', function () {
 
     return Inertia::render('Welcome', [
         'subjects' => $subjects,
+        'faqs' => \App\Support\Seo::faqs(),
         'stats' => [
             'total_subjects' => $totalSubjects,
             'total_past_questions' => $totalPastQuestions,
@@ -59,37 +60,15 @@ Route::get('/api/stats', function () {
 // National Past Questions & Timed CBT Simulation Hub (Open to guests & learners)
 Route::get('/past-questions', fn() => Inertia::render('ExamPrep/PastQuestionsIndex'));
 
-// SEO & AEO Machine Discovery Routes
-Route::get('/sitemap.xml', function () {
-    $path = public_path('sitemap.xml');
-    if (file_exists($path)) {
-        return response(file_get_contents($path), 200, ['Content-Type' => 'application/xml; charset=utf-8']);
-    }
-    abort(404);
-});
-
-Route::get('/robots.txt', function () {
-    $path = public_path('robots.txt');
-    if (file_exists($path)) {
-        return response(file_get_contents($path), 200, ['Content-Type' => 'text/plain; charset=utf-8']);
-    }
-    abort(404);
-});
-
-Route::get('/llms.txt', function () {
-    $path = public_path('llms.txt');
-    if (file_exists($path)) {
-        return response(file_get_contents($path), 200, ['Content-Type' => 'text/plain; charset=utf-8']);
-    }
-    abort(404);
-});
-
+// SEO & AEO machine discovery: built from App\Support\Seo so every URL uses APP_URL.
+Route::get('/robots.txt', fn () => response(\App\Support\Seo::robotsTxt(), 200, ['Content-Type' => 'text/plain; charset=utf-8']));
+Route::get('/sitemap.xml', fn () => response(\App\Support\Seo::sitemapXml(), 200, ['Content-Type' => 'application/xml; charset=utf-8']));
+Route::get('/llms.txt', fn () => response(\App\Support\Seo::llmsTxt(), 200, ['Content-Type' => 'text/plain; charset=utf-8']));
 Route::get('/llms-full.txt', function () {
-    $path = public_path('llms-full.txt');
-    if (file_exists($path)) {
-        return response(file_get_contents($path), 200, ['Content-Type' => 'text/plain; charset=utf-8']);
-    }
-    abort(404);
+    $path = resource_path('seo/llms-full.txt');
+    abort_unless(file_exists($path), 404);
+
+    return response(file_get_contents($path), 200, ['Content-Type' => 'text/plain; charset=utf-8']);
 });
 
 // Authentication & Password Reset Routes
