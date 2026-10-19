@@ -88,6 +88,17 @@ class SeoTest extends TestCase
         }
     }
 
+    public function test_no_page_hardcodes_a_site_domain(): void
+    {
+        // Links to the site must come from APP_URL (App\Support\Seo::url), never a written-in domain.
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(resource_path('js')));
+        foreach ($files as $file) {
+            if (preg_match('/\.tsx?$/', $file->getFilename()) && ! str_contains($file->getPathname(), '__tests__')) {
+                $this->assertDoesNotMatchRegularExpression('#https?://(www\.)?(acedrill|ailearn)\.#i', file_get_contents($file->getPathname()), $file->getPathname());
+            }
+        }
+    }
+
     public function test_non_production_copies_stay_out_of_search(): void
     {
         $this->app['env'] = 'local';

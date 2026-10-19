@@ -188,32 +188,7 @@ export default function Index() {
                 </div>
             }
         >
-            <Head>
-                <title>School Curriculum & Subjects | AceDrill</title>
-                <meta name="description" content="Explore secondary school curriculum subjects on AceDrill. Access syllabus topics, interactive quizzes, and offline study materials." />
-                <meta property="og:title" content="School Curriculum & Subjects | AceDrill" />
-                <meta property="og:description" content="Explore secondary school curriculum subjects on AceDrill. Access syllabus topics, interactive quizzes, and offline study materials." />
-                <script type="application/ld+json">
-                    {JSON.stringify({
-                        "@context": "https://schema.org",
-                        "@type": "BreadcrumbList",
-                        "itemListElement": [
-                            {
-                                "@type": "ListItem",
-                                "position": 1,
-                                "name": "Home",
-                                "item": "https://acedrill.app/"
-                            },
-                            {
-                                "@type": "ListItem",
-                                "position": 2,
-                                "name": "Curriculum",
-                                "item": "https://acedrill.app/subjects"
-                            }
-                        ]
-                    })}
-                </script>
-            </Head>
+            <Head title="School Curriculum & Subjects | AceDrill" />
 
             <div className="space-y-6">
                 {/* Search Bar & Class Filter */}

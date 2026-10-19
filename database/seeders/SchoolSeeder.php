@@ -38,7 +38,7 @@ class SchoolSeeder extends Seeder
                 'city' => 'Lagos',
                 'state' => 'Lagos',
                 'phone' => '+234 800 111 2222',
-                'email' => 'admin@acedrill.app',
+                'email' => 'acedrill.school@example.com',
                 'description' => 'A premier senior secondary school focused on STEM, commercial, humanities, and secondary academic excellence.',
                 'is_active' => true,
             ]
@@ -56,7 +56,7 @@ class SchoolSeeder extends Seeder
                 'city' => 'Abuja',
                 'state' => 'FCT',
                 'phone' => '+234 800 333 4444',
-                'email' => 'contact@greenwoodhigh.edu',
+                'email' => 'greenwood.school@example.com',
                 'description' => 'Committed to academic excellence, leadership development, and comprehensive secondary curriculum.',
                 'is_active' => true,
             ]
