@@ -41,6 +41,7 @@ This guide walks you through the steps to successfully deploy this Laravel + Rea
 - [ ] `/run-migrations`, `/run-migrate-fresh-seed`, `/run-seed`, `/clear-cache` return **404** without the token, and `/run-migrate-fresh-seed` returns **403** in production unless `ALLOW_DESTRUCTIVE_MAINTENANCE=true`.
 - [ ] Sign in as each role (learner, teacher, school admin, platform admin) and open their dashboard.
 - [ ] The header shows **Offline Ready**; on a phone over HTTPS, switch to airplane mode, reload, take a quiz, reconnect, and confirm the score and XP appear.
+- [ ] On the server, delete any old `htdocs/public/robots.txt`, `sitemap.xml`, `llms.txt` and `llms-full.txt` (uploads never delete files; `.htaccess` routes these URLs to Laravel anyway).
 - [ ] Search: `https://your-domain/robots.txt`, `/sitemap.xml` and `/llms.txt` show your own domain (they are built from `APP_URL`; only `APP_ENV=production` is indexable). View the home page source: it has the FAQ as text and as `FAQPage` JSON-LD.
 - [ ] Add the site to [Google Search Console](https://search.google.com/search-console) and [Bing Webmaster Tools](https://www.bing.com/webmasters) (Bing also feeds ChatGPT search and Copilot), submit `https://your-domain/sitemap.xml`, and check the home page with Google's [Rich Results Test](https://search.google.com/test/rich-results).
 

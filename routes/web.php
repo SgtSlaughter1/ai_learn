@@ -61,14 +61,14 @@ Route::get('/api/stats', function () {
 Route::get('/past-questions', fn() => Inertia::render('ExamPrep/PastQuestionsIndex'));
 
 // SEO & AEO machine discovery: built from App\Support\Seo so every URL uses APP_URL.
-Route::get('/robots.txt', fn () => response(\App\Support\Seo::robotsTxt(), 200, ['Content-Type' => 'text/plain; charset=utf-8']));
-Route::get('/sitemap.xml', fn () => response(\App\Support\Seo::sitemapXml(), 200, ['Content-Type' => 'application/xml; charset=utf-8']));
-Route::get('/llms.txt', fn () => response(\App\Support\Seo::llmsTxt(), 200, ['Content-Type' => 'text/plain; charset=utf-8']));
+Route::get('/robots.txt', fn () => response(\App\Support\Seo::robotsTxt(), 200, ['Content-Type' => 'text/plain; charset=utf-8', 'Cache-Control' => 'public, max-age=3600']));
+Route::get('/sitemap.xml', fn () => response(\App\Support\Seo::sitemapXml(), 200, ['Content-Type' => 'application/xml; charset=utf-8', 'Cache-Control' => 'public, max-age=3600']));
+Route::get('/llms.txt', fn () => response(\App\Support\Seo::llmsTxt(), 200, ['Content-Type' => 'text/plain; charset=utf-8', 'Cache-Control' => 'public, max-age=3600']));
 Route::get('/llms-full.txt', function () {
     $path = resource_path('seo/llms-full.txt');
     abort_unless(file_exists($path), 404);
 
-    return response(file_get_contents($path), 200, ['Content-Type' => 'text/plain; charset=utf-8']);
+    return response(file_get_contents($path), 200, ['Content-Type' => 'text/plain; charset=utf-8', 'Cache-Control' => 'public, max-age=3600']);
 });
 
 // Authentication & Password Reset Routes

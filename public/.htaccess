@@ -25,6 +25,10 @@
     RewriteRule ^manifest\.webmanifest$ index.php [L]
     RewriteRule ^build/manifest\.webmanifest$ index.php [L]
 
+    # Search and AI crawler files are generated from APP_URL by Laravel. Send them there even
+    # if an old static copy was left on the server, or the old copy would be served instead.
+    RewriteRule ^(robots\.txt|sitemap\.xml|llms\.txt|llms-full\.txt)$ index.php [L]
+
     # All other requests to Laravel front controller
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
