@@ -27,6 +27,12 @@ class Question extends Model
         return $this->belongsTo(School::class);
     }
 
+    /** The shared passage, poem, diagram or table this question is about, if any. */
+    public function context(): BelongsTo
+    {
+        return $this->belongsTo(QuestionContext::class, 'context_id');
+    }
+
     public function options(): HasMany
     {
         return $this->hasMany(QuestionOption::class)->orderBy('sort_order');

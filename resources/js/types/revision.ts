@@ -24,6 +24,8 @@ export interface RevisionQueueItem {
     exam_year?: number | null;
     question_text: string;
     passage_text?: string | null;
+    /** A school question about a shared passage carries that passage. */
+    context?: import('@/components/quiz/PassageView').QuizContext | null;
     image_url?: string | null;
     explanation?: string | null;
     /** Offline marking (see AnswerKey.ts): hash of the correct option and the sealed explanation. */

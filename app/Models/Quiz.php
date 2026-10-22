@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Support\AttemptQuestions;
 use Illuminate\Support\Collection;
 
 class Quiz extends Model
@@ -45,9 +46,12 @@ class Quiz extends Model
             return $submitted;
         }
 
-        $unanswered = $this->questions
-            ->whereNotIn('id', $submitted->pluck('id')->all())
-            ->take($required - $submitted->count());
+        // Missing questions are added a whole passage at a time, like any attempt is picked.
+        $unanswered = AttemptQuestions::pick(
+            $this->questions->whereNotIn('id', $submitted->pluck('id')->all())->values(),
+            $required - $submitted->count(),
+            shuffle: false,
+        );
 
         return $submitted->concat($unanswered)->values();
     }

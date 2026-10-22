@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-import Markdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import { RichText } from '@/components/common/RichText';
 import 'katex/dist/katex.min.css';
 import { usePage } from '@inertiajs/react';
 import { ExamSimulationResult } from '../../types/past-questions';
@@ -291,9 +289,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                                                 </span>
                                                 <div>
                                                     <div className="font-bold text-sm text-[var(--color-text)] line-clamp-2 [&_p]:inline">
-                                                        <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                            {formatMathText(q.question_text)}
-                                                        </Markdown>
+                                                        <RichText text={formatMathText(q.question_text)} />
                                                     </div>
                                                     <div className="text-xs text-[var(--color-muted)] mt-1">
                                                         Topic: <strong>{q.topic?.name}</strong> • Your choice: <span className={q.is_correct ? 'text-[var(--color-success)] font-bold' : 'text-[var(--color-error)] font-bold'}>{q.selected_option_text || 'Skipped'}</span>
@@ -310,9 +306,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                                             <div className="p-4 md:p-6 border-t border-[var(--color-border)] bg-[var(--color-surface)] space-y-4">
                                                 {q.passage_text && (
                                                     <div className="p-3 rounded-xl bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-xs italic text-[var(--color-muted)] chat-markdown">
-                                                        <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                            {formatMathText(q.passage_text)}
-                                                        </Markdown>
+                                                        <RichText text={formatMathText(q.passage_text)} />
                                                     </div>
                                                 )}
 
@@ -342,9 +336,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                                                                 <div className="flex items-center gap-2.5">
                                                                     <span className="font-extrabold uppercase w-5 text-center">{opt.label || chrFromIdx(optIdx)}.</span>
                                                                     <span className="[&_p]:inline">
-                                                                        <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                                            {formatMathText(opt.option_text)}
-                                                                        </Markdown>
+                                                                        <RichText text={formatMathText(opt.option_text)} />
                                                                     </span>
                                                                 </div>
                                                                 {isCorrectOpt && <span className="text-[10px] font-extrabold uppercase text-[var(--color-success)]">✓ Correct</span>}
@@ -359,9 +351,7 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
                                                         <strong className="block text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-primary)] mb-1">
                                                             Solution & Step-by-Step Working:
                                                         </strong>
-                                                        <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                            {formatMathText(q.explanation)}
-                                                        </Markdown>
+                                                        <RichText text={formatMathText(q.explanation)} />
                                                     </div>
                                                 )}
                                             </div>

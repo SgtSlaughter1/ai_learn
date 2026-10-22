@@ -46,6 +46,16 @@ return [
         'model' => env('MODEL_NAME', 'gemini-3.1-flash-lite'),
     ],
 
+    // Groq (OpenAI-compatible API). The fallback model has its own rate limits, so it
+    // doubles the free daily capacity; Gemini comes after both.
+    'groq' => [
+        'api_key' => env('GROQ_API_KEY'),
+        'model' => env('GROQ_MODEL', 'openai/gpt-oss-120b'),
+        'fallback_model' => env('GROQ_FALLBACK_MODEL', 'openai/gpt-oss-20b'),
+        'base_url' => env('GROQ_BASE_URL', 'https://api.groq.com/openai/v1'),
+    ],
+
+    // groq | gemini | local. Unset: Groq when its key is set, else Gemini, else local.
     'ai' => [
         'provider' => env('AI_PROVIDER'),
     ],

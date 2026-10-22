@@ -509,6 +509,8 @@ class SpacedRepetitionService
             'exam_year' => $pastQuestion?->exam_year,
             'question_text' => $qObj->question_text,
             'passage_text' => $pastQuestion?->passage_text,
+            // A school question about a shared passage carries that passage.
+            'context' => $isPq ? null : $qObj->context?->toLearnerArray(),
             'image_url' => $qObj->image_url,
             // No plain answers: the device marks the card from these (see OfflineAnswerKey),
             // and the server re-checks the chosen option when the review syncs.

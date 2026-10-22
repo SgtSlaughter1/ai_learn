@@ -193,6 +193,11 @@ Route::middleware('auth')->group(function () {
             Route::match(['patch', 'put'], '/admin/questions/{id}', [Admin\QuestionController::class, 'update']);
             Route::delete('/admin/questions/{id}', [Admin\QuestionController::class, 'destroy']);
             Route::post('/admin/questions/upload-image', [Admin\QuestionToolsController::class, 'uploadImage']);
+            // Shared passages, poems, diagrams and tables (created through the question form)
+            Route::get('/admin/question-contexts', [Admin\QuestionContextController::class, 'index']);
+            Route::match(['patch', 'put'], '/admin/question-contexts/{id}', [Admin\QuestionContextController::class, 'update']);
+            Route::patch('/admin/question-contexts/{id}/order', [Admin\QuestionContextController::class, 'reorder']);
+            Route::delete('/admin/question-contexts/{id}', [Admin\QuestionContextController::class, 'destroy']);
             Route::post('/admin/questions/ai-extract', [Admin\QuestionToolsController::class, 'extract'])->middleware('throttle:ai');
             Route::post('/admin/questions/ai-generate', [Admin\QuestionToolsController::class, 'generate'])->middleware('throttle:ai');
         });
@@ -294,6 +299,14 @@ $guardMaintenance = function (bool $destructive = false) {
         abort(403, 'Wiping the database is disabled in production.');
     }
 };
+
+// PHP security check: the running PHP version and whether it has the October 2026 critical
+// fixes (see App\Support\PhpSecurity). For hosts without SSH, where `php -v` can't be run.
+Route::get('/php-check', function () use ($guardMaintenance) {
+    $guardMaintenance();
+
+    return response()->json(\App\Support\PhpSecurity::report());
+});
 
 // Clear Cache utility
 Route::get('/clear-cache', function () use ($guardMaintenance) {

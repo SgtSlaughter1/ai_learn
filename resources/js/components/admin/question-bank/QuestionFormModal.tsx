@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import Markdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import { RichText } from '@/components/common/RichText';
 import 'katex/dist/katex.min.css';
-import type { ClassItem, QuestionItem, SubjectItem, TopicItem } from '@/types/admin';
+import type { ClassItem, QuestionContextItem, QuestionItem, SubjectItem, TopicItem } from '@/types/admin';
 import { formatClassOptionLabel, ALL_GRADE_GROUPS, getGradeLevelsForSchool, getGradeLevelsForTeacher } from '@/utils/format';
 import QuestionImageUploader from './QuestionImageUploader';
 import MathToolbar from './MathToolbar';
+import PassageSection from './PassageSection';
+import SubjectTools, { formulaSuggestion } from './SubjectTools';
+import { PassageView } from '@/components/quiz/PassageView';
 import { Eye, EyeOff, Plus, Trash2, Image as ImageIcon, Check, Sigma } from 'lucide-react';
 
 export interface QuestionFormData {
@@ -23,6 +24,13 @@ export interface QuestionFormData {
         option_text: string;
         is_correct: boolean;
     }[];
+    /** The shared passage this question is about (sent whole; see QuestionController::placeInContext). */
+    context?: QuestionContextItem | null;
+    /** On edit: take the question off its passage. */
+    detach_context?: boolean;
+    /** After "Save & add next" on a passage: keep it, read-only, for the next question. */
+    context_locked?: boolean;
+    context_question_number?: number;
 }
 
 interface QuestionFormModalProps {
@@ -149,6 +157,21 @@ export default function QuestionFormModal({
             }
         }
     }, [isOpen, editingQuestion, allTopics, subjects, classes, form.image_url, form.grade_level, form.topic_id, form.options]);
+
+    const subjectName = useMemo(() => {
+        const topic = allTopics.find((t) => String(t.id) === String(form.topic_id));
+        const subjectId = selectedSubjectId || (topic?.subject_id ? String(topic.subject_id) : '');
+        return subjects.find((sub) => String(sub.id) === subjectId)?.name ?? topic?.subject?.name ?? '';
+    }, [allTopics, form.topic_id, selectedSubjectId, subjects]);
+    const suggestion = useMemo(() => formulaSuggestion(form.question_text, subjectName), [form.question_text, subjectName]);
+
+    const setContext = (context: QuestionContextItem | null) => setForm((prev) => ({
+        ...prev,
+        context,
+        context_locked: context ? prev.context_locked : false,
+        // Unticking the passage on a question that was on one takes it off when saved.
+        detach_context: !context && Boolean(editingQuestion?.context_id),
+    }));
 
     // Filtered classes based on selected grade level
     const availableClasses = classes.filter(
@@ -359,6 +382,18 @@ export default function QuestionFormModal({
         }
     };
 
+    // Wrap the selected text in the focused field (underline, bold), or insert a placeholder.
+    const handleWrapSelection = (before: string, after: string = before, placeholder: string = 'word') => {
+        const el: HTMLInputElement | HTMLTextAreaElement | null =
+            activeFocus === 'prompt' ? promptTextareaRef.current
+            : activeFocus === 'explanation' ? explanationTextareaRef.current
+            : typeof activeFocus === 'number' ? optionInputRefs.current[activeFocus] : null;
+        const text = el?.value ?? '';
+        const start = el?.selectionStart ?? text.length;
+        const end = el?.selectionEnd ?? text.length;
+        handleInsertMath(before + (text.slice(start, end) || placeholder) + after);
+    };
+
     // Auto-Format text in the currently focused field
     const handleFormatActiveText = (formatted: string) => {
         if (activeFocus === 'prompt') {
@@ -400,6 +435,11 @@ export default function QuestionFormModal({
                 showToast('Please enter the question prompt', 'error');
             }
             promptTextareaRef.current?.focus();
+            return;
+        }
+        if (form.context && !form.context.body?.trim() && !form.context.image_url) {
+            setMobileTab('editor');
+            showToast?.('Add the passage text or a picture, or untick "This question is about a passage".', 'error');
             return;
         }
         if (isSaveAndNext && onSaveAndAddNext) {
@@ -684,12 +724,16 @@ export default function QuestionFormModal({
                                         </span>
                                     </div>
 
+                                    {form.context && (form.context.body || form.context.image_url) && (
+                                        <div className="p-2.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] max-h-56 overflow-y-auto">
+                                            <PassageView context={form.context} label={form.context_question_number ? `Question ${form.context_question_number} on this passage` : null} compact />
+                                        </div>
+                                    )}
+
                                     {/* Rendered prompt */}
                                     {form.question_text ? (
                                         <div className="text-xs font-semibold text-[var(--color-text)] leading-relaxed [&_p]:inline">
-                                            <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                {form.question_text}
-                                            </Markdown>
+                                            <RichText text={form.question_text} />
                                         </div>
                                     ) : (
                                         <div className="text-xs text-[var(--color-muted)] italic">
@@ -733,9 +777,7 @@ export default function QuestionFormModal({
                                                     {opt.is_correct ? '✓' : String.fromCharCode(65 + i)}
                                                 </span>
                                                 <div className="flex-1 min-w-0 [&_p]:inline text-[11px]">
-                                                    <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                        {opt.option_text || `(Empty ${String.fromCharCode(65 + i)})`}
-                                                    </Markdown>
+                                                    <RichText text={opt.option_text || `(Empty ${String.fromCharCode(65 + i)})`} />
                                                 </div>
                                                 {opt.is_correct && (
                                                     <span className="text-[9px] font-extrabold text-emerald-600 dark:text-emerald-400 shrink-0">
@@ -753,9 +795,7 @@ export default function QuestionFormModal({
                                                 Solution:
                                             </span>
                                             <div className="text-[var(--color-text)] [&_p]:inline leading-relaxed">
-                                                <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                    {form.explanation}
-                                                </Markdown>
+                                                <RichText text={form.explanation} />
                                             </div>
                                         </div>
                                     )}
@@ -823,6 +863,18 @@ export default function QuestionFormModal({
                                 </div>
                             </div>
 
+                            <SubjectTools subjectName={subjectName} onInsert={handleInsertMath} onWrap={handleWrapSelection} />
+
+                            <PassageSection
+                                value={form.context ?? null}
+                                onChange={setContext}
+                                topicId={form.topic_id}
+                                locked={Boolean(form.context && form.context_locked)}
+                                onUnlock={() => setForm((prev) => ({ ...prev, context_locked: false }))}
+                                questionNumber={form.context_question_number}
+                                showToast={showToast}
+                            />
+
                             {/* Question Prompt Field */}
                             <div className="space-y-1">
                                 <div className="flex items-center justify-between">
@@ -843,6 +895,20 @@ export default function QuestionFormModal({
                                     }`}
                                     placeholder="Enter the question prompt here (e.g., Solve for x in $2x^2 + 5x - 3 = 0$)..."
                                 />
+                                {suggestion && (
+                                    <div className="flex flex-wrap items-center gap-2 p-2 rounded-xl bg-[var(--color-primary-5)] border border-[var(--color-primary)]/20 text-[11px]">
+                                        <span className="flex-1 min-w-[180px] text-[var(--color-text)]">
+                                            Show <code className="font-mono">{suggestion.match}</code> as <span className="text-sm"><RichText text={suggestion.replacement} inline /></span>?
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setForm((prev) => ({ ...prev, question_text: prev.question_text.replace(suggestion.match, suggestion.replacement) }))}
+                                            className="min-h-8 px-3 rounded-lg bg-[var(--color-primary)] text-white font-bold cursor-pointer"
+                                        >
+                                            Yes, tidy it
+                                        </button>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Diagram / Figure (Compact Collapsible Trigger) */}
@@ -852,8 +918,10 @@ export default function QuestionFormModal({
                                     onChange={(url) => setForm((prev) => ({ ...prev, image_url: url }))}
                                     onHide={() => setShowImageUploader(false)}
                                     showToast={showToast}
-                                    label="Question Diagram / Figure (Optional)"
-                                    description="Attach a diagram, graph, or illustration. Supports drag-and-drop, browsing, and clipboard paste (Ctrl+V)."
+                                    label={form.context ? 'Picture for this question only' : 'Question picture (optional)'}
+                                    description={form.context
+                                        ? 'Only this question shows it. A picture every question needs belongs on the passage above.'
+                                        : 'A diagram, graph or illustration. Drag and drop, browse, or paste (Ctrl+V).'}
                                 />
                             ) : (
                                 <button
@@ -862,7 +930,7 @@ export default function QuestionFormModal({
                                     className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-xl border border-dashed border-[var(--color-border)] hover:border-[var(--color-primary)] text-[var(--color-muted)] hover:text-[var(--color-text)] bg-[var(--color-background)] hover:bg-[var(--color-surface-hover)] transition-all font-semibold cursor-pointer"
                                 >
                                     <ImageIcon className="w-3.5 h-3.5 text-[var(--color-primary)]" />
-                                    <span>+ Attach Diagram / Figure (Optional)</span>
+                                    <span>{form.context ? '+ Add a picture for this question only' : '+ Add a picture to this question (optional)'}</span>
                                 </button>
                             )}
 
@@ -1113,10 +1181,10 @@ export default function QuestionFormModal({
                                     onClick={(e) => handleFormSubmit(e, true)}
                                     disabled={isSubmitting || !form.question_text.trim()}
                                     className="w-full sm:w-auto justify-center px-3.5 sm:px-4 py-2.5 sm:py-2 bg-[var(--color-surface-hover)] hover:bg-[var(--color-surface)] text-[var(--color-primary)] border border-[var(--color-primary)]/30 hover:border-[var(--color-primary)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5"
-                                    title="Save this question and immediately start drafting the next one with curriculum preserved"
+                                    title={form.context ? 'Save this question and write the next one about the same passage' : 'Save this question and immediately start drafting the next one with curriculum preserved'}
                                 >
                                     <Plus className="w-3.5 h-3.5" />
-                                    <span>Save &amp; Next</span>
+                                    <span>{form.context ? 'Save & add next for this passage' : 'Save & Next'}</span>
                                 </button>
                             )}
                             <button

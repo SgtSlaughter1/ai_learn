@@ -8,6 +8,8 @@ use App\Http\Requests\Quiz\SyncQuizAttemptRequest;
 use App\Models\LearnerProgress;
 use App\Models\Quiz;
 use App\Support\OfflineAnswerKey;
+use App\Support\AttemptQuestions;
+use App\Models\QuestionContext;
 use App\Models\QuizAttempt;
 use App\Models\QuizAnswer;
 use App\Models\Question;
@@ -50,7 +52,7 @@ class QuizWebController extends Controller
         // Eager load questions and options (including explanation and is_correct for offline caching)
         $quiz->load([
             'questions' => function ($query) {
-                $query->select(['questions.id', 'topic_id', 'question_text', 'type', 'difficulty', 'explanation'])
+                $query->select(['questions.id', 'topic_id', 'context_id', 'context_order', 'question_text', 'image_url', 'type', 'difficulty', 'explanation'])
                       ->where('status', 'active');
             },
             'questions.options' => function ($query) {
@@ -60,9 +62,12 @@ class QuizWebController extends Controller
         ]);
 
         $questions = $quiz->questions;
-        // School curriculum & topic practice: deliver 10 random questions per try if the question bank has more
+        // School curriculum & topic practice: deliver 10 random questions per try if the question
+        // bank has more, taking a shared passage's questions together and in order.
         if ($questions->count() > Quiz::QUESTIONS_PER_ATTEMPT) {
-            $questions = $questions->shuffle()->take(Quiz::QUESTIONS_PER_ATTEMPT)->values();
+            $questions = AttemptQuestions::pick($questions, Quiz::QUESTIONS_PER_ATTEMPT);
+        } else {
+            $questions = AttemptQuestions::pick($questions, PHP_INT_MAX, shuffle: false);
         }
 
         $user = $request->user() ?? auth()->user() ?? request()->user();
@@ -74,13 +79,18 @@ class QuizWebController extends Controller
                 'title' => $quiz->title,
                 'description' => $quiz->description,
                 'time_limit_minutes' => $quiz->time_limit_minutes,
+                // Shared passages, once each; questions point to them with context_id.
+                'contexts' => QuestionContext::learnerArrays($questions->pluck('context_id')),
                 'questions' => $questions->map(function ($q) use ($isStaff) {
                     $correctOption = $q->options->firstWhere('is_correct', true);
 
                     return [
                         'id' => $q->id,
                         'topic_id' => $q->topic_id,
+                        'context_id' => $q->context_id,
+                        'context_order' => $q->context_order,
                         'question_text' => $q->question_text,
+                        'image_url' => $q->image_url,
                         'type' => $q->type,
                         'difficulty' => $q->difficulty,
                         // Learners get the explanation sealed (see OfflineAnswerKey): readable on the
@@ -461,15 +471,25 @@ class QuizWebController extends Controller
         // Load the quiz details, answers, questions, options, and correctness
         $attempt->load([
             'quiz',
-            'answers.question.options'
+            'answers.question.options',
+            'answers.question.context',
         ]);
 
-        $answersMapped = $attempt->answers->map(function ($ans) {
+        // Review in the order they were asked: a passage's questions together, in context_order.
+        $orderedAnswers = AttemptQuestions::units($attempt->answers->map(fn ($ans) => (object) [
+            'id' => $ans->question_id,
+            'context_id' => $ans->question?->context_id,
+            'context_order' => $ans->question?->context_order,
+            'answer' => $ans,
+        ]))->flatten(1)->pluck('answer');
+
+        $answersMapped = $orderedAnswers->map(function ($ans) {
             $question = $ans->question;
             return [
                 'id' => $ans->id,
                 'question_id' => $ans->question_id,
                 'question_text' => $question?->question_text ?? ('Question #' . $ans->question_id),
+                'context' => $question?->context?->toLearnerArray(),
                 'explanation' => $question?->explanation ?? '',
                 'selected_option_id' => $ans->selected_option_id,
                 'is_correct' => (bool) $ans->is_correct,

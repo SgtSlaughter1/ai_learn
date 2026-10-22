@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import Markdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import { RichText } from '@/components/common/RichText';
 import 'katex/dist/katex.min.css';
 import type { ExtractedQuestion } from '@/utils/questionParser';
 import QuestionImageUploader from './QuestionImageUploader';
@@ -144,9 +142,7 @@ export default function ExtractedQuestionCard({
                             <span className="text-[10px] font-bold text-[var(--color-primary)] uppercase tracking-wider shrink-0">
                                 Math Preview:
                             </span>
-                            <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                {q.question_text}
-                            </Markdown>
+                            <RichText text={q.question_text} />
                         </div>
                     )}
             </div>

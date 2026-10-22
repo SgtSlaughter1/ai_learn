@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { confirmAction } from '@/components/common/ConfirmModal';
-import type { QuestionItem, SubjectItem, TopicItem, ClassItem } from '@/types/admin';
+import type { QuestionContextItem, QuestionItem, SubjectItem, TopicItem, ClassItem } from '@/types/admin';
 import { executeAdminAction, getAdminAuthHeaders } from '@/services/AdminOfflineService';
 import { parseQuestionsOffline, generateOfflineQuestionsForTopic, type ExtractedQuestion } from '@/utils/questionParser';
 import QuestionFilterBar from './question-bank/QuestionFilterBar';
 import QuestionListItem from './question-bank/QuestionListItem';
+import PassageSectionCard from './question-bank/PassageSectionCard';
 import QuestionFormModal, { type QuestionFormData } from './question-bank/QuestionFormModal';
 import AIBulkImportModal from './question-bank/AIBulkImportModal';
 import { Skeleton, SkeletonText } from '@/components/common/Skeleton';
@@ -149,7 +150,27 @@ export default function QuestionBankTab({
                 option_text: opt.option_text,
                 is_correct: opt.is_correct,
             })),
+            context: q.context ? { ...q.context } : null,
+            detach_context: false,
+            context_locked: false,
+            context_question_number: q.context_order ?? undefined,
         });
+        setIsQuestionModalOpen(true);
+    };
+
+    /** "Add a question" on a passage in the list: the form opens on that passage, locked. */
+    const handleAddToPassage = (context: QuestionContextItem, onPassage: QuestionItem[]) => {
+        const first = onPassage[0];
+        setEditingQuestion(null);
+        resetQuestionForm();
+        setQuestionForm((prev) => ({
+            ...prev,
+            topic_id: String(first?.topic_id ?? context.topic_id ?? ''),
+            grade_level: first?.grade_level || first?.topic?.level || '',
+            context: { ...context },
+            context_locked: true,
+            context_question_number: onPassage.length + 1,
+        }));
         setIsQuestionModalOpen(true);
     };
 
@@ -396,6 +417,8 @@ export default function QuestionBankTab({
                     option_text: opt.option_text,
                     is_correct: opt.is_correct,
                 })),
+                context: questionForm.context ?? null,
+                context_order: questionForm.context ? questionForm.context_question_number ?? 1 : null,
                 topic: selectedTopic
                     ? {
                           id: selectedTopic.id,
@@ -413,19 +436,25 @@ export default function QuestionBankTab({
                 recordId: tempId,
                 endpoint,
                 method,
-                payload: questionForm,
+                // The form's own UI flags stay on this device.
+                payload: { ...questionForm, context_locked: undefined, context_question_number: undefined },
                 optimisticRecord: optimisticQuestion,
             });
 
             if (res.success) {
                 if (stayOpenAndAddNext && !editingQuestion) {
                     showToast(
-                        res.message || (res.offline ? 'Question saved locally! Ready for next question.' : 'Question saved! Ready for next question.'),
+                        questionForm.context
+                            ? `Question ${questionForm.context_question_number ?? 1} saved${res.offline ? ' on this device' : ''}. Write the next question about the same passage.`
+                            : res.message || (res.offline ? 'Question saved locally! Ready for next question.' : 'Question saved! Ready for next question.'),
                         'success'
                     );
                     // Reset text and options but keep topic_id, difficulty, and type intact for rapid entry
+                    // On a passage, the passage stays (read-only) for the next question about it.
                     setQuestionForm((prev) => ({
                         ...prev,
+                        context_locked: Boolean(prev.context),
+                        context_question_number: prev.context ? (prev.context_question_number ?? 1) + 1 : undefined,
                         question_text: '',
                         image_url: '',
                         explanation: '',
@@ -535,11 +564,34 @@ export default function QuestionBankTab({
         questionSearch,
     ]);
 
+    // Questions on the same passage are listed together under it, in the order learners get them.
+    type ListItem = { kind: 'single'; question: QuestionItem } | { kind: 'section'; key: string; context: QuestionContextItem; questions: QuestionItem[] };
+    const listItems = useMemo<ListItem[]>(() => {
+        const items: ListItem[] = [];
+        const sections = new Map<string, Extract<ListItem, { kind: 'section' }>>();
+        for (const q of filteredQuestions) {
+            const key = q.context?.client_id ?? (q.context_id ? `id_${q.context_id}` : null);
+            if (!q.context || !key) {
+                items.push({ kind: 'single', question: q });
+                continue;
+            }
+            let section = sections.get(key);
+            if (!section) {
+                section = { kind: 'section', key, context: q.context, questions: [] };
+                sections.set(key, section);
+                items.push(section);
+            }
+            section.questions.push(q);
+        }
+        sections.forEach((section) => section.questions.sort((a, b) => (a.context_order ?? 0) - (b.context_order ?? 0) || a.id - b.id));
+        return items;
+    }, [filteredQuestions]);
+
     const itemsPerPage = 50;
-    const paginatedQuestions = useMemo(() => {
+    const paginatedItems = useMemo(() => {
         const start = (page - 1) * itemsPerPage;
-        return filteredQuestions.slice(start, start + itemsPerPage);
-    }, [filteredQuestions, page, itemsPerPage]);
+        return listItems.slice(start, start + itemsPerPage);
+    }, [listItems, page, itemsPerPage]);
 
     return (
         <div className="space-y-6">
@@ -606,19 +658,31 @@ export default function QuestionBankTab({
                 </div>
             ) : (
                 <div className="space-y-4">
-                    {paginatedQuestions.map((q) => (
+                    {paginatedItems.map((item) => item.kind === 'single' ? (
                         <QuestionListItem
-                            key={q.id}
-                            question={q}
+                            key={item.question.id}
+                            question={item.question}
                             onEdit={handleEditQuestion}
                             onDelete={handleDeleteQuestion}
-                            isDeleting={deletingQuestionId === q.id}
+                            isDeleting={deletingQuestionId === item.question.id}
+                        />
+                    ) : (
+                        <PassageSectionCard
+                            key={item.key}
+                            context={item.context}
+                            questions={item.questions}
+                            onEditQuestion={handleEditQuestion}
+                            onDeleteQuestion={handleDeleteQuestion}
+                            deletingQuestionId={deletingQuestionId}
+                            onAddQuestion={handleAddToPassage}
+                            onChanged={onRefresh}
+                            showToast={showToast}
                         />
                     ))}
 
                     <Pagination
                         currentPage={page}
-                        totalItems={filteredQuestions.length}
+                        totalItems={listItems.length}
                         itemsPerPage={itemsPerPage}
                         onPageChange={setPage}
                         itemLabel="questions"

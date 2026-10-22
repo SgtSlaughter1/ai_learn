@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\BulkSaveQuestionsRequest;
 use App\Http\Requests\Admin\SaveQuestionRequest;
 use App\Http\Requests\Admin\UpdateQuestionRequest;
 use App\Models\Question;
+use App\Models\QuestionContext;
 use App\Models\QuestionOption;
 use App\Models\Quiz;
 use App\Models\Subject;
@@ -16,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class QuestionController extends Controller
 {
@@ -28,6 +30,7 @@ class QuestionController extends Controller
             'topic.subject:id,name,slug,school_id,class_id',
             'topic.subject.schoolClass:id,name,grade_level',
             'school:id,name',
+            'context',
         ]);
 
         if ($request->filled('topic_id')) {
@@ -118,6 +121,7 @@ class QuestionController extends Controller
             }
 
             $question = Question::create($payload);
+            $this->placeInContext($question, $validated, $topic, $assignedSchoolId);
 
             foreach ($validated['options'] as $index => $opt) {
                 QuestionOption::create([
@@ -157,7 +161,7 @@ class QuestionController extends Controller
 
         return response()->json([
             'message' => 'Question created successfully',
-            'question' => $question->load(['options', 'topic.subject:id,name', 'school:id,name']),
+            'question' => $question->load(['options', 'topic.subject:id,name', 'school:id,name', 'context']),
         ], 201);
     }
 
@@ -273,6 +277,7 @@ class QuestionController extends Controller
             }
 
             $question->update($updatePayload);
+            $this->placeInContext($question, $validated, $newTopic, $assignedSchoolId);
 
             $question->syncOptions($validated['options'] ?? []);
 
@@ -307,8 +312,59 @@ class QuestionController extends Controller
 
         return response()->json([
             'message' => 'Question updated successfully',
-            'question' => $question->fresh(['options', 'topic.subject:id,name', 'school:id,name']),
+            'question' => $question->fresh(['options', 'topic.subject:id,name', 'school:id,name', 'context']),
         ]);
+    }
+
+    /**
+     * Put the question on the shared passage the form sent (creating or updating that
+     * passage), take it off one (detach_context), or leave it where it is. A question
+     * joining a passage goes to the end of that passage's questions.
+     */
+    private function placeInContext(Question $question, array $validated, Topic $topic, ?int $schoolId): void
+    {
+        if (! empty($validated['detach_context'])) {
+            $question->update(['context_id' => null, 'context_order' => null]);
+
+            return;
+        }
+        if (empty($validated['context'])) {
+            return;
+        }
+
+        $data = $validated['context'];
+        $fields = [
+            'type' => $data['type'] ?? 'passage',
+            'title' => $data['title'] ?? null,
+            'instructions' => $data['instructions'] ?? null,
+            'body' => $data['body'] ?? null,
+            'image_url' => $data['image_url'] ?? null,
+            'show_line_numbers' => (bool) ($data['show_line_numbers'] ?? false),
+        ];
+
+        $context = QuestionContext::with('topic.subject')->where('client_id', $data['client_id'])->first();
+        if ($context) {
+            Gate::authorize('update', $context);
+            if ((int) $context->topic_id !== (int) $topic->id) {
+                throw ValidationException::withMessages([
+                    'context' => 'This passage belongs to another topic. Choose that topic, or start a new passage.',
+                ]);
+            }
+            $context->update($fields);
+        } else {
+            $context = QuestionContext::create($fields + [
+                'client_id' => $data['client_id'],
+                'topic_id' => $topic->id,
+                'school_id' => $schoolId,
+            ]);
+        }
+
+        if ((int) $question->context_id !== (int) $context->id) {
+            $question->update([
+                'context_id' => $context->id,
+                'context_order' => (int) Question::where('context_id', $context->id)->max('context_order') + 1,
+            ]);
+        }
     }
 
     public function destroy(Request $request, int $id): JsonResponse

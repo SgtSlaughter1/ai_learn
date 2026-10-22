@@ -166,6 +166,41 @@ export async function cacheQuiz(quiz: CachedQuiz): Promise<void> {
     };
     const clean = sanitizeQuizForOffline(withHashes);
     await db.quizzes.put({ ...clean, cached_at: new Date().toISOString() });
+    void precacheQuizImages(clean);
+}
+
+/** The service worker serves /storage/ images from here (vite.config.ts, question-images). */
+export const QUESTION_IMAGE_CACHE = 'question-images';
+
+/**
+ * Save a quiz's pictures (passage diagrams, question figures) for offline use when the quiz
+ * is saved, not only once a learner happens to open that question online.
+ */
+export async function precacheQuizImages(quiz: Pick<CachedQuiz, 'questions' | 'contexts'>): Promise<void> {
+    if (typeof caches === 'undefined') return;
+    const urls = new Set<string>();
+    const add = (url?: string | null) => {
+        if (!url) return;
+        try {
+            const parsed = new URL(url, window.location.origin);
+            if (parsed.origin === window.location.origin) urls.add(parsed.href);
+        } catch {
+            // not a URL
+        }
+    };
+    (quiz.contexts ?? []).forEach((c) => add(c.image_url));
+    (quiz.questions ?? []).forEach((q) => add(q.image_url));
+    if (urls.size === 0) return;
+    try {
+        const cache = await caches.open(QUESTION_IMAGE_CACHE);
+        await Promise.all([...urls].map(async (url) => {
+            if (await cache.match(url)) return;
+            const res = await fetch(url, { credentials: 'same-origin' });
+            if (res.ok) await cache.put(url, res);
+        }));
+    } catch {
+        // Storage full or offline: the images load from the network next time.
+    }
 }
 
 export async function getCachedQuiz(id: number | string): Promise<CachedQuiz | undefined> {

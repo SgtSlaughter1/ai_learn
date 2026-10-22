@@ -89,6 +89,22 @@ export default defineConfig({
                         },
                     },
                     {
+                        // Question and passage pictures uploaded by teachers (/storage/questions/…).
+                        // OfflineService.precacheQuizImages fills this when a quiz is saved.
+                        urlPattern: ({ url }) => url.pathname.startsWith('/storage/'),
+                        handler: 'CacheFirst',
+                        options: {
+                            cacheName: 'question-images',
+                            expiration: {
+                                maxEntries: 500,
+                                maxAgeSeconds: 60 * 24 * 60 * 60,
+                            },
+                            cacheableResponse: {
+                                statuses: [0, 200],
+                            },
+                        },
+                    },
+                    {
                         // 4. Cache images and icons in /images/
                         urlPattern: ({ url }) => url.pathname.startsWith('/images/'),
                         handler: 'StaleWhileRevalidate',
@@ -107,7 +123,12 @@ export default defineConfig({
                         // 3. Cache API calls for offline fallback.
                         // Sync endpoints are excluded: a cached session check would make the
                         // sync engine think it is online and signed in when it is not.
-                        urlPattern: ({ url }) => url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/v1/sync/'),
+                        // Admin endpoints are excluded too: AdminOfflineService keeps their offline
+                        // copy, and on a slow server this cache's 3s fallback served stale lists
+                        // right after an edit (and kept staff-only answers in the HTTP cache).
+                        urlPattern: ({ url }) => url.pathname.startsWith('/api/')
+                            && !url.pathname.startsWith('/api/v1/sync/')
+                            && !url.pathname.startsWith('/api/v1/admin/'),
                         handler: 'NetworkFirst',
                         options: {
                             cacheName: 'api-cache',

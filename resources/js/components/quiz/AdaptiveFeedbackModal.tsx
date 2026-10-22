@@ -1,7 +1,5 @@
 import { Head } from '@inertiajs/react';
-import Markdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import { RichText } from '@/components/common/RichText';
 import { Check, X } from 'lucide-react';
 
 interface AdaptiveFeedbackModalProps {
@@ -84,9 +82,7 @@ export function AdaptiveFeedbackModal({
                                 Explanation
                             </span>
                             <div className="chat-markdown text-xs sm:text-sm text-[var(--color-muted)] leading-relaxed">
-                                <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                    {explanation}
-                                </Markdown>
+                                <RichText text={explanation} />
                             </div>
                         </div>
                     )}

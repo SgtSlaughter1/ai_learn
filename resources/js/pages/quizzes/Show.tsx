@@ -11,6 +11,9 @@ import { QuestionCard, QuizQuestion } from '@/components/quiz/QuestionCard';
 import { QuestionPalette } from '@/components/quiz/QuestionPalette';
 import { QuizModeSelect } from '@/components/quiz/QuizModeSelect';
 import { AdaptiveFeedbackModal } from '@/components/quiz/AdaptiveFeedbackModal';
+import { PassagePanel } from '@/components/quiz/PassagePanel';
+import type { QuizContext } from '@/components/quiz/PassageView';
+import { passageRuns, pickAttemptQuestions } from '@/services/AttemptQuestions';
 
 interface Quiz {
     id: number;
@@ -18,6 +21,8 @@ interface Quiz {
     description: string | null;
     time_limit_minutes: number | null;
     questions: QuizQuestion[];
+    /** Shared passages; questions point to them with context_id. */
+    contexts?: (QuizContext & { id: number })[];
 }
 
 interface Props {
@@ -146,10 +151,9 @@ export default function Show({ quizId }: Props) {
 
     const startStandardQuiz = () => {
         if (!quiz) return;
-        const pool = [...(quiz.questions || [])];
-        const selected = pool.length > 10
-            ? pool.sort(() => Math.random() - 0.5).slice(0, 10)
-            : pool;
+        // 10 random questions, taking a passage's questions together and in order.
+        const pool = quiz.questions || [];
+        const selected = pool.length > 10 ? pickAttemptQuestions(pool) : pickAttemptQuestions(pool, pool.length, false);
         setActiveQuestions(selected);
         setActiveIndex(0);
         setAnswers({});
@@ -160,7 +164,7 @@ export default function Show({ quizId }: Props) {
         if (e) e.preventDefault();
         if (isSubmitting || !quiz) return;
 
-        const shown = activeQuestions.length > 0 ? activeQuestions.length : Math.min(quiz.questions.length, 10);
+        const shown = activeQuestions.length > 0 ? activeQuestions.length : pickAttemptQuestions(quiz.questions, 10, false).length;
         const unanswered = shown - Object.keys(answers).length;
         if (!(await confirmAction({
             title: 'Submit your answers?',
@@ -176,7 +180,7 @@ export default function Show({ quizId }: Props) {
         const attemptId = crypto.randomUUID();
         let calculatedScore = 0;
         let totalMarks = 0;
-        const questionsToGrade = activeQuestions.length > 0 ? activeQuestions : quiz.questions.slice(0, 10);
+        const questionsToGrade = activeQuestions.length > 0 ? activeQuestions : pickAttemptQuestions(quiz.questions, 10, false);
 
         // Provisional offline score: every question shown is recorded (unanswered ones too)
         // and weighted by its marks, exactly as the server grades it. Only whether the chosen
@@ -213,6 +217,7 @@ export default function Show({ quizId }: Props) {
                 time_limit_minutes: quiz.time_limit_minutes,
                 status: 'active',
                 questions: quiz.questions as any,
+                contexts: quiz.contexts as any,
                 cached_at: new Date().toISOString(),
             });
 
@@ -338,8 +343,20 @@ export default function Show({ quizId }: Props) {
         return meta ? meta.getAttribute('content') || '' : '';
     }
 
-    const questions = activeQuestions.length > 0 ? activeQuestions : (quiz?.questions?.slice(0, 10) || []);
+    const questions = activeQuestions.length > 0 ? activeQuestions : pickAttemptQuestions(quiz?.questions ?? [], 10, false);
     const currentQuestion = questions[activeIndex];
+
+    // The passage the current question is about, and where its questions start and end.
+    const contextFor = (q?: QuizQuestion | null): (QuizContext & { id?: number }) | null => {
+        if (!q) return null;
+        if (q.context) return q.context;
+        return q.context_id ? quiz?.contexts?.find((c) => c.id === q.context_id) ?? null : null;
+    };
+    const runs = passageRuns(questions);
+    const currentRun = runs.find((r) => activeIndex >= r.start && activeIndex <= r.end);
+    const currentContext = contextFor(currentQuestion);
+    const runLabel = (r: { start: number; end: number }) => r.start === r.end ? `Question ${r.start + 1} refers to this` : `Questions ${r.start + 1}–${r.end + 1} refer to this`;
+    const paletteGroups = runs.map((r) => ({ start: r.start, end: r.end, label: contextFor(questions[r.start])?.title || `Questions ${r.start + 1}–${r.end + 1}: passage` }));
     const progressPercent = questions.length > 0 ? ((activeIndex + 1) / questions.length) * 100 : 0;
 
     // ── Offline Completed Result View ──
@@ -414,7 +431,7 @@ export default function Show({ quizId }: Props) {
             <QuizModeSelect
                 quizTitle={quiz.title}
                 description={quiz.description}
-                questionCount={Math.min(quiz.questions.length, 10)}
+                questionCount={pickAttemptQuestions(quiz.questions, 10, false).length}
                 timeLimitMinutes={quiz.time_limit_minutes}
                 isOnline={!isOffline}
                 adaptiveLoading={adaptiveLoading}
@@ -461,7 +478,10 @@ export default function Show({ quizId }: Props) {
                     adaptiveDifficultyLabel={adaptiveState.difficulty_label}
                 />
 
-                <main className="max-w-4xl w-full mx-auto my-6 md:my-10 flex-1 flex flex-col justify-center">
+                <main className={`${adaptiveCurrentQuestion.context ? 'max-w-6xl grid lg:grid-cols-2 gap-6 items-start' : 'max-w-4xl flex flex-col justify-center'} w-full mx-auto my-6 md:my-10 flex-1`}>
+                    {adaptiveCurrentQuestion.context && (
+                        <PassagePanel key={adaptiveCurrentQuestion.context.id ?? 'ctx'} context={adaptiveCurrentQuestion.context} label="This question refers to it" />
+                    )}
                     <QuestionCard
                         question={adaptiveCurrentQuestion}
                         selectedOptionId={selectedAdaptiveOption}
@@ -515,13 +535,14 @@ export default function Show({ quizId }: Props) {
                 secondsRemaining={secondsRemaining}
             />
 
-            <main className="max-w-4xl w-full mx-auto my-6 md:my-10 flex-1 flex flex-col justify-center space-y-4">
+            <main className={`${currentContext ? 'max-w-6xl' : 'max-w-4xl'} w-full mx-auto my-6 md:my-10 flex-1 flex flex-col justify-center space-y-4`}>
                 {/* Question jumping palette */}
                 <QuestionPalette
                     totalQuestions={questions.length}
                     currentIndex={activeIndex}
                     answeredIndices={answeredIndices}
                     onSelectIndex={setActiveIndex}
+                    groups={paletteGroups}
                 />
 
                 {questions.length === 0 ? (
@@ -530,11 +551,17 @@ export default function Show({ quizId }: Props) {
                     </div>
                 ) : (
                     currentQuestion && (
-                        <QuestionCard
-                            question={currentQuestion}
-                            selectedOptionId={answers[currentQuestion.id] ?? null}
-                            onSelectOption={(oId) => handleSelectOption(currentQuestion.id, oId)}
-                        />
+                        <div className={currentContext ? 'grid lg:grid-cols-2 gap-6 items-start' : ''}>
+                            {currentContext && currentRun && (
+                                <PassagePanel key={`${currentRun.start}-${currentContext.id ?? ''}`} context={currentContext} label={runLabel(currentRun)} />
+                            )}
+                            <QuestionCard
+                                question={currentQuestion}
+                                selectedOptionId={answers[currentQuestion.id] ?? null}
+                                onSelectOption={(oId) => handleSelectOption(currentQuestion.id, oId)}
+                                passageNote={currentContext && currentRun ? `Question ${activeIndex + 1} · ${currentContext.title || 'about the passage'}` : null}
+                            />
+                        </div>
                     )
                 )}
             </main>

@@ -389,6 +389,8 @@ class AdaptiveService
             'id'            => $question->id,
             'topic_id'      => $question->topic_id,
             'question_text' => $question->question_text,
+            'image_url'     => $question->image_url,
+            'context'       => $question->context?->toLearnerArray(),
             'type'          => $question->type,
             'difficulty'    => $question->difficulty,
             'options'       => $question->options->map(fn($o) => [

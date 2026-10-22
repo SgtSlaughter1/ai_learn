@@ -69,6 +69,7 @@ export default function Result({ attemptId }: Props) {
                         id: ans.id,
                         question_id: ans.question_id,
                         question_text: question?.question_text || `Question #${ans.question_id}`,
+                        context: question?.context_id ? localQuiz?.contexts?.find((c) => c.id === question.context_id) ?? null : null,
                         explanation: review?.explanation ?? '',
                         selected_option_id: ans.selected_option_id,
                         is_correct: review ? review.isCorrect : Boolean(ans.is_correct),

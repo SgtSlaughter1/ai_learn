@@ -247,6 +247,22 @@ export interface QuestionOptionItem {
     sort_order?: number;
 }
 
+export type QuestionContextType = 'passage' | 'poem' | 'diagram' | 'table';
+
+/** A shared passage in the question bank (app/Models/QuestionContext.php). */
+export interface QuestionContextItem {
+    id?: number;
+    client_id: string;
+    topic_id?: number;
+    type: QuestionContextType;
+    title: string | null;
+    instructions: string | null;
+    body: string | null;
+    image_url: string | null;
+    show_line_numbers: boolean;
+    questions_count?: number;
+}
+
 export interface QuestionItem {
     id: number;
     school_id?: number | null;
@@ -261,6 +277,10 @@ export interface QuestionItem {
     explanation: string | null;
     status: string;
     options: QuestionOptionItem[];
+    /** The shared passage, poem, diagram or table this question is about. */
+    context_id?: number | null;
+    context_order?: number | null;
+    context?: QuestionContextItem | null;
     topic?: {
         id: number;
         name: string;

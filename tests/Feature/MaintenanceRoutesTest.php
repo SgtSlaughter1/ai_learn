@@ -10,7 +10,7 @@ class MaintenanceRoutesTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const ROUTES = ['/clear-cache', '/run-migrations', '/run-migrate-fresh-seed', '/run-seed', '/run-past-questions-seed'];
+    private const ROUTES = ['/php-check', '/clear-cache', '/run-migrations', '/run-migrate-fresh-seed', '/run-seed', '/run-past-questions-seed'];
 
     private const TOKEN = 'a3f1c9e07b5d4c2a8e6f1b3d5c7a9e0f2b4d6c8a';
 
@@ -41,6 +41,15 @@ class MaintenanceRoutesTest extends TestCase
         foreach (self::ROUTES as $route) {
             $this->get("{$route}?token=wrong")->assertNotFound();
         }
+    }
+
+    public function test_the_php_check_reports_the_running_version_with_the_token(): void
+    {
+        config(['app.maintenance_token' => self::TOKEN]);
+
+        $this->get('/php-check', ['X-Maintenance-Token' => self::TOKEN])->assertOk()
+            ->assertJsonPath('php_version', PHP_VERSION)
+            ->assertJsonPath('patched', \App\Support\PhpSecurity::isPatched());
     }
 
     public function test_the_right_token_runs_migrations(): void

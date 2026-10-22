@@ -1,7 +1,5 @@
 import React, { useState, useRef } from 'react';
-import Markdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import { RichText } from '@/components/common/RichText';
 import 'katex/dist/katex.min.css';
 import { PastQuestionItem } from '../../types/past-questions';
 import { AiExplanationDrawer } from '../quiz/AiExplanationDrawer';
@@ -380,9 +378,7 @@ export const ExamPracticeModal: React.FC<Props> = ({
                             <p className="not-italic text-[10px] font-extrabold text-[var(--color-primary)] uppercase tracking-wider mb-2">
                                 Reading Comprehension Passage:
                             </p>
-                            <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                {formatMathText(currentQ.passage_text)}
-                            </Markdown>
+                            <RichText text={formatMathText(currentQ.passage_text)} />
                         </div>
                     )}
 
@@ -416,9 +412,7 @@ export const ExamPracticeModal: React.FC<Props> = ({
 
                     {/* Question Text with KaTeX LaTeX Rendering */}
                     <div className="text-lg md:text-xl font-bold text-[var(--color-text)] leading-relaxed chat-markdown">
-                        <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                            {formatMathText(currentQ.question_text)}
-                        </Markdown>
+                        <RichText text={formatMathText(currentQ.question_text)} />
                     </div>
 
                     {/* Options List */}
@@ -465,9 +459,7 @@ export const ExamPracticeModal: React.FC<Props> = ({
                                         )}
                                     </div>
                                     <div className="flex-1 pt-1 font-semibold text-sm text-[var(--color-text)] [&_p]:inline">
-                                        <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                            {formatMathText(option.option_text)}
-                                        </Markdown>
+                                        <RichText text={formatMathText(option.option_text)} />
                                     </div>
                                     {isAnswered && isOptionCorrect && (
                                         <svg className="w-6 h-6 text-[var(--color-success)] shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -536,9 +528,7 @@ export const ExamPracticeModal: React.FC<Props> = ({
                                             Your Answer
                                         </span>
                                         <div className="text-xs font-semibold text-[var(--color-text)] [&_p]:inline">
-                                            <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                {selectedOpt ? formatMathText(`${selectedOpt.label || ''} ${selectedOpt.option_text}`) : 'None'}
-                                            </Markdown>
+                                            <RichText text={selectedOpt ? formatMathText(`${selectedOpt.label || ''} ${selectedOpt.option_text}`) : 'None'} />
                                         </div>
                                     </div>
                                     <div className="p-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-success)]/30 space-y-1">
@@ -546,9 +536,7 @@ export const ExamPracticeModal: React.FC<Props> = ({
                                             Correct Answer
                                         </span>
                                         <div className="text-xs font-semibold text-[var(--color-text)] [&_p]:inline">
-                                            <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                {correctOpt ? formatMathText(`${correctOpt.label || ''} ${correctOpt.option_text}`) : 'None'}
-                                            </Markdown>
+                                            <RichText text={correctOpt ? formatMathText(`${correctOpt.label || ''} ${correctOpt.option_text}`) : 'None'} />
                                         </div>
                                     </div>
                                 </div>
@@ -560,9 +548,7 @@ export const ExamPracticeModal: React.FC<Props> = ({
                                     <strong className="block text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-muted)] mb-1">
                                         Step-by-Step Solution & Working:
                                     </strong>
-                                    <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                        {formatMathText(currentQ.explanation)}
-                                    </Markdown>
+                                    <RichText text={formatMathText(currentQ.explanation)} />
                                 </div>
                             ) : !isCorrect && (
                                 <p className="text-xs text-[var(--color-muted)]">

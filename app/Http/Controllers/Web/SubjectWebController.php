@@ -611,7 +611,10 @@ class SubjectWebController extends Controller
             'qn.id as question_id',
             'qn.school_id as question_school_id',
             'qn.topic_id',
+            'qn.context_id',
+            'qn.context_order',
             'qn.question_text',
+            'qn.image_url',
             'qn.type',
             'qn.difficulty',
             'qn.explanation',
@@ -648,7 +651,10 @@ class SubjectWebController extends Controller
                     'id' => (int) $row->question_id,
                     'school_id' => $row->question_school_id ? (int) $row->question_school_id : null,
                     'topic_id' => (int) $row->topic_id,
+                    'context_id' => $row->context_id ? (int) $row->context_id : null,
+                    'context_order' => $row->context_order !== null ? (int) $row->context_order : null,
                     'question_text' => $row->question_text,
+                    'image_url' => $row->image_url,
                     'type' => $row->type,
                     'difficulty' => $row->difficulty,
                     'explanation' => $isStaff ? $row->explanation : null,
@@ -676,7 +682,11 @@ class SubjectWebController extends Controller
             }
         }
 
-        $formattedQuizzes = array_values(array_map(function ($q) {
+        // Shared passages, loaded once for all quizzes, sent once per quiz that uses them.
+        $contextsById = collect(\App\Models\QuestionContext::learnerArrays($quizRows->pluck('context_id')))->keyBy('id');
+
+        $formattedQuizzes = array_values(array_map(function ($q) use ($contextsById) {
+            $q['contexts'] = $contextsById->only(array_unique(array_filter(array_column($q['questions'], 'context_id'))))->values()->all();
             $q['questions'] = array_values(array_map(function ($question) {
                 // Learners grade and review offline from these (see OfflineAnswerKey).
                 $question += OfflineAnswerKey::forQuestion(

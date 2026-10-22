@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import Markdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import { RichText } from '@/components/common/RichText';
 import 'katex/dist/katex.min.css';
 import type { QuestionItem } from '@/types/admin';
 import { Image as ImageIcon, Maximize2, X } from 'lucide-react';
@@ -115,9 +113,7 @@ export default function QuestionListItem({ question: q, onEdit, onDelete, isDele
 
             {/* Full-Width Question Text */}
             <div className="text-sm sm:text-base font-bold text-[var(--color-text)] leading-relaxed [&_p]:inline">
-                <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                    {q.question_text}
-                </Markdown>
+                <RichText text={q.question_text} />
             </div>
 
             {/* Options Grid */}
@@ -136,9 +132,7 @@ export default function QuestionListItem({ question: q, onEdit, onDelete, isDele
                                 {String.fromCharCode(65 + idx)}.
                             </span>
                             <span className="min-w-0 flex-1 break-words [&_p]:inline">
-                                <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                    {opt.option_text}
-                                </Markdown>
+                                <RichText text={opt.option_text} />
                             </span>
                         </div>
                         {opt.is_correct && (
@@ -160,9 +154,7 @@ export default function QuestionListItem({ question: q, onEdit, onDelete, isDele
                     </svg>
                     <div className="[&_p]:inline break-words min-w-0 flex-1">
                         <strong className="text-[var(--color-text)] font-semibold">Explanation: </strong>
-                        <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                            {q.explanation}
-                        </Markdown>
+                        <RichText text={q.explanation} />
                     </div>
                 </div>
             )}

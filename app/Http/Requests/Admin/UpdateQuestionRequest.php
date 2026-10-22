@@ -31,12 +31,28 @@ class UpdateQuestionRequest extends FormRequest
             'options.*.is_correct' => ['required_with:options', 'boolean'],
             'options.*.explanation' => ['nullable', 'string'],
             'options.*.sort_order' => ['nullable', 'integer'],
+            // The shared passage, poem, diagram or table this question is about. Sent whole
+            // with every question in it, identified by a device-made id, so questions added
+            // offline before the passage reached the server still end up on one passage.
+            'context' => ['nullable', 'array'],
+            'context.client_id' => ['required_with:context', 'uuid'],
+            'context.type' => ['nullable', 'string', 'in:passage,poem,diagram,table'],
+            'context.title' => ['nullable', 'string', 'max:255'],
+            'context.instructions' => ['nullable', 'string', 'max:500'],
+            'context.body' => ['nullable', 'string', 'max:60000'],
+            'context.image_url' => ['nullable', 'string', 'max:500'],
+            'context.show_line_numbers' => ['nullable', 'boolean'],
+            'detach_context' => ['nullable', 'boolean'],
         ];
     }
 
     public function withValidator($validator)
     {
         $validator->after(function ($validator) {
+            $context = $this->input('context');
+            if (is_array($context) && blank($context['body'] ?? null) && blank($context['image_url'] ?? null)) {
+                $validator->errors()->add('context.body', 'Add the passage text or a picture for these questions.');
+            }
             $options = $this->input('options', []);
             if (!empty($options)) {
                 $hasCorrect = false;

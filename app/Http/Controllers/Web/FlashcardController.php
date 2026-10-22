@@ -51,6 +51,7 @@ class FlashcardController extends Controller
         // 2. Fetch questions from these weak topics
         $questions = Question::with(['options', 'topic.subject'])
             ->where('status', 'active')
+            ->whereNull('context_id') // passage questions make no sense without the passage
             ->whereIn('topic_id', $weakTopicIds)
             ->inRandomOrder()
             ->limit(10)
@@ -63,6 +64,7 @@ class FlashcardController extends Controller
 
             $paddingQuestions = Question::with(['options', 'topic.subject'])
                 ->where('status', 'active')
+                ->whereNull('context_id')
                 ->whereNotIn('id', $existingIds)
                 ->inRandomOrder()
                 ->limit($neededCount)

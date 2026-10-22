@@ -2,6 +2,7 @@ import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import { db } from '@/db/database';
+import { precacheQuizImages } from '@/services/OfflineService';
 import { LevelFilterTabs } from '@/components/subjects/LevelFilterTabs';
 import { TopicCard, SubjectTopic } from '@/components/subjects/TopicCard';
 import { SubjectQuizCard, SubjectQuiz } from '@/components/subjects/SubjectQuizCard';
@@ -121,12 +122,15 @@ export default function Show({ slug }: Props) {
                                     ? existing.questions
                                     : [];
 
-                            await db.quizzes.put({
+                            const record = {
                                 ...q,
                                 status: 'published',
                                 cached_at: new Date().toISOString(),
                                 questions: questionsToSave,
-                            });
+                                contexts: questionsToSave === q.questions ? q.contexts ?? [] : existing?.contexts ?? [],
+                            };
+                            await db.quizzes.put(record);
+                            void precacheQuizImages(record);
                         }
                     }
                 }

@@ -1,7 +1,5 @@
-import Markdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
 import type { CachedFlashcard } from '@/db/database';
+import { RichText } from '@/components/common/RichText';
 
 interface FlashcardCardProps {
     card: CachedFlashcard;
@@ -37,9 +35,7 @@ export function FlashcardCard({ card, flipped, onFlip }: FlashcardCardProps) {
                             </span>
                         </div>
                         <div className="chat-markdown text-xl font-bold leading-relaxed text-[var(--color-text)] pt-4">
-                            <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                {card.question_text}
-                            </Markdown>
+                            <RichText text={card.question_text} />
                         </div>
                     </div>
                     <div className="text-center text-xs font-semibold text-[var(--color-primary)]/80 flex items-center justify-center gap-1.5 pt-4 border-t border-[var(--color-border)]/50">
@@ -68,9 +64,7 @@ export function FlashcardCard({ card, flipped, onFlip }: FlashcardCardProps) {
                             </span>
                         </div>
                         <div className="chat-markdown text-xl font-bold leading-relaxed text-[var(--color-text)]">
-                            <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                {answerText}
-                            </Markdown>
+                            <RichText text={answerText} />
                         </div>
                         {card.explanation && (
                             <div className="p-4 bg-[var(--color-background)]/60 border border-[var(--color-border)] rounded-2xl space-y-1.5 mt-2">
@@ -78,9 +72,7 @@ export function FlashcardCard({ card, flipped, onFlip }: FlashcardCardProps) {
                                     AI Explanation
                                 </span>
                                 <div className="chat-markdown text-xs text-[var(--color-muted)] leading-relaxed">
-                                    <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                        {card.explanation}
-                                    </Markdown>
+                                    <RichText text={card.explanation} />
                                 </div>
                             </div>
                         )}

@@ -20,7 +20,7 @@ This guide walks you through the steps to successfully deploy this Laravel + Rea
 - [ ] `LOG_LEVEL=warning`.
 - [ ] Database credentials for a production database user.
 - [ ] Mail settings (`MAIL_*`) so password resets work.
-- [ ] `GEMINI_API_KEY` (or `AI_API_KEY`), `AI_PROVIDER`, `MODEL_NAME` if AI features are used.
+- [ ] AI: `AI_PROVIDER=groq` and `GROQ_API_KEY` (fastest; models default to `openai/gpt-oss-120b`, then `openai/gpt-oss-20b`, each with its own free-tier limits). Keep `GEMINI_API_KEY` set too: Gemini answers automatically when Groq fails or hits its rate limit, and the built-in offline answers cover the rest. Check that the host can reach `api.groq.com`.
 - [ ] `MAINTENANCE_TOKEN` left **empty** if you can run Artisan over SSH. Only on hosts without SSH: set it to `openssl rand -hex 32`, use it, then empty it again.
 - [ ] `ALLOW_DESTRUCTIVE_MAINTENANCE`: `true` only while you are still testing and want `/run-migrate-fresh-seed` (drops **every** table, then migrates and seeds the test accounts). Set it back to `false` once real schools have data on the site.
 
@@ -30,6 +30,12 @@ This guide walks you through the steps to successfully deploy this Laravel + Rea
 - [ ] Test accounts: `php artisan db:seed --force` (or `/run-seed` with the token) creates one account per role for checking the live site, all with the password `password`: `platformadmin@example.com`, `schooladmin@example.com`, `teacher@example.com`, `learner@example.com` (plus a few more teachers and learners). Re-running it is safe; it also resets these accounts' passwords to `password`.
 - [ ] Before real schools use the site: create your own platform admin, then deactivate or delete the `@example.com` accounts (Admin → Users), since anyone who knows the demo password can sign in with them.
 - [ ] Automatic daily database backups are enabled.
+
+### PHP security (critical, October 2026)
+- [ ] PHP is **8.3.36 or later** (or 8.2.35, 8.4.27, 8.5.12 on those lines). Earlier releases have CVE-2026-109618 and CVE-2026-109619: unauthenticated remote code execution on every PHP that serves web requests (PHP-FPM, Apache `mod_php`, CGI, LiteSpeed). Upgrading is the only complete fix.
+- [ ] Check it: `php artisan php:security-check` over SSH, or open `/php-check` with the maintenance token on hosts without SSH. Both say `patched` and the version needed.
+- [ ] **InfinityFree / shared hosting:** the host controls PHP, so only the host can patch it. Check `/php-check`; if it is not patched, ask the host when it will be (on InfinityFree: their forum and status page) and consider taking the site offline until it is, as the UK NCSC advises. A VPS lets you patch the same day.
+- [ ] **VPS:** update the PHP packages from your distribution (for example `sudo apt update && sudo apt install --only-upgrade 'php8.3*'`), restart PHP-FPM and the web server, then run the check. Until then, in the FPM pool or `php.ini` (not `.user.ini`, which applies too late): `session.upload_progress.enabled = 0` (the app does not use it) and `post_max_size = 32M` with `upload_max_filesize` below it (question pictures are at most 5 MB). These reduce exposure; they do not fix it.
 
 ### Server processes
 - [ ] After every deploy: `php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan event:cache`, then `php artisan queue:restart`.

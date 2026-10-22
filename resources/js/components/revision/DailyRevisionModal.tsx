@@ -1,8 +1,7 @@
 import React, { useState, useRef } from 'react';
+import { RichText } from '@/components/common/RichText';
+import { PassageView } from '@/components/quiz/PassageView';
 import { createPortal } from 'react-dom';
-import Markdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import {
     RevisionQueueItem,
@@ -340,14 +339,24 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
                                 <span className="not-italic text-[10px] font-extrabold text-[var(--color-primary)] uppercase tracking-wider block mb-1">
                                     Passage Context:
                                 </span>
-                                <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                    {formatMathText(currentItem.passage_text)}
-                                </Markdown>
+                                <RichText text={formatMathText(currentItem.passage_text)} />
                             </div>
                         )}
 
+                        {/* Shared passage of a school question (poem, diagram, table) */}
+                        {currentItem?.context && (
+                            <details open className="p-4 rounded-2xl bg-[var(--color-surface-hover)] border border-[var(--color-border)]">
+                                <summary className="text-[10px] font-extrabold text-[var(--color-primary)] uppercase tracking-wider cursor-pointer">
+                                    {currentItem.context.title || 'Passage'}
+                                </summary>
+                                <div className="pt-2 max-h-64 overflow-y-auto">
+                                    <PassageView context={currentItem.context} compact />
+                                </div>
+                            </details>
+                        )}
+
                         {/* Prescribed Literature Context */}
-                        {!currentItem?.passage_text && litContext && (
+                        {!currentItem?.passage_text && !currentItem?.context && litContext && (
                             <div className="p-3 rounded-xl bg-[var(--color-primary-5)] border border-[var(--color-primary-20)] flex items-center gap-2.5 text-xs">
                                 <BookOpen className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
                                 <span className="text-[var(--color-text)] font-semibold">
@@ -358,9 +367,7 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
 
                         {/* Question Text */}
                         <div className="text-base font-bold text-[var(--color-text)] leading-relaxed chat-markdown">
-                            <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                {formatMathText(currentItem?.question_text || '')}
-                            </Markdown>
+                            <RichText text={formatMathText(currentItem?.question_text || '')} />
                         </div>
 
                         {/* Question Image (if any) */}
@@ -403,9 +410,7 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
                                                 {opt.label}
                                             </span>
                                             <span className="font-medium text-[var(--color-text)] [&_p]:inline">
-                                                <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                    {formatMathText(opt.option_text)}
-                                                </Markdown>
+                                                <RichText text={formatMathText(opt.option_text)} />
                                             </span>
                                         </div>
 

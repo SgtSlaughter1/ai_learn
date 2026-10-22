@@ -570,7 +570,7 @@ export interface AdminActionResult<T = any> {
 
 export async function executeAdminAction<T = any>(options: {
     // 'classMemberships' has no local table: callers keep their own cached roster up to date.
-    table: 'adminLearners' | 'adminSchools' | 'adminClasses' | 'adminQuestions' | 'adminSchoolAdmins' | 'adminTeachers' | 'subjects' | 'topics' | 'classMemberships';
+    table: 'adminLearners' | 'adminSchools' | 'adminClasses' | 'adminQuestions' | 'adminSchoolAdmins' | 'adminTeachers' | 'subjects' | 'topics' | 'classMemberships' | 'questionContexts';
     action: 'insert' | 'update' | 'delete';
     recordId: string;
     endpoint: string;

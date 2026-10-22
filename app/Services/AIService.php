@@ -18,14 +18,136 @@ use Illuminate\Support\Facades\Http;
 class AIService
 {
     protected string $provider;
+    /** Gemini API key. */
     protected ?string $apiKey;
+    /** Gemini model. */
     protected string $modelName;
+    protected ?string $groqKey;
 
     public function __construct(?string $provider = null, ?string $apiKey = null, ?string $modelName = null)
     {
         $this->apiKey = $apiKey ?? (config('services.gemini.api_key') ?? (env('GEMINI_API_KEY') ?: env('GOOGLE_API_KEY') ?: env('AI_API_KEY')));
         $this->modelName = $modelName ?? (config('services.gemini.model') ?? env('MODEL_NAME', 'gemini-3.1-flash-lite'));
-        $this->provider = $provider ?? (config('services.ai.provider') ?? env('AI_PROVIDER') ?: (empty($this->apiKey) ? 'local' : 'gemini'));
+        $this->groqKey = config('services.groq.api_key') ?: null;
+        $this->provider = $provider ?? (config('services.ai.provider') ?: match (true) {
+            ! empty($this->groqKey) => 'groq',
+            ! empty($this->apiKey) => 'gemini',
+            default => 'local',
+        });
+    }
+
+    /**
+     * Ask the AI. Tries the chosen provider first and the other configured one after it, so a
+     * failure or rate limit on one does not leave learners without an answer; null when every
+     * provider fails (callers then use the built-in offline answers).
+     *
+     * @param  array  $contents  Gemini-style turns: [['role' => 'user'|'model', 'parts' => [['text' => ...]]]]
+     * @param  bool  $json  Ask for a JSON reply (question import and generation).
+     */
+    protected function generate(array $contents, ?string $systemInstruction = null, bool $json = false): ?string
+    {
+        if ($this->provider === 'local') {
+            return null;
+        }
+        $order = $this->provider === 'gemini' ? ['gemini', 'groq'] : ['groq', 'gemini'];
+        foreach ($order as $provider) {
+            $text = $provider === 'groq'
+                ? $this->callGroq($contents, $systemInstruction, $json)
+                : $this->callGemini($contents, $systemInstruction, $json ? ['response_mime_type' => 'application/json'] : []);
+            if ($text !== null && $text !== '') {
+                return $json ? $text : $this->normalizeMathDelimiters($text);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Groq's OpenAI-compatible chat API: the main model, then the fallback model (each has
+     * its own rate limits). A rate-limited or failing model moves on to the next at once.
+     */
+    protected function callGroq(array $contents, ?string $systemInstruction = null, bool $json = false): ?string
+    {
+        if (empty($this->groqKey)) {
+            return null;
+        }
+
+        $messages = [];
+        $system = trim((string) $systemInstruction);
+        if ($json) {
+            // JSON mode needs an object at the top level: arrays come back under "questions".
+            $system .= ($system ? "\n\n" : '').'Reply with one JSON object only. When the answer is a list of questions, return it as {"questions": [ ... ]}.';
+        }
+        if ($system !== '') {
+            $messages[] = ['role' => 'system', 'content' => $system];
+        }
+        foreach ($contents as $turn) {
+            $text = collect($turn['parts'] ?? [])->pluck('text')->filter()->implode("\n");
+            if ($text !== '') {
+                $messages[] = ['role' => ($turn['role'] ?? 'user') === 'model' ? 'assistant' : 'user', 'content' => $text];
+            }
+        }
+
+        $models = array_values(array_unique(array_filter([
+            config('services.groq.model', 'openai/gpt-oss-120b'),
+            config('services.groq.fallback_model'),
+        ])));
+        $url = rtrim((string) config('services.groq.base_url', 'https://api.groq.com/openai/v1'), '/').'/chat/completions';
+
+        foreach ($models as $model) {
+            $body = [
+                'model' => $model,
+                'messages' => $messages,
+                'temperature' => $json ? 0.2 : 0.4,
+                'max_completion_tokens' => $json ? 6000 : 1500,
+            ];
+            if (str_starts_with($model, 'openai/gpt-oss')) {
+                // Reasoning models: think briefly, return only the answer.
+                $body['reasoning_effort'] = $json ? 'medium' : 'low';
+                $body['reasoning_format'] = 'hidden';
+            }
+            if ($json) {
+                $body['response_format'] = ['type' => 'json_object'];
+            }
+
+            try {
+                $response = Http::withToken($this->groqKey)->timeout($json ? 45 : 30)->post($url, $body);
+                if ($response->successful()) {
+                    $text = trim((string) $response->json('choices.0.message.content'));
+                    if ($text !== '') {
+                        return $text;
+                    }
+                } else {
+                    \Illuminate\Support\Facades\Log::warning("Groq model {$model} returned status {$response->status()}: ".substr($response->body(), 0, 200));
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::warning("Groq model {$model} error: ".$e->getMessage());
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Some models write maths as \( ... \) and \[ ... \]; the app renders $...$ and $$...$$.
+     */
+    public function normalizeMathDelimiters(string $text): string
+    {
+        // \x5C is a backslash: \[ ... \] becomes $$ ... $$, \( ... \) becomes $ ... $.
+        $text = preg_replace_callback('#\x5C\[(.+?)\x5C\]#s', fn ($m) => '$$'.trim($m[1]).'$$', $text);
+
+        return preg_replace_callback('#\x5C\((.+?)\x5C\)#s', fn ($m) => '$'.trim($m[1]).'$', $text);
+    }
+
+    /** Decode a JSON reply into a list of questions (Groq wraps the list in "questions"). */
+    private function decodeQuestionList(?string $text): array
+    {
+        $parsed = $text ? json_decode($text, true) : null;
+        if (is_array($parsed) && isset($parsed['questions']) && is_array($parsed['questions'])) {
+            $parsed = $parsed['questions'];
+        }
+
+        return is_array($parsed) ? $parsed : [];
     }
 
     /**
@@ -33,7 +155,7 @@ class AIService
      */
     protected function callGemini(array $contents, ?string $systemInstruction = null, array $generationConfig = []): ?string
     {
-        if (empty($this->apiKey) || $this->provider !== 'gemini') {
+        if (empty($this->apiKey)) {
             return null;
         }
 
@@ -153,12 +275,12 @@ Rules:
 - Keep total response concise (under 240 words).";
             }
 
-            $geminiResult = $this->callGemini([
+            $aiResult = $this->generate([
                 ['role' => 'user', 'parts' => [['text' => $prompt]]]
             ]);
 
-            if ($geminiResult) {
-                return $geminiResult;
+            if ($aiResult) {
+                return $aiResult;
             }
 
             // Local Heuristic Tutor Explanation (Offline Fallback)
@@ -242,12 +364,12 @@ Rules:
 - Keep total response concise, direct, and encouraging.";
             }
 
-            $geminiResult = $this->callGemini([
+            $aiResult = $this->generate([
                 ['role' => 'user', 'parts' => [['text' => $prompt]]]
             ]);
 
-            if ($geminiResult) {
-                return $geminiResult;
+            if ($aiResult) {
+                return $aiResult;
             }
 
             // Offline Heuristic Fallback
@@ -506,9 +628,9 @@ Guidelines:
             'parts' => [['text' => $message]]
         ];
 
-        $geminiResult = $this->callGemini($contents, $systemInstruction);
-        if ($geminiResult) {
-            return $geminiResult;
+        $aiResult = $this->generate($contents, $systemInstruction);
+        if ($aiResult) {
+            return $aiResult;
         }
 
         return $this->generateHeuristicAdminChatResponse(
@@ -597,9 +719,9 @@ Guidelines:
             'parts' => [['text' => $message]]
         ];
 
-        $geminiResult = $this->callGemini($contents, $systemInstruction);
-        if ($geminiResult) {
-            return $geminiResult;
+        $aiResult = $this->generate($contents, $systemInstruction);
+        if ($aiResult) {
+            return $aiResult;
         }
 
         return $this->generateHeuristicChatResponse($user, $message, $history);
@@ -916,38 +1038,11 @@ You MUST return ONLY a valid JSON array matching this exact schema:
   }
 ]";
 
-        if ($this->apiKey && ($this->provider === 'gemini')) {
-            $modelsToTry = array_unique([$this->modelName, 'gemini-3.6-flash', 'gemini-3.5-flash']);
-            foreach ($modelsToTry as $model) {
-                try {
-                    $response = Http::timeout(20)
-                        ->withHeaders(['Content-Type' => 'application/json'])
-                        ->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$this->apiKey}", [
-                            'contents' => [
-                                ['parts' => [['text' => $prompt]]]
-                            ],
-                            'generationConfig' => [
-                                'response_mime_type' => 'application/json',
-                            ]
-                        ]);
-
-                    if ($response->successful()) {
-                        $body = $response->json();
-                        $text = $body['candidates'][0]['content']['parts'][0]['text'] ?? null;
-                        if ($text) {
-                            $parsed = json_decode($text, true);
-                            if (is_array($parsed) && !empty($parsed)) {
-                                $sanitized = $this->sanitizeExtractedQuestions($parsed);
-                                if (!empty($sanitized)) {
-                                    return $sanitized;
-                                }
-                            }
-                        }
-                    }
-                } catch (\Exception $e) {
-                    // Try next model or fallback to heuristic parser
-                }
-            }
+        $sanitized = $this->sanitizeExtractedQuestions($this->decodeQuestionList(
+            $this->generate([['role' => 'user', 'parts' => [['text' => $prompt]]]], null, json: true)
+        ));
+        if (! empty($sanitized)) {
+            return $sanitized;
         }
 
         return $this->heuristicQuestionParser($rawText);
@@ -1003,38 +1098,11 @@ You MUST return ONLY a valid JSON array matching this exact schema:
   }
 ]";
 
-        if ($this->apiKey && ($this->provider === 'gemini')) {
-            $modelsToTry = array_unique([$this->modelName, 'gemini-3.1-flash-lite', 'gemini-flash-lite-latest', 'gemini-flash-latest', 'gemma-4-31b-it', 'gemini-3.8-flash']);
-            foreach ($modelsToTry as $model) {
-                try {
-                    $response = Http::timeout(25)
-                        ->withHeaders(['Content-Type' => 'application/json'])
-                        ->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$this->apiKey}", [
-                            'contents' => [
-                                ['parts' => [['text' => $prompt]]]
-                            ],
-                            'generationConfig' => [
-                                'response_mime_type' => 'application/json',
-                            ]
-                        ]);
-
-                    if ($response->successful()) {
-                        $body = $response->json();
-                        $text = $body['candidates'][0]['content']['parts'][0]['text'] ?? null;
-                        if ($text) {
-                            $parsed = json_decode($text, true);
-                            if (is_array($parsed) && !empty($parsed)) {
-                                $sanitized = $this->sanitizeExtractedQuestions($parsed);
-                                if (!empty($sanitized)) {
-                                    return array_slice($sanitized, 0, $count);
-                                }
-                            }
-                        }
-                    }
-                } catch (\Exception $e) {
-                    // Try next model or fallback
-                }
-            }
+        $sanitized = $this->sanitizeExtractedQuestions($this->decodeQuestionList(
+            $this->generate([['role' => 'user', 'parts' => [['text' => $prompt]]]], null, json: true)
+        ));
+        if (! empty($sanitized)) {
+            return array_slice($sanitized, 0, $count);
         }
 
         return $this->generateHeuristicTopicQuestions($topicName, $subjectName, $gradeLevel, $count);

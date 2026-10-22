@@ -41,13 +41,27 @@ export interface CachedQuiz {
     time_limit_minutes: number | null;
     status: string;
     questions: CachedQuestion[];
+    /** Shared passages (poems, diagrams, tables) its questions point to with context_id. */
+    contexts?: CachedQuestionContext[];
     cached_at: string;
+}
+
+export interface CachedQuestionContext {
+    id: number;
+    type: string;
+    title: string | null;
+    instructions: string | null;
+    body: string | null;
+    image_url: string | null;
+    show_line_numbers: boolean;
 }
 
 export interface CachedQuestion {
     id: number;
     school_id?: number | null;
     topic_id: number;
+    context_id?: number | null;
+    context_order?: number | null;
     question_text: string;
     image_url?: string | null;
     type: string;

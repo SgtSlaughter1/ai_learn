@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import Markdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import { RichText } from '@/components/common/RichText';
 import 'katex/dist/katex.min.css';
 import { PastQuestionItem, ExamSimulationResult } from '../../types/past-questions';
 import { formatMathText, extractLiteratureContext } from '../../utils/mathFormatter';
@@ -466,9 +464,7 @@ export const ExamSimulationModal: React.FC<Props> = ({
                                 <span className="not-italic text-[10px] font-extrabold text-[var(--color-primary)] uppercase tracking-wider block mb-1">
                                     Read Passage:
                                 </span>
-                                <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                    {formatMathText(currentQ.passage_text)}
-                                </Markdown>
+                                <RichText text={formatMathText(currentQ.passage_text)} />
                             </div>
                         )}
 
@@ -500,9 +496,7 @@ export const ExamSimulationModal: React.FC<Props> = ({
                         )}
 
                         <div className="text-lg md:text-xl font-bold text-[var(--color-text)] leading-relaxed chat-markdown">
-                            <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                {formatMathText(currentQ.question_text)}
-                            </Markdown>
+                            <RichText text={formatMathText(currentQ.question_text)} />
                         </div>
 
                         <div className="space-y-3 pt-2 flex-1">
@@ -528,9 +522,7 @@ export const ExamSimulationModal: React.FC<Props> = ({
                                             {label}
                                         </span>
                                         <div className="flex-1 font-semibold text-sm [&_p]:inline">
-                                            <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                {formatMathText(option.option_text)}
-                                            </Markdown>
+                                            <RichText text={formatMathText(option.option_text)} />
                                         </div>
                                     </button>
                                 );

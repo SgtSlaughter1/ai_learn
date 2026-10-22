@@ -9,6 +9,8 @@ interface QuestionImageUploaderProps {
     showToast?: (text: string, type?: 'success' | 'error') => void;
     label?: string;
     description?: string;
+    /** Inside another bordered card (the passage editor): no box of its own. */
+    flat?: boolean;
 }
 
 export default function QuestionImageUploader({
@@ -18,6 +20,7 @@ export default function QuestionImageUploader({
     showToast,
     label = 'Question Diagram / Figure (Optional)',
     description = 'Attach an illustration, graph, or diagram to this question.',
+    flat = false,
 }: QuestionImageUploaderProps) {
     const [isUploading, setIsUploading] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
@@ -164,7 +167,7 @@ export default function QuestionImageUploader({
         <div
             ref={containerRef}
             onPaste={handlePaste}
-            className="rounded-2xl p-4 bg-[var(--color-background)] border border-[var(--color-border)] space-y-3 transition-colors"
+            className={flat ? 'space-y-3' : 'rounded-2xl p-4 bg-[var(--color-background)] border border-[var(--color-border)] space-y-3 transition-colors'}
         >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
@@ -208,10 +211,10 @@ export default function QuestionImageUploader({
                             type="button"
                             onClick={onHide}
                             className="px-2 py-1 rounded-lg text-[10px] font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] transition-colors cursor-pointer flex items-center gap-1"
-                            title="Hide diagram uploader"
+                            title="Close without adding a picture"
                         >
                             <X className="w-3 h-3" />
-                            <span>Hide</span>
+                            <span>Cancel</span>
                         </button>
                     )}
                 </div>

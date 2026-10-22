@@ -1,7 +1,6 @@
-import Markdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
 
+import { RichText } from '@/components/common/RichText';
+import type { QuizContext } from './PassageView';
 export interface QuestionOption {
     id: number;
     option_text: string;
@@ -20,6 +19,11 @@ export interface QuizQuestion {
     /** Marks this question is worth in its quiz (from the server; 1 if unknown). */
     marks?: number;
     options: QuestionOption[];
+    /** On a shared passage: the quiz's contexts entry with this id (QuestionContext). */
+    context_id?: number | null;
+    context_order?: number | null;
+    /** Sent with the question itself where there is no quiz-level list (adaptive mode). */
+    context?: (QuizContext & { id?: number }) | null;
 }
 
 interface QuestionCardProps {
@@ -27,6 +31,8 @@ interface QuestionCardProps {
     selectedOptionId: number | null;
     onSelectOption: (optionId: number) => void;
     onSkip?: () => void;
+    /** Shown above the question when it is about the passage beside it. */
+    passageNote?: string | null;
 }
 
 export function QuestionCard({
@@ -34,6 +40,7 @@ export function QuestionCard({
     selectedOptionId,
     onSelectOption,
     onSkip,
+    passageNote,
 }: QuestionCardProps) {
     const getDifficultyBadge = (difficulty?: string) => {
         switch (difficulty) {
@@ -51,6 +58,9 @@ export function QuestionCard({
     return (
         <div className="bg-[var(--color-surface)] backdrop-blur-md border border-[var(--color-border)]/80 p-6 md:p-10 rounded-3xl shadow-xl flex flex-col justify-between space-y-8">
             <div className="space-y-4">
+                {passageNote && (
+                    <p className="text-xs font-bold text-[var(--color-primary)]">{passageNote}</p>
+                )}
                 <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-extrabold px-2 py-0.5 bg-[var(--color-accent)]/10 text-[var(--color-accent)] border border-[var(--color-accent)]/20 rounded-md tracking-wider uppercase">
                         {question.type.replace('_', ' ')}
@@ -79,9 +89,7 @@ export function QuestionCard({
                 )}
 
                 <div className="chat-markdown text-lg md:text-xl font-bold leading-relaxed text-[var(--color-text)]">
-                    <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                        {question.question_text}
-                    </Markdown>
+                    <RichText text={question.question_text} />
                 </div>
             </div>
 
@@ -100,9 +108,7 @@ export function QuestionCard({
                             }`}
                         >
                             <span className="leading-snug [&_p]:inline">
-                                <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                    {option.option_text}
-                                </Markdown>
+                                <RichText text={option.option_text} />
                             </span>
                             <div
                                 className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 ml-3 ${

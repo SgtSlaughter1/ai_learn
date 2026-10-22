@@ -1,8 +1,7 @@
-import Markdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
 import { Sparkles, Check, X, Lightbulb, CheckCircle2, XCircle } from 'lucide-react';
+import { RichText } from '@/components/common/RichText';
 import { formatMathText } from '@/utils/mathFormatter';
+import { PassageView, CONTEXT_TYPE_LABELS, type QuizContext } from './PassageView';
 
 export interface ResultOption {
     id: number;
@@ -20,6 +19,8 @@ export interface ResultAnswer {
     is_correct: boolean;
     marks_awarded: number;
     options: ResultOption[];
+    /** The shared passage the question was about, if any. */
+    context?: (QuizContext & { id?: number }) | null;
 }
 
 interface ResultQuestionBreakdownProps {
@@ -46,10 +47,25 @@ export function ResultQuestionBreakdown({
             {answers.map((answer, idx) => {
                 const selectedOpt = answer.options.find(o => o.id === answer.selected_option_id);
                 const correctOpt = answer.options.find(o => o.is_correct);
+                // Show a passage once, above the first of its questions.
+                const context = answer.context;
+                const firstOnPassage = context && (idx === 0 || answers[idx - 1].context?.id !== context.id
+                    || answers[idx - 1].context?.title !== context.title);
+                const onPassage = context ? answers.filter((a) => a.context?.id === context.id && a.context?.title === context.title).length : 0;
 
                 return (
+                    <div key={answer.id} className="space-y-3">
+                    {firstOnPassage && context && (
+                        <details className="bg-[var(--color-primary-5)] border border-[var(--color-primary)]/20 rounded-3xl p-5 md:p-6">
+                            <summary className="cursor-pointer text-sm font-extrabold text-[var(--color-primary)]">
+                                {CONTEXT_TYPE_LABELS[context.type] ?? 'Passage'}{context.title ? `: ${context.title}` : ''} · Questions {idx + 1}–{idx + onPassage}
+                            </summary>
+                            <div className="pt-3">
+                                <PassageView context={context} compact />
+                            </div>
+                        </details>
+                    )}
                     <div
-                        key={answer.id}
                         className={`bg-[var(--color-surface)] backdrop-blur-md border p-6 md:p-8 rounded-3xl space-y-6 transition-all ${
                             answer.is_correct
                                 ? 'border-[var(--color-border)]'
@@ -74,9 +90,7 @@ export function ResultQuestionBreakdown({
                                     </span>
                                 </div>
                                 <h3 className="text-lg font-bold text-[var(--color-text)] leading-relaxed chat-markdown">
-                                    <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                        {formatMathText(answer.question_text)}
-                                    </Markdown>
+                                    <RichText text={formatMathText(answer.question_text)} />
                                 </h3>
                                 {answer.image_url && (
                                     <div className="flex justify-center my-3">
@@ -123,9 +137,7 @@ export function ResultQuestionBreakdown({
                                     </span>
                                     <div className="text-xs font-bold text-[var(--color-text)] chat-markdown [&_p]:inline">
                                         {selectedOpt ? (
-                                            <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                {formatMathText(selectedOpt.option_text)}
-                                            </Markdown>
+                                            <RichText text={formatMathText(selectedOpt.option_text)} />
                                         ) : (
                                             <span className="text-[var(--color-muted)] italic">None (Skipped)</span>
                                         )}
@@ -141,9 +153,7 @@ export function ResultQuestionBreakdown({
                                         {answersHidden ? (
                                             <span className="text-[var(--color-muted)] italic font-normal">Shown once your attempt is verified online</span>
                                         ) : correctOpt ? (
-                                            <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                {formatMathText(correctOpt.option_text)}
-                                            </Markdown>
+                                            <RichText text={formatMathText(correctOpt.option_text)} />
                                         ) : (
                                             <span className="text-[var(--color-muted)] italic">Not available</span>
                                         )}
@@ -176,9 +186,7 @@ export function ResultQuestionBreakdown({
                                                 {String.fromCharCode(65 + optIdx)}
                                             </span>
                                             <div className="chat-markdown text-[var(--color-text)] [&_p]:inline">
-                                                <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                                    {formatMathText(option.option_text)}
-                                                </Markdown>
+                                                <RichText text={formatMathText(option.option_text)} />
                                             </div>
                                         </div>
 
@@ -206,12 +214,11 @@ export function ResultQuestionBreakdown({
                                     Official Explanation Working
                                 </span>
                                 <div className="chat-markdown text-xs text-[var(--color-text)] leading-relaxed font-medium">
-                                    <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                        {formatMathText(answer.explanation)}
-                                    </Markdown>
+                                    <RichText text={formatMathText(answer.explanation)} />
                                 </div>
                             </div>
                         )}
+                    </div>
                     </div>
                 );
             })}
