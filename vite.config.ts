@@ -32,8 +32,8 @@ export default defineConfig({
                     { url: '/favicon.ico', revision: '2' },
                     { url: '/images/favicon.svg', revision: '1' },
                     { url: '/images/maskable-512x512.png', revision: '1' },
-                    { url: '/images/screenshot-desktop.png', revision: '1' },
-                    { url: '/images/screenshot-mobile.png', revision: '1' },
+                    { url: '/images/screenshot-desktop.png', revision: '2' },
+                    { url: '/images/screenshot-mobile.png', revision: '2' },
                 ],
                 modifyURLPrefix: {
                     // Map Vite's output paths to the actual served paths
@@ -195,6 +195,7 @@ export default defineConfig({
                         src: '/images/screenshot-mobile.png',
                         sizes: '750x1334',
                         type: 'image/png',
+                        form_factor: 'narrow',
                         label: 'Dashboard - Mobile View'
                     }
                 ]

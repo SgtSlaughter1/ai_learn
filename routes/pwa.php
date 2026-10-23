@@ -129,7 +129,7 @@ $serveManifest = function () {
         ],
         'screenshots' => [
             ['src' => '/images/screenshot-desktop.png', 'sizes' => '1280x720', 'type' => 'image/png', 'form_factor' => 'wide', 'label' => 'Dashboard - Desktop View'],
-            ['src' => '/images/screenshot-mobile.png', 'sizes' => '750x1334', 'type' => 'image/png', 'label' => 'Dashboard - Mobile View'],
+            ['src' => '/images/screenshot-mobile.png', 'sizes' => '750x1334', 'type' => 'image/png', 'form_factor' => 'narrow', 'label' => 'Dashboard - Mobile View'],
         ],
     ];
 

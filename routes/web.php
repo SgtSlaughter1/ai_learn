@@ -559,5 +559,5 @@ Route::post('/api/v1/feedback', [\App\Http\Controllers\Api\FeedbackController::c
 
 // Who is signed in (null for guests). Public so the sync engine can ask on any page
 // without the browser logging a 401 for signed-out visitors.
-Route::get('/api/v1/sync/session', [\App\Http\Controllers\Web\SyncController::class, 'session'])->middleware('throttle:api');
+Route::get('/api/v1/sync/session', [SyncController::class, 'session'])->middleware('throttle:api');
 
