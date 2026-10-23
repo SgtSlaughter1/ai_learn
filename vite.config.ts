@@ -23,13 +23,15 @@ export default defineConfig({
                 // Also precache the offline fallback page from public/
                 additionalManifestEntries: [
                     { url: '/offline.html', revision: '2' },
-                    { url: '/images/icon-144x144.png', revision: '1' },
-                    { url: '/images/icon-192x192.png', revision: '1' },
-                    { url: '/images/icon-512x512.png', revision: '1' },
-                    { url: '/images/apple-touch-icon.png', revision: '1' },
-                    { url: '/images/favicon-32x32.png', revision: '1' },
-                    { url: '/images/favicon-16x16.png', revision: '1' },
-                    { url: '/favicon.ico', revision: '1' },
+                    { url: '/images/icon-144x144.png', revision: '2' },
+                    { url: '/images/icon-192x192.png', revision: '2' },
+                    { url: '/images/icon-512x512.png', revision: '2' },
+                    { url: '/images/apple-touch-icon.png', revision: '2' },
+                    { url: '/images/favicon-32x32.png', revision: '2' },
+                    { url: '/images/favicon-16x16.png', revision: '2' },
+                    { url: '/favicon.ico', revision: '2' },
+                    { url: '/images/favicon.svg', revision: '1' },
+                    { url: '/images/maskable-512x512.png', revision: '1' },
                     { url: '/images/screenshot-desktop.png', revision: '1' },
                     { url: '/images/screenshot-mobile.png', revision: '1' },
                 ],
@@ -174,13 +176,8 @@ export default defineConfig({
                         purpose: 'any'
                     },
                     {
-                        src: '/images/icon-192x192.png',
-                        sizes: '192x192',
-                        type: 'image/png',
-                        purpose: 'maskable'
-                    },
-                    {
-                        src: '/images/icon-512x512.png',
+                        // Full-bleed tile with the mark inside the 80 % safe zone, so Android's mask never clips it.
+                        src: '/images/maskable-512x512.png',
                         sizes: '512x512',
                         type: 'image/png',
                         purpose: 'maskable'

@@ -1,6 +1,7 @@
 import { Head, Link, useForm } from '@inertiajs/react';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { useState, FormEvent } from 'react';
-import { Eye, EyeOff, ArrowLeft, CheckCircle2, Sparkles, BookOpen, WifiOff, Award } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, CheckCircle2, Sparkles, WifiOff, Award } from 'lucide-react';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 
 interface LoginProps {
@@ -49,14 +50,9 @@ export default function Login({ status }: LoginProps) {
                 {/* Main Hero Content */}
                 <div className="relative z-10 my-auto space-y-6 max-w-md">
                     {/* Brand Emblem */}
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-[var(--color-accent)] text-[var(--color-primary)] flex items-center justify-center font-black shadow-md">
-                            <BookOpen className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <span className="text-xl font-black tracking-tight text-white">AceDrill</span>
-                            <span className="block text-[10px] uppercase font-bold tracking-widest text-white/70">Learning Portal</span>
-                        </div>
+                    <div className="space-y-2">
+                        <BrandLogo tone="reversed" className="h-10 w-auto" />
+                        <span className="block text-[10px] uppercase font-bold tracking-widest text-white/70">Learning Portal</span>
                     </div>
 
                     {/* Headline & Description */}
@@ -133,7 +129,7 @@ export default function Login({ status }: LoginProps) {
                         {/* Centered Brand Emblem & Header */}
                         <div className="flex flex-col items-center text-center mb-6">
                             <div className="w-12 h-12 rounded-2xl bg-[var(--color-primary)] text-white flex items-center justify-center font-bold shadow-sm mb-3">
-                                <BookOpen className="w-6 h-6" />
+                                <BrandLogo variant="symbol" tone="reversed" className="w-8 h-8" title="" />
                             </div>
                             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-[var(--color-text)]">
                                 Sign In

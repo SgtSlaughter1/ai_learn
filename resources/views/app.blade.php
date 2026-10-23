@@ -53,6 +53,7 @@
         <style>.js #seo-content{display:none}</style>
 
         {{-- Favicons --}}
+        <link rel="icon" type="image/svg+xml" href="/images/favicon.svg">
         <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
         <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
         <link rel="shortcut icon" href="/favicon.ico">

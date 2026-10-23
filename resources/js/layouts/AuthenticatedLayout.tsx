@@ -1,4 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import React, { useEffect, useState } from 'react';
 import ChatWidget from '@/components/ui/ChatWidget';
 import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt';
@@ -94,11 +95,8 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex flex-col relative">
             {/* Mobile Clean Top Header Bar */}
             <div className="md:hidden bg-[var(--color-surface)] border-b border-[var(--color-border)] px-4 py-2.5 flex items-center justify-between sticky top-0 z-30 shadow-xs">
-                <Link
-                    href="/dashboard"
-                    className="text-xl font-bold text-[var(--color-primary)] tracking-tight flex items-center gap-2"
-                >
-                    <span>AceDrill</span>
+                <Link href="/dashboard" className="flex items-center" aria-label="AceDrill dashboard">
+                    <BrandLogo className="h-7 w-auto" title="" />
                 </Link>
                 <div className="flex items-center gap-2">
                     <SyncStatus compact fallback={<OfflineReadinessBadge isOnline={isOnline} compact />} />
@@ -113,11 +111,8 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                 <div>
                     {/* Desktop Sidebar Brand Header */}
                     <div className="px-6 py-6 border-b border-white/10">
-                        <Link
-                            href="/dashboard"
-                            className="text-2xl font-bold text-white tracking-tight"
-                        >
-                            AceDrill
+                        <Link href="/dashboard" className="inline-flex" aria-label="AceDrill dashboard">
+                            <BrandLogo tone="reversed" className="h-9 w-auto" title="" />
                         </Link>
                         <p className="text-xs text-[var(--color-primary-light)] mt-0.5 font-medium">Offline-First Learning</p>
                     </div>

@@ -74,6 +74,19 @@ export default function QuestionImageUploader({
                     setIsUploading(false);
                     return;
                 }
+            } else {
+                // The server answered and refused: saving the picture into the question instead
+                // would only fail later (image links are capped at 500 characters). Say why.
+                const data = await res.json().catch(() => ({}));
+                showToast?.(
+                    res.status === 403 && !data?.message
+                        ? 'Picture uploads are blocked by the web host right now. Use "URL Link" to add a picture from a link, or try again later.'
+                        : data?.message || data?.errors?.image?.[0] || 'The picture could not be uploaded. Try a smaller image, or use "URL Link".',
+                    'error'
+                );
+                if (res.status === 403) setActiveTab('url');
+                setIsUploading(false);
+                return;
             }
         } catch (err) {
             console.warn('Online upload unavailable, falling back to local base64 DataURL for offline mode...', err);

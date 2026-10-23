@@ -13,6 +13,7 @@
 html[data-theme="light"] {
     /* ── Light Palette ── */
     --color-primary:        #183B2B;
+    --color-brand-mark:     #183B2B;   /* logo A + name (brandguidelines.md) */
     --color-primary-light:  #6F8F7A;
     --color-accent:         #D99A3D;
     --color-background:     #F7F4EC;
@@ -48,6 +49,7 @@ html[data-theme="dark"],
 [data-theme="dark"] {
     /* ── Dark Palette (AceDrill Obsidian Emerald) ── */
     --color-primary:        #2E7D52;
+    --color-brand-mark:     #F1F5F2;   /* the reversed logo on dark surfaces */
     --color-primary-light:  #52B788;
     --color-accent:         #E5A93C;
     --color-background:     #0D1510;

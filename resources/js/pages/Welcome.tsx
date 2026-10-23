@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { Head, Link } from '@inertiajs/react';
 import PWAInstallPrompt from '@/components/ui/PWAInstallPrompt';
 import ThemeToggle from '@/components/ui/ThemeToggle';
@@ -165,16 +166,8 @@ export default function Welcome({ subjects = [], stats, faqs }: WelcomeProps) {
                 <header className="sticky top-0 z-50 w-full px-2.5 sm:px-6 pt-2.5 sm:pt-3 pb-2">
                     <nav className="max-w-6xl mx-auto px-3 sm:px-5 py-2 sm:py-2.5 rounded-2xl bg-[var(--color-surface)]/90 backdrop-blur-md border border-[var(--color-border)] shadow-sm flex items-center justify-between gap-2 sm:gap-4 transition-all">
                         {/* Brand Logo */}
-                        <Link href="/" className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-                            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[var(--color-primary)] flex items-center justify-center text-white shadow-xs">
-                                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                                </svg>
-                            </div>
-                            <div className="flex flex-col">
-                                <span className="text-base sm:text-lg font-black tracking-tight text-[var(--color-primary)] leading-none">AceDrill</span>
-                                <span className="text-[9px] sm:text-[10px] font-semibold text-[var(--color-muted)]">Offline Learning</span>
-                            </div>
+                        <Link href="/" className="flex items-center shrink-0" aria-label="AceDrill home">
+                            <BrandLogo className="h-7 sm:h-8 w-auto" title="" />
                         </Link>
 
                         {/* Navigation Links (Clean & Short) */}
