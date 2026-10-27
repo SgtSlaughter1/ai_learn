@@ -12,9 +12,12 @@ class XpTransaction extends Model
 
     protected $guarded = [];
 
-    protected $casts = [
-        'metadata' => 'array',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'metadata' => 'array',
+        ];
+    }
 
     public function user(): BelongsTo
     {

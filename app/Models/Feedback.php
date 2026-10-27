@@ -14,10 +14,13 @@ class Feedback extends Model
 
     protected $guarded = [];
 
-    protected $casts = [
-        'rating' => 'integer',
-        'meta' => 'array',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'rating' => 'integer',
+            'meta' => 'array',
+        ];
+    }
 
     /**
      * Optional relationship to the user who submitted feedback.

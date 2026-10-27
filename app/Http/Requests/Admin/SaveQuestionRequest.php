@@ -2,10 +2,13 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Admin\Concerns\ValidatesCorrectOptions;
 use Illuminate\Foundation\Http\FormRequest;
 
 class SaveQuestionRequest extends FormRequest
 {
+    use ValidatesCorrectOptions;
+
     /** Authorized by the route's role gate and the controller's policy checks. */
     public function authorize(): bool
     {
@@ -52,17 +55,7 @@ class SaveQuestionRequest extends FormRequest
             if (is_array($context) && blank($context['body'] ?? null) && blank($context['image_url'] ?? null)) {
                 $validator->errors()->add('context.body', 'Add the passage text or a picture for these questions.');
             }
-            $options = $this->input('options', []);
-            $hasCorrect = false;
-            foreach ($options as $option) {
-                if (isset($option['is_correct']) && filter_var($option['is_correct'], FILTER_VALIDATE_BOOLEAN)) {
-                    $hasCorrect = true;
-                    break;
-                }
-            }
-            if (!$hasCorrect) {
-                $validator->errors()->add('options', 'A question must have at least one correct option.');
-            }
+            $this->checkCorrectOptions($validator, (array) $this->input('options', []), $this->input('type'));
         });
     }
 }

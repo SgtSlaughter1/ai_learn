@@ -27,7 +27,7 @@ class ResetPasswordNotification extends Notification
             'email' => $notifiable->getEmailForPasswordReset(),
         ], false));
 
-        $name = trim(($notifiable->first_name ?? '') . ' ' . ($notifiable->last_name ?? ''));
+        $name = trim(($notifiable->first_name ?? '').' '.($notifiable->last_name ?? ''));
         if (empty($name)) {
             $name = $notifiable->name ?? 'Learner';
         }

@@ -29,6 +29,13 @@ class ChatAIRequest extends FormRequest
                 && is_string($entry['content']);
         }));
 
+        // A long chat is normal: keep its most recent turns, each trimmed, instead of rejecting
+        // the message (one long AI answer used to break every later turn).
+        $history = array_map(fn (array $entry) => [
+            'role' => $entry['role'],
+            'content' => mb_substr($entry['content'], 0, AiInputSanitizer::MAX_HISTORY_MESSAGE_LENGTH),
+        ], array_slice($history, -AiInputSanitizer::MAX_HISTORY_TURNS));
+
         $this->merge([
             'history' => $history,
         ]);

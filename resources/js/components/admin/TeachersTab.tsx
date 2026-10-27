@@ -636,7 +636,7 @@ export default function TeachersTab({
                                         required={!editingTeacher}
                                         value={formData.password}
                                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                        placeholder="Min 6 characters"
+                                        placeholder="Min 8 characters"
                                         className="w-full px-3.5 py-2.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]"
                                     />
                                 </div>

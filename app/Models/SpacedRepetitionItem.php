@@ -60,7 +60,7 @@ class SpacedRepetitionItem extends Model
             ->where('status', 'active')
             ->where(function ($q) {
                 $q->whereNull('next_review_at')
-                  ->orWhere('next_review_at', '<=', now());
+                    ->orWhere('next_review_at', '<=', now());
             });
     }
 

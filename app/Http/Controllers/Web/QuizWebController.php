@@ -2,29 +2,40 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Actions\Quiz\GradeQuizAttempt;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Quiz\SubmitQuizAttemptRequest;
 use App\Http\Requests\Quiz\SyncQuizAttemptRequest;
+use App\Jobs\AwardQuizCompletionXp;
 use App\Models\LearnerProgress;
-use App\Models\Quiz;
-use App\Support\OfflineAnswerKey;
-use App\Support\AttemptQuestions;
-use App\Models\QuestionContext;
-use App\Models\QuizAttempt;
-use App\Models\QuizAnswer;
 use App\Models\Question;
+use App\Models\QuestionContext;
+use App\Models\Quiz;
+use App\Models\QuizAnswer;
+use App\Models\QuizAttempt;
+use App\Services\Gamification\GamificationService;
+use App\Services\SpacedRepetition\SpacedRepetitionService;
+use App\Support\AttemptQuestions;
+use App\Support\OfflineAnswerKey;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
-use App\Jobs\AwardQuizCompletionXp;
-use App\Services\Gamification\GamificationService;
 
 class QuizWebController extends Controller
 {
+    public function __construct(
+        private GradeQuizAttempt $grader,
+        private GamificationService $gamification,
+        private SpacedRepetitionService $spacedRepetition,
+    ) {}
+
     /**
      * Render the student quiz taking interface.
      */
@@ -34,31 +45,27 @@ class QuizWebController extends Controller
         if ($user?->isAnyAdmin()) {
             return redirect('/admin/dashboard');
         }
+        Gate::authorize('view', $quiz);
+
         return Inertia::render('quizzes/Show', [
             'quizId' => $quiz->id,
         ]);
     }
 
-    /**
-     * Backward-compatible alias for showQuiz.
-     */
-    public function show(Request $request, Quiz $quiz): Response|RedirectResponse
-    {
-        return $this->showQuiz($request, $quiz);
-    }
-
     public function getQuizData(Request $request, Quiz $quiz): JsonResponse
     {
+        Gate::authorize('view', $quiz);
+
         // Eager load questions and options (including explanation and is_correct for offline caching)
         $quiz->load([
             'questions' => function ($query) {
                 $query->select(['questions.id', 'topic_id', 'context_id', 'context_order', 'question_text', 'image_url', 'type', 'difficulty', 'explanation'])
-                      ->where('status', 'active');
+                    ->where('status', 'active');
             },
             'questions.options' => function ($query) {
                 $query->select(['question_options.id', 'question_id', 'option_text', 'sort_order', 'is_correct'])
-                      ->orderBy('sort_order');
-            }
+                    ->orderBy('sort_order');
+            },
         ]);
 
         $questions = $quiz->questions;
@@ -107,11 +114,12 @@ class QuizWebController extends Controller
                             if ($isStaff) {
                                 $optionData['is_correct'] = (bool) $o->is_correct;
                             }
+
                             return $optionData;
                         })->values()->all(),
                     ];
                 })->values()->all(),
-            ]
+            ],
         ]);
     }
 
@@ -120,6 +128,7 @@ class QuizWebController extends Controller
      */
     public function submitQuizAttempt(SubmitQuizAttemptRequest $request, Quiz $quiz): JsonResponse|RedirectResponse
     {
+        Gate::authorize('attempt', $quiz);
         $user = auth()->user();
         $rawAnswers = $request->validated('answers');
 
@@ -140,68 +149,17 @@ class QuizWebController extends Controller
             'questions' => function ($q) {
                 $q->where('status', 'active');
             },
-            'questions.options'
+            'questions.options',
         ]);
 
         $questionsToGrade = $quiz->questionsForAttempt(array_keys($submittedAnswers));
-
-        $score = 0;
-        $totalMarks = 0;
         $attemptId = (string) Str::uuid();
+        $graded = $this->grader->handle($questionsToGrade, $submittedAnswers, $attemptId, now());
+        ['score' => $score, 'total_marks' => $totalMarks, 'answers' => $answersToInsert, 'topic_tallies' => $topicTallies] = $graded;
 
         DB::beginTransaction();
 
         try {
-            $answersToInsert = [];
-            $topicTallies = [];
-
-            foreach ($questionsToGrade as $question) {
-                $questionId = $question->id;
-                $pivotMarks = $question->pivot->marks ?? 1;
-                $totalMarks += $pivotMarks;
-
-                $selectedOptionId = $submittedAnswers[$questionId] ?? null;
-                $isCorrect = false;
-                $marksAwarded = 0;
-
-                if (is_array($selectedOptionId)) {
-                    $correctOptionIds = $question->options->where('is_correct', true)->pluck('id')->map(fn($id) => (int) $id)->sort()->values()->all();
-                    $studentOptionIds = collect($selectedOptionId)->map(fn($id) => (int) $id)->sort()->values()->all();
-                    if (!empty($correctOptionIds) && $correctOptionIds === $studentOptionIds) {
-                        $isCorrect = true;
-                        $marksAwarded = $pivotMarks;
-                        $score += $pivotMarks;
-                    }
-                    $recordedOptionId = !empty($studentOptionIds) ? $studentOptionIds[0] : null;
-                } elseif ($selectedOptionId) {
-                    $option = $question->options->firstWhere('id', $selectedOptionId);
-                    if ($option && $option->is_correct) {
-                        $isCorrect = true;
-                        $marksAwarded = $pivotMarks;
-                        $score += $pivotMarks;
-                    }
-                    $recordedOptionId = $selectedOptionId;
-                } else {
-                    $recordedOptionId = null;
-                }
-
-                $answersToInsert[] = [
-                    'id' => (string) Str::uuid(),
-                    'quiz_attempt_id' => $attemptId,
-                    'question_id' => $questionId,
-                    'selected_option_id' => $recordedOptionId,
-                    'is_correct' => $isCorrect,
-                    'marks_awarded' => $marksAwarded,
-                    'answered_at' => now(),
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-
-                $topicTallies[$question->topic_id] ??= ['attempted' => 0, 'correct' => 0];
-                $topicTallies[$question->topic_id]['attempted']++;
-                $topicTallies[$question->topic_id]['correct'] += $isCorrect ? 1 : 0;
-            }
-
             // Create the attempt
             QuizAttempt::create([
                 'id' => $attemptId,
@@ -224,28 +182,28 @@ class QuizWebController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             if ($request->wantsJson()) {
-                return response()->json(['success' => false, 'error' => $e->getMessage()], 422);
+                report($e); // details go to the log, never to the client (they can include SQL)
+
+                return response()->json(['success' => false, 'message' => 'The attempt could not be saved. Please try again.'], 500);
             }
             throw $e;
         }
 
         // Process gamification rewards (XP, streaks, achievements)
         $attempt = QuizAttempt::find($attemptId)->setRelation('user', $user)->setRelation('quiz', $quiz);
-        $gamificationService = app(GamificationService::class);
-        $newAchievements = $gamificationService->awardQuizCompletionOnce($attempt);
+        $newAchievements = $this->gamification->awardQuizCompletionOnce($attempt);
 
         // Auto-record questions into Spaced Repetition memory engine
         try {
-            $srsService = app(\App\Services\SpacedRepetition\SpacedRepetitionService::class);
             foreach ($answersToInsert as $ans) {
-                $srsService->recordAttempt($user, [
+                $this->spacedRepetition->recordAttempt($user, [
                     'question_id' => $ans['question_id'],
                     'is_correct' => $ans['is_correct'],
                     'selected_option_id' => $ans['selected_option_id'],
                 ]);
             }
         } catch (\Throwable $t) {
-            \Illuminate\Support\Facades\Log::warning('SRS quiz attempt record failed: ' . $t->getMessage());
+            Log::warning('SRS quiz attempt record failed: '.$t->getMessage());
         }
 
         if ($request->wantsJson()) {
@@ -260,14 +218,6 @@ class QuizWebController extends Controller
         }
 
         return redirect("/quizzes/attempts/{$attemptId}");
-    }
-
-    /**
-     * Backward-compatible alias for submitQuizAttempt.
-     */
-    public function submit(SubmitQuizAttemptRequest $request, Quiz $quiz): JsonResponse|RedirectResponse
-    {
-        return $this->submitQuizAttempt($request, $quiz);
     }
 
     /**
@@ -286,14 +236,6 @@ class QuizWebController extends Controller
     }
 
     /**
-     * Backward-compatible alias for showQuizResult.
-     */
-    public function result(QuizAttempt $attempt): Response
-    {
-        return $this->showQuizResult($attempt);
-    }
-
-    /**
      * Sync an offline quiz attempt that was completed without internet.
      * Called by SyncService.ts when the user comes back online.
      */
@@ -302,7 +244,7 @@ class QuizWebController extends Controller
         $request->validated();
         $user = auth()->user();
 
-        if (!Str::isUuid($attemptId)) {
+        if (! Str::isUuid($attemptId)) {
             return response()->json(['success' => false, 'code' => 'invalid_attempt_id', 'message' => 'Attempt id must be a UUID.'], 422);
         }
 
@@ -312,6 +254,7 @@ class QuizWebController extends Controller
             if ($existing->user_id !== $user->id) {
                 return response()->json(['success' => false, 'code' => 'attempt_owner_mismatch', 'message' => 'This attempt belongs to a different account.'], 409);
             }
+
             return response()->json([
                 'success' => true,
                 'attempt_id' => $existing->id,
@@ -325,6 +268,7 @@ class QuizWebController extends Controller
             'questions' => fn ($q) => $q->where('status', 'active'),
             'questions.options',
         ])->findOrFail($request->quiz_id);
+        Gate::authorize('recordOfflineAttempt', $quiz);
 
         $submittedAnswers = collect($request->answers)
             ->filter(fn ($a) => is_array($a) && isset($a['question_id']))
@@ -342,80 +286,26 @@ class QuizWebController extends Controller
 
         $questionsToGrade = $quiz->questionsForAttempt($submittedAnswers->keys()->all());
 
-        // Keep the time the learner actually finished, so streaks and history reflect
-        // offline days. Clamp it so a wrong device clock cannot push it into the future
-        // or far into the past.
-        $completedAt = $request->filled('completed_at')
-            ? \Illuminate\Support\Carbon::parse($request->completed_at)
-            : now();
-        if ($completedAt->isFuture()) {
-            $completedAt = now();
-        }
-        if ($completedAt->lt(now()->subDays(30))) {
-            $completedAt = now()->subDays(30);
-        }
+        // Keep the time the learner actually finished, so streaks and history reflect offline
+        // days; activityTime clamps a wrong device clock (no future, at most 30 days back).
+        $completedAt = GamificationService::activityTime($request->input('completed_at'));
         $durationSeconds = (int) $request->input('duration_seconds', 300);
         $startedAt = $completedAt->copy()->subSeconds($durationSeconds);
 
-        $score      = 0;
-        $totalMarks = 0;
-        $answersToInsert    = [];
-        $topicTallies       = [];
-
-        foreach ($questionsToGrade as $question) {
-            $pivotMarks = $question->pivot->marks ?? 1;
-            $totalMarks += $pivotMarks;
-
-            $selected = $submittedAnswers->get($question->id)['selected_option_id'] ?? null;
-            $validOptionIds = $question->options->pluck('id')->map(fn ($id) => (int) $id);
-            $isCorrect = false;
-
-            if (is_array($selected)) {
-                $studentOptionIds = collect($selected)->map(fn ($id) => (int) $id)
-                    ->filter(fn ($id) => $validOptionIds->contains($id))
-                    ->sort()->values()->all();
-                $correctOptionIds = $question->options->where('is_correct', true)
-                    ->pluck('id')->map(fn ($id) => (int) $id)->sort()->values()->all();
-                $isCorrect = !empty($correctOptionIds) && $correctOptionIds === $studentOptionIds;
-                $recordedOptionId = $studentOptionIds[0] ?? null;
-            } else {
-                // An option id the question no longer has is stored as "no answer",
-                // never as a dangling foreign key.
-                $recordedOptionId = $selected !== null && $validOptionIds->contains((int) $selected) ? (int) $selected : null;
-                $isCorrect = $recordedOptionId !== null
-                    && (bool) $question->options->firstWhere('id', $recordedOptionId)?->is_correct;
-            }
-
-            $marksAwarded = $isCorrect ? $pivotMarks : 0;
-            $score += $marksAwarded;
-
-            $answersToInsert[] = [
-                'id'              => (string) Str::uuid(),
-                'quiz_attempt_id' => $attemptId,
-                'question_id'     => $question->id,
-                'selected_option_id' => $recordedOptionId,
-                'is_correct'      => $isCorrect,
-                'marks_awarded'   => $marksAwarded,
-                'answered_at'     => $completedAt,
-                'created_at'      => now(),
-                'updated_at'      => now(),
-            ];
-
-            $topicTallies[$question->topic_id] ??= ['attempted' => 0, 'correct' => 0];
-            $topicTallies[$question->topic_id]['attempted']++;
-            $topicTallies[$question->topic_id]['correct'] += $isCorrect ? 1 : 0;
-        }
+        $selected = $submittedAnswers->map(fn ($a) => $a['selected_option_id'] ?? null)->all();
+        $graded = $this->grader->handle($questionsToGrade, $selected, $attemptId, $completedAt);
+        ['score' => $score, 'total_marks' => $totalMarks, 'answers' => $answersToInsert, 'topic_tallies' => $topicTallies] = $graded;
 
         try {
             DB::transaction(function () use ($user, $quiz, $attemptId, $score, $totalMarks, $startedAt, $completedAt, $answersToInsert, $topicTallies) {
                 $attempt = QuizAttempt::create([
-                    'id'           => $attemptId,
-                    'user_id'      => $user->id,
-                    'quiz_id'      => $quiz->id,
-                    'status'       => 'completed',
-                    'score'        => $score,
-                    'total_marks'  => $totalMarks,
-                    'started_at'   => $startedAt,
+                    'id' => $attemptId,
+                    'user_id' => $user->id,
+                    'quiz_id' => $quiz->id,
+                    'status' => 'completed',
+                    'score' => $score,
+                    'total_marks' => $totalMarks,
+                    'started_at' => $startedAt,
                     'completed_at' => $completedAt,
                 ]);
 
@@ -429,16 +319,18 @@ class QuizWebController extends Controller
                 // through quiz_attempts.xp_awarded_at, so retries never award twice.
                 AwardQuizCompletionXp::dispatch($attemptId, $completedAt->toIso8601String());
             });
-        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+        } catch (UniqueConstraintViolationException $e) {
             // Another request (second tab, or the page's own submit) synced this attempt first.
             $existing = QuizAttempt::find($attemptId);
             if ($existing && $existing->user_id === $user->id) {
                 return response()->json(['success' => true, 'attempt_id' => $attemptId, 'already_synced' => true]);
             }
             report($e);
+
             return response()->json(['success' => false, 'code' => 'sync_conflict', 'message' => 'Could not save this attempt.'], 409);
         } catch (\Throwable $e) {
             report($e);
+
             return response()->json(['success' => false, 'code' => 'sync_failed', 'message' => 'Could not save this attempt. It will be retried.'], 500);
         }
 
@@ -451,21 +343,13 @@ class QuizWebController extends Controller
     }
 
     /**
-     * Backward-compatible alias for syncQuizAttempt.
-     */
-    public function syncAttempt(SyncQuizAttemptRequest $request, string $attemptId): JsonResponse
-    {
-        return $this->syncQuizAttempt($request, $attemptId);
-    }
-
-    /**
      * Get details and answered breakdown for a completed quiz attempt.
      */
     public function getQuizAttemptData(QuizAttempt $attempt): JsonResponse
     {
         // Authorize access
         if ($attempt->user_id !== auth()->id()) {
-            return response()->json(['error' => 'Forbidden'], 403);
+            abort(403, 'Forbidden');
         }
 
         // Load the quiz details, answers, questions, options, and correctness
@@ -475,8 +359,11 @@ class QuizWebController extends Controller
             'answers.question.context',
         ]);
 
-        // Review in the order they were asked: a passage's questions together, in context_order.
-        $orderedAnswers = AttemptQuestions::units($attempt->answers->map(fn ($ans) => (object) [
+        // Review in the quiz's order (answers come back from the database in no set order: MySQL
+        // returns them by id), with a passage's questions together in context_order.
+        $position = $attempt->quiz?->questions()->pluck('questions.id')->flip() ?? collect();
+        $answers = $attempt->answers->sortBy(fn ($ans) => $position[$ans->question_id] ?? PHP_INT_MAX)->values();
+        $orderedAnswers = AttemptQuestions::units($answers->map(fn ($ans) => (object) [
             'id' => $ans->question_id,
             'context_id' => $ans->question?->context_id,
             'context_order' => $ans->question?->context_order,
@@ -485,10 +372,11 @@ class QuizWebController extends Controller
 
         $answersMapped = $orderedAnswers->map(function ($ans) {
             $question = $ans->question;
+
             return [
                 'id' => $ans->id,
                 'question_id' => $ans->question_id,
-                'question_text' => $question?->question_text ?? ('Question #' . $ans->question_id),
+                'question_text' => $question?->question_text ?? ('Question #'.$ans->question_id),
                 'context' => $question?->context?->toLearnerArray(),
                 'explanation' => $question?->explanation ?? '',
                 'selected_option_id' => $ans->selected_option_id,
@@ -507,20 +395,12 @@ class QuizWebController extends Controller
         return response()->json([
             'attempt' => [
                 'id' => $attempt->id,
-                'quiz_title' => $attempt->quiz?->title ?? ('Quiz #' . $attempt->quiz_id),
+                'quiz_title' => $attempt->quiz?->title ?? ('Quiz #'.$attempt->quiz_id),
                 'score' => $attempt->score,
                 'total_marks' => $attempt->total_marks,
                 'completed_at' => $attempt->completed_at ? $attempt->completed_at->toIso8601String() : null,
                 'answers' => $answersMapped,
-            ]
+            ],
         ]);
-    }
-
-    /**
-     * Backward-compatible alias for getQuizAttemptData.
-     */
-    public function getAttemptData(QuizAttempt $attempt): JsonResponse
-    {
-        return $this->getQuizAttemptData($attempt);
     }
 }

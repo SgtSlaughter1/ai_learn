@@ -11,6 +11,8 @@ use App\Models\ClassModel;
 use App\Models\School;
 use App\Models\TeacherProfile;
 use App\Models\User;
+use App\Support\ListSize;
+use App\Support\SearchTerm;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -43,13 +45,13 @@ class TeacherController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhereHas('teacherProfile', fn ($tp) => $tp->where('employee_id', 'like', "%{$search}%")->orWhere('department', 'like', "%{$search}%"));
+                $q->where('name', 'like', SearchTerm::like($search))
+                    ->orWhere('email', 'like', SearchTerm::like($search))
+                    ->orWhereHas('teacherProfile', fn ($tp) => $tp->where('employee_id', 'like', SearchTerm::like($search))->orWhere('department', 'like', SearchTerm::like($search)));
             });
         }
 
-        $perPage = max(1, min(100, (int) $request->get('per_page', 50)));
+        $perPage = ListSize::from($request->get('per_page'), 50, 100);
         $teachers = $query->orderBy('name')->paginate($perPage);
 
         return response()->json([
@@ -121,7 +123,9 @@ class TeacherController extends Controller
             ? $this->assignableClasses($validated, $targetSchoolId)
             : null;
 
-        DB::transaction(function () use ($teacherUser, $validated, $targetSchoolId, $classes) {
+        $previousSchoolId = $teacherUser->managedSchoolId();
+
+        DB::transaction(function () use ($teacherUser, $validated, $targetSchoolId, $previousSchoolId, $classes) {
             $userData = [
                 'name' => $validated['name'],
                 'email' => $validated['email'],
@@ -144,12 +148,20 @@ class TeacherController extends Controller
             if (array_key_exists('is_active', $validated)) {
                 $profileData['is_active'] = $validated['is_active'];
             }
-            if ($targetSchoolId !== $teacherUser->managedSchoolId()) {
+            if ($targetSchoolId !== $previousSchoolId) {
                 $profileData['school_id'] = $targetSchoolId;
             }
 
             if (! empty($profileData)) {
                 $teacherUser->teacherProfile()->updateOrCreate(['user_id' => $teacherUser->id], $profileData);
+            }
+
+            // A teacher who moves school leaves the old school's classes; otherwise they keep
+            // managing those rosters and the old school's admin can still edit their account.
+            if ($targetSchoolId !== $previousSchoolId) {
+                $teacherUser->classMemberships()
+                    ->whereNotIn('class_id', ClassModel::where('school_id', $targetSchoolId)->select('id'))
+                    ->delete();
             }
 
             if ($classes !== null) {

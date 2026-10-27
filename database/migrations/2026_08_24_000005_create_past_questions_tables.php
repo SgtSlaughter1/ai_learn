@@ -11,9 +11,6 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::dropIfExists('past_question_options');
-        Schema::dropIfExists('past_questions');
-
         Schema::create('past_questions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('subject_id')->nullable()->constrained('subjects')->nullOnDelete();
@@ -29,6 +26,9 @@ return new class extends Migration
             $table->longText('explanation')->nullable();
             $table->string('status', 20)->default('active'); // active, archived
             $table->json('metadata')->nullable(); // holds ALOC id, learning objectives, tags, curriculum alignment
+            // sha1 of exam + year + subject + normalised text: lets imports find the same question
+            // again (instead of matching long text) and stops duplicates.
+            $table->char('content_hash', 40)->nullable()->unique();
             $table->timestamps();
 
             $table->index(['exam_code', 'exam_year']);

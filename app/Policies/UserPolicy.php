@@ -24,8 +24,15 @@ class UserPolicy
             return false;
         }
         $schoolId = $actor->managedSchoolId();
+        if ($schoolId === null) {
+            return false;
+        }
 
-        return $schoolId !== null && $target->belongsToSchool($schoolId);
+        // A teacher belongs to the school on their profile; class memberships elsewhere (left
+        // over from a move) must not let another school's admin change their password.
+        return $target->isTeacher()
+            ? $target->managedSchoolId() === $schoolId
+            : $target->belongsToSchool($schoolId);
     }
 
     public function delete(User $actor, User $target): bool

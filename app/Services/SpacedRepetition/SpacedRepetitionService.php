@@ -3,11 +3,11 @@
 namespace App\Services\SpacedRepetition;
 
 use App\Models\LearnerProgress;
-use App\Models\PastQuestion;
 use App\Models\PastQuestionOption;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\SpacedRepetitionItem;
+use App\Models\Subject;
 use App\Models\User;
 use App\Services\Gamification\GamificationService;
 use App\Support\OfflineAnswerKey;
@@ -17,6 +17,18 @@ use Illuminate\Support\Facades\DB;
 
 class SpacedRepetitionService
 {
+    /** Review intervals in days for the first steps of the ladder (SM-2 takes over after). */
+    private const FIRST_INTERVALS = [3, 7, 14];
+
+    /** An item is mastered after this many correct reviews in a row, or once its interval reaches MASTERED_INTERVAL days. */
+    private const MASTERY_STREAK = 5;
+
+    private const MASTERED_INTERVAL = 60;
+
+    /** Longest gap between reviews. Without it "easy" kept multiplying the interval until the next
+     * review date passed 2038, which MySQL TIMESTAMP columns can't store (the review failed). */
+    private const MAX_INTERVAL = 365;
+
     public function __construct(
         protected GamificationService $gamificationService
     ) {}
@@ -31,14 +43,14 @@ class SpacedRepetitionService
         $isCorrect = (bool) ($params['is_correct'] ?? false);
         $rating = $params['rating'] ?? null; // 'again', 'hard', 'good', 'easy'
 
-        if (!$questionId) {
+        if (! $questionId) {
             return null;
         }
 
         $subjectId = $params['subject_id'] ?? null;
         $topicId = $params['topic_id'] ?? null;
 
-        if (!$subjectId || !$topicId) {
+        if (! $subjectId || ! $topicId) {
             $q = Question::with('topic.subject')->find($questionId);
             $topicId = $topicId ?: $q?->topic_id;
             $subjectId = $subjectId ?: $q?->topic?->subject_id;
@@ -89,7 +101,7 @@ class SpacedRepetitionService
         $item->total_reviews += 1;
         $item->last_reviewed_at = $at;
 
-        if (!$isCorrect || $rating === 'again') {
+        if (! $isCorrect || $rating === 'again') {
             // Mistake / Failed Recall: reset interval
             $item->repetition_level = 1;
             $item->interval_days = 1;
@@ -100,6 +112,7 @@ class SpacedRepetitionService
             $item->last_result = 'wrong';
             $item->reason_tag = 'recent_mistake';
             $item->status = 'active';
+
             return;
         }
 
@@ -119,24 +132,24 @@ class SpacedRepetitionService
 
         // Calculate next interval progression
         if ($currentLevel === 0 || $currentInterval <= 1) {
-            $nextInterval = 3;
+            $nextInterval = self::FIRST_INTERVALS[0];
             $nextLevel = 2;
         } elseif ($currentLevel === 1 || $currentInterval <= 3) {
-            $nextInterval = 7;
+            $nextInterval = self::FIRST_INTERVALS[1];
             $nextLevel = 3;
         } elseif ($currentLevel === 2 || $currentInterval <= 7) {
-            $nextInterval = 14;
+            $nextInterval = self::FIRST_INTERVALS[2];
             $nextLevel = 4;
         } else {
             $multiplier = $rating === 'easy' ? max($ease, 2.5) : ($rating === 'hard' ? 1.2 : $ease);
-            $nextInterval = (int) round($currentInterval * $multiplier);
+            $nextInterval = min(self::MAX_INTERVAL, (int) round($currentInterval * $multiplier));
             $nextLevel = $currentLevel + 1;
         }
 
         // Graduation to Mastered state
-        if ($item->consecutive_correct >= 5 || $nextInterval >= 60) {
+        if ($item->consecutive_correct >= self::MASTERY_STREAK || $nextInterval >= self::MASTERED_INTERVAL) {
             $item->status = 'mastered';
-            $item->interval_days = max(60, $nextInterval);
+            $item->interval_days = max(self::MASTERED_INTERVAL, $nextInterval);
             $item->next_review_at = $at->copy()->addDays($item->interval_days);
             $item->reason_tag = 'retention_check';
         } else {
@@ -163,14 +176,13 @@ class SpacedRepetitionService
             ->select(['c.id', 'c.name', 'c.school_id', 'c.grade_level', 'c.program_id'])
             ->first();
 
-        if (!$enrolledClass) {
+        if (! $enrolledClass) {
             // Fallback for independent learners: general school curriculum subjects
             $schoolId = $user->learnerProfile?->school_id;
+            // No school means shared subjects only, never every school's private ones.
             $subjectIds = Subject::where('status', 'active')
-                ->when($schoolId, function ($q, $sId) {
-                    $q->where(function ($sub) use ($sId) {
-                        $sub->where('school_id', $sId)->orWhereNull('school_id');
-                    });
+                ->where(function ($sub) use ($schoolId) {
+                    $sub->whereNull('school_id')->when($schoolId, fn ($q) => $q->orWhere('school_id', $schoolId));
                 })
                 ->pluck('id')
                 ->all();
@@ -191,7 +203,7 @@ class SpacedRepetitionService
         if ($enrolledClass->program_id) {
             $classQuery->where(function ($q) use ($enrolledClass) {
                 $q->where('program_id', $enrolledClass->program_id)
-                  ->orWhere('id', $enrolledClass->id);
+                    ->orWhere('id', $enrolledClass->id);
             });
         } else {
             $classQuery->where('id', $enrolledClass->id);
@@ -205,13 +217,13 @@ class SpacedRepetitionService
             ->whereNull('deleted_at')
             ->where(function ($q) use ($classIds, $enrolledClass) {
                 $q->whereIn('class_id', $classIds)
-                  ->orWhere(function ($sub) use ($enrolledClass) {
-                      $sub->whereNull('class_id')
-                          ->where(function ($s) use ($enrolledClass) {
-                              $s->where('school_id', $enrolledClass->school_id)
-                                ->orWhereNull('school_id');
-                          });
-                  });
+                    ->orWhere(function ($sub) use ($enrolledClass) {
+                        $sub->whereNull('class_id')
+                            ->where(function ($s) use ($enrolledClass) {
+                                $s->where('school_id', $enrolledClass->school_id)
+                                    ->orWhereNull('school_id');
+                            });
+                    });
             })
             ->pluck('id')
             ->all();
@@ -241,20 +253,21 @@ class SpacedRepetitionService
             'subject',
             'topic',
         ])
-        ->where('user_id', $user->id)
-        ->where('status', 'active')
-        ->whereNotNull('question_id')
-        ->where(function ($q) {
-            $q->whereNull('next_review_at')
-              ->orWhere('next_review_at', '<=', now()->endOfDay());
-        });
+            ->where('user_id', $user->id)
+        // Mastered items return for their spaced retention check (60+ days) instead of never.
+            ->whereIn('status', ['active', 'mastered'])
+            ->whereNotNull('question_id')
+            ->where(function ($q) {
+                $q->whereNull('next_review_at')
+                    ->orWhere('next_review_at', '<=', now()->endOfDay());
+            });
 
-        if (!empty($subjectIds)) {
+        if (! empty($subjectIds)) {
             $dueQuery->where(function ($q) use ($subjectIds) {
                 $q->whereIn('subject_id', $subjectIds)
-                  ->orWhereHas('question.topic', function ($tq) use ($subjectIds) {
-                      $tq->whereIn('subject_id', $subjectIds);
-                  });
+                    ->orWhereHas('question.topic', function ($tq) use ($subjectIds) {
+                        $tq->whereIn('subject_id', $subjectIds);
+                    });
             });
         }
 
@@ -269,7 +282,7 @@ class SpacedRepetitionService
             ->limit($limit)
             ->get();
 
-        $formatted = $dueItems->map(fn($item) => $this->formatQueueItem($item))->filter()->values();
+        $formatted = $dueItems->map(fn ($item) => $this->formatQueueItem($item))->filter()->values();
 
         // 2. Fallback: If learner has fewer than $limit items due, seed strictly from the learner's class/programme curriculum questions
         if ($formatted->count() < $limit) {
@@ -308,7 +321,7 @@ class SpacedRepetitionService
         $weakTopicQuery = LearnerProgress::where('user_id', $user->id)
             ->where('mastery_score', '<', 75);
 
-        if (!empty($subjectIds)) {
+        if (! empty($subjectIds)) {
             $weakTopicQuery->whereHas('topic', function ($t) use ($subjectIds) {
                 $t->whereIn('subject_id', $subjectIds);
             });
@@ -320,117 +333,86 @@ class SpacedRepetitionService
             ->pluck('topic_id')
             ->all();
 
+        // Every question the learner already has an item for stays out: seeding must never touch an
+        // existing item (it used to record a fake mistake, resetting even mastered ones).
+        $excludeQIds = array_merge($excludeQIds, SpacedRepetitionItem::where('user_id', $user->id)
+            ->whereNotNull('question_id')
+            ->pluck('question_id')
+            ->all());
+
+        // Candidate sources in priority order, each with the reason shown on the card.
+        $sources = [];
+        if (! empty($weakTopicIds)) {
+            // 1. The learner's weak topics in their curriculum
+            $sources[] = ['weak_topic', fn ($q) => $q->whereIn('topic_id', $weakTopicIds)];
+        }
+        if ($enrolledClassId) {
+            // 2. Their exact enrolled class
+            $sources[] = ['fragile_mastery', fn ($q) => $q->whereHas('topic.subject', fn ($s) => $s->where('class_id', $enrolledClassId))];
+        }
+        if (! empty($classIds)) {
+            // 3. Other classes in their programme track
+            $sources[] = ['fragile_mastery', fn ($q) => $q->whereHas('topic.subject', fn ($s) => $s->whereIn('class_id', $classIds))];
+        }
+        if (! empty($subjectIds)) {
+            // 4. General subjects in their school's curriculum
+            $sources[] = ['fragile_mastery', fn ($q) => $q->whereHas('topic.subject', fn ($s) => $s->whereIn('id', $subjectIds))];
+        }
+
         $seeded = collect();
-
-        // 1. First priority: Questions from learner's weak topics in their curriculum
-        if (!empty($weakTopicIds)) {
-            $weakQuestions = Question::with(['options', 'topic.subject'])
-                ->where('status', 'active')
-                ->whereIn('topic_id', $weakTopicIds)
-                ->whereNotIn('id', $excludeQIds)
-                ->inRandomOrder()
-                ->limit($count)
-                ->get();
-
-            foreach ($weakQuestions as $q) {
-                $item = $this->recordAttempt($user, [
-                    'question_id' => $q->id,
-                    'is_correct' => false,
-                    'rating' => 'again',
-                ]);
-                if ($item) {
-                    $item->setRelation('question', $q);
-                    $item->reason_tag = 'weak_topic';
-                    $seeded->push($this->formatQueueItem($item));
-                    $excludeQIds[] = $q->id;
-                }
+        foreach ($sources as [$reasonTag, $filter]) {
+            if ($seeded->count() >= $count) {
+                break;
             }
-        }
 
-        // 2. Second priority: Questions from the learner's EXACT enrolled class subjects
-        if ($seeded->count() < $count && $enrolledClassId) {
-            $stillNeeded = $count - $seeded->count();
-            $exactClassQuestions = Question::with(['options', 'topic.subject'])
-                ->where('status', 'active')
+            $questions = $filter(Question::with(['options', 'topic.subject'])->where('status', 'active'))
                 ->whereNotIn('id', $excludeQIds)
-                ->whereHas('topic.subject', function ($s) use ($enrolledClassId) {
-                    $s->where('class_id', $enrolledClassId);
-                })
                 ->inRandomOrder()
-                ->limit($stillNeeded)
+                ->limit($count - $seeded->count())
                 ->get();
 
-            foreach ($exactClassQuestions as $q) {
-                $item = $this->recordAttempt($user, [
-                    'question_id' => $q->id,
-                    'is_correct' => false,
-                    'rating' => 'again',
-                ]);
+            foreach ($questions as $q) {
+                $excludeQIds[] = $q->id;
+                $item = $this->seedItem($user, $q, $reasonTag);
                 if ($item) {
-                    $item->setRelation('question', $q);
-                    $item->reason_tag = 'fragile_mastery';
-                    $seeded->push($this->formatQueueItem($item));
-                    $excludeQIds[] = $q->id;
-                }
-            }
-        }
-
-        // 3. Third priority: Questions from other progression classes in the learner's PROGRAM track
-        if ($seeded->count() < $count && !empty($classIds)) {
-            $stillNeeded = $count - $seeded->count();
-            $programQuestions = Question::with(['options', 'topic.subject'])
-                ->where('status', 'active')
-                ->whereNotIn('id', $excludeQIds)
-                ->whereHas('topic.subject', function ($s) use ($classIds) {
-                    $s->whereIn('class_id', $classIds);
-                })
-                ->inRandomOrder()
-                ->limit($stillNeeded)
-                ->get();
-
-            foreach ($programQuestions as $q) {
-                $item = $this->recordAttempt($user, [
-                    'question_id' => $q->id,
-                    'is_correct' => false,
-                    'rating' => 'again',
-                ]);
-                if ($item) {
-                    $item->setRelation('question', $q);
-                    $item->reason_tag = 'fragile_mastery';
-                    $seeded->push($this->formatQueueItem($item));
-                    $excludeQIds[] = $q->id;
-                }
-            }
-        }
-
-        // 4. Fallback: Questions from general school subjects in the learner's school curriculum
-        if ($seeded->count() < $count && !empty($subjectIds)) {
-            $stillNeeded = $count - $seeded->count();
-            $generalQuestions = Question::with(['options', 'topic.subject'])
-                ->where('status', 'active')
-                ->whereNotIn('id', $excludeQIds)
-                ->whereHas('topic.subject', function ($s) use ($subjectIds) {
-                    $s->whereIn('id', $subjectIds);
-                })
-                ->inRandomOrder()
-                ->limit($stillNeeded)
-                ->get();
-
-            foreach ($generalQuestions as $q) {
-                $item = $this->recordAttempt($user, [
-                    'question_id' => $q->id,
-                    'is_correct' => false,
-                    'rating' => 'again',
-                ]);
-                if ($item) {
-                    $item->setRelation('question', $q);
-                    $item->reason_tag = 'fragile_mastery';
                     $seeded->push($this->formatQueueItem($item));
                 }
             }
         }
 
         return $seeded;
+    }
+
+    /**
+     * A new, never-reviewed item due now. Returns null when the learner already has one for this
+     * question (a concurrent request created it): existing items are never changed by seeding.
+     */
+    private function seedItem(User $user, Question $question, string $reasonTag): ?SpacedRepetitionItem
+    {
+        $item = SpacedRepetitionItem::createOrFirst(
+            ['user_id' => $user->id, 'question_id' => $question->id],
+            [
+                'item_type' => 'question',
+                'past_question_id' => null,
+                'subject_id' => $question->topic?->subject_id,
+                'topic_id' => $question->topic_id,
+                'repetition_level' => 0,
+                'ease_factor' => 2.50,
+                'interval_days' => 0,
+                'consecutive_correct' => 0,
+                'total_reviews' => 0,
+                'total_mistakes' => 0,
+                'next_review_at' => now(),
+                'reason_tag' => $reasonTag,
+                'status' => 'active',
+            ]
+        );
+
+        if (! $item->wasRecentlyCreated) {
+            return null;
+        }
+
+        return $item->setRelation('question', $question);
     }
 
     /**
@@ -441,7 +423,7 @@ class SpacedRepetitionService
         $question = $item->question;
         $pastQuestion = $item->pastQuestion;
 
-        if (!$question && !$pastQuestion) {
+        if (! $question && ! $pastQuestion) {
             return null;
         }
 
@@ -486,7 +468,7 @@ class SpacedRepetitionService
 
         // Format options
         $options = $qObj->options->map(function ($opt, $idx) use ($isPq) {
-            $letter = $isPq 
+            $letter = $isPq
                 ? ($opt->option_key ?: chr(65 + $idx))
                 : chr(65 + $idx);
 
@@ -577,7 +559,7 @@ class SpacedRepetitionService
         $item->save();
 
         // Calculate XP Reward (strictly based on correct recall)
-        if (!$isCorrect || $rating === 'again') {
+        if (! $isCorrect || $rating === 'again') {
             $xpEarned = 0;
             $gamificationResult = [
                 'total_xp' => $user->gamification?->total_xp ?? 0,
@@ -595,7 +577,7 @@ class SpacedRepetitionService
                 $user,
                 $xpEarned,
                 'spaced_repetition',
-                "Daily Revision Recall: " . ($item->topic?->name ?? 'Concept Recall'),
+                'Daily Revision Recall: '.($item->topic?->name ?? 'Concept Recall'),
                 $reviewedAt
             );
         }
@@ -625,20 +607,20 @@ class SpacedRepetitionService
 
         $base = SpacedRepetitionItem::where('user_id', $user->id)->whereNotNull('question_id');
 
-        if (!empty($subjectIds)) {
+        if (! empty($subjectIds)) {
             $base->where(function ($q) use ($subjectIds) {
                 $q->whereIn('subject_id', $subjectIds)
-                  ->orWhereHas('question.topic', function ($tq) use ($subjectIds) {
-                      $tq->whereIn('subject_id', $subjectIds);
-                  });
+                    ->orWhereHas('question.topic', function ($tq) use ($subjectIds) {
+                        $tq->whereIn('subject_id', $subjectIds);
+                    });
             });
         }
 
         $totalItems = (clone $base)->count();
-        $dueToday = (clone $base)->where('status', 'active')
+        $dueToday = (clone $base)->whereIn('status', ['active', 'mastered'])
             ->where(function ($q) {
                 $q->whereNull('next_review_at')
-                  ->orWhere('next_review_at', '<=', now()->endOfDay());
+                    ->orWhere('next_review_at', '<=', now()->endOfDay());
             })->count();
         $mastered = (clone $base)->where('status', 'mastered')->count();
         $learning = (clone $base)->where('status', 'active')->count();

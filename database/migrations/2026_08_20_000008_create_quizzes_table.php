@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('quizzes', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('school_id')->nullable()->constrained('schools')->nullOnDelete();
+            $table->foreignId('school_id')->nullable()->constrained('schools')->restrictOnDelete(); // null means "shared with every school", so never null it on delete
             $table->string('title');
             $table->text('description')->nullable();
             $table->integer('time_limit_minutes')->nullable();

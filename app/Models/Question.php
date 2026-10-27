@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,7 +14,13 @@ class Question extends Model
 
     protected $guarded = [];
 
-    protected $casts = [];
+    protected function casts(): array
+    {
+        return [
+            'marks' => 'integer',
+            'context_order' => 'integer',
+        ];
+    }
 
     public function topic(): BelongsTo
     {
@@ -63,7 +68,7 @@ class Question extends Model
      */
     public function scopeForUser($query, ?User $user)
     {
-        if (!$user) {
+        if (! $user) {
             return $query->whereRaw('1 = 0');
         }
 
@@ -76,9 +81,10 @@ class Question extends Model
 
         if ($user->isSchoolAdmin()) {
             $schoolId = $user->primarySchool()?->id;
+
             return $query->where(function ($q) use ($schoolId) {
                 $q->where('school_id', $schoolId)->orWhereNull('school_id');
-            })->when(!empty($allowedVariants), function ($q) use ($allowedVariants) {
+            })->when(! empty($allowedVariants), function ($q) use ($allowedVariants) {
                 $q->whereHas('topic', function ($tq) use ($allowedVariants) {
                     $tq->whereIn('level', $allowedVariants)->orWhereNull('level');
                 });
@@ -98,7 +104,7 @@ class Question extends Model
 
             return $query->whereHas('topic.subject', function ($sub) use ($teacherClassIds) {
                 $sub->whereIn('class_id', $teacherClassIds);
-            })->when(!empty($allowedVariants), function ($q) use ($allowedVariants) {
+            })->when(! empty($allowedVariants), function ($q) use ($allowedVariants) {
                 $q->whereHas('topic', function ($tq) use ($allowedVariants) {
                     $tq->whereIn('level', $allowedVariants)->orWhereNull('level');
                 });
@@ -128,7 +134,7 @@ class Question extends Model
                 } else {
                     $subQuery->whereNull('class_id');
                 }
-            })->when(!empty($allowedVariants), function ($q) use ($allowedVariants) {
+            })->when(! empty($allowedVariants), function ($q) use ($allowedVariants) {
                 $q->whereHas('topic', function ($tq) use ($allowedVariants) {
                     $tq->whereIn('level', $allowedVariants)->orWhereNull('level');
                 });
@@ -156,10 +162,10 @@ class Question extends Model
             ];
 
             $match = null;
-            if (!empty($opt['id']) && is_numeric($opt['id'])) {
+            if (! empty($opt['id']) && is_numeric($opt['id'])) {
                 $match = $unmatched->get((int) $opt['id']);
             }
-            if (!$match) {
+            if (! $match) {
                 $match = $unmatched->first(fn ($o) => trim($o->option_text) === trim($opt['option_text']));
             }
 

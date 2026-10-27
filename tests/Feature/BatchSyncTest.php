@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
+use App\Jobs\AwardQuizCompletionXp;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Quiz;
@@ -11,6 +12,7 @@ use App\Models\Subject;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\XpTransaction;
+use App\Services\Gamification\GamificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -20,8 +22,11 @@ class BatchSyncTest extends TestCase
     use RefreshDatabase;
 
     protected User $learner;
+
     protected Quiz $quiz;
+
     protected Question $question;
+
     protected QuestionOption $correct;
 
     protected function setUp(): void
@@ -161,8 +166,8 @@ class BatchSyncTest extends TestCase
         $xpAfterSync = XpTransaction::where('user_id', $this->learner->id)->sum('amount');
 
         // A retried or duplicated job must not award again.
-        (new \App\Jobs\AwardQuizCompletionXp($id))->handle(app(\App\Services\Gamification\GamificationService::class));
-        (new \App\Jobs\AwardQuizCompletionXp($id))->handle(app(\App\Services\Gamification\GamificationService::class));
+        (new AwardQuizCompletionXp($id))->handle(app(GamificationService::class));
+        (new AwardQuizCompletionXp($id))->handle(app(GamificationService::class));
 
         $this->assertNotNull(QuizAttempt::find($id)->xp_awarded_at);
         $this->assertGreaterThan(0, $xpAfterSync);

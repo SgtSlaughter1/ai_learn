@@ -12,17 +12,20 @@ class ExamSimulation extends Model
 
     protected $guarded = [];
 
-    protected $casts = [
-        'subject_ids' => 'array',
-        'answers' => 'array',
-        'topic_breakdown' => 'array',
-        'score_percentage' => 'float',
-        'total_questions' => 'integer',
-        'correct_answers' => 'integer',
-        'duration_seconds' => 'integer',
-        'time_spent_seconds' => 'integer',
-        'completed_at' => 'datetime',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'subject_ids' => 'array',
+            'answers' => 'array',
+            'topic_breakdown' => 'array',
+            'score_percentage' => 'float',
+            'total_questions' => 'integer',
+            'correct_answers' => 'integer',
+            'duration_seconds' => 'integer',
+            'time_spent_seconds' => 'integer',
+            'completed_at' => 'datetime',
+        ];
+    }
 
     public function user(): BelongsTo
     {

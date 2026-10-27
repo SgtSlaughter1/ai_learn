@@ -17,6 +17,8 @@ use Illuminate\Support\Str;
 
 class QuestionToolsController extends Controller
 {
+    public function __construct(private AIService $ai) {}
+
     public function extract(AiExtractQuestionsRequest $request): JsonResponse
     {
         $validated = $request->validated();
@@ -38,8 +40,7 @@ class QuestionToolsController extends Controller
             }
         }
 
-        $aiService = app(AIService::class);
-        $extracted = $aiService->extractAndSolveQuestions($validated['raw_text'], $subjectName, $topicName);
+        $extracted = $this->ai->extractAndSolveQuestions($validated['raw_text'], $subjectName, $topicName);
 
         return response()->json([
             'count' => count($extracted),
@@ -75,8 +76,7 @@ class QuestionToolsController extends Controller
         $gradeLevel = $validated['grade_level'] ?? $topic->level ?? null;
         $count = $validated['count'] ?? 10;
 
-        $aiService = app(AIService::class);
-        $generated = $aiService->generateQuestionsForTopic(
+        $generated = $this->ai->generateQuestionsForTopic(
             topicName: $topicName,
             subjectName: $subjectName,
             className: $className,
@@ -87,6 +87,8 @@ class QuestionToolsController extends Controller
         return response()->json([
             'count' => count($generated),
             'questions' => $generated,
+            // 'offline' when the AI was unavailable and these are templates to edit, not real questions.
+            'source' => collect($generated)->contains('is_placeholder', true) ? 'offline' : 'ai',
             'topic' => [
                 'id' => $topic->id,
                 'name' => $topic->name,
@@ -98,12 +100,15 @@ class QuestionToolsController extends Controller
     public function uploadImage(Request $request): JsonResponse
     {
 
+        // No SVG: it can carry scripts that run on this domain when the file is opened.
         $request->validate([
-            'image' => ['required', 'image', 'mimes:jpeg,png,jpg,webp,svg,gif', 'max:5120'],
+            'image' => ['required', 'image', 'mimes:jpeg,png,jpg,webp,gif', 'max:5120'],
         ]);
 
         $file = $request->file('image');
-        $filename = 'q_'.time().'_'.Str::random(10).'.'.$file->getClientOriginalExtension();
+        // Extension from the file's contents, never the uploaded name: a PNG named "x.html"
+        // would otherwise be stored, and served, as a web page.
+        $filename = 'q_'.time().'_'.Str::random(10).'.'.$file->extension();
         $path = $file->storeAs('questions', $filename, 'public');
 
         $url = asset('storage/'.$path);

@@ -2,10 +2,14 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Admin\Concerns\ValidatesCorrectOptions;
+use App\Models\Question;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateQuestionRequest extends FormRequest
 {
+    use ValidatesCorrectOptions;
+
     /** Authorized by the route's role gate and the controller's policy checks. */
     public function authorize(): bool
     {
@@ -53,18 +57,11 @@ class UpdateQuestionRequest extends FormRequest
             if (is_array($context) && blank($context['body'] ?? null) && blank($context['image_url'] ?? null)) {
                 $validator->errors()->add('context.body', 'Add the passage text or a picture for these questions.');
             }
-            $options = $this->input('options', []);
-            if (!empty($options)) {
-                $hasCorrect = false;
-                foreach ($options as $option) {
-                    if (isset($option['is_correct']) && filter_var($option['is_correct'], FILTER_VALIDATE_BOOLEAN)) {
-                        $hasCorrect = true;
-                        break;
-                    }
-                }
-                if (!$hasCorrect) {
-                    $validator->errors()->add('options', 'A question must have at least one correct option.');
-                }
+            $options = (array) $this->input('options', []);
+            if (! empty($options)) {
+                // No type sent: the question keeps the type it already has.
+                $type = $this->input('type') ?? Question::whereKey($this->route('id'))->value('type');
+                $this->checkCorrectOptions($validator, $options, $type);
             }
         });
     }

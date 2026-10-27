@@ -12,11 +12,14 @@ use App\Models\LearnerProfile;
 use App\Models\School;
 use App\Models\User;
 use App\Models\UserGamification;
+use App\Support\ListSize;
+use App\Support\SearchTerm;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class LearnerController extends Controller
 {
@@ -46,14 +49,14 @@ class LearnerController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhereHas('learnerProfile', fn ($lp) => $lp->where('student_id', 'like', "%{$search}%"));
+                $q->where('name', 'like', SearchTerm::like($search))
+                    ->orWhere('email', 'like', SearchTerm::like($search))
+                    ->orWhereHas('learnerProfile', fn ($lp) => $lp->where('student_id', 'like', SearchTerm::like($search)));
             });
         }
 
         $learners = $query->orderBy('name')
-            ->paginate($request->get('per_page', 50));
+            ->paginate(ListSize::from($request->get('per_page'), 50, 100));
 
         return response()->json([
             'learners' => $learners->items(),
@@ -83,13 +86,13 @@ class LearnerController extends Controller
         if (! empty($validated['class_id'])) {
             $targetClass = ClassModel::find($validated['class_id']);
             if (! $targetClass) {
-                return response()->json(['error' => 'Selected class does not exist.'], 422);
+                throw ValidationException::withMessages(['class_id' => 'Selected class does not exist.']);
             }
             if ($targetSchool && $targetClass->school_id !== $targetSchool->id) {
-                return response()->json(['error' => 'The selected class does not belong to the selected school.'], 422);
+                throw ValidationException::withMessages(['class_id' => 'The selected class does not belong to the selected school.']);
             }
             if ($targetSchool && ! $targetSchool->supportsGradeLevel($targetClass->grade_level)) {
-                return response()->json(['error' => "Class grade level ({$targetClass->grade_level}) is not supported by the school's category ({$targetSchool->category})."], 422);
+                throw ValidationException::withMessages(['grade_level' => "Class grade level ({$targetClass->grade_level}) is not supported by the school's category ({$targetSchool->category_type_label})."]);
             }
             if (empty($validated['grade_level'])) {
                 $validated['grade_level'] = $targetClass->grade_level;
@@ -97,7 +100,7 @@ class LearnerController extends Controller
         }
 
         if (! empty($validated['grade_level']) && $targetSchool && ! $targetSchool->supportsGradeLevel($validated['grade_level'])) {
-            return response()->json(['error' => "Grade level {$validated['grade_level']} is not supported by the school's category ({$targetSchool->category})."], 422);
+            throw ValidationException::withMessages(['grade_level' => "Grade level {$validated['grade_level']} is not supported by the school's category ({$targetSchool->category_type_label})."]);
         }
 
         $user = DB::transaction(function () use ($validated) {
@@ -158,18 +161,18 @@ class LearnerController extends Controller
         if (! empty($validated['class_id'])) {
             $targetClass = ClassModel::find($validated['class_id']);
             if (! $targetClass) {
-                return response()->json(['error' => 'Selected class does not exist.'], 422);
+                throw ValidationException::withMessages(['class_id' => 'Selected class does not exist.']);
             }
             if ($targetSchool && $targetClass->school_id !== $targetSchool->id) {
-                return response()->json(['error' => 'The selected class does not belong to the selected school.'], 422);
+                throw ValidationException::withMessages(['class_id' => 'The selected class does not belong to the selected school.']);
             }
             if ($targetSchool && ! $targetSchool->supportsGradeLevel($targetClass->grade_level)) {
-                return response()->json(['error' => "Class grade level ({$targetClass->grade_level}) is not supported by the school's category ({$targetSchool->category})."], 422);
+                throw ValidationException::withMessages(['grade_level' => "Class grade level ({$targetClass->grade_level}) is not supported by the school's category ({$targetSchool->category_type_label})."]);
             }
         }
 
         if (! empty($validated['grade_level']) && $targetSchool && ! $targetSchool->supportsGradeLevel($validated['grade_level'])) {
-            return response()->json(['error' => "Grade level {$validated['grade_level']} is not supported by the school's category ({$targetSchool->category})."], 422);
+            throw ValidationException::withMessages(['grade_level' => "Grade level {$validated['grade_level']} is not supported by the school's category ({$targetSchool->category_type_label})."]);
         }
 
         DB::transaction(function () use ($user, $validated) {

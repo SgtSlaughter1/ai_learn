@@ -8,7 +8,9 @@ use App\Models\Quiz;
 use App\Models\QuizAdaptiveState;
 use App\Models\QuizAnswer;
 use App\Models\QuizAttempt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class AdaptiveService
 {
@@ -16,9 +18,9 @@ class AdaptiveService
      * Difficulty rating values on an Elo-like scale.
      */
     private const DIFFICULTY_RATINGS = [
-        'easy'   => 1000,
+        'easy' => 1000,
         'medium' => 1500,
-        'hard'   => 2000,
+        'hard' => 2000,
     ];
 
     /**
@@ -26,6 +28,11 @@ class AdaptiveService
      * Higher = more volatile, lower = more stable.
      */
     private const K_FACTOR = 32;
+
+    /** Bounds of the ability estimate, so a long run of answers can't push it off the scale. */
+    public const MIN_ABILITY = 500;
+
+    public const MAX_ABILITY = 2500;
 
     /**
      * Maximum questions per adaptive quiz session (10 questions per attempt).
@@ -44,86 +51,106 @@ class AdaptiveService
         // Create quiz attempt record
         $attemptId = (string) Str::uuid();
         QuizAttempt::create([
-            'id'             => $attemptId,
-            'user_id'        => $userId,
-            'quiz_id'        => $quiz->id,
-            'status'         => 'in_progress',
-            'score'          => 0,
-            'total_marks'    => 0,
-            'started_at'     => now(),
+            'id' => $attemptId,
+            'user_id' => $userId,
+            'quiz_id' => $quiz->id,
+            'status' => 'in_progress',
+            'score' => 0,
+            'total_marks' => 0,
+            'started_at' => now(),
         ]);
 
         // Create adaptive state
         $state = QuizAdaptiveState::create([
-            'quiz_attempt_id'     => $attemptId,
-            'user_id'             => $userId,
-            'quiz_id'             => $quiz->id,
-            'current_ability'     => $initialAbility,
-            'questions_answered'  => 0,
-            'correct_count'       => 0,
+            'quiz_attempt_id' => $attemptId,
+            'user_id' => $userId,
+            'quiz_id' => $quiz->id,
+            'current_ability' => $initialAbility,
+            'questions_answered' => 0,
+            'correct_count' => 0,
             'answered_question_ids' => [],
-            'answer_results'      => [],
-            'is_completed'        => false,
+            'answer_results' => [],
+            'is_completed' => false,
         ]);
 
         // Select and return the first question
         $firstQuestion = $this->selectNextQuestion($state, $quiz);
 
         return [
-            'state_id'         => $state->id,
-            'attempt_id'       => $attemptId,
-            'ability_score'    => $initialAbility,
+            'state_id' => $state->id,
+            'attempt_id' => $attemptId,
+            'ability_score' => $initialAbility,
             'difficulty_label' => $this->getDifficultyLabel($initialAbility),
             'questions_answered' => 0,
-            'total_questions'  => self::MAX_QUESTIONS,
-            'is_completed'     => false,
-            'question'         => $firstQuestion ? $this->formatQuestion($firstQuestion) : null,
+            'total_questions' => self::MAX_QUESTIONS,
+            'is_completed' => false,
+            'question' => $firstQuestion ? $this->formatQuestion($firstQuestion) : null,
         ];
     }
 
     /**
      * Submit an answer and return the next question (or completion).
      */
-    public function submitAnswer(string $userId, int|string $stateId, int $questionId, ?int $selectedOptionId): array
+    public function submitAnswer(string $userId, int|string $stateId, int $questionId, ?int $selectedOptionId, ?int $quizId = null): array
+    {
+        // Locked so a double tap can't record the same answer twice or lose an update.
+        return DB::transaction(fn () => $this->recordAnswer($userId, $stateId, $questionId, $selectedOptionId, $quizId));
+    }
+
+    private function recordAnswer(string $userId, int|string $stateId, int $questionId, ?int $selectedOptionId, ?int $quizId): array
     {
         $state = QuizAdaptiveState::where('id', $stateId)
             ->where('user_id', $userId)
             ->where('is_completed', false)
+            ->when($quizId !== null, fn ($q) => $q->where('quiz_id', $quizId))
+            ->lockForUpdate()
             ->firstOrFail();
 
         $quiz = Quiz::findOrFail($state->quiz_id);
 
-        // Find the question and evaluate the answer
-        $question = Question::with('options')->findOrFail($questionId);
+        // Only this quiz's questions, each answered once: otherwise any question id (even another
+        // school's) would return its answer, and repeating a known one would farm the score.
+        $answeredIds = is_array($state->answered_question_ids) ? $state->answered_question_ids : [];
+        if (in_array($questionId, array_map('intval', $answeredIds), true)) {
+            throw ValidationException::withMessages(['question_id' => 'This question has already been answered.']);
+        }
+        $question = $quiz->questions()
+            ->where('questions.id', $questionId)
+            ->where('questions.status', 'active')
+            ->with('options')
+            ->first();
+        if (! $question) {
+            throw ValidationException::withMessages(['question_id' => 'This question is not part of the quiz.']);
+        }
         $correctOption = $question->options->firstWhere('is_correct', true);
         $isCorrect = $selectedOptionId && $correctOption && $selectedOptionId === $correctOption->id;
 
         // Calculate ability shift using Elo formula
         $questionRating = self::DIFFICULTY_RATINGS[$question->difficulty] ?? self::DIFFICULTY_RATINGS['medium'];
-        $newAbility = $this->calculateNewAbility($state->current_ability, $questionRating, $isCorrect);
+        $newAbility = self::nextAbility($state->current_ability, $questionRating, $isCorrect);
 
         // Update the state
-        $answeredIds = $state->answered_question_ids ?? [];
-        if (!is_array($answeredIds)) $answeredIds = [];
         $answeredIds[] = $questionId;
 
         $results = $state->answer_results ?? [];
-        if (!is_array($results)) $results = [];
+        if (! is_array($results)) {
+            $results = [];
+        }
         $results[] = [
-            'question_id'        => $questionId,
+            'question_id' => $questionId,
             'selected_option_id' => $selectedOptionId,
-            'is_correct'         => $isCorrect,
-            'ability_before'     => $state->current_ability,
-            'ability_after'      => $newAbility,
-            'question_difficulty'=> $question->difficulty,
+            'is_correct' => $isCorrect,
+            'ability_before' => $state->current_ability,
+            'ability_after' => $newAbility,
+            'question_difficulty' => $question->difficulty,
         ];
 
         $state->update([
-            'current_ability'      => $newAbility,
-            'questions_answered'   => $state->questions_answered + 1,
-            'correct_count'        => $state->correct_count + ($isCorrect ? 1 : 0),
+            'current_ability' => $newAbility,
+            'questions_answered' => $state->questions_answered + 1,
+            'correct_count' => $state->correct_count + ($isCorrect ? 1 : 0),
             'answered_question_ids' => $answeredIds,
-            'answer_results'       => $results,
+            'answer_results' => $results,
         ]);
 
         // Check if quiz is complete
@@ -135,22 +162,22 @@ class AdaptiveService
         // Select the next adaptive question
         $nextQuestion = $this->selectNextQuestion($state, $quiz);
 
-        if (!$nextQuestion) {
+        if (! $nextQuestion) {
             return $this->completeQuiz($state, $quiz);
         }
 
         return [
-            'state_id'         => $state->id,
-            'attempt_id'       => $state->quiz_attempt_id,
-            'ability_score'    => $newAbility,
+            'state_id' => $state->id,
+            'attempt_id' => $state->quiz_attempt_id,
+            'ability_score' => $newAbility,
             'difficulty_label' => $this->getDifficultyLabel($newAbility),
             'questions_answered' => $state->questions_answered,
-            'total_questions'  => $totalQuestions,
-            'is_completed'     => false,
-            'answer_correct'   => $isCorrect,
-            'explanation'      => $question->explanation,
-            'correct_option_id'=> $correctOption?->id,
-            'question'         => $this->formatQuestion($nextQuestion),
+            'total_questions' => $totalQuestions,
+            'is_completed' => false,
+            'answer_correct' => $isCorrect,
+            'explanation' => $question->explanation,
+            'correct_option_id' => $correctOption?->id,
+            'question' => $this->formatQuestion($nextQuestion),
         ];
     }
 
@@ -177,6 +204,7 @@ class AdaptiveService
         // Map mastery_score (0-100) to ability scale (800-2200)
         // mastery 0 → ability 800, mastery 50 → ability 1500, mastery 100 → ability 2200
         $avgMastery = $progress->avg('mastery_score');
+
         return (int) round(800 + ($avgMastery / 100) * 1400);
     }
 
@@ -185,14 +213,14 @@ class AdaptiveService
      * Expected score = 1 / (1 + 10^((questionRating - ability) / 400))
      * New ability = ability + K * (actualScore - expectedScore)
      */
-    private function calculateNewAbility(int $currentAbility, int $questionRating, bool $isCorrect): int
+    /** Elo update after one answer, kept between MIN_ABILITY and MAX_ABILITY. */
+    public static function nextAbility(int $currentAbility, int $questionRating, bool $isCorrect): int
     {
         $expectedScore = 1 / (1 + pow(10, ($questionRating - $currentAbility) / 400));
         $actualScore = $isCorrect ? 1 : 0;
         $newAbility = $currentAbility + self::K_FACTOR * ($actualScore - $expectedScore);
 
-        // Clamp ability to reasonable bounds
-        return (int) max(500, min(2500, $newAbility));
+        return (int) max(self::MIN_ABILITY, min(self::MAX_ABILITY, $newAbility));
     }
 
     /**
@@ -204,7 +232,9 @@ class AdaptiveService
     private function selectNextQuestion(QuizAdaptiveState $state, Quiz $quiz): ?Question
     {
         $answeredIds = $state->answered_question_ids ?? [];
-        if (!is_array($answeredIds)) $answeredIds = [];
+        if (! is_array($answeredIds)) {
+            $answeredIds = [];
+        }
         $totalAnswered = $state->questions_answered;
         $currentAbility = $state->current_ability;
 
@@ -236,7 +266,7 @@ class AdaptiveService
 
             return [
                 'question' => $question,
-                'score'    => $finalScore,
+                'score' => $finalScore,
             ];
         });
 
@@ -252,19 +282,19 @@ class AdaptiveService
     private function completeQuiz(QuizAdaptiveState $state, Quiz $quiz): array
     {
         $results = $state->answer_results ?? [];
+        // One query for every answered question's marks and topic (was one query per answer).
+        $answered = $quiz->questions()
+            ->whereIn('questions.id', array_column($results, 'question_id'))
+            ->get(['questions.id', 'questions.topic_id'])
+            ->keyBy('id');
+        $marksFor = fn (array $result): int => (int) ($answered[$result['question_id']]?->pivot->marks ?? 1);
+
         $score = 0;
         $totalMarks = 0;
-
         foreach ($results as $result) {
-            $questionMarks = $quiz->questions()
-                ->where('questions.id', $result['question_id'])
-                ->first()
-                ?->pivot
-                ->marks ?? 1;
-
-            $totalMarks += $questionMarks;
+            $totalMarks += $marksFor($result);
             if ($result['is_correct']) {
-                $score += $questionMarks;
+                $score += $marksFor($result);
             }
         }
 
@@ -273,9 +303,9 @@ class AdaptiveService
 
         // Update the quiz attempt with final score
         QuizAttempt::where('id', $state->quiz_attempt_id)->update([
-            'status'       => 'completed',
-            'score'        => $score,
-            'total_marks'  => $totalMarks,
+            'status' => 'completed',
+            'score' => $score,
+            'total_marks' => $totalMarks,
             'completed_at' => now(),
         ]);
 
@@ -283,89 +313,64 @@ class AdaptiveService
         $answersToInsert = [];
         foreach ($results as $result) {
             $answersToInsert[] = [
-                'id'                  => (string) Str::uuid(),
-                'quiz_attempt_id'     => $state->quiz_attempt_id,
-                'question_id'         => $result['question_id'],
-                'selected_option_id'  => $result['selected_option_id'],
-                'is_correct'          => $result['is_correct'],
-                'marks_awarded'       => $result['is_correct'] ? 1 : 0,
-                'answered_at'         => now(),
-                'created_at'          => now(),
-                'updated_at'          => now(),
+                'id' => (string) Str::uuid(),
+                'quiz_attempt_id' => $state->quiz_attempt_id,
+                'question_id' => $result['question_id'],
+                'selected_option_id' => $result['selected_option_id'],
+                'is_correct' => $result['is_correct'],
+                // The question's own marks, so the result page adds up to the attempt's score.
+                'marks_awarded' => $result['is_correct'] ? $marksFor($result) : 0,
+                'answered_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
             ];
         }
         QuizAnswer::insert($answersToInsert);
 
         // Update topic mastery
-        $this->updateTopicMastery($state);
+        $this->updateTopicMastery($state, $answered->pluck('topic_id', 'id')->all());
 
         return [
-            'state_id'           => $state->id,
-            'attempt_id'         => $state->quiz_attempt_id,
-            'ability_score'      => $state->current_ability,
-            'difficulty_label'   => $this->getDifficultyLabel($state->current_ability),
+            'state_id' => $state->id,
+            'attempt_id' => $state->quiz_attempt_id,
+            'ability_score' => $state->current_ability,
+            'difficulty_label' => $this->getDifficultyLabel($state->current_ability),
             'questions_answered' => $state->questions_answered,
-            'correct_count'      => $state->correct_count,
-            'is_completed'       => true,
-            'score'              => $score,
-            'total_marks'        => $totalMarks,
-            'percentage'         => $totalMarks > 0 ? round(($score / $totalMarks) * 100) : 0,
-            'ability_history'    => collect($results)->pluck('ability_after')->toArray(),
-            'question'           => null,
+            'correct_count' => $state->correct_count,
+            'is_completed' => true,
+            'score' => $score,
+            'total_marks' => $totalMarks,
+            'percentage' => $totalMarks > 0 ? round(($score / $totalMarks) * 100) : 0,
+            'ability_history' => collect($results)->pluck('ability_after')->toArray(),
+            'question' => null,
         ];
     }
 
     /**
-     * Update topic mastery scores based on adaptive quiz results.
+     * Add the adaptive results to topic progress through the same atomic update as quiz sync
+     * (the old read-then-write lost concurrent updates), then record the new ability estimate.
+     *
+     * @param  array<int, int>  $topicByQuestion  question id => topic id
      */
-    private function updateTopicMastery(QuizAdaptiveState $state): void
+    private function updateTopicMastery(QuizAdaptiveState $state, array $topicByQuestion): void
     {
-        $userId = $state->user_id;
-        $results = $state->answer_results ?? [];
-
-        // Group results by question topic
-        $topicStats = [];
-        foreach ($results as $result) {
-            $question = Question::find($result['question_id']);
-            if (!$question) continue;
-
-            $topicId = $question->topic_id;
-            if (!isset($topicStats[$topicId])) {
-                $topicStats[$topicId] = ['attempted' => 0, 'correct' => 0];
+        $tallies = [];
+        foreach ($state->answer_results ?? [] as $result) {
+            $topicId = $topicByQuestion[$result['question_id']] ?? null;
+            if (! $topicId) {
+                continue;
             }
-            $topicStats[$topicId]['attempted']++;
+            $tallies[$topicId] ??= ['attempted' => 0, 'correct' => 0];
+            $tallies[$topicId]['attempted']++;
             if ($result['is_correct']) {
-                $topicStats[$topicId]['correct']++;
+                $tallies[$topicId]['correct']++;
             }
         }
 
-        foreach ($topicStats as $topicId => $stats) {
-            $masteryScore = $stats['attempted'] > 0
-                ? (int) round(($stats['correct'] / $stats['attempted']) * 100)
-                : 0;
-
-            // Get existing progress or calculate from scratch
-            $existing = LearnerProgress::where('user_id', $userId)
-                ->where('topic_id', $topicId)
-                ->first();
-
-            $totalAttempted = ($existing?->questions_attempted ?? 0) + $stats['attempted'];
-            $totalCorrect = ($existing?->questions_correct ?? 0) + $stats['correct'];
-            $overallMastery = $totalAttempted > 0
-                ? (int) round(($totalCorrect / $totalAttempted) * 100)
-                : $masteryScore;
-
-            LearnerProgress::updateOrCreate(
-                ['user_id' => $userId, 'topic_id' => $topicId],
-                [
-                    'questions_attempted' => $totalAttempted,
-                    'questions_correct'   => $totalCorrect,
-                    'mastery_score'       => $overallMastery,
-                    'ability_score'       => $state->current_ability,
-                    'last_attempted_at'   => now(),
-                ]
-            );
-        }
+        LearnerProgress::recordResults($state->user_id, $tallies, now());
+        LearnerProgress::where('user_id', $state->user_id)
+            ->whereIn('topic_id', array_keys($tallies))
+            ->update(['ability_score' => $state->current_ability]);
     }
 
     /**
@@ -373,10 +378,19 @@ class AdaptiveService
      */
     private function getDifficultyLabel(int $ability): string
     {
-        if ($ability < 1200) return 'Beginner';
-        if ($ability < 1500) return 'Developing';
-        if ($ability < 1800) return 'Proficient';
-        if ($ability < 2100) return 'Advanced';
+        if ($ability < 1200) {
+            return 'Beginner';
+        }
+        if ($ability < 1500) {
+            return 'Developing';
+        }
+        if ($ability < 1800) {
+            return 'Proficient';
+        }
+        if ($ability < 2100) {
+            return 'Advanced';
+        }
+
         return 'Expert';
     }
 
@@ -386,15 +400,15 @@ class AdaptiveService
     private function formatQuestion(Question $question): array
     {
         return [
-            'id'            => $question->id,
-            'topic_id'      => $question->topic_id,
+            'id' => $question->id,
+            'topic_id' => $question->topic_id,
             'question_text' => $question->question_text,
-            'image_url'     => $question->image_url,
-            'context'       => $question->context?->toLearnerArray(),
-            'type'          => $question->type,
-            'difficulty'    => $question->difficulty,
-            'options'       => $question->options->map(fn($o) => [
-                'id'          => $o->id,
+            'image_url' => $question->image_url,
+            'context' => $question->context?->toLearnerArray(),
+            'type' => $question->type,
+            'difficulty' => $question->difficulty,
+            'options' => $question->options->map(fn ($o) => [
+                'id' => $o->id,
                 'option_text' => $o->option_text,
             ]),
         ];

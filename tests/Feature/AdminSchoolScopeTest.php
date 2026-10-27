@@ -21,10 +21,15 @@ class AdminSchoolScopeTest extends TestCase
     use RefreshDatabase;
 
     protected User $platformAdmin;
+
     protected User $schoolAdmin;
+
     protected User $ownLearner;
+
     protected User $otherLearner;
+
     protected ClassModel $ownClass;
+
     protected ClassModel $otherClass;
 
     protected function setUp(): void
@@ -34,8 +39,8 @@ class AdminSchoolScopeTest extends TestCase
         $this->platformAdmin = User::factory()->create(['role' => UserRole::PLATFORM_ADMIN]);
         $this->schoolAdmin = User::factory()->create(['role' => UserRole::SCHOOL_ADMIN]);
 
-        $ownSchool = School::create(['name' => 'Own School', 'slug' => 'own-school', 'category' => 'SECONDARY', 'is_active' => true, 'admin_user_id' => $this->schoolAdmin->id]);
-        $otherSchool = School::create(['name' => 'Other School', 'slug' => 'other-school', 'category' => 'SECONDARY', 'is_active' => true]);
+        $ownSchool = School::create(['name' => 'Own School', 'slug' => 'own-school', 'is_active' => true, 'admin_user_id' => $this->schoolAdmin->id]);
+        $otherSchool = School::create(['name' => 'Other School', 'slug' => 'other-school', 'is_active' => true]);
 
         $this->ownClass = ClassModel::create(['school_id' => $ownSchool->id, 'name' => 'SS1 Own', 'slug' => 'ss1-own', 'grade_level' => 'SS1', 'is_active' => true]);
         $this->otherClass = ClassModel::create(['school_id' => $otherSchool->id, 'name' => 'SS1 Other', 'slug' => 'ss1-other', 'grade_level' => 'SS1', 'is_active' => true]);
@@ -50,6 +55,7 @@ class AdminSchoolScopeTest extends TestCase
         if ($school) {
             LearnerProfile::create(['user_id' => $learner->id, 'school_id' => $school->id]);
         }
+
         return $learner;
     }
 
@@ -183,5 +189,22 @@ class AdminSchoolScopeTest extends TestCase
     public function test_feedback_inbox_requires_sign_in(): void
     {
         $this->getJson('/api/v1/admin/feedbacks')->assertUnauthorized();
+    }
+
+    public function test_school_categories_are_stored_and_filtered_by_category_ids(): void
+    {
+        $this->actingAs($this->platformAdmin)
+            ->postJson('/api/v1/admin/schools', ['name' => 'Hilltop College', 'category_ids' => [3, 2, 3]])
+            ->assertCreated()
+            ->assertJsonPath('school.category_ids', [2, 3])
+            ->assertJsonPath('school.category_type_label', 'Combined (Junior & Senior)');
+
+        $names = fn (string $category) => collect($this->getJson("/api/v1/admin/schools?category={$category}")->json('schools'))->pluck('name')->all();
+        $this->assertSame(['Hilltop College'], $names('junior'));
+        $this->assertSame(['Hilltop College'], $names('combined'));
+        $this->assertSame([], $names('primary'));
+
+        // A school saved without categories counts as senior secondary.
+        $this->postJson('/api/v1/admin/schools', ['name' => 'Plain School'])->assertJsonPath('school.category_ids', [3]);
     }
 }

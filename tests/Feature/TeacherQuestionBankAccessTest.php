@@ -18,9 +18,13 @@ class TeacherQuestionBankAccessTest extends TestCase
     use RefreshDatabase;
 
     protected School $school;
+
     protected User $teacherUser;
+
     protected ClassModel $class;
+
     protected Subject $subject;
+
     protected Topic $topic;
 
     protected function setUp(): void
@@ -30,7 +34,6 @@ class TeacherQuestionBankAccessTest extends TestCase
         $this->school = School::create([
             'name' => 'Springfield High',
             'slug' => 'springfield-high',
-            'category' => 'SECONDARY',
             'is_active' => true,
         ]);
 
@@ -146,7 +149,7 @@ class TeacherQuestionBankAccessTest extends TestCase
                         ['option_text' => 'Water', 'is_correct' => true],
                         ['option_text' => 'Oxygen', 'is_correct' => false],
                     ],
-                ]
+                ],
             ],
         ];
 

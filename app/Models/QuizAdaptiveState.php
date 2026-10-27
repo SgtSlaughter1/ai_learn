@@ -12,11 +12,14 @@ class QuizAdaptiveState extends Model
 
     protected $guarded = [];
 
-    protected $casts = [
-        'answered_question_ids' => 'array',
-        'answer_results'        => 'array',
-        'is_completed'          => 'boolean',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'answered_question_ids' => 'array',
+            'answer_results' => 'array',
+            'is_completed' => 'boolean',
+        ];
+    }
 
     public function attempt(): BelongsTo
     {

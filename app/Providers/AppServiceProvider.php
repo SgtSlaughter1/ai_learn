@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Validation\Rules\Password;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -57,6 +58,7 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('ai', fn (Request $request) => Limit::perMinute(20)->by($byUser($request)));
         RateLimiter::for('login', fn (Request $request) => Limit::perMinute(10)->by(strtolower((string) $request->input('email')).'|'.$request->ip()));
         RateLimiter::for('public-feedback', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
+        RateLimiter::for('maintenance', fn (Request $request) => Limit::perMinute(10)->by($request->ip())); // shared by all actions, so guessing the token is slow
     }
 
     /**
@@ -65,7 +67,13 @@ class AppServiceProvider extends ServiceProvider
      */
     private function registerAuthorization(): void
     {
-        Gate::define('access-admin', fn (User $user) => $user->isAnyAdmin());
+        // A school admin whose school was reassigned or removed has nothing to manage; letting them
+        // in would skip every "their school" filter and show other schools' data.
+        // One password rule for every form (register, reset, admin and teacher account forms).
+        Password::defaults(fn () => Password::min(8));
+
+        Gate::define('access-admin', fn (User $user) => $user->isPlatformAdmin()
+            || ($user->isSchoolAdmin() && $user->managedSchoolId() !== null));
         Gate::define('access-teaching', fn (User $user) => $user->isAnyAdmin() || $user->isTeacher());
         Gate::define('manage-platform', fn (User $user) => $user->isPlatformAdmin());
 

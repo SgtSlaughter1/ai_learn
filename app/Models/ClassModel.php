@@ -68,10 +68,12 @@ class ClassModel extends Model
             ->where('class_memberships.role', 'teacher');
     }
 
+    /** Learners currently in the class; removing a learner only deactivates their membership. */
     public function learnerUsers(): HasManyThrough
     {
         return $this->hasManyThrough(User::class, ClassMembership::class, 'class_id', 'id', 'id', 'user_id')
-            ->where('class_memberships.role', 'learner');
+            ->where('class_memberships.role', 'learner')
+            ->where('class_memberships.is_active', true);
     }
 
     /**
@@ -79,7 +81,7 @@ class ClassModel extends Model
      */
     public function scopeForUser($query, ?User $user)
     {
-        if (!$user) {
+        if (! $user) {
             return $query->whereRaw('1 = 0');
         }
 
@@ -90,20 +92,24 @@ class ClassModel extends Model
         if ($user->isSchoolAdmin()) {
             $schoolId = $user->primarySchool()?->id;
             $allowedGrades = $user->allowedGradeLevels();
+
             return $query->where('school_id', $schoolId)
-                ->when(!empty($allowedGrades), fn ($q) => $q->whereIn('grade_level', $allowedGrades));
+                ->when(! empty($allowedGrades), fn ($q) => $q->whereIn('grade_level', $allowedGrades));
         }
 
         if ($user->isTeacher()) {
             if ($user->relationLoaded('classes')) {
                 $classIds = $user->classes->pluck('id')->all();
+
                 return $query->whereIn('id', $classIds);
             }
+
             return $query->whereHas('memberships', fn ($q) => $q->where('user_id', $user->id)->where('role', 'teacher'));
         }
 
         if ($user->isLearner()) {
             $classId = $user->primaryClass()?->id;
+
             return $query->where('id', $classId);
         }
 
@@ -115,9 +121,10 @@ class ClassModel extends Model
      */
     public function scopeForSchool($query, ?int $schoolId)
     {
-        if (!$schoolId) {
+        if (! $schoolId) {
             return $query;
         }
+
         return $query->where('school_id', $schoolId);
     }
 }

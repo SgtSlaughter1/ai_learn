@@ -17,7 +17,6 @@ class SaveSchoolRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'category' => ['nullable', 'string', 'in:primary,junior,senior,combined'],
             'category_ids' => ['nullable', 'array'],
             'category_ids.*' => ['integer', 'in:1,2,3'],
             'slug' => ['nullable', 'string', 'max:255', 'unique:schools,slug'],

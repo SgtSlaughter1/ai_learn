@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\PastQuestion;
-use App\Models\PastQuestionOption;
 use App\Models\Subject;
 use App\Models\Topic;
 use Illuminate\Database\Seeder;
@@ -19,7 +18,8 @@ class PastQuestionSeeder extends Seeder
     {
         // Prevent duplicate insertions if past questions already exist
         if (PastQuestion::count() > 0) {
-            $this->command?->info('Past questions table already populated (' . PastQuestion::count() . ' questions). Skipping snapshot restore.');
+            $this->command?->info('Past questions table already populated ('.PastQuestion::count().' questions). Skipping snapshot restore.');
+
             return;
         }
 
@@ -27,10 +27,11 @@ class PastQuestionSeeder extends Seeder
 
         if (file_exists($snapshotPath)) {
             $this->seedFromSnapshot($snapshotPath);
+
             return;
         }
 
-        $this->command?->warn('No past questions snapshot found at ' . $snapshotPath);
+        $this->command?->warn('No past questions snapshot found at '.$snapshotPath);
     }
 
     /**
@@ -43,6 +44,7 @@ class PastQuestionSeeder extends Seeder
 
         if (empty($questions)) {
             $this->command?->warn('Snapshot file is empty.');
+
             return;
         }
 
@@ -63,7 +65,7 @@ class PastQuestionSeeder extends Seeder
                     $subjectSlug = $item['subject_slug'] ?: Str::slug($item['subject_name'] ?? 'General');
                     $subjectName = $item['subject_name'] ?: 'General Subject';
 
-                    if (!isset($subjectCache[$subjectSlug])) {
+                    if (! isset($subjectCache[$subjectSlug])) {
                         $subject = Subject::firstOrCreate(
                             ['slug' => $subjectSlug],
                             [
@@ -79,12 +81,12 @@ class PastQuestionSeeder extends Seeder
 
                     // Match or create topic
                     $topicId = null;
-                    if (!empty($item['topic_name'])) {
+                    if (! empty($item['topic_name'])) {
                         $topicSlug = $item['topic_slug'] ?: Str::slug($item['topic_name']);
                         $subjectTopics = $topicCache->get($subject->id, collect());
                         $topic = $subjectTopics->firstWhere('slug', $topicSlug);
 
-                        if (!$topic) {
+                        if (! $topic) {
                             $topic = Topic::firstOrCreate(
                                 ['subject_id' => $subject->id, 'slug' => $topicSlug],
                                 [
@@ -120,7 +122,7 @@ class PastQuestionSeeder extends Seeder
                     ]);
 
                     // Bulk insert options
-                    if (!empty($item['options'])) {
+                    if (! empty($item['options'])) {
                         $optionsToInsert = [];
                         foreach ($item['options'] as $opt) {
                             $optionsToInsert[] = [

@@ -10,7 +10,8 @@ return new class extends Migration
     {
         Schema::create('learner_profiles', function (Blueprint $table) {
             $table->id();
-            $table->uuid('user_id')->constrained('users')->cascadeOnDelete();
+            // One profile per learner (User::learnerProfile is hasOne). foreignUuid, so the key is really created.
+            $table->foreignUuid('user_id')->unique()->constrained('users')->cascadeOnDelete();
             $table->foreignId('school_id')->nullable()->constrained('schools')->nullOnDelete();
             $table->string('student_id')->nullable();
             $table->string('grade_level')->nullable();
@@ -18,7 +19,6 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
-            $table->unique(['user_id', 'school_id']);
             $table->index('school_id');
             $table->index('grade_level');
         });

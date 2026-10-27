@@ -205,7 +205,11 @@ export default function QuestionBankTab({
                 if (data.questions && data.questions.length > 0) {
                     setExtractedQuestions(data.questions);
                     setBulkStep('review');
-                    showToast(`Generated ${data.questions.length} questions on "${selectedTopic?.name || 'Topic'}" with AI`, 'success');
+                    if (data.source === 'offline') {
+                        showToast(`AI is unavailable right now: these ${data.questions.length} are template questions. Edit each one before saving.`, 'error');
+                    } else {
+                        showToast(`Generated ${data.questions.length} questions on "${selectedTopic?.name || 'Topic'}" with AI`, 'success');
+                    }
                     setIsGeneratingBulkAI(false);
                     return;
                 }

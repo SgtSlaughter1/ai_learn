@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Feedback;
+use App\Support\ListSize;
+use App\Support\SearchTerm;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -49,7 +51,7 @@ class FeedbackController extends Controller
 
         // Feedback written offline is resent until it gets through; the id it was given
         // on the device makes the resend find the first copy instead of storing it twice.
-        $feedback = !empty($validated['client_id'])
+        $feedback = ! empty($validated['client_id'])
             ? Feedback::createOrFirst(['client_id' => $validated['client_id']], $attributes)
             : Feedback::create($attributes);
 
@@ -80,14 +82,14 @@ class FeedbackController extends Controller
         if ($request->filled('search')) {
             $search = $request->query('search');
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('subject', 'like', "%{$search}%")
-                  ->orWhere('message', 'like', "%{$search}%");
+                $q->where('name', 'like', SearchTerm::like($search))
+                    ->orWhere('email', 'like', SearchTerm::like($search))
+                    ->orWhere('subject', 'like', SearchTerm::like($search))
+                    ->orWhere('message', 'like', SearchTerm::like($search));
             });
         }
 
-        $feedbacks = $query->paginate($request->integer('per_page', 25));
+        $feedbacks = $query->paginate(ListSize::from($request->query('per_page'), 25, 100));
 
         return response()->json([
             'status' => 'success',

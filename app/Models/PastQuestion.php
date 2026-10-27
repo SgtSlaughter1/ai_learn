@@ -13,11 +13,14 @@ class PastQuestion extends Model
 
     protected $guarded = [];
 
-    protected $casts = [
-        'exam_year' => 'integer',
-        'question_number' => 'integer',
-        'metadata' => 'array',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'exam_year' => 'integer',
+            'question_number' => 'integer',
+            'metadata' => 'array',
+        ];
+    }
 
     public function subject(): BelongsTo
     {

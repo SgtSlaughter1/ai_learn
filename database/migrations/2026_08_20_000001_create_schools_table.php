@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (!Schema::hasTable('categories')) {
+        if (! Schema::hasTable('categories')) {
             Schema::create('categories', function (Blueprint $table) {
                 $table->id();
                 $table->string('name');
@@ -18,12 +18,11 @@ return new class extends Migration
             });
         }
 
-        if (!Schema::hasTable('schools')) {
+        if (! Schema::hasTable('schools')) {
             Schema::create('schools', function (Blueprint $table) {
                 $table->id();
                 $table->string('name');
                 $table->json('category_ids')->nullable();
-                $table->string('category', 50)->default('senior')->index(); // primary, junior, senior, combined
                 $table->string('slug', 150)->unique();
                 $table->string('address')->nullable();
                 $table->string('city')->nullable();
@@ -31,11 +30,11 @@ return new class extends Migration
                 $table->string('phone')->nullable();
                 $table->string('email')->nullable();
                 $table->text('description')->nullable();
-                $table->uuid('admin_user_id')->nullable()->constrained('users')->nullOnDelete();
+                // One school per admin: unique, and foreignUuid so the foreign key is really created.
+                $table->foreignUuid('admin_user_id')->nullable()->unique()->constrained('users')->nullOnDelete();
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
 
-                $table->index('admin_user_id');
                 $table->index('is_active');
             });
         }

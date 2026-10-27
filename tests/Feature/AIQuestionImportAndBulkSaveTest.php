@@ -18,7 +18,9 @@ class AIQuestionImportAndBulkSaveTest extends TestCase
     use RefreshDatabase;
 
     protected User $adminUser;
+
     protected Subject $subject;
+
     protected Topic $topic;
 
     protected function setUp(): void
@@ -46,7 +48,7 @@ class AIQuestionImportAndBulkSaveTest extends TestCase
     {
         $aiService = app(AIService::class);
 
-        $rawText = <<<TEXT
+        $rawText = <<<'TEXT'
 1. What is the process by which green plants manufacture food using sunlight?
 A) Respiration
 B) Photosynthesis
@@ -82,7 +84,7 @@ TEXT;
         $q1 = $extracted[0];
         $this->assertStringContainsString('process by which green plants', $q1['question_text']);
         $this->assertCount(4, $q1['options']);
-        $correctOpts1 = array_filter($q1['options'], fn($o) => $o['is_correct'] === true);
+        $correctOpts1 = array_filter($q1['options'], fn ($o) => $o['is_correct'] === true);
         $this->assertCount(1, $correctOpts1);
         $this->assertEquals('Photosynthesis', array_values($correctOpts1)[0]['option_text']);
 
@@ -90,20 +92,20 @@ TEXT;
         $q2 = $extracted[1];
         $this->assertStringContainsString('powerhouse of the cell', $q2['question_text']);
         $this->assertCount(4, $q2['options']);
-        $correctOpts2 = array_filter($q2['options'], fn($o) => $o['is_correct'] === true);
+        $correctOpts2 = array_filter($q2['options'], fn ($o) => $o['is_correct'] === true);
         $this->assertCount(1, $correctOpts2);
 
         // Check question 3
         $q3 = $extracted[2];
         $this->assertStringContainsString('2x + 6 = 18', $q3['question_text']);
-        $correctOpts3 = array_filter($q3['options'], fn($o) => $o['is_correct'] === true);
+        $correctOpts3 = array_filter($q3['options'], fn ($o) => $o['is_correct'] === true);
         $this->assertCount(1, $correctOpts3);
         $this->assertEquals('6', array_values($correctOpts3)[0]['option_text']);
     }
 
     public function test_ai_extract_endpoint_returns_structured_questions(): void
     {
-        $rawText = <<<TEXT
+        $rawText = <<<'TEXT'
 1. What organ pumps blood through the human body?
 A) Brain
 B) Heart
@@ -132,10 +134,10 @@ TEXT;
                             '*' => [
                                 'option_text',
                                 'is_correct',
-                            ]
-                        ]
-                    ]
-                ]
+                            ],
+                        ],
+                    ],
+                ],
             ]);
 
         $questions = $response->json('questions');
@@ -198,7 +200,7 @@ TEXT;
         $this->assertEquals($this->topic->id, $q1->topic_id);
         $this->assertEquals('easy', $q1->difficulty);
         $this->assertCount(4, $q1->options);
-        
+
         $correctOption1 = $q1->options()->where('is_correct', true)->first();
         $this->assertNotNull($correctOption1);
         $this->assertEquals('Carbon Dioxide', $correctOption1->option_text);
@@ -213,11 +215,11 @@ TEXT;
         $this->assertNotNull($correctOption2);
         $this->assertEquals('Heartbeat', $correctOption2->option_text);
 
-        // Verify that topic assessment quiz has linked these questions
-        $quiz = Quiz::where('topic_id', $this->topic->id)->first();
-        if ($quiz) {
-            $this->assertGreaterThanOrEqual(2, $quiz->questions()->count());
-        }
+        // Both questions joined their subject's quiz (quizzes have no topic_id: the old lookup
+        // matched nothing on SQLite, so this was never checked).
+        $quiz = Quiz::where('title', $this->topic->subject->name.' Assessment & Practice')->first();
+        $this->assertNotNull($quiz);
+        $this->assertGreaterThanOrEqual(2, $quiz->questions()->count());
     }
 
     public function test_ai_service_dynamically_learns_and_drafts_from_uploaded_questions(): void
@@ -273,12 +275,24 @@ TEXT;
             $this->assertStringContainsString('2x(x + 2)', $response);
             $this->assertStringContainsString('Factor out 2x to get 2x(x + 2)', $response);
         } finally {
-            putenv('AI_PROVIDER=' . ($prevProvider !== false && $prevProvider !== null ? $prevProvider : ''));
-            putenv('GEMINI_API_KEY=' . ($prevGeminiKey !== false && $prevGeminiKey !== null ? $prevGeminiKey : ''));
-            putenv('GOOGLE_API_KEY=' . ($prevGoogleKey !== false && $prevGoogleKey !== null ? $prevGoogleKey : ''));
-            if ($prevProvider !== null && $prevProvider !== false) $_ENV['AI_PROVIDER'] = $prevProvider; else unset($_ENV['AI_PROVIDER']);
-            if ($prevGeminiKey !== null && $prevGeminiKey !== false) $_ENV['GEMINI_API_KEY'] = $prevGeminiKey; else unset($_ENV['GEMINI_API_KEY']);
-            if ($prevGoogleKey !== null && $prevGoogleKey !== false) $_ENV['GOOGLE_API_KEY'] = $prevGoogleKey; else unset($_ENV['GOOGLE_API_KEY']);
+            putenv('AI_PROVIDER='.($prevProvider !== false && $prevProvider !== null ? $prevProvider : ''));
+            putenv('GEMINI_API_KEY='.($prevGeminiKey !== false && $prevGeminiKey !== null ? $prevGeminiKey : ''));
+            putenv('GOOGLE_API_KEY='.($prevGoogleKey !== false && $prevGoogleKey !== null ? $prevGoogleKey : ''));
+            if ($prevProvider !== null && $prevProvider !== false) {
+                $_ENV['AI_PROVIDER'] = $prevProvider;
+            } else {
+                unset($_ENV['AI_PROVIDER']);
+            }
+            if ($prevGeminiKey !== null && $prevGeminiKey !== false) {
+                $_ENV['GEMINI_API_KEY'] = $prevGeminiKey;
+            } else {
+                unset($_ENV['GEMINI_API_KEY']);
+            }
+            if ($prevGoogleKey !== null && $prevGoogleKey !== false) {
+                $_ENV['GOOGLE_API_KEY'] = $prevGoogleKey;
+            } else {
+                unset($_ENV['GOOGLE_API_KEY']);
+            }
         }
     }
 
@@ -301,7 +315,7 @@ TEXT;
             $this->assertArrayHasKey('options', $q);
             $this->assertCount(4, $q['options']);
 
-            $correctOpts = array_filter($q['options'], fn($o) => !empty($o['is_correct']));
+            $correctOpts = array_filter($q['options'], fn ($o) => ! empty($o['is_correct']));
             $this->assertCount(1, $correctOpts, 'Each generated question must have exactly one correct option.');
         }
     }
@@ -328,15 +342,15 @@ TEXT;
                             '*' => [
                                 'option_text',
                                 'is_correct',
-                            ]
-                        ]
-                    ]
+                            ],
+                        ],
+                    ],
                 ],
                 'topic' => [
                     'id',
                     'name',
                     'subject_id',
-                ]
+                ],
             ]);
 
         $data = $response->json();

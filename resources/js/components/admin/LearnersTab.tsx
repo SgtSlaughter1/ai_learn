@@ -572,7 +572,7 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
                                         value={learnerForm.password}
                                         onChange={(e) => setLearnerForm({ ...learnerForm, password: e.target.value })}
                                         className="w-full px-4 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] outline-none"
-                                        placeholder="Minimum 6 characters"
+                                        placeholder="Minimum 8 characters"
                                     />
                                 </div>
                             )}

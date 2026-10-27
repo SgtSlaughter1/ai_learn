@@ -3,24 +3,21 @@
 namespace App\Console\Commands;
 
 use App\Enums\UserRole;
-use App\Models\ClassModel;
-use App\Models\ClassMembership;
-use App\Models\Question;
-use App\Models\QuestionOption;
-use App\Models\Quiz;
-use App\Models\School;
+use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Web\DashboardController;
+use App\Http\Controllers\Web\FlashcardController;
+use App\Http\Controllers\Web\GamificationController;
+use App\Http\Controllers\Web\SubjectWebController;
 use App\Models\Subject;
-use App\Models\TeacherProfile;
 use App\Models\Topic;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Str;
 
 class BenchmarkEndpointsCommand extends Command
 {
     protected $signature = 'benchmark:endpoints';
+
     protected $description = 'Benchmark the response times and database query counts of all core API functions';
 
     public function handle(): int
@@ -45,51 +42,51 @@ class BenchmarkEndpointsCommand extends Command
         $endpoints = [
             [
                 'name' => 'GET /api/v1/auth/user',
-                'action' => fn () => app(\App\Http\Controllers\Auth\LoginController::class)->getUser(
+                'action' => fn () => app(LoginController::class)->getUser(
                     request()->setUserResolver(fn () => $learner)
                 ),
             ],
             [
                 'name' => 'GET /api/v1/dashboard/stats',
-                'action' => fn () => app(\App\Http\Controllers\Web\DashboardController::class)->getStats(
+                'action' => fn () => app(DashboardController::class)->getLearnerStats(
                     request()->setUserResolver(fn () => $learner)
                 ),
             ],
             [
                 'name' => 'GET /api/v1/subjects',
-                'action' => fn () => app(\App\Http\Controllers\Web\SubjectWebController::class)->getSubjects(
+                'action' => fn () => app(SubjectWebController::class)->getSubjects(
                     request()->setUserResolver(fn () => $learner)
                 ),
             ],
             [
                 'name' => 'GET /api/v1/subjects/{subject}',
-                'action' => fn () => app(\App\Http\Controllers\Web\SubjectWebController::class)->getSubject(
+                'action' => fn () => app(SubjectWebController::class)->getSubject(
                     request()->setUserResolver(fn () => $learner),
                     $subject->slug
                 ),
             ],
             [
                 'name' => 'GET /api/v1/subjects/{id}/topics',
-                'action' => fn () => app(\App\Http\Controllers\Web\SubjectWebController::class)->getTopics(
+                'action' => fn () => app(SubjectWebController::class)->getTopics(
                     request()->setUserResolver(fn () => $learner),
                     (string) $subject->id
                 ),
             ],
             [
                 'name' => 'GET /api/v1/flashcards/deck',
-                'action' => fn () => app(\App\Http\Controllers\Web\FlashcardController::class)->getDeck(
+                'action' => fn () => app(FlashcardController::class)->getFlashcardDeck(
                     request()->setUserResolver(fn () => $learner)
                 ),
             ],
             [
                 'name' => 'GET /api/v1/gamification/profile',
-                'action' => fn () => app(\App\Http\Controllers\Web\GamificationController::class)->getProfile(
+                'action' => fn () => app(GamificationController::class)->getProfile(
                     request()->setUserResolver(fn () => $learner)
                 ),
             ],
             [
                 'name' => 'GET /api/v1/gamification/leaderboard',
-                'action' => fn () => app(\App\Http\Controllers\Web\GamificationController::class)->getLeaderboard(
+                'action' => fn () => app(GamificationController::class)->getLeaderboard(
                     request()->setUserResolver(fn () => $learner)
                 ),
             ],

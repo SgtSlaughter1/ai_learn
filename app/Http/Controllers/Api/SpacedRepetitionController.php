@@ -7,6 +7,7 @@ use App\Http\Requests\Revision\CompleteRevisionSessionRequest;
 use App\Http\Requests\Revision\SubmitReviewRequest;
 use App\Services\Gamification\GamificationService;
 use App\Services\SpacedRepetition\SpacedRepetitionService;
+use App\Support\ListSize;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -24,7 +25,7 @@ class SpacedRepetitionController extends Controller
     public function getTodayQueue(Request $request): JsonResponse
     {
         $user = Auth::user() ?? $request->user();
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthenticated',
@@ -36,7 +37,7 @@ class SpacedRepetitionController extends Controller
             ], 401);
         }
 
-        $limit = min((int) ($request->query('limit', 6)), 20);
+        $limit = ListSize::from($request->query('limit'), 6, 20);
         $queueData = $this->spacedRepetitionService->getTodayQueue($user, $limit);
 
         return response()->json([
@@ -62,7 +63,8 @@ class SpacedRepetitionController extends Controller
     }
 
     /**
-     * Finalize today's revision session, award daily streak bonus XP (+25 XP), and return summary.
+     * Finalize today's revision session: XP for correct answers (+1 each, +3 for a perfect session,
+     * capped per day) and the streak update, then return the summary.
      */
     public function completeSession(CompleteRevisionSessionRequest $request): JsonResponse
     {
@@ -76,7 +78,7 @@ class SpacedRepetitionController extends Controller
             $user,
             $correctCount,
             $completedCount,
-            \App\Services\Gamification\GamificationService::activityTime($validated['completed_at'] ?? null)
+            GamificationService::activityTime($validated['completed_at'] ?? null)
         );
 
         return response()->json([
@@ -100,7 +102,7 @@ class SpacedRepetitionController extends Controller
     public function getStats(Request $request): JsonResponse
     {
         $user = Auth::user() ?? $request->user();
-        if (!$user) {
+        if (! $user) {
             return response()->json(['success' => false, 'message' => 'Unauthenticated'], 401);
         }
 

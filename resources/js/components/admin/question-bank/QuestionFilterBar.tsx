@@ -60,7 +60,7 @@ export default function QuestionFilterBar({
             return getGradeLevelsForTeacher(classes, school);
         }
 
-        if (school && (school.category || (school.category_ids && school.category_ids.length > 0) || (school.allowed_grade_levels && school.allowed_grade_levels.length > 0))) {
+        if (school && ((school.category_ids && school.category_ids.length > 0) || (school.allowed_grade_levels && school.allowed_grade_levels.length > 0))) {
             const schoolGroups = getGradeLevelsForSchool(school);
             if (schoolGroups && schoolGroups.length > 0 && schoolGroups !== ALL_GRADE_GROUPS) {
                 return schoolGroups;

@@ -4,13 +4,15 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Services\Gamification\GamificationService;
+use App\Services\Gamification\LeaderboardService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class GamificationController extends Controller
 {
     public function __construct(
-        private GamificationService $gamificationService
+        private GamificationService $gamificationService,
+        private LeaderboardService $leaderboard,
     ) {}
 
     /**
@@ -19,6 +21,7 @@ class GamificationController extends Controller
     public function profile(Request $request): JsonResponse
     {
         $data = $this->gamificationService->getDashboardData($request->user());
+
         return response()->json($data);
     }
 
@@ -27,7 +30,8 @@ class GamificationController extends Controller
      */
     public function leaderboard(Request $request): JsonResponse
     {
-        $data = $this->gamificationService->getLeaderboard($request->user());
+        $data = $this->leaderboard->board($request->user());
+
         return response()->json($data);
     }
 

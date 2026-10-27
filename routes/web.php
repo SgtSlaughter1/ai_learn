@@ -1,69 +1,40 @@
 <?php
 
+use App\Http\Controllers\Admin;
+use App\Http\Controllers\Api\FeedbackController;
+use App\Http\Controllers\Api\PastQuestionController;
+use App\Http\Controllers\Api\SpacedRepetitionController;
 use App\Http\Controllers\Auth\LoginController;
-use App\Http\Controllers\Auth\RegisterController;
-use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\NewPasswordController;
-use App\Http\Controllers\Web\DashboardController;
-use App\Http\Controllers\Web\SubjectWebController;
-use App\Http\Controllers\Web\QuizWebController;
+use App\Http\Controllers\Auth\PasswordResetLinkController;
+use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\HomeController;
+use App\Http\Controllers\MaintenanceController;
+use App\Http\Controllers\Web\AccountController;
 use App\Http\Controllers\Web\AdaptiveQuizController;
 use App\Http\Controllers\Web\AIWebController;
+use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\FlashcardController;
 use App\Http\Controllers\Web\GamificationController;
+use App\Http\Controllers\Web\QuizWebController;
+use App\Http\Controllers\Web\SubjectWebController;
 use App\Http\Controllers\Web\SyncController;
 use App\Http\Controllers\Web\TeacherDashboardController;
-use App\Http\Controllers\Admin;
-use App\Http\Controllers\Api\PastQuestionController;
+use App\Http\Middleware\EnsureMaintenanceToken;
+use App\Support\Seo;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::get('/', function () {
-    $subjects = \App\Models\Subject::where('status', 'active')
-        ->withCount('topics')
-        ->orderBy('sort_order')
-        ->get(['id', 'name', 'code', 'slug', 'description', 'icon', 'school_id']);
-
-    $totalSubjects = \App\Models\Subject::where('status', 'active')->count();
-    $totalPastQuestions = \App\Models\PastQuestion::count();
-    $examCounts = \App\Models\PastQuestion::select('exam_code', \Illuminate\Support\Facades\DB::raw('count(*) as count'))
-        ->groupBy('exam_code')
-        ->pluck('count', 'exam_code')
-        ->toArray();
-
-    return Inertia::render('Welcome', [
-        'subjects' => $subjects,
-        'faqs' => \App\Support\Seo::faqs(),
-        'stats' => [
-            'total_subjects' => $totalSubjects,
-            'total_past_questions' => $totalPastQuestions,
-            'exam_counts' => $examCounts,
-        ],
-    ]);
-});
-
-Route::get('/api/stats', function () {
-    $totalSubjects = \App\Models\Subject::where('status', 'active')->count();
-    $totalPastQuestions = \App\Models\PastQuestion::count();
-    $examCounts = \App\Models\PastQuestion::select('exam_code', \Illuminate\Support\Facades\DB::raw('count(*) as count'))
-        ->groupBy('exam_code')
-        ->pluck('count', 'exam_code')
-        ->toArray();
-
-    return response()->json([
-        'total_subjects' => $totalSubjects,
-        'total_past_questions' => $totalPastQuestions,
-        'exam_counts' => $examCounts,
-    ]);
-});
+Route::get('/', [HomeController::class, 'show']);
+Route::get('/api/stats', [HomeController::class, 'stats']);
 
 // National Past Questions & Timed CBT Simulation Hub (Open to guests & learners)
-Route::get('/past-questions', fn() => Inertia::render('ExamPrep/PastQuestionsIndex'));
+Route::get('/past-questions', fn () => Inertia::render('ExamPrep/PastQuestionsIndex'));
 
 // SEO & AEO machine discovery: built from App\Support\Seo so every URL uses APP_URL.
-Route::get('/robots.txt', fn () => response(\App\Support\Seo::robotsTxt(), 200, ['Content-Type' => 'text/plain; charset=utf-8', 'Cache-Control' => 'public, max-age=3600']));
-Route::get('/sitemap.xml', fn () => response(\App\Support\Seo::sitemapXml(), 200, ['Content-Type' => 'application/xml; charset=utf-8', 'Cache-Control' => 'public, max-age=3600']));
-Route::get('/llms.txt', fn () => response(\App\Support\Seo::llmsTxt(), 200, ['Content-Type' => 'text/plain; charset=utf-8', 'Cache-Control' => 'public, max-age=3600']));
+Route::get('/robots.txt', fn () => response(Seo::robotsTxt(), 200, ['Content-Type' => 'text/plain; charset=utf-8', 'Cache-Control' => 'public, max-age=3600']));
+Route::get('/sitemap.xml', fn () => response(Seo::sitemapXml(), 200, ['Content-Type' => 'application/xml; charset=utf-8', 'Cache-Control' => 'public, max-age=3600']));
+Route::get('/llms.txt', fn () => response(Seo::llmsTxt(), 200, ['Content-Type' => 'text/plain; charset=utf-8', 'Cache-Control' => 'public, max-age=3600']));
 Route::get('/llms-full.txt', function () {
     $path = resource_path('seo/llms-full.txt');
     abort_unless(file_exists($path), 404);
@@ -82,7 +53,7 @@ Route::middleware('guest')->group(function () {
     Route::get('/forgot-password', [PasswordResetLinkController::class, 'show'])->name('password.request');
     Route::post('/forgot-password', [PasswordResetLinkController::class, 'store'])->name('password.email')->middleware('throttle:login');
     Route::get('/reset-password/{token}', [NewPasswordController::class, 'show'])->name('password.reset');
-    Route::post('/reset-password', [NewPasswordController::class, 'store'])->name('password.update');
+    Route::post('/reset-password', [NewPasswordController::class, 'store'])->name('password.update')->middleware('throttle:login');
 });
 Route::post('/logout', [LoginController::class, 'destroy']);
 
@@ -98,7 +69,7 @@ Route::prefix('api/v1/auth')->middleware('throttle:login')->group(function () {
 // Protected Core Learning Routes
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'showLearnerDashboard']);
-    Route::get('/learner/dashboard', fn() => \Inertia\Inertia::render('learner/Dashboard'));
+    Route::get('/learner/dashboard', fn () => Inertia::render('learner/Dashboard'));
     Route::middleware('can:access-admin')->group(function () {
         Route::get('/admin/dashboard', [Admin\DashboardController::class, 'show']);
         Route::get('/super-admin/dashboard', [Admin\DashboardController::class, 'show']);
@@ -108,7 +79,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/subjects', [SubjectWebController::class, 'showSubjectsPage']);
     Route::get('/general-knowledge', [SubjectWebController::class, 'showGeneralKnowledgePage']);
     Route::get('/subjects/{subject}', [SubjectWebController::class, 'showSubject']);
-    
+
     // Quiz Exercises & Attempts
     Route::get('/quizzes/{quiz}', [QuizWebController::class, 'showQuiz']);
     Route::post('/quizzes/{quiz}/attempt', [QuizWebController::class, 'submitQuizAttempt']);
@@ -116,7 +87,7 @@ Route::middleware('auth')->group(function () {
 
     // Active Recall Flashcards
     Route::get('/flashcards', [FlashcardController::class, 'showFlashcardsPage']);
-    Route::get('/profile', [\App\Http\Controllers\Web\AccountController::class, 'show']);
+    Route::get('/profile', [AccountController::class, 'show']);
 
     // Separate JSON Data Routes
     Route::prefix('api/v1')->middleware('throttle:api')->group(function () {
@@ -140,17 +111,20 @@ Route::middleware('auth')->group(function () {
             Route::post('/ai/explain', [AIWebController::class, 'explain']);
             Route::get('/ai/similar-question', [AIWebController::class, 'similarQuestion']);
             Route::post('/ai/chat', [AIWebController::class, 'chat']);
+            // Paths the quiz drawer and Daily Revision call; signed-in only, like the ones above.
+            Route::get('/questions/similar', [AIWebController::class, 'similarQuestion']);
+            Route::post('/questions/explain', [AIWebController::class, 'explain']);
         });
 
         // Spaced Repetition (Daily 5-Min Smart Revision)
-        Route::get('/revision/today', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'getTodayQueue']);
-        Route::post('/revision/submit', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'submitReview']);
-        Route::post('/revision/complete-session', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'completeSession']);
-        Route::get('/revision/stats', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'getStats']);
+        Route::get('/revision/today', [SpacedRepetitionController::class, 'getTodayQueue']);
+        Route::post('/revision/submit', [SpacedRepetitionController::class, 'submitReview']);
+        Route::post('/revision/complete-session', [SpacedRepetitionController::class, 'completeSession']);
+        Route::get('/revision/stats', [SpacedRepetitionController::class, 'getStats']);
 
         // Flashcards Deck API
-        Route::get('/flashcards/deck', [FlashcardController::class, 'getDeck']);
-        Route::post('/flashcards/complete', [FlashcardController::class, 'complete']);
+        Route::get('/flashcards/deck', [FlashcardController::class, 'getFlashcardDeck']);
+        Route::post('/flashcards/complete', [FlashcardController::class, 'completeFlashcardReview']);
 
         // Gamification & XP System
         Route::get('/gamification/profile', [GamificationController::class, 'profile']);
@@ -163,8 +137,8 @@ Route::middleware('auth')->group(function () {
 
         // The user's own account (profile page Danger Zone); password-checked, so rate limited.
         Route::middleware('throttle:10,1')->group(function () {
-            Route::post('/account/deactivate', [\App\Http\Controllers\Web\AccountController::class, 'deactivate']);
-            Route::delete('/account', [\App\Http\Controllers\Web\AccountController::class, 'destroy']);
+            Route::post('/account/deactivate', [AccountController::class, 'deactivate']);
+            Route::delete('/account', [AccountController::class, 'destroy']);
         });
         Route::post('/gamification/sync', [SyncController::class, 'syncGamification']);
 
@@ -248,27 +222,19 @@ Route::middleware('auth')->group(function () {
             Route::match(['patch', 'put'], '/admin/school-admins/{id}', [Admin\SchoolAdminController::class, 'update']);
             Route::delete('/admin/school-admins/{id}', [Admin\SchoolAdminController::class, 'destroy']);
 
-            Route::get('/admin/feedbacks', [\App\Http\Controllers\Api\FeedbackController::class, 'index']);
-            Route::match(['patch', 'put'], '/admin/feedbacks/{id}/status', [\App\Http\Controllers\Api\FeedbackController::class, 'updateStatus']);
+            Route::get('/admin/feedbacks', [FeedbackController::class, 'index']);
+            Route::match(['patch', 'put'], '/admin/feedbacks/{id}/status', [FeedbackController::class, 'updateStatus']);
         });
-
-        // Past Questions & National Exam Simulation Hub
-        Route::get('/past-questions/meta', [PastQuestionController::class, 'getMeta']);
-        Route::get('/past-questions/questions', [PastQuestionController::class, 'getQuestions']);
-        Route::post('/past-questions/verify-answer', [PastQuestionController::class, 'verifyAnswer']);
-        Route::post('/past-questions/simulation/start', [PastQuestionController::class, 'startSimulation']);
-        Route::post('/past-questions/simulation/submit', [PastQuestionController::class, 'submitSimulation']);
-        Route::get('/past-questions/history', [PastQuestionController::class, 'getHistory']);
-        Route::post('/past-questions/explain', [PastQuestionController::class, 'explain']);
     });
 });
 
-// Past questions public API endpoints (accessible without strict session login for guest practice)
-// Open to guests (CBT practice); these registrations take precedence over the signed-in ones above.
+// Past questions API, open to guests (CBT practice). The controller checks the session itself
+// where a signed-in learner gets more (history, saved simulations, higher limits).
 Route::prefix('api/v1/past-questions')->middleware('throttle:api')->group(function () {
     Route::get('/meta', [PastQuestionController::class, 'getMeta']);
     Route::get('/questions', [PastQuestionController::class, 'getQuestions']);
     Route::post('/verify-answer', [PastQuestionController::class, 'verifyAnswer']);
+    Route::get('/similar', [PastQuestionController::class, 'getSimilar']);
     Route::post('/simulation/start', [PastQuestionController::class, 'startSimulation']);
     Route::post('/simulation/submit', [PastQuestionController::class, 'submitSimulation']);
     Route::get('/history', [PastQuestionController::class, 'getHistory']);
@@ -281,283 +247,26 @@ Route::get('/api/health', function () {
 
 // ── Shared Hosting & Maintenance Utilities ──
 //
-// InfinityFree has no SSH, so Artisan commands have to be triggered over HTTP.
-// Every route below is disabled (404) unless MAINTENANCE_TOKEN is set to at least
-// 32 characters and sent as the X-Maintenance-Token header or ?token=.
-// Generate one with: openssl rand -hex 32
-
-$guardMaintenance = function (bool $destructive = false) {
-    $token = (string) config('app.maintenance_token');
-    $provided = (string) (request()->header('X-Maintenance-Token') ?? request()->query('token', ''));
-
-    // Fail closed: no (or weak) token configured means these routes don't exist.
-    if (strlen($token) < 32 || ! hash_equals($token, $provided)) {
-        abort(404);
-    }
-
-    if ($destructive && app()->isProduction() && ! config('app.allow_destructive_maintenance')) {
-        abort(403, 'Wiping the database is disabled in production.');
-    }
-};
-
-// PHP security check: the running PHP version and whether it has the October 2026 critical
-// fixes (see App\Support\PhpSecurity). For hosts without SSH, where `php -v` can't be run.
-Route::get('/php-check', function () use ($guardMaintenance) {
-    $guardMaintenance();
-
-    return response()->json(\App\Support\PhpSecurity::report());
-});
-
-// Clear Cache utility
-Route::get('/clear-cache', function () use ($guardMaintenance) {
-    $guardMaintenance();
-
-    \Illuminate\Support\Facades\Artisan::call('view:clear');
-    \Illuminate\Support\Facades\Artisan::call('route:clear');
-    \Illuminate\Support\Facades\Artisan::call('config:clear');
-    \Illuminate\Support\Facades\Artisan::call('cache:clear');
-    return 'All caches cleared successfully!';
-});
-
-// Run standard migrations
-Route::get('/run-migrations', function () use ($guardMaintenance) {
-    $guardMaintenance();
-
-    try {
-        \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
-        $output = \Illuminate\Support\Facades\Artisan::output();
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Migrations ran successfully!',
-            'output' => $output
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Failed to run migrations: ' . $e->getMessage()
-        ], 500);
-    }
-});
-
-// Run migrate:fresh --seed.
-// Drops every table individually (shared-hosting MySQL users often can't drop
-// the database or run `db:wipe`), then re-runs migrations and seeds.
-// The response includes a diagnostic report so privilege problems are visible
-// instead of showing up as a confusing "table already exists" error.
-Route::get('/run-migrate-fresh-seed', function () use ($guardMaintenance) {
-    $guardMaintenance(destructive: true);
-
-    // Best-effort: long drop + migrate + seed jobs can outlive PHP defaults
-    @set_time_limit(300);
-    @ini_set('memory_limit', '256M');
-
-    // collect a clean lookup of the migration files currently on disk (only *.php)
-    // so we can compare against what the migrations run-tracking table still records
-    $diskFilenames = [];
-    foreach (glob(database_path('migrations/*.php')) ?: [] as $path) {
-        $b = basename($path, '.php');
-        // only count real PHP files (skip symlinks / deleted-but-linked files)
-        $diskFilenames[] = $b;
-    }
-
-    $report = [
-        'database' => \Illuminate\Support\Facades\DB::getDatabaseName(),
-        'driver'   => \Illuminate\Support\Facades\DB::getDriverName(),
-    ];
-
-    try {
-        // What privileges does this MySQL user actually have? (diagnostic)
-        try {
-            $report['grants'] = array_map(
-                fn ($row) => array_values((array) $row)[0],
-                \Illuminate\Support\Facades\DB::select('SHOW GRANTS')
-            );
-        } catch (\Throwable $e) {
-            $report['grants'] = 'Unable to read grants: ' . $e->getMessage();
-        }
-
-        // ── Canonical migration list & auto-purge of stale duplicate files ─────────
-        $canonicalMigrations = [
-            '0001_01_01_000000_create_users_table',
-            '0001_01_01_000001_create_cache_table',
-            '0001_01_01_000002_create_jobs_table',
-            '2026_08_20_000000_create_roles_table',
-            '2026_08_20_000001_create_schools_table',
-            '2026_08_20_000002_create_programs_table',
-            '2026_08_20_000003_create_classes_table',
-            '2026_08_20_000004_create_subjects_table',
-            '2026_08_20_000005_create_topics_table',
-            '2026_08_20_000006_create_questions_table',
-            '2026_08_20_000007_create_question_options_table',
-            '2026_08_20_000008_create_quizzes_table',
-            '2026_08_20_000009_create_quiz_questions_table',
-            '2026_08_20_000010_create_quiz_attempts_table',
-            '2026_08_20_000011_create_quiz_answers_table',
-            '2026_08_20_000012_create_learner_progress_table',
-            '2026_08_20_000013_create_content_packages_table',
-            '2026_08_22_000000_create_quiz_adaptive_states_table',
-            '2026_08_22_000001_create_user_gamification_table',
-            '2026_08_22_000002_create_xp_transactions_table',
-            '2026_08_22_000003_create_user_achievements_table',
-            '2026_08_23_000002_create_teacher_profiles_table',
-            '2026_08_23_000003_create_learner_profiles_table',
-            '2026_08_23_000005_create_class_memberships_table',
-            '2026_08_24_000001_create_achievements_table',
-            '2026_08_24_000004_create_exam_simulations_table',
-            '2026_08_24_000005_create_past_questions_tables',
-            '2026_09_24_000001_create_spaced_repetition_items_table',
-            '2026_09_27_000001_create_feedbacks_table',
-            '2026_10_15_000001_create_idempotency_keys_table',
-        ];
-
-        // Auto-purge only known old/stale merged migration files from server disk
-        $staleMergedFiles = [
-            '2026_08_23_000001_create_schools_table',
-            '2026_08_24_000002_create_categories_table_and_update_schools',
-            '2026_08_24_000003_add_exam_fields_to_questions_table',
-            // Merged into their create migrations
-            '2026_10_15_000002_add_archiving_and_sync_constraints',
-            '2026_10_15_000003_add_client_ids_for_offline_sync',
-            '2026_10_15_000004_add_xp_awarded_at_to_quiz_attempts',
-        ];
-        $purgedExtraFiles = [];
-        foreach ($staleMergedFiles as $staleBase) {
-            $stalePath = database_path("migrations/{$staleBase}.php");
-            if (file_exists($stalePath)) {
-                @unlink($stalePath);
-                $purgedExtraFiles[] = $staleBase;
-            }
-        }
-        $report['purged_stale_migration_files'] = $purgedExtraFiles;
-
-        $migrationFilesOnDisk = glob(database_path('migrations/*.php')) ?: [];
-        $filenamesOnDisk = array_map(fn ($p) => basename($p, '.php'), $migrationFilesOnDisk);
-        $report['migration_files_on_disk'] = $filenamesOnDisk;
-
-        // 1. Every table that exists right now
-        $tablesBefore = array_map(
-            fn ($table) => array_values((array) $table)[0],
-            \Illuminate\Support\Facades\DB::select('SHOW FULL TABLES WHERE Table_type = ?', ['BASE TABLE'])
-        );
-        $report['tables_before'] = $tablesBefore;
-
-        // 2. Drop each table on its own, so one denied DROP can't abort the wipe
-        $drop = ['dropped' => [], 'failed' => []];
-        \Illuminate\Support\Facades\Schema::disableForeignKeyConstraints();
-        foreach ($tablesBefore as $table) {
-            try {
-                \Illuminate\Support\Facades\DB::statement("DROP TABLE IF EXISTS `{$table}`");
-                $drop['dropped'][] = $table;
-            } catch (\Throwable $e) {
-                $drop['failed'][$table] = $e->getMessage();
-            }
-        }
-        \Illuminate\Support\Facades\Schema::enableForeignKeyConstraints();
-        $report['drop_results'] = $drop;
-
-        // 3. Verify the wipe actually happened.
-        $report['tables_remaining_after_drop'] = array_map(
-            fn ($table) => array_values((array) $table)[0],
-            \Illuminate\Support\Facades\DB::select('SHOW FULL TABLES WHERE Table_type = ?', ['BASE TABLE'])
-        );
-
-        // 4. Rebuild the schema
-        try {
-            \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
-            $report['migrate'] = [
-                'status' => 'success',
-                'output' => \Illuminate\Support\Facades\Artisan::output(),
-            ];
-        } catch (\Throwable $e) {
-            $report['migrate'] = ['status' => 'error', 'error' => $e->getMessage()];
-        }
-
-        // 5. Seed
-        try {
-            \Illuminate\Support\Facades\Artisan::call('db:seed', ['--force' => true]);
-            $report['seed'] = [
-                'status' => 'success',
-                'output' => \Illuminate\Support\Facades\Artisan::output(),
-            ];
-        } catch (\Throwable $e) {
-            $report['seed'] = ['status' => 'error', 'error' => $e->getMessage()];
-        }
-
-        $status = match (true) {
-            count($report['tables_remaining_after_drop']) > 0 => 'error',
-            ($report['migrate']['status'] ?? '') !== 'success' => 'error',
-            ($report['seed']['status'] ?? '') !== 'success' => 'partial',
-            default => 'success',
-        };
-
-        return response()->json(
-            array_merge(['status' => $status], $report),
-            $status === 'success' ? 200 : 500
-        );
-    } catch (\Throwable $e) {
-        \Illuminate\Support\Facades\Schema::enableForeignKeyConstraints();
-
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Failed to run migrate:fresh --seed: ' . $e->getMessage(),
-            'report' => $report,
-        ], 500);
-    }
-});
-
-// Run seeders only
-// Every seeder is idempotent (updateOrCreate; past questions skip once present), so this
-// only adds or refreshes the test accounts and sample content; it never wipes anything.
-Route::get('/run-seed', function () use ($guardMaintenance) {
-    $guardMaintenance();
-
-    @set_time_limit(300);
-    @ini_set('memory_limit', '256M');
-
-    try {
-        \Illuminate\Support\Facades\Artisan::call('db:seed', ['--force' => true]);
-        $output = \Illuminate\Support\Facades\Artisan::output();
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Database seeded successfully!',
-            'output' => $output
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Failed to run seeders: ' . $e->getMessage()
-        ], 500);
-    }
-});
-
-// Run past questions migration and seed only (convenient for incremental setup)
-Route::get('/run-past-questions-seed', function () use ($guardMaintenance) {
-    $guardMaintenance();
-
-    @set_time_limit(300);
-    @ini_set('memory_limit', '256M');
-
-    try {
-        \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
-        \Illuminate\Support\Facades\Artisan::call('db:seed', ['--class' => 'PastQuestionSeeder', '--force' => true]);
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Past questions migrated and seeded successfully!',
-            'questions_count' => \App\Models\PastQuestion::count(),
-            'options_count' => \App\Models\PastQuestionOption::count(),
-        ]);
-    } catch (\Throwable $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Failed to seed past questions: ' . $e->getMessage(),
-        ], 500);
-    }
-});
+// InfinityFree has no SSH, so Artisan commands are triggered over HTTP (MaintenanceController).
+// Opening a URL shows a confirmation page; the action runs only when that page posts back
+// MAINTENANCE_TOKEN (at least 32 characters; generate with: openssl rand -hex 32). Everything
+// answers 404 while no token is configured.
+foreach ([
+    'php-check' => 'phpCheck',
+    'clear-cache' => 'clearCache',
+    'run-migrations' => 'runMigrations',
+    'run-migrate-fresh-seed' => 'migrateFreshSeed',
+    'run-seed' => 'runSeed',
+    'run-past-questions-seed' => 'runPastQuestionsSeed',
+] as $path => $action) {
+    Route::get("/{$path}", [MaintenanceController::class, 'confirm']);
+    Route::post("/{$path}", [MaintenanceController::class, $action])
+        ->middleware([EnsureMaintenanceToken::class, 'throttle:maintenance']);
+}
 
 // Feedback Submission Web Endpoint
-Route::post('/api/v1/feedback', [\App\Http\Controllers\Api\FeedbackController::class, 'store'])->middleware('throttle:public-feedback');
+Route::post('/api/v1/feedback', [FeedbackController::class, 'store'])->middleware('throttle:public-feedback');
 
 // Who is signed in (null for guests). Public so the sync engine can ask on any page
 // without the browser logging a 401 for signed-out visitors.
 Route::get('/api/v1/sync/session', [SyncController::class, 'session'])->middleware('throttle:api');
-

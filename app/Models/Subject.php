@@ -44,7 +44,7 @@ class Subject extends Model
      */
     public function scopeForUser($query, ?User $user)
     {
-        if (!$user) {
+        if (! $user) {
             return $query->whereRaw('1 = 0');
         }
 
@@ -54,9 +54,10 @@ class Subject extends Model
 
         if ($user->isSchoolAdmin()) {
             $schoolId = $user->primarySchool()?->id;
+
             return $query->where(function ($q) use ($schoolId) {
                 $q->where('school_id', $schoolId)
-                  ->orWhereNull('school_id');
+                    ->orWhereNull('school_id');
             });
         }
 
@@ -76,6 +77,7 @@ class Subject extends Model
 
         if ($user->isLearner()) {
             $classId = $user->primaryClass()?->id;
+
             return $query->where(function ($q) use ($classId) {
                 if ($classId) {
                     $q->where('class_id', $classId)->orWhereNull('class_id');

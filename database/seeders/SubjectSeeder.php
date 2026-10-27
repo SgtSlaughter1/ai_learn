@@ -83,7 +83,7 @@ class SubjectSeeder extends Seeder
             }
         }
 
-        $this->command?->info("Cleanly seeded SS1, SS2, and SS3 subjects (3 subjects & 5 topics per subject each with 15 questions).");
+        $this->command?->info('Cleanly seeded SS1, SS2, and SS3 subjects (3 subjects & 5 topics per subject each with 15 questions).');
     }
 
     private function getSS1Curriculum(): array

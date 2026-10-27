@@ -2,16 +2,15 @@
 
 namespace Tests\Feature;
 
-use App\Http\Middleware\EnsureAccountIsActive;
 use App\Enums\UserRole;
-use App\Models\ClassModel;
+use App\Http\Middleware\EnsureAccountIsActive;
 use App\Models\ClassMembership;
+use App\Models\ClassModel;
 use App\Models\LearnerProgress;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
-use App\Models\QuizAnswer;
 use App\Models\School;
 use App\Models\Subject;
 use App\Models\TeacherProfile;
@@ -76,9 +75,9 @@ class EndpointPerformanceBenchmarkTest extends TestCase
             return;
         }
 
-        echo "\n\n" . str_repeat('=', 78) . "\n";
-        echo sprintf("%-38s | %-8s | %-12s | %-10s\n", "API Endpoint Function", "Status", "Latency", "Queries");
-        echo str_repeat('-', 78) . "\n";
+        echo "\n\n".str_repeat('=', 78)."\n";
+        echo sprintf("%-38s | %-8s | %-12s | %-10s\n", 'API Endpoint Function', 'Status', 'Latency', 'Queries');
+        echo str_repeat('-', 78)."\n";
 
         foreach (self::$benchmarkResults as $res) {
             echo sprintf(
@@ -89,7 +88,7 @@ class EndpointPerformanceBenchmarkTest extends TestCase
                 $res['query_count']
             );
         }
-        echo str_repeat('=', 78) . "\n\n";
+        echo str_repeat('=', 78)."\n\n";
     }
 
     // ── 1. Auth & Profile ──
@@ -166,8 +165,8 @@ class EndpointPerformanceBenchmarkTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonStructure([
                 'subjects' => [
-                    '*' => ['id', 'name', 'slug', 'description', 'progress_percent', 'topics_count']
-                ]
+                    '*' => ['id', 'name', 'slug', 'description', 'progress_percent', 'topics_count'],
+                ],
             ]);
     }
 
@@ -187,7 +186,7 @@ class EndpointPerformanceBenchmarkTest extends TestCase
             ->assertJsonStructure([
                 'subject' => ['id', 'name', 'slug', 'description'],
                 'topics',
-                'quizzes'
+                'quizzes',
             ]);
     }
 
@@ -233,9 +232,9 @@ class EndpointPerformanceBenchmarkTest extends TestCase
                     'id',
                     'title',
                     'questions' => [
-                        '*' => ['id', 'topic_id', 'question_text', 'type', 'options']
-                    ]
-                ]
+                        '*' => ['id', 'topic_id', 'question_text', 'type', 'options'],
+                    ],
+                ],
             ]);
     }
 
@@ -297,7 +296,7 @@ class EndpointPerformanceBenchmarkTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJsonStructure([
-                'attempt' => ['id', 'quiz_title', 'score', 'total_marks', 'answers']
+                'attempt' => ['id', 'quiz_title', 'score', 'total_marks', 'answers'],
             ]);
     }
 
@@ -315,7 +314,7 @@ class EndpointPerformanceBenchmarkTest extends TestCase
 
         $response = $this->benchmark('GET /api/v1/flashcards/deck', function () {
             return $this->getJson('/api/v1/flashcards/deck');
-        }, maxAllowedQueries: 6);
+        }, maxAllowedQueries: 10); // includes resolving the learner's school and class to scope questions
 
         $response->assertStatus(200)
             ->assertJsonStructure(['deck']);
@@ -328,7 +327,7 @@ class EndpointPerformanceBenchmarkTest extends TestCase
 
         $response = $this->benchmark('POST /api/v1/flashcards/complete', function () {
             return $this->postJson('/api/v1/flashcards/complete', [
-                'ratings' => ['easy', 'good', 'easy']
+                'ratings' => ['easy', 'good', 'easy'],
             ]);
         }, maxAllowedQueries: 15);
 

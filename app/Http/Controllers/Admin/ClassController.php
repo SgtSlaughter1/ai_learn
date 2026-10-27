@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ClassController extends Controller
 {
@@ -52,11 +53,11 @@ class ClassController extends Controller
         $assignedSchoolId = $request->user()->schoolForNewRecord($validated['school_id'] ?? null);
         $targetSchool = School::find($assignedSchoolId);
         if (! $targetSchool) {
-            return response()->json(['error' => 'Designated school not found.'], 404);
+            abort(404, 'Designated school not found.');
         }
 
         if (! $targetSchool->supportsGradeLevel($validated['grade_level'])) {
-            return response()->json(['error' => "Grade level '{$validated['grade_level']}' is not permitted for school '{$targetSchool->name}' under category '{$targetSchool->category}'."], 422);
+            throw ValidationException::withMessages(['grade_level' => "Grade level '{$validated['grade_level']}' is not permitted for school '{$targetSchool->name}' under category '{$targetSchool->category_type_label}'."]);
         }
 
         $slug = Str::slug($validated['name']).'-'.Str::random(5);
@@ -92,7 +93,7 @@ class ClassController extends Controller
         $effectiveSchoolId = $validated['school_id'] ?? $class->school_id;
         $targetSchool = School::find($effectiveSchoolId);
         if ($targetSchool && ! $targetSchool->supportsGradeLevel($validated['grade_level'])) {
-            return response()->json(['error' => "Grade level '{$validated['grade_level']}' is not permitted for school '{$targetSchool->name}' under category '{$targetSchool->category}'."], 422);
+            throw ValidationException::withMessages(['grade_level' => "Grade level '{$validated['grade_level']}' is not permitted for school '{$targetSchool->name}' under category '{$targetSchool->category_type_label}'."]);
         }
 
         if (isset($validated['arm']) && ! isset($validated['section'])) {

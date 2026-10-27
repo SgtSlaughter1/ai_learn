@@ -30,8 +30,9 @@ class ClassSeeder extends Seeder
         $learner4 = User::where('email', 'chidi.learner@example.com')->first();
         $learner5 = User::where('email', 'amina.learner@example.com')->first();
 
-        if (!$school1 || !$school2) {
-            $this->command?->error("Schools must be seeded before running ClassSeeder.");
+        if (! $school1 || ! $school2) {
+            $this->command?->error('Schools must be seeded before running ClassSeeder.');
+
             return;
         }
 
@@ -284,6 +285,6 @@ class ClassSeeder extends Seeder
             );
         }
 
-        $this->command?->info("Clean Grade Ladder Classes seeded successfully.");
+        $this->command?->info('Clean Grade Ladder Classes seeded successfully.');
     }
 }

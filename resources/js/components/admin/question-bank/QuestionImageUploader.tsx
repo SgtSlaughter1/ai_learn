@@ -38,8 +38,8 @@ export default function QuestionImageUploader({
 
     // Handle file upload (online API with offline base64 fallback)
     const processFile = async (file: File) => {
-        if (!file.type.startsWith('image/')) {
-            showToast?.('Please upload a valid image file (PNG, JPG, WEBP, SVG)', 'error');
+        if (!file.type.startsWith('image/') || file.type === 'image/svg+xml') {
+            showToast?.('Please upload a valid image file (PNG, JPG, WEBP, GIF)', 'error');
             return;
         }
 
@@ -303,7 +303,7 @@ export default function QuestionImageUploader({
                     <input
                         ref={fileInputRef}
                         type="file"
-                        accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
                         onChange={handleFileChange}
                         className="hidden"
                     />
@@ -322,7 +322,7 @@ export default function QuestionImageUploader({
                                 Click to browse, drag & drop, or <span className="text-[var(--color-primary)] underline">paste screenshot (Ctrl+V)</span>
                             </div>
                             <p className="text-[10px] text-[var(--color-muted)]">
-                                Supports PNG, JPG, WEBP, SVG (up to 5MB). Automatically saved offline.
+                                Supports PNG, JPG, WEBP, GIF (up to 5MB). Automatically saved offline.
                             </p>
                         </div>
                     )}

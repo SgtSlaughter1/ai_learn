@@ -32,10 +32,15 @@ class RegisterController extends Controller
      */
     public function store(Request $request): RedirectResponse|JsonResponse
     {
+        // Normalise rather than reject "Ada@School.ng" (the old 'lowercase' rule refused it).
+        if (is_string($request->input('email'))) {
+            $request->merge(['email' => mb_strtolower(trim($request->input('email')))]);
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'confirmed', Password::min(6)],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'string', 'confirmed', Password::defaults()],
         ]);
 
         $user = DB::transaction(function () use ($validated) {
@@ -75,7 +80,6 @@ class RegisterController extends Controller
         if ($request->wantsJson()) {
             return response()->json([
                 'status' => 'success',
-                'token' => session()->getId(),
                 'user' => [
                     'id' => $user->id,
                     'name' => $user->name,

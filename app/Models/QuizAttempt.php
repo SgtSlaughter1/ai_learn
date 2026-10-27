@@ -14,7 +14,8 @@ class QuizAttempt extends Model
 {
     use HasFactory, HasUuids;
 
-    protected $guarded = [];
+    /** xp_awarded_at is claimed by GamificationService with an atomic update, never mass-assigned. */
+    protected $fillable = ['id', 'user_id', 'quiz_id', 'status', 'score', 'total_marks', 'started_at', 'completed_at'];
 
     protected static function booted(): void
     {
@@ -27,6 +28,8 @@ class QuizAttempt extends Model
         return [
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
+            'score' => 'integer',
+            'total_marks' => 'integer',
         ];
     }
 

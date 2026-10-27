@@ -2,10 +2,13 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\NormalizesEmail;
 use Illuminate\Foundation\Http\FormRequest;
 
 class EnrollClassLearnerRequest extends FormRequest
 {
+    use NormalizesEmail;
+
     /** Authorized by the route's role gate and the controller's policy checks. */
     public function authorize(): bool
     {

@@ -14,7 +14,7 @@ class QuestionFactory extends Factory
     {
         return [
             'topic_id' => Topic::factory(),
-            'question_text' => $this->faker->sentence() . '?',
+            'question_text' => $this->faker->sentence().'?',
             'type' => 'multiple_choice',
             'difficulty' => 'medium',
             'explanation' => $this->faker->sentence(),

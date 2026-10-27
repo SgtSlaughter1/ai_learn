@@ -20,9 +20,12 @@ class QuestionContext extends Model
 
     protected $guarded = [];
 
-    protected $casts = [
-        'show_line_numbers' => 'boolean',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'show_line_numbers' => 'boolean',
+        ];
+    }
 
     public function topic(): BelongsTo
     {

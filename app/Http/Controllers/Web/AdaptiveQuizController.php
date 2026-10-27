@@ -8,6 +8,7 @@ use App\Models\Quiz;
 use App\Services\Adaptive\AdaptiveService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class AdaptiveQuizController extends Controller
 {
@@ -21,6 +22,7 @@ class AdaptiveQuizController extends Controller
      */
     public function start(Request $request, Quiz $quiz): JsonResponse
     {
+        Gate::authorize('attempt', $quiz);
         $user = $request->user();
 
         $result = $this->adaptiveService->startQuiz($user->id, $quiz);
@@ -33,6 +35,7 @@ class AdaptiveQuizController extends Controller
      */
     public function answer(AdaptiveQuizAnswerRequest $request, Quiz $quiz): JsonResponse
     {
+        Gate::authorize('attempt', $quiz);
         $user = $request->user();
         $validated = $request->validated();
 
@@ -41,6 +44,7 @@ class AdaptiveQuizController extends Controller
             $validated['state_id'],
             $validated['question_id'],
             $validated['selected_option_id'] ?? null,
+            $quiz->id,
         );
 
         return response()->json($result);

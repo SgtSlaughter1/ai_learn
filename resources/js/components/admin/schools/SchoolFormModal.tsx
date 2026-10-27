@@ -3,6 +3,7 @@ import type { SchoolItem } from '@/types/admin';
 
 export interface SchoolFormData {
     name: string;
+    /** Which option the category select shows. Only category_ids is sent to the server. */
     category: string;
     category_ids: number[];
     slug: string;

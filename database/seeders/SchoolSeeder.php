@@ -3,8 +3,8 @@
 namespace Database\Seeders;
 
 use App\Models\LearnerProfile;
-use App\Models\TeacherProfile;
 use App\Models\School;
+use App\Models\TeacherProfile;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
@@ -31,7 +31,6 @@ class SchoolSeeder extends Seeder
             ['slug' => 'acedrill-academy'],
             [
                 'name' => 'AceDrill Academy',
-                'category' => 'senior',
                 'category_ids' => [3],
                 'admin_user_id' => $schoolAdmin1?->id,
                 'address' => '12 Innovation Drive, Tech City',
@@ -49,7 +48,6 @@ class SchoolSeeder extends Seeder
             ['slug' => 'greenwood-high-school'],
             [
                 'name' => 'Greenwood High School',
-                'category' => 'combined',
                 'category_ids' => [2, 3],
                 'admin_user_id' => $schoolAdmin2?->id,
                 'address' => '45 Heritage Boulevard',
@@ -160,6 +158,6 @@ class SchoolSeeder extends Seeder
             );
         }
 
-        $this->command?->info("Schools and Learner Profiles seeded successfully.");
+        $this->command?->info('Schools and Learner Profiles seeded successfully.');
     }
 }

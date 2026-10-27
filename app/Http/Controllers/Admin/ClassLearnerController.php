@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 
 class ClassLearnerController extends Controller
 {
@@ -101,11 +102,11 @@ class ClassLearnerController extends Controller
         }
 
         if (! $learner) {
-            return response()->json(['error' => 'Learner not found'], 404);
+            abort(404, 'Learner not found');
         }
 
         if (! $learner->isLearner()) {
-            return response()->json(['error' => 'Selected user is not a learner'], 400);
+            throw ValidationException::withMessages(['email' => 'Selected user is not a learner']);
         }
         Gate::authorize('enrol', [$learner, $class]);
 

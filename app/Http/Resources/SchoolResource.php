@@ -19,7 +19,7 @@ class SchoolResource extends JsonResource
             'name' => $this->name,
             'slug' => $this->slug,
             'code' => $this->code,
-            'category' => $this->category,
+            'category_ids' => $this->category_ids ?? [],
             'allowed_grade_levels' => $this->allowed_grade_levels,
             'address' => $this->address,
             'city' => $this->city,

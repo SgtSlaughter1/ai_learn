@@ -30,7 +30,7 @@ class ExportPastQuestionsSnapshotCommand extends Command
         $filePath = $customPath ?: database_path('seeders/data/past_questions_snapshot.json');
         $dir = dirname($filePath);
 
-        if (!file_exists($dir)) {
+        if (! file_exists($dir)) {
             mkdir($dir, 0755, true);
         }
 
@@ -67,6 +67,7 @@ class ExportPastQuestionsSnapshotCommand extends Command
         $count = count($questions);
         if ($count === 0) {
             $this->warn('No past questions found in database.');
+
             return 1;
         }
 

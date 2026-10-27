@@ -11,6 +11,8 @@ export interface ExtractedQuestion {
     difficulty: string;
     explanation: string | null;
     options: ExtractedOption[];
+    /** The server found no (or several) correct answers and pre-selected one: check it before saving. */
+    needs_review?: boolean;
 }
 
 export function parseQuestionsOffline(rawText: string): ExtractedQuestion[] {

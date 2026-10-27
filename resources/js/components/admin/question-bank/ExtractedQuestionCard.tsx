@@ -51,6 +51,11 @@ export default function ExtractedQuestionCard({
                     <span className="px-2.5 py-1 rounded-lg bg-[var(--color-primary)] text-white font-bold text-xs shadow-sm">
                         #{qIdx + 1}
                     </span>
+                    {q.needs_review && (
+                        <span className="px-2 py-0.5 rounded-lg bg-[var(--color-accent-10)] text-[var(--color-accent-hover)] border border-[var(--color-accent-20)] font-bold text-[10px] uppercase">
+                            Check the answer
+                        </span>
+                    )}
                     <div className="flex items-center gap-1.5 bg-[var(--color-surface)] p-1 rounded-lg border border-[var(--color-border)]">
                         {(['easy', 'medium', 'hard'] as const).map((diff) => (
                             <button

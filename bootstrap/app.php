@@ -1,5 +1,9 @@
 <?php
 
+use App\Http\Controllers\MaintenanceController;
+use App\Http\Middleware\EnsureAccountIsActive;
+use App\Http\Middleware\EnsureIdempotentRequest;
+use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -20,13 +24,16 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->validateCsrfTokens(except: [
-            'api/*',
-        ]);
+        // Every write needs a same-origin browser (Sec-Fetch-Site) or a CSRF token, /api/v1 included:
+        // those routes use the browser session, so excluding them let other sites post as the user.
+        // Routes in routes/api.php are not in the web group and never had this check.
+        // The maintenance actions are exempt: they don't use the session and require their own
+        // 32+ character token (EnsureMaintenanceToken), so `curl` with the header keeps working.
+        $middleware->preventRequestForgery(except: array_keys(MaintenanceController::ACTIONS));
         $middleware->web(append: [
-            \App\Http\Middleware\EnsureAccountIsActive::class,
-            \App\Http\Middleware\HandleInertiaRequests::class,
-            \App\Http\Middleware\EnsureIdempotentRequest::class,
+            EnsureAccountIsActive::class,
+            HandleInertiaRequests::class,
+            EnsureIdempotentRequest::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

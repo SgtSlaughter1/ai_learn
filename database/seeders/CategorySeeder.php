@@ -41,6 +41,6 @@ class CategorySeeder extends Seeder
             );
         }
 
-        $this->command?->info("Education categories (Primary, Junior, Senior) seeded successfully.");
+        $this->command?->info('Education categories (Primary, Junior, Senior) seeded successfully.');
     }
 }

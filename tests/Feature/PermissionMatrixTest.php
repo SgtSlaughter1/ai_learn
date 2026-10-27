@@ -98,13 +98,17 @@ class PermissionMatrixTest extends TestCase
             ->json($method, $this->resolveUri($uri), $this->payload($payload));
 
         $status = $response->getStatusCode();
-        $this->assertLessThan(500, $status, "Server error: " . $response->getContent());
+        $this->assertLessThan(500, $status, 'Server error: '.$response->getContent());
         if ($allowed === 'hidden') {
             $this->assertSame(404, $status, "Expected the record to be hidden from {$actor}, got {$status}");
         } elseif ($allowed) {
-            $this->assertNotContains($status, [401, 403], "Expected {$actor} to be allowed, got {$status}: " . $response->getContent());
+            $this->assertNotContains($status, [401, 403], "Expected {$actor} to be allowed, got {$status}: ".$response->getContent());
+        } elseif ($actor === 'orphanAdmin') {
+            // A school admin with no school is signed out before any check runs.
+            $this->assertSame(401, $status, "Expected {$actor} to be signed out, got {$status}: ".$response->getContent());
+            $this->assertSame('account_inactive', $response->json('code'));
         } else {
-            $this->assertSame(403, $status, "Expected {$actor} to be denied, got {$status}: " . $response->getContent());
+            $this->assertSame(403, $status, "Expected {$actor} to be denied, got {$status}: ".$response->getContent());
         }
     }
 
@@ -117,8 +121,8 @@ class PermissionMatrixTest extends TestCase
         $this->f['adminB'] = $user(UserRole::SCHOOL_ADMIN);
         $this->f['orphanAdmin'] = $user(UserRole::SCHOOL_ADMIN); // administers no school
 
-        $this->f['schoolA'] = School::create(['name' => 'School A', 'slug' => 'school-a', 'category' => 'SECONDARY', 'is_active' => true, 'admin_user_id' => $this->f['schoolAdmin']->id]);
-        $this->f['schoolB'] = School::create(['name' => 'School B', 'slug' => 'school-b', 'category' => 'SECONDARY', 'is_active' => true, 'admin_user_id' => $this->f['adminB']->id]);
+        $this->f['schoolA'] = School::create(['name' => 'School A', 'slug' => 'school-a', 'is_active' => true, 'admin_user_id' => $this->f['schoolAdmin']->id]);
+        $this->f['schoolB'] = School::create(['name' => 'School B', 'slug' => 'school-b', 'is_active' => true, 'admin_user_id' => $this->f['adminB']->id]);
 
         $class = fn (School $school, string $slug) => ClassModel::create(['school_id' => $school->id, 'name' => strtoupper($slug), 'slug' => $slug, 'grade_level' => 'SS1', 'is_active' => true]);
         $this->f['classA'] = $class($this->f['schoolA'], 'ss1-a');
@@ -127,6 +131,7 @@ class PermissionMatrixTest extends TestCase
         $teacher = function (School $school) use ($user): User {
             $t = $user(UserRole::TEACHER);
             TeacherProfile::create(['user_id' => $t->id, 'school_id' => $school->id]);
+
             return $t;
         };
         $this->f['teacher'] = $teacher($this->f['schoolA']);
@@ -142,6 +147,7 @@ class PermissionMatrixTest extends TestCase
             if ($inClass) {
                 ClassMembership::create(['class_id' => $inClass->id, 'user_id' => $l->id, 'role' => 'learner', 'is_active' => true]);
             }
+
             return $l;
         };
         $this->f['learner'] = $learner($this->f['schoolA'], $this->f['classA']);
@@ -169,6 +175,7 @@ class PermissionMatrixTest extends TestCase
     {
         return preg_replace_callback('/\{(\w+)(?:\.(\w+))?\}/', function ($m) {
             $record = $this->f[$m[1]];
+
             return (string) (isset($m[2]) ? $record->{$m[2]} : $record->getKey());
         }, $uri);
     }

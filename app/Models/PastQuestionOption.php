@@ -12,10 +12,13 @@ class PastQuestionOption extends Model
 
     protected $guarded = [];
 
-    protected $casts = [
-        'is_correct' => 'boolean',
-        'sort_order' => 'integer',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'is_correct' => 'boolean',
+            'sort_order' => 'integer',
+        ];
+    }
 
     public function pastQuestion(): BelongsTo
     {

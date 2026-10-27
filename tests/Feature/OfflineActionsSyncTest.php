@@ -18,6 +18,8 @@ use App\Models\Topic;
 use App\Models\User;
 use App\Models\UserGamification;
 use App\Models\XpTransaction;
+use App\Services\SpacedRepetition\SpacedRepetitionService;
+use App\Support\OfflineAnswerKey;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -32,6 +34,7 @@ class OfflineActionsSyncTest extends TestCase
     use RefreshDatabase;
 
     protected User $learner;
+
     protected Topic $topic;
 
     protected function setUp(): void
@@ -65,7 +68,7 @@ class OfflineActionsSyncTest extends TestCase
             ->assertStatus(422);
 
         $this->actingAs($this->learner)
-            ->postJson('/api/v1/flashcards/complete', ['ratings' => array_fill(0, 101, 'easy')])
+            ->postJson('/api/v1/flashcards/complete', ['ratings' => array_fill(0, 11, 'easy')])
             ->assertStatus(422);
     }
 
@@ -125,13 +128,13 @@ class OfflineActionsSyncTest extends TestCase
         QuestionOption::factory()->create(['question_id' => $question->id, 'is_correct' => false]);
         $item = SpacedRepetitionItem::create(['user_id' => $this->learner->id, 'question_id' => $question->id, 'topic_id' => $this->topic->id, 'next_review_at' => now()]);
 
-        $card = app(\App\Services\SpacedRepetition\SpacedRepetitionService::class)->formatQueueItem($item->fresh());
+        $card = app(SpacedRepetitionService::class)->formatQueueItem($item->fresh());
 
         $this->assertArrayNotHasKey('explanation', $card);
         foreach ($card['options'] as $option) {
             $this->assertArrayNotHasKey('is_correct', $option);
         }
-        $this->assertSame(\App\Support\OfflineAnswerKey::hash('q', $question->id, $correct->id), $card['answer_hash']);
+        $this->assertSame(OfflineAnswerKey::hash('q', $question->id, $correct->id), $card['answer_hash']);
         $this->assertNotEmpty($card['explanation_sealed']);
         $this->assertStringNotContainsString('Photosynthesis', json_encode($card));
     }
@@ -173,7 +176,7 @@ class OfflineActionsSyncTest extends TestCase
     public function test_repeated_enrolment_reuses_the_membership(): void
     {
         $admin = User::factory()->create(['role' => UserRole::PLATFORM_ADMIN]);
-        $school = School::create(['name' => 'Test School', 'slug' => 'test-school', 'category' => 'SECONDARY', 'is_active' => true]);
+        $school = School::create(['name' => 'Test School', 'slug' => 'test-school', 'is_active' => true]);
         $class = ClassModel::create(['school_id' => $school->id, 'name' => 'SS1 Gold', 'slug' => 'ss1-gold', 'grade_level' => 'SS1', 'is_active' => true]);
 
         foreach (range(1, 2) as $_) {
@@ -202,6 +205,7 @@ class OfflineActionsSyncTest extends TestCase
         DB::table('past_question_options')->insert([
             'past_question_id' => $id, 'option_text' => '5', 'is_correct' => false, 'created_at' => now(), 'updated_at' => now(),
         ]);
+
         return [$id, $correct];
     }
 

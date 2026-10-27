@@ -142,8 +142,8 @@ class DashboardController extends Controller
             ->take(5)
             ->get();
 
-        $allowedGradeLevels = School::allowedGradeLevelsForCategory(null);
-        $gradeOptions = School::gradeOptionsForCategory(null);
+        $allowedGradeLevels = School::allowedGradeLevelsForCategoryIds(null);
+        $gradeOptions = School::gradeOptionsForCategoryIds(null);
 
         return [
             'is_super_admin' => true,
@@ -228,9 +228,9 @@ class DashboardController extends Controller
             ->where('u.role', 'learner')
             ->where('ug.total_xp', '>', 0);
 
-        if ($schoolId) {
-            $topLearnersQuery->where('lp.school_id', $schoolId);
-        }
+        // Always scoped: an admin with no school matches nobody (0 is never a school id),
+        // rather than seeing every school's learners.
+        $topLearnersQuery->where('lp.school_id', $schoolId ?? 0);
 
         $topLearners = $topLearnersQuery
             ->select([
@@ -262,9 +262,7 @@ class DashboardController extends Controller
             ->join('learner_profiles as lprof', 'lprof.user_id', '=', 'u.id')
             ->leftJoin('schools as s', 's.id', '=', 'lprof.school_id');
 
-        if ($schoolId) {
-            $strugglingQuery->where('lprof.school_id', $schoolId);
-        }
+        $strugglingQuery->where('lprof.school_id', $schoolId ?? 0);
 
         $strugglingLearners = $strugglingQuery
             ->groupBy('u.id', 'u.name', 'u.email', 's.name', 'lprof.grade_level')
@@ -281,8 +279,8 @@ class DashboardController extends Controller
             ->take(5)
             ->get();
 
-        $allowedGradeLevels = $school ? ($school->allowed_grade_levels ?? []) : School::allowedGradeLevelsForCategory(null);
-        $gradeOptions = $school ? ($school->grade_options ?? []) : School::gradeOptionsForCategory(null);
+        $allowedGradeLevels = $school ? ($school->allowed_grade_levels ?? []) : School::allowedGradeLevelsForCategoryIds(null);
+        $gradeOptions = $school ? ($school->grade_options ?? []) : School::gradeOptionsForCategoryIds(null);
 
         return [
             'is_super_admin' => false,
@@ -291,7 +289,6 @@ class DashboardController extends Controller
                 'id' => $school->id,
                 'name' => $school->name,
                 'slug' => $school->slug,
-                'category' => $school->category,
                 'category_ids' => $school->category_ids ?? [],
                 'allowed_grade_levels' => $allowedGradeLevels,
                 'grade_options' => $gradeOptions,

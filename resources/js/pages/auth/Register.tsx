@@ -196,7 +196,7 @@ export default function Register() {
                                         value={data.password}
                                         onChange={(e) => setData('password', e.target.value)}
                                         className="input-field pr-11 text-xs sm:text-sm"
-                                        placeholder="•••••••• (Min 6 characters)"
+                                        placeholder="•••••••• (Min 8 characters)"
                                         required
                                         autoComplete="new-password"
                                     />

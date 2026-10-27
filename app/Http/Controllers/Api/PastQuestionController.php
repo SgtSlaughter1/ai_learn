@@ -14,9 +14,10 @@ use App\Models\PastQuestionOption;
 use App\Models\Subject;
 use App\Models\Topic;
 use App\Services\AIService;
-use Illuminate\Http\JsonResponse;
 use App\Services\Gamification\GamificationService;
+use App\Support\ListSize;
 use App\Support\OfflineAnswerKey;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -36,9 +37,9 @@ class PastQuestionController extends Controller
     {
         $schoolId = $request->query('school_id');
         $user = Auth::user() ?? $request->user();
-        $isGuest = !$user;
+        $isGuest = ! $user;
 
-        $cacheKey = 'past_questions:meta:v1' . ($schoolId ? ":{$schoolId}" : '');
+        $cacheKey = 'past_questions:meta:v1'.($schoolId ? ":{$schoolId}" : '');
 
         $cachedMeta = Cache::remember($cacheKey, now()->addMinutes(5), function () {
             // Available standard exams
@@ -114,6 +115,7 @@ class PastQuestionController extends Controller
                 $code = $exam['code'];
                 $exam['questionCount'] = $examCounts[$code] ?? 0;
                 $exam['available_years'] = $yearsByExam->get($code, []);
+
                 return $exam;
             }, $examsConfig);
 
@@ -156,6 +158,7 @@ class PastQuestionController extends Controller
                 $sArray['available_exams'] = $subjectExamMap->get($s->id, []);
                 $sArray['available_years_by_exam'] = $subjectYearsByExamMap->get($s->id, []);
                 $sArray['counts_by_exam'] = $subjectExamCounts->get($s->id, []);
+
                 return $sArray;
             })->values()->all();
 
@@ -188,7 +191,7 @@ class PastQuestionController extends Controller
     public function getQuestions(Request $request): JsonResponse
     {
         $user = Auth::user() ?? $request->user();
-        $isGuest = !$user;
+        $isGuest = ! $user;
 
         $examCode = $request->query('exam_code');
         $examYear = $request->query('year');
@@ -197,8 +200,7 @@ class PastQuestionController extends Controller
         $topicId = $request->query('topic_id');
 
         // Unauthenticated guests are capped to a maximum of 20 questions alone
-        $requestedLimit = (int) ($request->query('limit', 40));
-        $limit = $isGuest ? min($requestedLimit, 20) : min($requestedLimit, 100);
+        $limit = ListSize::from($request->query('limit'), $isGuest ? 20 : 40, $isGuest ? 20 : 100);
         $random = $request->boolean('random', true);
 
         $query = PastQuestion::with([
@@ -223,10 +225,10 @@ class PastQuestionController extends Controller
             $query->where(function ($q) use ($subjectSlug) {
                 $q->whereHas('subject', function ($sq) use ($subjectSlug) {
                     $sq->where('slug', $subjectSlug)
-                       ->orWhere('name', 'LIKE', '%' . str_replace('-', ' ', $subjectSlug) . '%');
+                        ->orWhere('name', 'LIKE', '%'.str_replace('-', ' ', $subjectSlug).'%');
                 })->orWhereHas('topic.subject', function ($tq) use ($subjectSlug) {
                     $tq->where('slug', $subjectSlug)
-                       ->orWhere('name', 'LIKE', '%' . str_replace('-', ' ', $subjectSlug) . '%');
+                        ->orWhere('name', 'LIKE', '%'.str_replace('-', ' ', $subjectSlug).'%');
                 });
             });
         }
@@ -240,15 +242,16 @@ class PastQuestionController extends Controller
         $questions = $query->limit($limit)->get();
 
         $user = Auth::user() ?? $request->user();
-        $isGuest = !$user;
+        $isGuest = ! $user;
         $isAdmin = $user && method_exists($user, 'isAnyAdmin') ? $user->isAnyAdmin() : ($user && method_exists($user, 'isAdmin') && $user->isAdmin());
 
         // Always hide answers by default so learners cannot inspect client-side state/HTML
-        $hideAnswers = !($isAdmin && $request->boolean('include_answers', false));
+        $hideAnswers = ! ($isAdmin && $request->boolean('include_answers', false));
 
         // Transform questions for front-end consumption
         $formatted = $questions->map(function (PastQuestion $q) use ($hideAnswers) {
             $subject = $q->subject ?? $q->topic?->subject;
+
             return [
                 'id' => $q->id,
                 'exam_code' => $q->exam_code,
@@ -286,9 +289,10 @@ class PastQuestionController extends Controller
                         'label' => $letter,
                         'option_text' => $opt->option_text,
                     ];
-                    if (!$hideAnswers) {
+                    if (! $hideAnswers) {
                         $optData['is_correct'] = (bool) $opt->is_correct;
                     }
+
                     return $optData;
                 })->values()->all(),
             ];
@@ -314,7 +318,7 @@ class PastQuestionController extends Controller
         $question = PastQuestion::with('options')->findOrFail($validated['question_id']);
         $correctOption = $question->options->firstWhere('is_correct', true);
         $selectedOption = $question->options->firstWhere('id', $validated['selected_option_id']);
-        
+
         $isCorrect = $selectedOption ? (bool) $selectedOption->is_correct : false;
 
         return response()->json([
@@ -333,7 +337,7 @@ class PastQuestionController extends Controller
         $validated = $request->validated();
 
         $user = Auth::user() ?? $request->user();
-        $isGuest = !$user;
+        $isGuest = ! $user;
 
         $totalQuestions = $isGuest
             ? min((int) ($validated['total_questions'] ?? 20), 20)
@@ -355,7 +359,7 @@ class PastQuestionController extends Controller
             ];
             // The device's id makes a retried start reuse the record, and lets a submit
             // made later (possibly offline) find it.
-            $simulation = !empty($validated['client_id'])
+            $simulation = ! empty($validated['client_id'])
                 ? ExamSimulation::createOrFirst(['client_id' => $validated['client_id']], $attributes)
                 : ExamSimulation::create($attributes);
             $simulationId = $simulation->user_id === $user->id ? $simulation->id : null;
@@ -385,7 +389,7 @@ class PastQuestionController extends Controller
         $answers = $validated['answers'] ?? [];
         $timeSpent = $validated['time_spent_seconds'] ?? 0;
 
-        $questionIds = !empty($validated['question_ids'])
+        $questionIds = ! empty($validated['question_ids'])
             ? $validated['question_ids']
             : array_keys($answers);
 
@@ -401,13 +405,15 @@ class PastQuestionController extends Controller
 
         foreach ($questionIds as $qId) {
             $question = $questions->get($qId);
-            if (!$question) continue;
+            if (! $question) {
+                continue;
+            }
 
             $selectedOptId = $answers[$qId] ?? null;
             $correctOption = $question->options->firstWhere('is_correct', true);
             $selectedOption = $selectedOptId ? $question->options->firstWhere('id', $selectedOptId) : null;
 
-            $isCorrect = ($correctOption && $selectedOptId && (int)$correctOption->id === (int)$selectedOptId);
+            $isCorrect = ($correctOption && $selectedOptId && (int) $correctOption->id === (int) $selectedOptId);
             if ($isCorrect) {
                 $correctAnswers++;
             }
@@ -418,7 +424,7 @@ class PastQuestionController extends Controller
             $subjectName = $question->subject?->name ?? $question->topic?->subject?->name ?? 'General';
 
             if ($topicId) {
-                if (!isset($topicStats[$topicId])) {
+                if (! isset($topicStats[$topicId])) {
                     $topicStats[$topicId] = [
                         'topic_id' => $topicId,
                         'topic_name' => $topicName,
@@ -454,13 +460,14 @@ class PastQuestionController extends Controller
                 'is_correct' => $isCorrect,
                 'options' => $question->options->map(function ($opt, $idx) use ($selectedOptId) {
                     $letter = $opt->option_key ?: chr(65 + $idx);
+
                     return [
                         'id' => $opt->id,
                         'key' => strtolower($letter),
                         'label' => $letter,
                         'option_text' => $opt->option_text,
                         'is_correct' => $opt->is_correct,
-                        'is_selected' => ($selectedOptId && (int)$opt->id === (int)$selectedOptId),
+                        'is_selected' => ($selectedOptId && (int) $opt->id === (int) $selectedOptId),
                     ];
                 }),
             ];
@@ -473,10 +480,10 @@ class PastQuestionController extends Controller
         // Find this learner's simulation record: by the id the device gave it (works for
         // simulations started offline), else by the server id from an online start.
         $simulation = null;
-        if ($user && !empty($validated['client_id'])) {
+        if ($user && ! empty($validated['client_id'])) {
             $simulation = ExamSimulation::where('user_id', $user->id)->where('client_id', $validated['client_id'])->first();
         }
-        if ($user && !$simulation && !empty($validated['simulation_id'])) {
+        if ($user && ! $simulation && ! empty($validated['simulation_id'])) {
             // Scoped to the learner: a simulation id must never update another user's record.
             $simulation = ExamSimulation::where('user_id', $user->id)->find($validated['simulation_id']);
         }
@@ -506,7 +513,7 @@ class PastQuestionController extends Controller
             }
 
             // Update user learner_progress topic mastery if user exists
-            if ($user && $tId && !$alreadyRecorded) {
+            if ($user && $tId && ! $alreadyRecorded) {
                 LearnerProgress::recordResults($user->id, [$tId => ['attempted' => (int) ($stat['total'] ?? 0), 'correct' => (int) ($stat['correct'] ?? 0)]], $completedAt);
             }
         }
@@ -522,9 +529,9 @@ class PastQuestionController extends Controller
             'topic_breakdown' => $topicBreakdown,
             'completed_at' => $completedAt,
         ];
-        if ($simulation && !$alreadyRecorded) {
+        if ($simulation && ! $alreadyRecorded) {
             $simulation->update($result);
-        } elseif (!$simulation && $user && !empty($validated['client_id'])) {
+        } elseif (! $simulation && $user && ! empty($validated['client_id'])) {
             // Started while offline: the server never saw the start, so create it now.
             ExamSimulation::createOrFirst(['client_id' => $validated['client_id']], $result + [
                 'user_id' => $user->id,
@@ -559,7 +566,7 @@ class PastQuestionController extends Controller
     public function getHistory(Request $request): JsonResponse
     {
         $user = Auth::user() ?? $request->user();
-        if (!$user) {
+        if (! $user) {
             return response()->json(['success' => true, 'data' => []]);
         }
 
@@ -615,7 +622,7 @@ class PastQuestionController extends Controller
 
         $query = PastQuestion::with(['options', 'subject', 'topic']);
 
-        if (!empty($excludeIds)) {
+        if (! empty($excludeIds)) {
             $query->whereNotIn('id', array_unique($excludeIds));
         }
 
@@ -632,19 +639,19 @@ class PastQuestionController extends Controller
         $question = (clone $query)->inRandomOrder()->first();
 
         // Fallback: relax topic filter to subject
-        if (!$question && $topicId && $subjectId) {
+        if (! $question && $topicId && $subjectId) {
             $fallbackQuery = PastQuestion::with(['options', 'subject', 'topic'])
                 ->where('subject_id', $subjectId);
             if ($examCode) {
                 $fallbackQuery->where('exam_code', $examCode);
             }
-            if (!empty($excludeIds)) {
+            if (! empty($excludeIds)) {
                 $fallbackQuery->whereNotIn('id', array_unique($excludeIds));
             }
             $question = $fallbackQuery->inRandomOrder()->first();
         }
 
-        if (!$question) {
+        if (! $question) {
             return response()->json([
                 'success' => false,
                 'message' => 'No additional past questions found for this topic.',
@@ -679,6 +686,7 @@ class PastQuestionController extends Controller
                 ],
                 'options' => $question->options->map(function (PastQuestionOption $opt, $index) {
                     $letter = $opt->option_key ?: chr(65 + $index);
+
                     return [
                         'id' => $opt->id,
                         'key' => strtolower($letter),

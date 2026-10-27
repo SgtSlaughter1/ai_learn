@@ -30,15 +30,8 @@ class DashboardController extends Controller
         if ($user?->isTeacher()) {
             return redirect('/teacher/dashboard');
         }
-        return Inertia::render('Dashboard');
-    }
 
-    /**
-     * Backward-compatible alias for showLearnerDashboard.
-     */
-    public function index(Request $request): Response|RedirectResponse
-    {
-        return $this->showLearnerDashboard($request);
+        return Inertia::render('Dashboard');
     }
 
     /**
@@ -70,7 +63,7 @@ class DashboardController extends Controller
                 ->map(function ($attempt) {
                     return [
                         'id' => (string) $attempt->id,
-                        'quiz_title' => $attempt->quiz?->title ?? ('Quiz #' . $attempt->quiz_id),
+                        'quiz_title' => $attempt->quiz?->title ?? ('Quiz #'.$attempt->quiz_id),
                         'status' => $attempt->status,
                         'score' => $attempt->score,
                         'total_marks' => $attempt->total_marks,
@@ -93,13 +86,5 @@ class DashboardController extends Controller
         });
 
         return response()->json($data);
-    }
-
-    /**
-     * Backward-compatible alias for getLearnerStats.
-     */
-    public function getStats(Request $request): JsonResponse
-    {
-        return $this->getLearnerStats($request);
     }
 }

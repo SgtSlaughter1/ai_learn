@@ -38,7 +38,7 @@ class StoreQuestionRequest extends FormRequest
                     break;
                 }
             }
-            if (!$hasCorrect) {
+            if (! $hasCorrect) {
                 $validator->errors()->add('options', 'A question must have at least one correct option.');
             }
         });

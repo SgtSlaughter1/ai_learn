@@ -15,8 +15,11 @@ class AccountStatusTest extends TestCase
     use RefreshDatabase;
 
     protected User $platformAdmin;
+
     protected User $schoolAdmin;
+
     protected School $school;
+
     protected School $otherSchool;
 
     protected function setUp(): void
@@ -24,8 +27,8 @@ class AccountStatusTest extends TestCase
         parent::setUp();
         $this->platformAdmin = User::factory()->create(['role' => UserRole::PLATFORM_ADMIN]);
         $this->schoolAdmin = User::factory()->create(['role' => UserRole::SCHOOL_ADMIN]);
-        $this->school = School::create(['name' => 'Own School', 'slug' => 'own-school', 'category' => 'senior', 'is_active' => true, 'admin_user_id' => $this->schoolAdmin->id]);
-        $this->otherSchool = School::create(['name' => 'Other School', 'slug' => 'other-school', 'category' => 'senior', 'is_active' => true]);
+        $this->school = School::create(['name' => 'Own School', 'slug' => 'own-school', 'is_active' => true, 'admin_user_id' => $this->schoolAdmin->id]);
+        $this->otherSchool = School::create(['name' => 'Other School', 'slug' => 'other-school', 'is_active' => true]);
     }
 
     private function learnerAt(School $school): User

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -52,7 +53,6 @@ class LoginController extends Controller
             if ($request->wantsJson()) {
                 return response()->json([
                     'status' => 'success',
-                    'token' => session()->getId(),
                     'user' => $this->formatUserResponse($user),
                     'redirect' => $redirectPath,
                 ]);
@@ -80,7 +80,7 @@ class LoginController extends Controller
     public function getUser(Request $request): JsonResponse
     {
         $user = Auth::user();
-        if (!$user) {
+        if (! $user) {
             return response()->json(['message' => 'Unauthenticated'], 401);
         }
 
@@ -119,7 +119,7 @@ class LoginController extends Controller
     public function refresh(Request $request): JsonResponse
     {
         $user = Auth::user();
-        if (!$user) {
+        if (! $user) {
             return response()->json(['message' => 'Unauthenticated'], 401);
         }
 
@@ -127,12 +127,11 @@ class LoginController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'token' => session()->getId(),
             'user' => $this->formatUserResponse($user),
         ]);
     }
 
-    protected function formatUserResponse(\App\Models\User $user): array
+    protected function formatUserResponse(User $user): array
     {
         $role = $user->role instanceof \BackedEnum ? $user->role->value : ($user->role ?? 'learner');
         $school = $user->primarySchool();
@@ -145,7 +144,7 @@ class LoginController extends Controller
             'school' => $school ? [
                 'id' => $school->id,
                 'name' => $school->name,
-                'category' => $school->category,
+                'category_ids' => $school->category_ids ?? [],
                 'allowed_grade_levels' => $school->allowed_grade_levels,
             ] : null,
             'allowed_grade_levels' => $user->allowedGradeLevels(),

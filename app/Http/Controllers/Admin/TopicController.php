@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class TopicController extends Controller
 {
@@ -61,7 +62,7 @@ class TopicController extends Controller
 
         $inferredLevel = $validated['level'] ?? ($subject?->schoolClass?->grade_level ? strtoupper($subject->schoolClass->grade_level) : 'SS1');
         if (! $user->supportsGradeLevel($inferredLevel)) {
-            return response()->json(['error' => "Grade level '{$inferredLevel}' is not permitted for your school/role."], 422);
+            throw ValidationException::withMessages(['grade_level' => "Grade level '{$inferredLevel}' is not permitted for your school/role."]);
         }
 
         $slug = ! empty($validated['slug']) ? Str::slug($validated['slug']) : Str::slug($validated['name']);
@@ -102,7 +103,7 @@ class TopicController extends Controller
         }
 
         if (! empty($validated['level']) && ! $user->supportsGradeLevel($validated['level'])) {
-            return response()->json(['error' => "Grade level '{$validated['level']}' is not permitted for your school/role."], 422);
+            throw ValidationException::withMessages(['grade_level' => "Grade level '{$validated['level']}' is not permitted for your school/role."]);
         }
 
         if (! empty($validated['slug'])) {

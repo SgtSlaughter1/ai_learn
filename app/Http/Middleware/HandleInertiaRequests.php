@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Subject;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -49,7 +50,7 @@ class HandleInertiaRequests extends Middleware
                     'accessAdmin' => $request->user()->can('access-admin'),
                     'accessTeaching' => $request->user()->can('access-teaching'),
                     'managePlatform' => $request->user()->can('manage-platform'),
-                    'manageCurriculum' => $request->user()->can('create', \App\Models\Subject::class),
+                    'manageCurriculum' => $request->user()->can('create', Subject::class),
                 ] : null,
             ],
         ]);

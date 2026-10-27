@@ -529,7 +529,7 @@ export default function SchoolAdminsTab({
                                 <input
                                     type="password"
                                     required={!editingAdmin}
-                                    minLength={6}
+                                    minLength={8}
                                     value={formData.password}
                                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                                     placeholder="••••••••"

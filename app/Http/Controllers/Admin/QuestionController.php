@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\Quiz\LinkQuestionToSubjectQuiz;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\BulkSaveQuestionsRequest;
 use App\Http\Requests\Admin\SaveQuestionRequest;
@@ -9,9 +10,10 @@ use App\Http\Requests\Admin\UpdateQuestionRequest;
 use App\Models\Question;
 use App\Models\QuestionContext;
 use App\Models\QuestionOption;
-use App\Models\Quiz;
 use App\Models\Subject;
 use App\Models\Topic;
+use App\Support\ListSize;
+use App\Support\SearchTerm;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +23,8 @@ use Illuminate\Validation\ValidationException;
 
 class QuestionController extends Controller
 {
+    public function __construct(private LinkQuestionToSubjectQuiz $linker) {}
+
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -51,11 +55,11 @@ class QuestionController extends Controller
 
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where('question_text', 'like', "%{$search}%");
+            $query->where('question_text', 'like', SearchTerm::like($search));
         }
 
         if ($request->filled('per_page') && is_numeric($request->per_page)) {
-            $perPage = max(1, min(100, (int) $request->per_page));
+            $perPage = ListSize::from($request->per_page, 50, 100);
             $questions = $query->orderByDesc('id')->paginate($perPage);
             $items = $questions->items();
             $total = $questions->total();
@@ -132,28 +136,9 @@ class QuestionController extends Controller
                 ]);
             }
 
-            // Auto-link question to subject assessment quiz so learners can take it immediately
-            if ($topic && $topic->subject) {
-                $subjectName = $topic->subject->name;
-                $quiz = Quiz::firstOrCreate(
-                    [
-                        'title' => "{$subjectName} Assessment & Practice",
-                        'school_id' => $assignedSchoolId,
-                    ],
-                    [
-                        'description' => "Comprehensive diagnostic assessment and practice exercises for {$subjectName}.",
-                        'time_limit_minutes' => 30,
-                        'status' => 'active',
-                    ]
-                );
-
-                if (! $quiz->questions()->where('questions.id', $question->id)->exists()) {
-                    $maxSort = (int) $quiz->questions()->max('quiz_questions.sort_order');
-                    $quiz->questions()->attach($question->id, [
-                        'sort_order' => $maxSort + 1,
-                        'marks' => $marks,
-                    ]);
-                }
+            // Into the subject quiz so learners can take it immediately
+            if ($quiz = $this->linker->quizFor($topic, $assignedSchoolId)) {
+                $this->linker->link($quiz, $question, $marks);
             }
 
             return $question;
@@ -178,22 +163,8 @@ class QuestionController extends Controller
 
             $results = [];
 
-            // Prepare Quiz for auto-linking
-            $quiz = null;
-            if ($topic && $topic->subject) {
-                $subjectName = $topic->subject->name;
-                $quiz = Quiz::firstOrCreate(
-                    [
-                        'title' => "{$subjectName} Assessment & Practice",
-                        'school_id' => $assignedSchoolId,
-                    ],
-                    [
-                        'description' => "Comprehensive diagnostic assessment and practice exercises for {$subjectName}.",
-                        'time_limit_minutes' => 30,
-                        'status' => 'active',
-                    ]
-                );
-            }
+            // The subject quiz every imported question joins
+            $quiz = $this->linker->quizFor($topic, $assignedSchoolId);
 
             foreach ($validated['questions'] as $qData) {
                 $question = Question::create([
@@ -216,12 +187,9 @@ class QuestionController extends Controller
                     ]);
                 }
 
-                if ($quiz && ! $quiz->questions()->where('questions.id', $question->id)->exists()) {
-                    $maxSort = (int) $quiz->questions()->max('quiz_questions.sort_order');
-                    $quiz->questions()->attach($question->id, [
-                        'sort_order' => $maxSort + 1,
-                        'marks' => 2,
-                    ]);
+                if ($quiz) {
+                    // Same default as a single question (it was 2 here, 1 everywhere else).
+                    $this->linker->link($quiz, $question, (int) ($qData['marks'] ?? 1));
                 }
 
                 $results[] = $question->load(['options', 'topic.subject:id,name', 'school:id,name']);
@@ -281,32 +249,9 @@ class QuestionController extends Controller
 
             $question->syncOptions($validated['options'] ?? []);
 
-            // Ensure question is linked to the subject quiz
-            if ($newTopic && $newTopic->subject) {
-                $subjectName = $newTopic->subject->name;
-                $quiz = Quiz::firstOrCreate(
-                    [
-                        'title' => "{$subjectName} Assessment & Practice",
-                        'school_id' => $assignedSchoolId,
-                    ],
-                    [
-                        'description' => "Comprehensive diagnostic assessment and practice exercises for {$subjectName}.",
-                        'time_limit_minutes' => 30,
-                        'status' => 'active',
-                    ]
-                );
-
-                if (! $quiz->questions()->where('questions.id', $question->id)->exists()) {
-                    $maxSort = (int) $quiz->questions()->max('quiz_questions.sort_order');
-                    $quiz->questions()->attach($question->id, [
-                        'sort_order' => $maxSort + 1,
-                        'marks' => $marks,
-                    ]);
-                } else {
-                    $quiz->questions()->updateExistingPivot($question->id, [
-                        'marks' => $marks,
-                    ]);
-                }
+            // Keep it in the (possibly new) topic's subject quiz with the current marks
+            if ($quiz = $this->linker->quizFor($newTopic, $assignedSchoolId)) {
+                $this->linker->link($quiz, $question, $marks);
             }
         });
 

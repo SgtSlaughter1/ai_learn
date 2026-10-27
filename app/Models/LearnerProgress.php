@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class LearnerProgress extends Model
@@ -43,6 +44,11 @@ class LearnerProgress extends Model
      */
     public static function recordResults(string $userId, array $tallies, \DateTimeInterface $at): void
     {
+        // Only ever move recency forward: a weeks-old attempt synced late must not roll it back.
+        // Formatted by us (digits only), so it is safe inside the SQL.
+        $stamp = Carbon::instance($at)->setTimezone(config('app.timezone'))->format('Y-m-d H:i:s');
+        $latest = DB::raw("CASE WHEN last_attempted_at IS NULL OR last_attempted_at < '{$stamp}' THEN '{$stamp}' ELSE last_attempted_at END");
+
         foreach ($tallies as $topicId => $tally) {
             $attempted = (int) $tally['attempted'];
             $correct = (int) $tally['correct'];
@@ -60,7 +66,7 @@ class LearnerProgress extends Model
                 'mastery_score' => DB::raw("ROUND(100.0 * (questions_correct + {$correct}) / (questions_attempted + {$attempted}))"),
                 'questions_attempted' => DB::raw("questions_attempted + {$attempted}"),
                 'questions_correct' => DB::raw("questions_correct + {$correct}"),
-                'last_attempted_at' => $at,
+                'last_attempted_at' => $latest,
             ]);
         }
     }

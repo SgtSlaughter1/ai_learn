@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\ClassModel;
-use App\Models\LearnerProfile;
-use App\Models\LearnerProgress;
+use App\Models\QuestionContext;
 use App\Models\Quiz;
 use App\Models\School;
 use App\Models\Subject;
 use App\Models\User;
+use App\Support\LearnerProgression;
 use App\Support\OfflineAnswerKey;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -31,18 +31,11 @@ class SubjectWebController extends Controller
         if ($user?->isAnyAdmin()) {
             return redirect('/admin/dashboard');
         }
-        if ($user && $user->isLearner() && !$user->hasSchoolAccess()) {
+        if ($user && $user->isLearner() && ! $user->hasSchoolAccess()) {
             return redirect('/general-knowledge');
         }
-        return Inertia::render('Subjects/Index');
-    }
 
-    /**
-     * Backward-compatible alias for showSubjectsPage.
-     */
-    public function index(Request $request): Response|RedirectResponse
-    {
-        return $this->showSubjectsPage($request);
+        return Inertia::render('Subjects/Index');
     }
 
     /**
@@ -54,15 +47,8 @@ class SubjectWebController extends Controller
         if ($user?->isAnyAdmin()) {
             return redirect('/admin/dashboard');
         }
-        return Inertia::render('GeneralKnowledge/Index');
-    }
 
-    /**
-     * Backward-compatible alias for showGeneralKnowledgePage.
-     */
-    public function generalKnowledge(Request $request): Response|RedirectResponse
-    {
-        return $this->showGeneralKnowledgePage($request);
+        return Inertia::render('GeneralKnowledge/Index');
     }
 
     /**
@@ -74,17 +60,10 @@ class SubjectWebController extends Controller
         if ($user?->isAnyAdmin()) {
             return redirect('/admin/dashboard');
         }
+
         return Inertia::render('Subjects/Show', [
             'slug' => $slug,
         ]);
-    }
-
-    /**
-     * Backward-compatible alias for showSubject.
-     */
-    public function show(Request $request, string $slug): Response|RedirectResponse
-    {
-        return $this->showSubject($request, $slug);
     }
 
     public function getSubjects(Request $request): JsonResponse
@@ -103,14 +82,14 @@ class SubjectWebController extends Controller
         ] = $this->resolveUserSchoolAndProgression($user);
 
         // If user has no school assigned, default scope to 'general'
-        if (!$userSchoolId && $scope === 'school') {
+        if (! $userSchoolId && $scope === 'school') {
             $scope = 'general';
         }
 
         $selectedClass = null;
         if ($classId) {
             $selectedClass = DB::table('classes')->where('id', $classId)->first();
-            if ($selectedClass && $selectedClass->grade_level && !$gradeLevel) {
+            if ($selectedClass && $selectedClass->grade_level && ! $gradeLevel) {
                 $gradeLevel = $selectedClass->grade_level;
             }
         }
@@ -155,7 +134,7 @@ class SubjectWebController extends Controller
         $userClassWindowIds = [];
         $userGradeLevels = [];
 
-        if (!$user) {
+        if (! $user) {
             return [$userSchoolId, $userSchoolName, $userClassId, $userClassWindowIds, $userGradeLevels];
         }
 
@@ -168,62 +147,11 @@ class SubjectWebController extends Controller
             $userSchoolName = $school?->name;
         }
 
-        if ($user->isLearner()) {
-            $enrolledClass = DB::table('class_memberships as cm')
-                ->join('classes as c', 'c.id', '=', 'cm.class_id')
-                ->leftJoin('programs as p', 'p.id', '=', 'c.program_id')
-                ->where('cm.user_id', $user->id)
-                ->where('cm.role', 'learner')
-                ->where('c.is_active', true)
-                ->select(['c.id', 'c.school_id', 'c.name', 'c.grade_level', 'c.arm', 'c.section', 'c.program_id', 'p.name as program_name', 'p.code as program_code'])
-                ->first();
-
-            if ($enrolledClass) {
-                $userClassId = $enrolledClass->id;
-                if (!$userSchoolId) {
-                    $userSchoolId = $enrolledClass->school_id;
-                }
-
-                $gradeOrder = ClassModel::GRADE_ORDER;
-
-                $schoolClasses = DB::table('classes as c')
-                    ->leftJoin('programs as p', 'p.id', '=', 'c.program_id')
-                    ->where('c.school_id', $enrolledClass->school_id)
-                    ->where('c.is_active', true)
-                    ->when($enrolledClass->program_id, function ($q, $programId) {
-                        $q->where(function ($sub) use ($programId) {
-                            $sub->where('c.program_id', $programId)
-                                ->orWhereNull('c.program_id');
-                        });
-                    }, function ($q) {
-                        $q->whereNull('c.program_id');
-                    })
-                    ->orderBy('c.id')
-                    ->select(['c.id', 'c.school_id', 'c.name', 'c.grade_level', 'c.arm', 'c.section', 'c.program_id', 'p.name as program_name', 'p.code as program_code'])
-                    ->get()
-                    ->sortBy(fn ($c) => $gradeOrder[strtoupper($c->grade_level ?? '')] ?? 99)
-                    ->values();
-
-                if ($enrolledClass->program_id) {
-                    $progressionClasses = $schoolClasses->where('program_id', $enrolledClass->program_id);
-                } elseif (in_array(strtoupper($enrolledClass->grade_level ?? ''), ['JSS1', 'JSS2', 'JSS3'])) {
-                    $progressionClasses = $schoolClasses->filter(fn ($c) => in_array(strtoupper($c->grade_level ?? ''), ['JSS1', 'JSS2', 'JSS3']));
-                } elseif (in_array(strtoupper($enrolledClass->grade_level ?? ''), ['PRI1', 'PRI2', 'PRI3', 'PRI4', 'PRI5', 'PRI6'])) {
-                    $progressionClasses = $schoolClasses->filter(fn ($c) => in_array(strtoupper($c->grade_level ?? ''), ['PRI1', 'PRI2', 'PRI3', 'PRI4', 'PRI5', 'PRI6']));
-                } else {
-                    $progressionClasses = $schoolClasses;
-                }
-
-                if ($progressionClasses->isNotEmpty()) {
-                    $userClassWindowIds = $progressionClasses->pluck('id')->all();
-                    $userGradeLevels = $progressionClasses->pluck('grade_level')->filter()->unique()->map(fn ($g) => strtolower($g))->all();
-                } else {
-                    $userClassWindowIds = [$enrolledClass->id];
-                    if ($enrolledClass->grade_level) {
-                        $userGradeLevels = [strtolower($enrolledClass->grade_level)];
-                    }
-                }
-            }
+        if ($user->isLearner() && ($progression = LearnerProgression::for($user))) {
+            $userClassId = $progression['enrolled_class']->id;
+            $userSchoolId ??= $progression['enrolled_class']->school_id;
+            $userClassWindowIds = $progression['class_ids'];
+            $userGradeLevels = $progression['grade_levels'];
         }
 
         return [$userSchoolId, $userSchoolName, $userClassId, $userClassWindowIds, $userGradeLevels];
@@ -242,10 +170,10 @@ class SubjectWebController extends Controller
 
         if ($level) {
             $topicsSummaryQuery->where('t.level', $level);
-        } elseif ($scope === 'general' && !empty($userGradeLevels)) {
+        } elseif ($scope === 'general' && ! empty($userGradeLevels)) {
             $topicsSummaryQuery->where(function ($q) use ($userGradeLevels) {
                 $q->whereIn('t.level', $userGradeLevels)
-                  ->orWhereNull('t.level');
+                    ->orWhereNull('t.level');
             });
         }
 
@@ -282,12 +210,12 @@ class SubjectWebController extends Controller
             if ($classId) {
                 $subjectsQuery->where(function ($q) use ($classId) {
                     $q->where('s.class_id', $classId)
-                      ->orWhereNull('s.class_id');
+                        ->orWhereNull('s.class_id');
                 });
-            } elseif (!empty($userClassWindowIds)) {
+            } elseif (! empty($userClassWindowIds)) {
                 $subjectsQuery->where(function ($q) use ($userClassWindowIds) {
                     $q->whereIn('s.class_id', $userClassWindowIds)
-                      ->orWhereNull('s.class_id');
+                        ->orWhereNull('s.class_id');
                 });
             }
         } elseif ($scope === 'general') {
@@ -299,8 +227,8 @@ class SubjectWebController extends Controller
                 } else {
                     return [];
                 }
-            } elseif (!empty($userGradeLevels)) {
-                $subjectsQuery->where(function ($q) use ($topicsSummary, $userGradeLevels) {
+            } elseif (! empty($userGradeLevels)) {
+                $subjectsQuery->where(function ($q) use ($topicsSummary) {
                     if ($topicsSummary->isNotEmpty()) {
                         $q->whereIn('s.id', $topicsSummary->keys());
                     }
@@ -355,7 +283,7 @@ class SubjectWebController extends Controller
 
     private function fetchCohortClasses(bool $includeClasses, ?User $user, ?int $userSchoolId, array $userClassWindowIds): array
     {
-        if (!$includeClasses || !$user) {
+        if (! $includeClasses || ! $user) {
             return [];
         }
 
@@ -365,7 +293,7 @@ class SubjectWebController extends Controller
             ->leftJoin('programs as p', 'p.id', '=', 'c.program_id')
             ->where('c.is_active', true)
             ->when($userSchoolId, fn ($q) => $q->where('c.school_id', $userSchoolId))
-            ->when(!empty($userClassWindowIds), fn ($q) => $q->whereIn('c.id', $userClassWindowIds))
+            ->when(! empty($userClassWindowIds), fn ($q) => $q->whereIn('c.id', $userClassWindowIds))
             ->select([
                 'c.id',
                 'c.school_id',
@@ -408,54 +336,9 @@ class SubjectWebController extends Controller
         if ($user) {
             $schoolId = $user->managedSchoolId();
 
-            if ($user->isLearner()) {
-                $enrolledClass = DB::table('class_memberships as cm')
-                    ->join('classes as c', 'c.id', '=', 'cm.class_id')
-                    ->leftJoin('programs as p', 'p.id', '=', 'c.program_id')
-                    ->where('cm.user_id', $user->id)
-                    ->where('cm.role', 'learner')
-                    ->where('c.is_active', true)
-                    ->select(['c.id', 'c.school_id', 'c.name', 'c.grade_level', 'c.arm', 'c.section', 'c.program_id', 'p.name as program_name', 'p.code as program_code'])
-                    ->first();
-
-                if ($enrolledClass) {
-                    $schoolId = $schoolId ?: $enrolledClass->school_id;
-                    $gradeOrder = ClassModel::GRADE_ORDER;
-
-                    $schoolClasses = DB::table('classes as c')
-                        ->leftJoin('programs as p', 'p.id', '=', 'c.program_id')
-                        ->where('c.school_id', $schoolId)
-                        ->where('c.is_active', true)
-                        ->when($enrolledClass->program_id, function ($q, $programId) {
-                            $q->where(function ($sub) use ($programId) {
-                                $sub->where('c.program_id', $programId)
-                                    ->orWhereNull('c.program_id');
-                            });
-                        }, function ($q) {
-                            $q->whereNull('c.program_id');
-                        })
-                        ->orderBy('c.id')
-                        ->select(['c.id', 'c.school_id', 'c.name', 'c.grade_level', 'c.arm', 'c.section', 'c.program_id', 'p.name as program_name', 'p.code as program_code'])
-                        ->get()
-                        ->sortBy(fn ($c) => $gradeOrder[strtoupper($c->grade_level ?? '')] ?? 99)
-                        ->values();
-
-                    if ($enrolledClass->program_id) {
-                        $progressionClasses = $schoolClasses->where('program_id', $enrolledClass->program_id);
-                    } elseif (in_array(strtoupper($enrolledClass->grade_level ?? ''), ['JSS1', 'JSS2', 'JSS3'])) {
-                        $progressionClasses = $schoolClasses->filter(fn ($c) => in_array(strtoupper($c->grade_level ?? ''), ['JSS1', 'JSS2', 'JSS3']));
-                    } elseif (in_array(strtoupper($enrolledClass->grade_level ?? ''), ['PRI1', 'PRI2', 'PRI3', 'PRI4', 'PRI5', 'PRI6'])) {
-                        $progressionClasses = $schoolClasses->filter(fn ($c) => in_array(strtoupper($c->grade_level ?? ''), ['PRI1', 'PRI2', 'PRI3', 'PRI4', 'PRI5', 'PRI6']));
-                    } else {
-                        $progressionClasses = $schoolClasses;
-                    }
-
-                    if ($progressionClasses->isNotEmpty()) {
-                        $userClassWindowIds = $progressionClasses->pluck('id')->all();
-                    } else {
-                        $userClassWindowIds = [$enrolledClass->id];
-                    }
-                }
+            if ($user->isLearner() && ($progression = LearnerProgression::for($user))) {
+                $schoolId = $schoolId ?: $progression['enrolled_class']->school_id;
+                $userClassWindowIds = $progression['class_ids'];
             }
         }
 
@@ -463,7 +346,7 @@ class SubjectWebController extends Controller
             ->leftJoin('programs as p', 'p.id', '=', 'c.program_id')
             ->where('c.is_active', true)
             ->when($schoolId, fn ($q) => $q->where('c.school_id', $schoolId))
-            ->when(!empty($userClassWindowIds), fn ($q) => $q->whereIn('c.id', $userClassWindowIds))
+            ->when(! empty($userClassWindowIds), fn ($q) => $q->whereIn('c.id', $userClassWindowIds))
             ->select([
                 'c.id',
                 'c.school_id',
@@ -514,7 +397,7 @@ class SubjectWebController extends Controller
 
         $userSchoolId = $user?->managedSchoolId();
 
-        if ($classId && !$gradeLevel) {
+        if ($classId && ! $gradeLevel) {
             $selectedClass = ClassModel::find($classId);
             if ($selectedClass && $selectedClass->grade_level) {
                 $gradeLevel = $selectedClass->grade_level;
@@ -530,7 +413,7 @@ class SubjectWebController extends Controller
             ->select(['subjects.*', 'sc.name as school_name'])
             ->first();
 
-        if (!$subject) {
+        if (! $subject) {
             return response()->json(['message' => 'Subject not found'], 404);
         }
         Gate::authorize('view', $subject);
@@ -589,7 +472,7 @@ class SubjectWebController extends Controller
 
         // Quizzes (which include answer keys for offline grading) only from the user's own
         // school or global ones, whatever scope is requested. Platform admins see all.
-        if (!$user?->can('manage-platform')) {
+        if (! $user?->can('manage-platform')) {
             $quizQuery->where(function ($q) use ($userSchoolId, $scope) {
                 $q->whereNull('q.school_id');
                 if ($scope === 'school' && $userSchoolId) {
@@ -623,17 +506,17 @@ class SubjectWebController extends Controller
             'qo.option_text',
             'qo.is_correct',
         ])
-        ->orderBy('q.id')
-        ->orderBy('qq.sort_order')
-        ->orderBy('qo.sort_order')
-        ->get();
+            ->orderBy('q.id')
+            ->orderBy('qq.sort_order')
+            ->orderBy('qo.sort_order')
+            ->get();
 
         $isStaff = $user && method_exists($user, 'isAnyAdmin') ? ($user->isAnyAdmin() || $user->isTeacher()) : false;
 
         // 3. Assemble clean payload in memory
         $groupedQuizzes = [];
         foreach ($quizRows as $row) {
-            if (!isset($groupedQuizzes[$row->quiz_id])) {
+            if (! isset($groupedQuizzes[$row->quiz_id])) {
                 $groupedQuizzes[$row->quiz_id] = [
                     'id' => (int) $row->quiz_id,
                     'school_id' => $row->quiz_school_id ? (int) $row->quiz_school_id : null,
@@ -646,7 +529,7 @@ class SubjectWebController extends Controller
                 ];
             }
 
-            if (!isset($groupedQuizzes[$row->quiz_id]['questions'][$row->question_id])) {
+            if (! isset($groupedQuizzes[$row->quiz_id]['questions'][$row->question_id])) {
                 $groupedQuizzes[$row->quiz_id]['questions'][$row->question_id] = [
                     'id' => (int) $row->question_id,
                     'school_id' => $row->question_school_id ? (int) $row->question_school_id : null,
@@ -683,7 +566,7 @@ class SubjectWebController extends Controller
         }
 
         // Shared passages, loaded once for all quizzes, sent once per quiz that uses them.
-        $contextsById = collect(\App\Models\QuestionContext::learnerArrays($quizRows->pluck('context_id')))->keyBy('id');
+        $contextsById = collect(QuestionContext::learnerArrays($quizRows->pluck('context_id')))->keyBy('id');
 
         $formattedQuizzes = array_values(array_map(function ($q) use ($contextsById) {
             $q['contexts'] = $contextsById->only(array_unique(array_filter(array_column($q['questions'], 'context_id'))))->values()->all();
@@ -696,8 +579,10 @@ class SubjectWebController extends Controller
                     $question['_explanation'],
                 );
                 unset($question['correct_option_id'], $question['_explanation']);
+
                 return $question;
             }, $q['questions']));
+
             return $q;
         }, $groupedQuizzes));
 
@@ -726,7 +611,7 @@ class SubjectWebController extends Controller
             ? Subject::find($subject)
             : Subject::where('slug', $subject)->first();
 
-        if (!$sub) {
+        if (! $sub) {
             return response()->json(['message' => 'Subject not found'], 404);
         }
         Gate::authorize('view', $sub);

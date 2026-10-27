@@ -67,17 +67,13 @@ export default function SchoolsTab({
 
     const openEditModal = (school: SchoolItem) => {
         setEditingSchool(school);
-        const derivedIds = school.category_ids && school.category_ids.length > 0
-            ? school.category_ids
-            : school.category === 'primary' ? [1]
-            : school.category === 'junior' ? [2]
-            : school.category === 'combined' ? [1, 2]
-            : [3];
+        const derivedIds = school.category_ids && school.category_ids.length > 0 ? school.category_ids : [3];
+        const selectValue = derivedIds.length > 1 ? 'combined' : ({ 1: 'primary', 2: 'junior' } as Record<number, string>)[derivedIds[0]] ?? 'senior';
 
         setFormData({
             name: school.name,
             slug: school.slug || '',
-            category: school.category || (derivedIds.length > 1 ? 'combined' : 'senior'),
+            category: selectValue,
             category_ids: derivedIds,
             address: school.address || '',
             city: school.city || '',
@@ -107,7 +103,6 @@ export default function SchoolsTab({
             id: editingSchool ? editingSchool.id : Date.now(),
             name: formData.name,
             slug: formData.slug || formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-            category: formData.category,
             category_ids: formData.category_ids,
             address: formData.address || null,
             city: formData.city || null,
@@ -127,7 +122,7 @@ export default function SchoolsTab({
             recordId: tempId,
             endpoint,
             method,
-            payload: formData,
+            payload: (({ category: _selectValue, ...rest }) => rest)(formData),
             optimisticRecord: optimisticSchool,
         });
 
@@ -180,7 +175,6 @@ export default function SchoolsTab({
         const matchesCity = !cityFilter || s.city === cityFilter;
         const matchesCategory =
             !categoryFilter ||
-            (s.category && s.category.toLowerCase() === categoryFilter.toLowerCase()) ||
             (categoryFilter === 'primary' && (s.category_ids || []).includes(1)) ||
             (categoryFilter === 'junior' && (s.category_ids || []).includes(2)) ||
             (categoryFilter === 'senior' && (s.category_ids || []).includes(3)) ||

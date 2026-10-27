@@ -11,6 +11,7 @@ use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
@@ -96,7 +97,8 @@ class SubjectController extends Controller
             $this->ensureClassInSchool($targetClass, $validated['school_id']);
         }
 
-        $subject->update($validated);
+        // Only real columns: validated keys without a column used to fail the update with a 500.
+        $subject->update(Arr::only($validated, ['name', 'slug', 'description', 'status', 'sort_order', 'school_id', 'class_id']));
 
         return response()->json([
             'message' => 'Subject updated successfully',
@@ -124,7 +126,7 @@ class SubjectController extends Controller
 
         $school = School::find($class->school_id);
         if ($school && ! $school->supportsGradeLevel($class->grade_level)) {
-            abort(422, "The selected class grade level ({$class->grade_level}) is not permitted under school category ({$school->category}).");
+            abort(422, "The selected class grade level ({$class->grade_level}) is not permitted under school category ({$school->category_type_label}).");
         }
 
         return $class;

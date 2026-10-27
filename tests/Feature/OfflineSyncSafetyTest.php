@@ -25,11 +25,17 @@ class OfflineSyncSafetyTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $learner;
+
     protected Topic $topic;
+
     protected Quiz $quiz;
+
     protected Question $question;
+
     protected QuestionOption $correct;
+
     protected QuestionOption $wrong;
 
     protected function setUp(): void
@@ -205,7 +211,7 @@ class OfflineSyncSafetyTest extends TestCase
         ]);
 
         $this->actingAs($this->learner)
-            ->postJson('/api/v1/quizzes/attempts/' . Str::uuid() . '/sync', $this->attemptPayload($this->correct->id))
+            ->postJson('/api/v1/quizzes/attempts/'.Str::uuid().'/sync', $this->attemptPayload($this->correct->id))
             ->assertOk();
 
         $profile = UserGamification::where('user_id', $this->learner->id)->first();
@@ -229,7 +235,7 @@ class OfflineSyncSafetyTest extends TestCase
     public function test_answered_question_is_archived_instead_of_failing(): void
     {
         $this->actingAs($this->learner)
-            ->postJson('/api/v1/quizzes/attempts/' . Str::uuid() . '/sync', $this->attemptPayload($this->correct->id))
+            ->postJson('/api/v1/quizzes/attempts/'.Str::uuid().'/sync', $this->attemptPayload($this->correct->id))
             ->assertOk();
 
         $this->actingAs($this->admin)
@@ -283,7 +289,7 @@ class OfflineSyncSafetyTest extends TestCase
         $email = $this->learner->email;
 
         $this->actingAs($this->learner)
-            ->postJson('/api/v1/quizzes/attempts/' . Str::uuid() . '/sync', $this->attemptPayload($this->correct->id))
+            ->postJson('/api/v1/quizzes/attempts/'.Str::uuid().'/sync', $this->attemptPayload($this->correct->id))
             ->assertOk();
 
         $this->actingAs($this->admin)

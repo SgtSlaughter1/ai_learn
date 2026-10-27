@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\LearnerProgress;
 use App\Models\Question;
-use App\Models\Subject;
 use App\Services\Gamification\GamificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -15,6 +14,8 @@ use Inertia\Response;
 
 class FlashcardController extends Controller
 {
+    public function __construct(private GamificationService $gamification) {}
+
     /**
      * Render the flashcards study shell page.
      */
@@ -24,15 +25,8 @@ class FlashcardController extends Controller
         if ($user?->isAnyAdmin()) {
             return redirect('/admin/dashboard');
         }
-        return Inertia::render('Flashcards/Index');
-    }
 
-    /**
-     * Backward-compatible alias for showFlashcardsPage.
-     */
-    public function index(Request $request): Response|RedirectResponse
-    {
-        return $this->showFlashcardsPage($request);
+        return Inertia::render('Flashcards/Index');
     }
 
     /**
@@ -48,10 +42,13 @@ class FlashcardController extends Controller
             ->pluck('topic_id')
             ->toArray();
 
-        // 2. Fetch questions from these weak topics
-        $questions = Question::with(['options', 'topic.subject'])
+        // Only questions this learner may see; built once because the school lookup costs queries.
+        $visible = Question::forUser($user)->with(['options', 'topic.subject'])
             ->where('status', 'active')
-            ->whereNull('context_id') // passage questions make no sense without the passage
+            ->whereNull('context_id'); // passage questions make no sense without the passage
+
+        // 2. Fetch questions from these weak topics
+        $questions = (clone $visible)
             ->whereIn('topic_id', $weakTopicIds)
             ->inRandomOrder()
             ->limit(10)
@@ -62,9 +59,7 @@ class FlashcardController extends Controller
             $existingIds = $questions->pluck('id')->toArray();
             $neededCount = 10 - $questions->count();
 
-            $paddingQuestions = Question::with(['options', 'topic.subject'])
-                ->where('status', 'active')
-                ->whereNull('context_id')
+            $paddingQuestions = (clone $visible)
                 ->whereNotIn('id', $existingIds)
                 ->inRandomOrder()
                 ->limit($neededCount)
@@ -76,6 +71,7 @@ class FlashcardController extends Controller
         // 4. Map questions to clean, secure Flashcard structures
         $deck = $questions->map(function ($q) {
             $correctOption = $q->options->firstWhere('is_correct', true);
+
             return [
                 'id' => $q->id,
                 'subject_name' => $q->topic->subject->name ?? 'Curriculum',
@@ -92,29 +88,21 @@ class FlashcardController extends Controller
     }
 
     /**
-     * Backward-compatible alias for getFlashcardDeck.
-     */
-    public function getDeck(Request $request): JsonResponse
-    {
-        return $this->getFlashcardDeck($request);
-    }
-
-    /**
      * Submit flashcard session completion and calculate/award XP.
      */
     public function completeFlashcardReview(Request $request): JsonResponse
     {
         $user = $request->user();
-        // Ratings only ever add XP, so cap the deck size and accept known values only.
+        // Ratings only ever add XP, so accept at most one deck (getFlashcardDeck serves 10) and known values only.
         $validated = $request->validate([
-            'ratings' => ['present', 'array', 'max:100'],
+            'ratings' => ['present', 'array', 'max:10'],
             'ratings.*' => ['string', 'in:easy,good,again'],
             'completed_at' => ['nullable', 'date'],
         ]);
         $ratings = $validated['ratings'];
-        
+
         $cardsCount = count($ratings);
-        
+
         // Calculate XP per rating:
         // 'easy' => 2 XP
         // 'good' => 1 XP
@@ -128,20 +116,19 @@ class FlashcardController extends Controller
                 default => 0,
             };
         }
-        
+
         // Add a flat +5 XP deck completion bonus if they reviewed at least 1 card
         if ($cardsCount > 0) {
             $xpEarned += 5;
         }
-        
-        $gamificationService = app(GamificationService::class);
-        $result = $gamificationService->processFlashcardCompletion(
+
+        $result = $this->gamification->processFlashcardCompletion(
             $user,
             $xpEarned,
             $cardsCount,
             GamificationService::activityTime($validated['completed_at'] ?? null)
         );
-        
+
         return response()->json([
             'success' => true,
             'xp_earned' => $result['xp_earned'],
@@ -149,13 +136,5 @@ class FlashcardController extends Controller
             'new_tier' => $result['new_tier'],
             'new_achievements' => $result['new_achievements'],
         ]);
-    }
-
-    /**
-     * Backward-compatible alias for completeFlashcardReview.
-     */
-    public function complete(Request $request): JsonResponse
-    {
-        return $this->completeFlashcardReview($request);
     }
 }

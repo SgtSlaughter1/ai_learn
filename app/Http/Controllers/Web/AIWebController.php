@@ -24,7 +24,7 @@ class AIWebController extends Controller
     public function explain(ExplainQuestionRequest $request): JsonResponse
     {
         $validated = $request->validated();
-        $question = Question::findOrFail($validated['question_id']);
+        $question = Question::forUser($request->user())->where('status', 'active')->findOrFail($validated['question_id']);
         $selectedOptionId = $validated['selected_option_id'] ?? null;
 
         $explanation = $this->aiService->explainAnswer($question, $selectedOptionId);
@@ -39,21 +39,23 @@ class AIWebController extends Controller
      */
     public function similarQuestion(Request $request): JsonResponse
     {
+        $user = $request->user();
         $baseQuestionId = $request->input('question_id');
         $topicId = $request->input('topic_id');
         $subjectId = $request->input('subject_id');
-        $excludeIds = (array) $request->input('exclude_ids', []);
+        $excludeIds = $this->parseIds($request->input('exclude_ids', []));
 
         if ($baseQuestionId) {
             $excludeIds[] = (int) $baseQuestionId;
-            $baseQuestion = Question::with('topic.subject')->find($baseQuestionId);
+            $baseQuestion = Question::forUser($user)->with('topic.subject')->find($baseQuestionId);
             if ($baseQuestion) {
                 $topicId = $topicId ?: $baseQuestion->topic_id;
                 $subjectId = $subjectId ?: $baseQuestion->topic?->subject_id;
             }
         }
 
-        $query = Question::with(['options', 'topic.subject'])->where('status', 'active');
+        // Only questions this user may see: their school's and the shared bank.
+        $query = Question::forUser($user)->with(['options', 'topic.subject'])->where('status', 'active');
 
         if (! empty($excludeIds)) {
             $query->whereNotIn('id', array_unique($excludeIds));
@@ -71,7 +73,7 @@ class AIWebController extends Controller
 
         // Fallback to subject if no more questions in specific topic
         if (! $question && $subjectId && $topicId) {
-            $fallbackQuery = Question::with(['options', 'topic.subject'])
+            $fallbackQuery = Question::forUser($user)->with(['options', 'topic.subject'])
                 ->where('status', 'active')
                 ->whereHas('topic', fn ($q) => $q->where('subject_id', $subjectId));
             if (! empty($excludeIds)) {
@@ -110,6 +112,18 @@ class AIWebController extends Controller
                 ]),
             ],
         ]);
+    }
+
+    /**
+     * Ids from a query string: "1,2,3" or exclude_ids[]=1&exclude_ids[]=2.
+     *
+     * @return array<int, int>
+     */
+    private function parseIds(mixed $raw): array
+    {
+        $parts = is_array($raw) ? $raw : explode(',', (string) $raw);
+
+        return array_values(array_filter(array_map('intval', $parts), fn (int $id) => $id > 0));
     }
 
     /**

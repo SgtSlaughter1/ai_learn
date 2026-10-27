@@ -49,26 +49,14 @@ export const ALL_GRADE_GROUPS: GradeGroup[] = [
 ];
 
 /**
- * Returns the relevant grade levels based on school category or category_ids.
- * If school has category_ids array, resolves grade levels for all assigned categories.
- * Otherwise falls back to category string.
+ * Returns the grade levels a school allows, from its allowed_grade_levels or its category_ids.
+ * A school with neither (or no school) gets every grade.
  */
 export function getGradeLevelsForSchool(
-    categoryOrSchool?: string | null | { category?: string | null; category_ids?: number[] | null; allowed_grade_levels?: string[] | null },
-    categoryIdsParam?: number[] | null
+    school?: { category_ids?: number[] | null; allowed_grade_levels?: string[] | null } | null
 ): GradeGroup[] {
-    let cat: string | undefined;
-    let ids: number[] | undefined;
-    let allowed: string[] | undefined;
-
-    if (typeof categoryOrSchool === 'object' && categoryOrSchool !== null) {
-        cat = categoryOrSchool.category?.toLowerCase();
-        ids = categoryOrSchool.category_ids || undefined;
-        allowed = categoryOrSchool.allowed_grade_levels || undefined;
-    } else {
-        cat = categoryOrSchool?.toLowerCase();
-        ids = categoryIdsParam || undefined;
-    }
+    const ids = school?.category_ids || undefined;
+    const allowed = school?.allowed_grade_levels || undefined;
 
     if (allowed && allowed.length > 0) {
         const allowedSet = new Set(allowed.map((g) => g.toUpperCase()));
@@ -98,21 +86,6 @@ export function getGradeLevelsForSchool(
         return groups.length > 0 ? groups : ALL_GRADE_GROUPS;
     }
 
-    if (cat === 'senior') {
-        return ALL_GRADE_GROUPS.filter((g) => g.group === 'Senior Secondary');
-    }
-    if (cat === 'junior') {
-        return ALL_GRADE_GROUPS.filter((g) => g.group === 'Junior Secondary');
-    }
-    if (cat === 'secondary' || cat === 'combined_secondary') {
-        return ALL_GRADE_GROUPS.filter((g) => g.group === 'Junior Secondary' || g.group === 'Senior Secondary');
-    }
-    if (cat === 'primary') {
-        return ALL_GRADE_GROUPS.filter((g) => g.group === 'Primary School' || g.group === 'Early Childhood');
-    }
-    if (cat === 'early_childhood') {
-        return ALL_GRADE_GROUPS.filter((g) => g.group === 'Early Childhood');
-    }
     return ALL_GRADE_GROUPS;
 }
 
@@ -123,7 +96,7 @@ export function getGradeLevelsForSchool(
  */
 export function getGradeLevelsForTeacher(
     classes?: { grade_level?: string | null }[] | null,
-    school?: { category?: string | null; category_ids?: number[] | null; allowed_grade_levels?: string[] | null } | null
+    school?: { category_ids?: number[] | null; allowed_grade_levels?: string[] | null } | null
 ): GradeGroup[] {
     const schoolGroups = getGradeLevelsForSchool(school);
     const schoolGradeSet = new Set(
@@ -155,9 +128,9 @@ export function getGradeLevelsForTeacher(
 }
 
 /**
- * Returns formatted human readable badge/label for school category or category_ids.
+ * Returns a human readable badge/label for a school's category_ids.
  */
-export function formatSchoolCategoryLabel(school?: { category?: string | null; category_ids?: number[] | null; category_type_label?: string } | null): string {
+export function formatSchoolCategoryLabel(school?: { category_ids?: number[] | null; category_type_label?: string } | null): string {
     if (!school) return 'Secondary';
     if (school.category_type_label) return school.category_type_label;
 
@@ -174,18 +147,7 @@ export function formatSchoolCategoryLabel(school?: { category?: string | null; c
         return 'Combined';
     }
 
-    switch (school.category?.toLowerCase()) {
-        case 'primary':
-            return 'Primary School';
-        case 'junior':
-            return 'Junior Secondary';
-        case 'senior':
-            return 'Senior Secondary';
-        case 'combined':
-            return 'Combined';
-        default:
-            return 'Secondary';
-    }
+    return 'All levels';
 }
 
 /**

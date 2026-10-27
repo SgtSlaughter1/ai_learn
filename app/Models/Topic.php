@@ -34,7 +34,7 @@ class Topic extends Model
      */
     public function scopeForUser($query, ?User $user)
     {
-        if (!$user) {
+        if (! $user) {
             return $query->whereRaw('1 = 0');
         }
 
@@ -47,14 +47,15 @@ class Topic extends Model
 
         if ($user->isSchoolAdmin()) {
             $schoolId = $user->primarySchool()?->id;
+
             return $query->whereHas('subject', function ($sub) use ($schoolId) {
                 $sub->where(function ($sq) use ($schoolId) {
                     $sq->where('school_id', $schoolId)->orWhereNull('school_id');
                 });
-            })->when(!empty($allowedVariants), function ($tq) use ($allowedVariants) {
+            })->when(! empty($allowedVariants), function ($tq) use ($allowedVariants) {
                 $tq->where(function ($subTq) use ($allowedVariants) {
                     $subTq->whereIn('level', $allowedVariants)
-                          ->orWhereNull('level');
+                        ->orWhereNull('level');
                 });
             });
         }
@@ -72,10 +73,10 @@ class Topic extends Model
 
             return $query->whereHas('subject', function ($sub) use ($teacherClassIds) {
                 $sub->whereIn('class_id', $teacherClassIds);
-            })->when(!empty($allowedVariants), function ($tq) use ($allowedVariants) {
+            })->when(! empty($allowedVariants), function ($tq) use ($allowedVariants) {
                 $tq->where(function ($subTq) use ($allowedVariants) {
                     $subTq->whereIn('level', $allowedVariants)
-                          ->orWhereNull('level');
+                        ->orWhereNull('level');
                 });
             });
         }

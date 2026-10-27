@@ -39,7 +39,8 @@ class AiInputSanitizer
         '/disregard\s+(all\s+|any\s+|the\s+)?(previous|prior|above|system|your)\s+(instructions?|prompts?|rules?|guidelines?)/i',
         '/forget\s+(all\s+|any\s+|the\s+)?(previous|prior|above|your)\s+(instructions?|prompts?|rules?|context)/i',
         '/you\s+are\s+now\s+(a|an|the)\s+/i',
-        '/act\s+as\s+(a|an|the)\s+(?!student|learner|tutor)/i',
+        // Not plain "act as a": "enzymes act as a catalyst" is chemistry, not an attack.
+        '/act\s+as\s+(if\s+you\s+(are|were)\b|an?\s+(unrestricted|unfiltered|uncensored|jailbroken|different\s+ai)\b)/i',
         '/pretend\s+(you\s+are|to\s+be)\s+(a|an|the)\s+/i',
         '/new\s+(system\s+)?(instructions?|prompt|rules?)\s*[:\-]/i',
         '/system\s*(prompt|message)\s*[:\-]/i',
@@ -82,7 +83,7 @@ class AiInputSanitizer
     protected array $xssPatterns = [
         '/<\s*script\b[^>]*>[\s\S]*?<\s*\/\s*script\s*>/i',
         '/<\s*\/?\s*(iframe|object|embed|link|meta|form|input|button|svg|img|video|audio|style)\b[^>]*>/i',
-        '/\bon\w+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', // inline JS event handlers
+        '/<[^>]*\bon\w+\s*=[^>]*>?/i', // tags carrying JS event handlers (only inside a tag: "if one = 5" is maths)
         '/javascript\s*:/i',
         '/data\s*:\s*text\/html/i',
         '/vbscript\s*:/i',
@@ -155,31 +156,10 @@ class AiInputSanitizer
                 'role' => $role === 'assistant' ? 'model' : $role,
                 'content' => $content,
             ];
-
-            if (count($clean) >= self::MAX_HISTORY_TURNS) {
-                break;
-            }
         }
 
-        return $clean;
-    }
-
-    /**
-     * Lightweight risk scoring for logging/rate-limiting decisions.
-     * Does NOT block by itself — sanitization already removed the payload.
-     */
-    public function riskScore(string $message): int
-    {
-        $score = 0;
-        foreach ([$this->sqlPatterns, $this->xssPatterns, $this->injectionPatterns] as $group) {
-            foreach ($group as $pattern) {
-                if (@preg_match($pattern, $message)) {
-                    $score++;
-                }
-            }
-        }
-
-        return $score;
+        // The most recent turns are the ones that give the next answer its context.
+        return array_slice($clean, -self::MAX_HISTORY_TURNS);
     }
 
     protected function stripPatterns(string $text, array $patterns): string

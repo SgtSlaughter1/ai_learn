@@ -1,39 +1,5 @@
 <?php
 
-use App\Http\Controllers\Api\PastQuestionController;
-use App\Http\Controllers\QuizController;
-use App\Http\Controllers\SubjectController;
-use Illuminate\Support\Facades\Route;
-
-// Public and test endpoints (will be wrapped in auth middleware when fully integrated)
-Route::get('/subjects', [SubjectController::class, 'getSubjectsList']);
-Route::get('/quizzes/{quiz}', [QuizController::class, 'showQuizDetails']);
-
-// Past questions public API endpoints (accessible for standalone PWA and client simulations)
-Route::prefix('v1/past-questions')->middleware('throttle:api')->group(function () {
-    Route::get('/meta', [PastQuestionController::class, 'getMeta']);
-    Route::get('/questions', [PastQuestionController::class, 'getQuestions']);
-    Route::post('/verify-answer', [PastQuestionController::class, 'verifyAnswer']);
-    Route::get('/similar', [PastQuestionController::class, 'getSimilar']);
-    Route::post('/simulation/start', [PastQuestionController::class, 'startSimulation']);
-    Route::post('/simulation/submit', [PastQuestionController::class, 'submitSimulation']);
-    Route::get('/history', [PastQuestionController::class, 'getHistory']);
-    Route::post('/explain', [PastQuestionController::class, 'explain']);
-});
-
-// LMS Questions API
-Route::prefix('v1/questions')->middleware('throttle:ai')->group(function () {
-    Route::get('/similar', [\App\Http\Controllers\Web\AIWebController::class, 'similarQuestion']);
-    Route::post('/explain', [\App\Http\Controllers\Web\AIWebController::class, 'explain']);
-});
-
-// Spaced Repetition API
-Route::prefix('v1/revision')->group(function () {
-    Route::get('/today', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'getTodayQueue']);
-    Route::post('/submit', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'submitReview']);
-    Route::post('/complete-session', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'completeSession']);
-    Route::get('/stats', [\App\Http\Controllers\Api\SpacedRepetitionController::class, 'getStats']);
-});
-
-// Feedback & Inquiries API (Public & Authenticated)
-Route::post('v1/feedback', [\App\Http\Controllers\Api\FeedbackController::class, 'store']);
+// Every JSON endpoint lives in routes/web.php under /api/v1 so it shares the browser session,
+// CSRF protection and the account-status check. This file is kept (bootstrap/app.php loads it)
+// for any future token-authenticated API.

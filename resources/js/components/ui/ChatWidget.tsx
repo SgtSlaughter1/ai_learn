@@ -612,7 +612,8 @@ export default function ChatWidget() {
                 },
                 body: JSON.stringify({
                     message: textToSend,
-                    history: messages
+                    // Recent turns only, each trimmed: the server keeps at most 20 of 2,000 characters.
+                    history: messages.slice(-12).map((m) => ({ role: m.role, content: String(m.content ?? '').slice(0, 2000) }))
                 })
             });
 

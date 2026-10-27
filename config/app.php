@@ -80,7 +80,9 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // All users are in Nigeria (WAT, UTC+1, no daylight saving): days for streaks and daily
+    // limits start at local midnight, not 01:00.
+    'timezone' => env('APP_TIMEZONE', 'Africa/Lagos'),
 
     /*
     |--------------------------------------------------------------------------

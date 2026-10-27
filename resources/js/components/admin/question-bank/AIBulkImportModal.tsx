@@ -136,6 +136,7 @@ D) 8`);
             ...opt,
             is_correct: i === optIdx,
         }));
+        updated[qIdx].needs_review = false; // the reviewer chose the answer
         setExtractedQuestions(updated);
     };
 

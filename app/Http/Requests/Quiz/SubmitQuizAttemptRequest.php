@@ -15,6 +15,8 @@ class SubmitQuizAttemptRequest extends FormRequest
     {
         return [
             'answers' => ['required', 'array'],
+            // Same bounds as the offline sync: a negative value put started_at in the future.
+            'duration_seconds' => ['nullable', 'integer', 'min:0', 'max:86400'],
         ];
     }
 }

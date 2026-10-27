@@ -2,7 +2,14 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\UserRole;
+use App\Http\Controllers\Web\AIWebController;
+use App\Http\Controllers\Web\DashboardController;
+use App\Http\Controllers\Web\FlashcardController;
+use App\Http\Controllers\Web\GamificationController;
+use App\Http\Controllers\Web\QuizWebController;
 use App\Models\Quiz;
+use App\Models\QuizAttempt;
 use App\Models\Subject;
 use App\Models\User;
 use App\Models\UserGamification;
@@ -14,6 +21,7 @@ use Illuminate\Support\Str;
 class RunLearnerE2ETestCommand extends Command
 {
     protected $signature = 'test:learner-e2e';
+
     protected $description = 'Run an End-to-End simulation of the learner flow including offline quiz taking and sync';
 
     public function handle(): int
@@ -24,12 +32,12 @@ class RunLearnerE2ETestCommand extends Command
 
         // 1. Get or create fake learner
         $learner = User::where('email', 'learner@example.com')->first();
-        if (!$learner) {
+        if (! $learner) {
             $learner = User::create([
                 'name' => 'Demo Learner',
                 'email' => 'learner@example.com',
                 'password' => bcrypt('password'),
-                'role' => \App\Enums\UserRole::LEARNER,
+                'role' => UserRole::LEARNER,
             ]);
         }
 
@@ -54,9 +62,9 @@ class RunLearnerE2ETestCommand extends Command
         // STEP 2: Fetch Initial Dashboard Stats
         $startTime = microtime(true);
         $dashboardReq = Request::create('/api/v1/dashboard/stats', 'GET');
-        $dashboardReq->setUserResolver(fn() => $learner);
-        $dashboardController = app(\App\Http\Controllers\Web\DashboardController::class);
-        $statsResponse = $dashboardController->getStats($dashboardReq);
+        $dashboardReq->setUserResolver(fn () => $learner);
+        $dashboardController = app(DashboardController::class);
+        $statsResponse = $dashboardController->getLearnerStats($dashboardReq);
         $statsData = $statsResponse->getData(true);
         $duration = round((microtime(true) - $startTime) * 1000, 2);
 
@@ -80,7 +88,7 @@ class RunLearnerE2ETestCommand extends Command
             'step' => '3. Curriculum Discovery',
             'endpoint' => "GET /api/v1/subjects/{$subject->slug}",
             'status' => $subject ? 'PASS' : 'FAIL',
-            'details' => "Subject: '{$subject->name}' (" . count($subject->topics) . ' topics cached for offline)',
+            'details' => "Subject: '{$subject->name}' (".count($subject->topics).' topics cached for offline)',
             'latency' => "{$duration} ms",
         ];
 
@@ -106,7 +114,9 @@ class RunLearnerE2ETestCommand extends Command
             $correctOption = $question->options->where('is_correct', true)->first();
             $selectedId = $correctOption ? $correctOption->id : $question->options->first()->id;
             $isCorrect = $correctOption && ($correctOption->id === $selectedId);
-            if ($isCorrect) $expectedScore++;
+            if ($isCorrect) {
+                $expectedScore++;
+            }
 
             $answers[] = [
                 'question_id' => $question->id,
@@ -128,9 +138,9 @@ class RunLearnerE2ETestCommand extends Command
             'POST',
             $syncPayload
         );
-        $syncReq->setUserResolver(fn() => $learner);
-        $quizController = app(\App\Http\Controllers\Web\QuizWebController::class);
-        $syncResponse = $quizController->syncAttempt($syncReq, $attemptId);
+        $syncReq->setUserResolver(fn () => $learner);
+        $quizController = app(QuizWebController::class);
+        $syncResponse = $quizController->syncQuizAttempt($syncReq, $attemptId);
         $syncData = $syncResponse->getData(true);
         $duration = round((microtime(true) - $startTime) * 1000, 2);
 
@@ -144,8 +154,8 @@ class RunLearnerE2ETestCommand extends Command
 
         // STEP 6: Result Screen Verification
         $startTime = microtime(true);
-        $attemptModel = \App\Models\QuizAttempt::findOrFail($attemptId);
-        $resultResponse = $quizController->getAttemptData($attemptModel);
+        $attemptModel = QuizAttempt::findOrFail($attemptId);
+        $resultResponse = $quizController->getQuizAttemptData($attemptModel);
         $resultData = $resultResponse->getData(true);
         $duration = round((microtime(true) - $startTime) * 1000, 2);
 
@@ -170,18 +180,18 @@ class RunLearnerE2ETestCommand extends Command
             'question_id' => $firstQuestion->id,
             'selected_option_id' => $selectedOpt,
         ]);
-        $aiRequest->setUserResolver(fn() => $learner);
-        $aiController = app(\App\Http\Controllers\Web\AIWebController::class);
+        $aiRequest->setUserResolver(fn () => $learner);
+        $aiController = app(AIWebController::class);
         $aiResponse = $aiController->explain($aiRequest);
         $aiData = $aiResponse->getData(true);
         $duration = round((microtime(true) - $startTime) * 1000, 2);
-        $hasExplanation = !empty($aiData['explanation']);
+        $hasExplanation = ! empty($aiData['explanation']);
 
         $steps[] = [
             'step' => '7. AI Tutor Explanation',
             'endpoint' => 'POST /api/v1/ai/explain',
             'status' => $hasExplanation ? 'PASS' : 'FAIL',
-            'details' => 'Received ' . strlen($aiData['explanation'] ?? '') . ' chars of pedagogical guidance',
+            'details' => 'Received '.strlen($aiData['explanation'] ?? '').' chars of pedagogical guidance',
             'latency' => "{$duration} ms",
         ];
 
@@ -190,9 +200,9 @@ class RunLearnerE2ETestCommand extends Command
         $flashcardReq = Request::create('/api/v1/flashcards/complete', 'POST', [
             'ratings' => ['easy', 'good', 'easy'],
         ]);
-        $flashcardReq->setUserResolver(fn() => $learner);
-        $flashcardController = app(\App\Http\Controllers\Web\FlashcardController::class);
-        $flashcardResponse = $flashcardController->complete($flashcardReq);
+        $flashcardReq->setUserResolver(fn () => $learner);
+        $flashcardController = app(FlashcardController::class);
+        $flashcardResponse = $flashcardController->completeFlashcardReview($flashcardReq);
         $flashcardData = $flashcardResponse->getData(true);
         $duration = round((microtime(true) - $startTime) * 1000, 2);
 
@@ -208,8 +218,8 @@ class RunLearnerE2ETestCommand extends Command
         // STEP 9: Gamification Profile & Leaderboard
         $startTime = microtime(true);
         $gamificationReq = Request::create('/api/v1/gamification/profile', 'GET');
-        $gamificationReq->setUserResolver(fn() => $learner);
-        $gamificationController = app(\App\Http\Controllers\Web\GamificationController::class);
+        $gamificationReq->setUserResolver(fn () => $learner);
+        $gamificationController = app(GamificationController::class);
         $profileResponse = $gamificationController->getProfile($gamificationReq);
         $profileData = $profileResponse->getData(true);
         $duration = round((microtime(true) - $startTime) * 1000, 2);
@@ -228,7 +238,7 @@ class RunLearnerE2ETestCommand extends Command
 
         // STEP 10: Final Dashboard State Verification
         $startTime = microtime(true);
-        $finalStatsResponse = $dashboardController->getStats($dashboardReq);
+        $finalStatsResponse = $dashboardController->getLearnerStats($dashboardReq);
         $finalStatsData = $finalStatsResponse->getData(true);
         $duration = round((microtime(true) - $startTime) * 1000, 2);
 
@@ -251,11 +261,12 @@ class RunLearnerE2ETestCommand extends Command
                 $statusFormatted = $s['status'] === 'PASS'
                     ? '<fg=green;options=bold>PASS</>'
                     : '<fg=red;options=bold>FAIL</>';
+
                 return [$s['step'], $s['endpoint'], $statusFormatted, $s['latency'], $s['details']];
             }, $steps)
         );
 
-        $allPassed = collect($steps)->every(fn($s) => $s['status'] === 'PASS');
+        $allPassed = collect($steps)->every(fn ($s) => $s['status'] === 'PASS');
 
         if ($allPassed) {
             $this->newLine();
@@ -264,11 +275,13 @@ class RunLearnerE2ETestCommand extends Command
             $this->line("• Offline Quiz Attempt: {$attemptId} -> Synced & Awarded XP");
             $this->line("• Active Recall Session: 3 Flashcards -> +{$flashcardXp} XP");
             $this->line("• Total XP Growth: +{$xpDelta} XP (New Total: {$finalXp})");
-            $this->line("• Dashboard Recent Activity: Verified with updated quiz attempt");
+            $this->line('• Dashboard Recent Activity: Verified with updated quiz attempt');
+
             return 0;
         }
 
         $this->error("\n[ERROR] Some E2E steps failed.");
+
         return 1;
     }
 }

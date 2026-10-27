@@ -15,7 +15,7 @@ return new class extends Migration
             // Generated on the device, so a passage created offline and the questions
             // added to it before syncing all land on the same row.
             $table->uuid('client_id')->unique();
-            $table->foreignId('school_id')->nullable()->constrained('schools')->nullOnDelete();
+            $table->foreignId('school_id')->nullable()->constrained('schools')->restrictOnDelete(); // null means "shared with every school", so never null it on delete
             $table->foreignId('topic_id')->constrained()->cascadeOnDelete();
             $table->string('type', 20)->default('passage'); // passage, poem, diagram, table
             $table->string('title')->nullable();
@@ -30,7 +30,7 @@ return new class extends Migration
 
         Schema::create('questions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('school_id')->nullable()->constrained('schools')->nullOnDelete();
+            $table->foreignId('school_id')->nullable()->constrained('schools')->restrictOnDelete(); // null means "shared with every school", so never null it on delete
             $table->foreignId('topic_id')->constrained()->cascadeOnDelete();
             // Set when the question is about a shared passage; context_order is its
             // position within that passage's questions (1, 2, 3, ...).

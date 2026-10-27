@@ -44,6 +44,7 @@ return [
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY') ?: env('GOOGLE_API_KEY') ?: env('AI_API_KEY'),
         'model' => env('MODEL_NAME', 'gemini-3.1-flash-lite'),
+        'fallback_model' => env('GEMINI_FALLBACK_MODEL', 'gemini-flash-lite-latest'),
     ],
 
     // Groq (OpenAI-compatible API). The fallback model has its own rate limits, so it
@@ -58,6 +59,9 @@ return [
     // groq | gemini | local. Unset: Groq when its key is set, else Gemini, else local.
     'ai' => [
         'provider' => env('AI_PROVIDER'),
+        // Seconds one AI request may spend across every provider and model before the offline
+        // answer is used. Keep it well under PHP's max_execution_time (often 30 s on shared hosts).
+        'time_budget' => (int) env('AI_TIME_BUDGET', 20),
     ],
 
 ];

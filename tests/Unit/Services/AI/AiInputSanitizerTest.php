@@ -157,6 +157,27 @@ class AiInputSanitizerTest extends TestCase
         $this->assertCount(AiInputSanitizer::MAX_HISTORY_TURNS, $clean);
     }
 
+    public function test_history_keeps_the_latest_turns(): void
+    {
+        $history = [];
+        for ($i = 0; $i < 30; $i++) {
+            $history[] = ['role' => 'user', 'content' => "Question number {$i} about algebra."];
+        }
+
+        $clean = $this->sanitizer->sanitizeHistory($history);
+        $this->assertSame('Question number 29 about algebra.', end($clean)['content']);
+    }
+
+    public function test_ordinary_study_text_is_not_mangled(): void
+    {
+        foreach ([
+            'If one = 5 and two = 6, what is three?',
+            'Enzymes act as a catalyst in reactions.',
+        ] as $message) {
+            $this->assertSame($message, $this->sanitizer->sanitizeMessage($message));
+        }
+    }
+
     public function test_history_sanitizes_each_content_entry(): void
     {
         $clean = $this->sanitizer->sanitizeHistory([

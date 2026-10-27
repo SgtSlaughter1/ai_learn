@@ -40,6 +40,6 @@ class ProgramSeeder extends Seeder
             );
         }
 
-        $this->command?->info("Academic Programs (Science, Humanities, Business) seeded successfully.");
+        $this->command?->info('Academic Programs (Science, Humanities, Business) seeded successfully.');
     }
 }

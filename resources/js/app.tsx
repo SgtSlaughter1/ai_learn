@@ -18,8 +18,11 @@ import { prewarmPagesForUser, refreshAppShell, removeLegacyCaches } from './serv
 import { reportServerReachable } from './services/Connectivity';
 import { GlobalNotices, OFFLINE_ACTION_BLOCKED_EVENT } from './components/sync/GlobalNotices';
 import { ConfirmHost } from './components/common/ConfirmModal';
+import { installCsrfFetch } from './services/CsrfFetch';
 
 const appName = import.meta.env.VITE_APP_NAME || 'AceDrill';
+
+installCsrfFetch();
 
 
 // ── Offline navigation ──

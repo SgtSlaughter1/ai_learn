@@ -8,6 +8,7 @@ use App\Models\QuestionContext;
 use App\Models\QuestionOption;
 use App\Models\Quiz;
 use App\Models\QuizAnswer;
+use App\Models\QuizAttempt;
 use App\Models\School;
 use App\Models\Subject;
 use App\Models\Topic;
@@ -22,7 +23,9 @@ class QuestionContextTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private School $school;
+
     private Topic $topic;
 
     protected function setUp(): void
@@ -35,7 +38,7 @@ class QuestionContextTest extends TestCase
     private function schoolWithAdmin(string $slug): array
     {
         $admin = User::factory()->create(['role' => UserRole::SCHOOL_ADMIN]);
-        $school = School::create(['name' => "School {$slug}", 'slug' => $slug, 'category' => 'senior', 'is_active' => true, 'admin_user_id' => $admin->id]);
+        $school = School::create(['name' => "School {$slug}", 'slug' => $slug, 'is_active' => true, 'admin_user_id' => $admin->id]);
         $subject = Subject::factory()->create(['school_id' => $school->id, 'name' => 'English Language']);
         $topic = Topic::factory()->create(['subject_id' => $subject->id, 'level' => 'SS2']);
 
@@ -173,7 +176,7 @@ class QuestionContextTest extends TestCase
         $answeredId = $this->actingAs($this->admin)->postJson('/api/v1/admin/questions', $this->questionPayload('Answered', $this->passage($remove)))->json('question.id');
         $this->actingAs($this->admin)->postJson('/api/v1/admin/questions', $this->questionPayload('Unanswered', $this->passage($remove)))->assertCreated();
         $answered = Question::find($answeredId);
-        $attempt = \App\Models\QuizAttempt::create([
+        $attempt = QuizAttempt::create([
             'id' => (string) Str::uuid(), 'user_id' => User::factory()->create(['role' => UserRole::LEARNER])->id,
             'quiz_id' => Quiz::factory()->create()->id, 'status' => 'completed', 'started_at' => now(),
         ]);
@@ -252,7 +255,7 @@ class QuestionContextTest extends TestCase
         [$quiz, $context, $passageIds] = $this->quizWithPassage(1);
         $learner = User::factory()->create(['role' => UserRole::LEARNER]);
         $single = $quiz->questions()->whereNull('context_id')->value('questions.id');
-        $attempt = \App\Models\QuizAttempt::create(['id' => (string) Str::uuid(), 'user_id' => $learner->id, 'quiz_id' => $quiz->id, 'status' => 'completed', 'started_at' => now()]);
+        $attempt = QuizAttempt::create(['id' => (string) Str::uuid(), 'user_id' => $learner->id, 'quiz_id' => $quiz->id, 'status' => 'completed', 'started_at' => now()]);
         // Saved in a scrambled order, as an offline sync may save them.
         foreach ([$passageIds[3], $single, $passageIds[0], $passageIds[4], $passageIds[2], $passageIds[1]] as $questionId) {
             QuizAnswer::create(['id' => (string) Str::uuid(), 'quiz_attempt_id' => $attempt->id, 'question_id' => $questionId]);

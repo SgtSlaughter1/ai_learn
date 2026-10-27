@@ -15,9 +15,14 @@ class QuizPolicy
         return true;
     }
 
+    /** Active quizzes of the user's school (or shared ones); admins of that school also see inactive ones. */
     public function view(User $user, Quiz $quiz): bool
     {
-        return $quiz->status === 'active' || $user->isPlatformAdmin() || $user->isSchoolAdmin();
+        if (! $this->visibleInSchool($user, $quiz->school_id)) {
+            return false;
+        }
+
+        return $quiz->status === 'active' || $this->adminManagesSchool($user, $quiz->school_id);
     }
 
     public function create(User $user): bool
@@ -37,6 +42,15 @@ class QuizPolicy
 
     public function attempt(User $user, Quiz $quiz): bool
     {
-        return $quiz->status === 'active';
+        return $quiz->status === 'active' && $this->visibleInSchool($user, $quiz->school_id);
+    }
+
+    /**
+     * Saving an attempt made offline. The quiz may have been deactivated since the learner took
+     * it, so only the school check applies; otherwise the device would retry a lost attempt forever.
+     */
+    public function recordOfflineAttempt(User $user, Quiz $quiz): bool
+    {
+        return $this->visibleInSchool($user, $quiz->school_id);
     }
 }

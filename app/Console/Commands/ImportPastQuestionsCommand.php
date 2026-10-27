@@ -44,7 +44,7 @@ class ImportPastQuestionsCommand extends Command
             $this->comment("  [Info] Resuming from saved cursor for [{$exam}] {$subject} to save API credits.");
         }
 
-        $this->info("Fetching past questions for [{$exam}] {$subject}" . ($year ? " (Year: {$year})" : "") . " (Pages: {$maxPages})...");
+        $this->info("Fetching past questions for [{$exam}] {$subject}".($year ? " (Year: {$year})" : '')." (Pages: {$maxPages})...");
 
         $totalImported = 0;
         $totalUpdated = 0;
@@ -54,8 +54,8 @@ class ImportPastQuestionsCommand extends Command
             $this->line("Fetching page {$page}/{$maxPages}...");
             $response = $this->fetchWithBackoff($importService, $subject, $exam, $year, $cursor);
 
-            if (!$response['success']) {
-                $this->error("Failed to fetch: " . ($response['error'] ?? 'Unknown error'));
+            if (! $response['success']) {
+                $this->error('Failed to fetch: '.($response['error'] ?? 'Unknown error'));
                 break;
             }
 
@@ -80,8 +80,8 @@ class ImportPastQuestionsCommand extends Command
             $cursor = $response['next_cursor'] ?? null;
             $importService->saveCursor($exam, $subject, $cursor);
 
-            if (!$cursor) {
-                $this->line("Reached end of available records on ALOC.");
+            if (! $cursor) {
+                $this->line('Reached end of available records on ALOC.');
                 break;
             }
 
@@ -89,7 +89,7 @@ class ImportPastQuestionsCommand extends Command
             sleep(1);
         }
 
-        $this->info("----------------------------------------------------");
+        $this->info('----------------------------------------------------');
         $this->info("Import Summary for [{$exam}] {$subject}:");
         $this->line("  Total New Saved: {$totalImported}");
         $this->line("  Total Updated:   {$totalUpdated}");
@@ -112,17 +112,17 @@ class ImportPastQuestionsCommand extends Command
 
         foreach ($matrix as $exam => $subjects) {
             $this->info("\n====================================================");
-            $this->info("Exam: " . strtoupper($exam) . " (Senior Secondary)");
-            $this->info("====================================================");
+            $this->info('Exam: '.strtoupper($exam).' (Senior Secondary)');
+            $this->info('====================================================');
 
             foreach ($subjects as $subject) {
                 $cursor = $importService->getSavedCursor($exam, $subject);
-                $this->line("Pulling [{$exam}] {$subject}..." . ($cursor ? " [resuming from cursor]" : ""));
+                $this->line("Pulling [{$exam}] {$subject}...".($cursor ? ' [resuming from cursor]' : ''));
 
                 $pagesFetched = 0;
                 do {
                     $res = $this->fetchWithBackoff($importService, $subject, $exam, null, $cursor);
-                    if (!$res['success'] || empty($res['data'])) {
+                    if (! $res['success'] || empty($res['data'])) {
                         $this->line("  -> No more records for [{$exam}] {$subject}.");
                         break;
                     }
@@ -138,7 +138,7 @@ class ImportPastQuestionsCommand extends Command
                     $cursor = $res['next_cursor'] ?? null;
                     $importService->saveCursor($exam, $subject, $cursor);
 
-                    if (!$cursor) {
+                    if (! $cursor) {
                         $this->line("  -> Reached end of {$exam} {$subject} records.");
                         break;
                     }
@@ -150,7 +150,7 @@ class ImportPastQuestionsCommand extends Command
 
         $this->info("\n====================================================");
         $this->info("SSCE Ingestion Complete! Total new SSCE questions saved: {$totalNew}");
-        $this->info("====================================================");
+        $this->info('====================================================');
 
         return self::SUCCESS;
     }
@@ -159,15 +159,16 @@ class ImportPastQuestionsCommand extends Command
     {
         $pagesPerSubject = max(1, (int) ($this->option('pages') ?: 5));
 
-        $this->info("Fetching live subjects catalogue from ALOC Station API...");
+        $this->info('Fetching live subjects catalogue from ALOC Station API...');
         $alocSubjects = $importService->fetchAvailableSubjects();
 
         if (empty($alocSubjects)) {
-            $this->error("Failed to retrieve subjects catalogue from ALOC.");
+            $this->error('Failed to retrieve subjects catalogue from ALOC.');
+
             return self::FAILURE;
         }
 
-        $this->info("Found " . count($alocSubjects) . " official subjects hosted on ALOC.");
+        $this->info('Found '.count($alocSubjects).' official subjects hosted on ALOC.');
 
         $totalNew = 0;
         $totalCreditsUsed = 0;
@@ -178,22 +179,22 @@ class ImportPastQuestionsCommand extends Command
             $supportedExams = $subjectItem['examTypes'] ?? $subjectItem['supportedExams'] ?? ['jamb'];
             $totalAvailable = $subjectItem['questionCount'] ?? 'unknown';
             $yearRange = $subjectItem['yearRange'] ?? [];
-            $yearStr = !empty($yearRange) ? " (Years: {$yearRange['min']}-{$yearRange['max']})" : "";
+            $yearStr = ! empty($yearRange) ? " (Years: {$yearRange['min']}-{$yearRange['max']})" : '';
 
             $this->info("\n====================================================");
             $this->info("Subject: {$subjectName} (Pool: {$totalAvailable} Qs){$yearStr}");
-            $this->info("Supported Exams: " . implode(', ', array_map('strtoupper', $supportedExams)));
-            $this->info("====================================================");
+            $this->info('Supported Exams: '.implode(', ', array_map('strtoupper', $supportedExams)));
+            $this->info('====================================================');
 
             foreach ($supportedExams as $exam) {
                 $cursor = $importService->getSavedCursor($exam, $subjectSlug);
-                $this->line("Fetching [{$exam}] {$subjectName} (Target: {$pagesPerSubject} pages)..." . ($cursor ? " [resuming cursor]" : ""));
+                $this->line("Fetching [{$exam}] {$subjectName} (Target: {$pagesPerSubject} pages)...".($cursor ? ' [resuming cursor]' : ''));
 
                 for ($p = 1; $p <= $pagesPerSubject; $p++) {
                     $res = $this->fetchWithBackoff($importService, $subjectSlug, $exam, null, $cursor);
 
-                    if (!$res['success']) {
-                        $this->line("  -> Notice: [{$exam}] {$subjectSlug} returned: " . ($res['error'] ?? 'Unknown'));
+                    if (! $res['success']) {
+                        $this->line("  -> Notice: [{$exam}] {$subjectSlug} returned: ".($res['error'] ?? 'Unknown'));
                         break;
                     }
 
@@ -213,7 +214,7 @@ class ImportPastQuestionsCommand extends Command
                     $cursor = $res['next_cursor'] ?? null;
                     $importService->saveCursor($exam, $subjectSlug, $cursor);
 
-                    if (!$cursor) {
+                    if (! $cursor) {
                         $this->line("  -> Reached end of ALOC records for [{$exam}] {$subjectSlug}.");
                         break;
                     }
@@ -224,10 +225,10 @@ class ImportPastQuestionsCommand extends Command
         }
 
         $this->info("\n====================================================");
-        $this->info("Dynamic Ingestion Completed!");
+        $this->info('Dynamic Ingestion Completed!');
         $this->info("  Total New Questions Saved: {$totalNew}");
         $this->info("  Approximate Credits Used:  {$totalCreditsUsed}");
-        $this->info("====================================================");
+        $this->info('====================================================');
 
         return self::SUCCESS;
     }
@@ -245,8 +246,10 @@ class ImportPastQuestionsCommand extends Command
             if ($res['status'] === 429) {
                 $this->warn("  ALOC rate limit hit. Waiting 10s before retry (attempt {$attempt}/{$maxRetries})...");
                 sleep(10);
+
                 continue;
             }
+
             return $res;
         }
 

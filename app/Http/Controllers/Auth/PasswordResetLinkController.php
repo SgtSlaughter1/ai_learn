@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\PasswordResetLinkRequest;
-use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
@@ -29,22 +28,14 @@ class PasswordResetLinkController extends Controller
      */
     public function store(PasswordResetLinkRequest $request): RedirectResponse|JsonResponse
     {
-        $validated = $request->validated();
-        $email = $validated['email'];
-        $user = User::where('email', $email)->first();
+        $email = $request->validated()['email'];
 
-        if ($user) {
-            try {
-                $token = Password::broker()->createToken($user);
-                $user->sendPasswordResetNotification($token);
-            } catch (\Exception $e) {
-                // If mail sending encounters an error (e.g. SMTP not configured yet), log the link safely
-                $resetUrl = url(route('password.reset', [
-                    'token' => $token ?? 'preview-token',
-                    'email' => $email,
-                ], false));
-                Log::info("[Password Reset Link for {$email}]: {$resetUrl}");
-            }
+        // The broker also limits how often one account can be sent a link (auth.passwords.*.throttle).
+        try {
+            Password::sendResetLink(['email' => $email]);
+        } catch (\Throwable $e) {
+            // Never log the link itself: anyone who can read the log could reset the password.
+            Log::error('password_reset.mail_failed', ['error' => class_basename($e).': '.$e->getMessage()]);
         }
 
         // Always return success message to prevent user enumeration attacks

@@ -28,10 +28,11 @@ class AuthTest extends TestCase
         $response->assertStatus(200);
         $response->assertJsonStructure([
             'status',
-            'token',
             'user' => ['id', 'name', 'email', 'role'],
             'redirect',
         ]);
+        // The session id stays in its HttpOnly cookie; JavaScript must never see it.
+        $response->assertJsonMissingPath('token');
         $response->assertJson([
             'status' => 'success',
             'user' => [
@@ -55,9 +56,9 @@ class AuthTest extends TestCase
         $response->assertStatus(200);
         $response->assertJsonStructure([
             'status',
-            'token',
             'user' => ['id', 'name', 'email', 'role'],
         ]);
+        $response->assertJsonMissingPath('token');
         $response->assertJson([
             'status' => 'success',
             'user' => [

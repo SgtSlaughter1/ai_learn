@@ -5,13 +5,17 @@ namespace Tests\Feature;
 use App\Enums\UserRole;
 use App\Http\Resources\QuestionOptionResource;
 use App\Http\Resources\QuestionResource;
+use App\Models\ClassMembership;
+use App\Models\ClassModel;
 use App\Models\ContentPackage;
 use App\Models\LearnerProgress;
+use App\Models\Program;
 use App\Models\Question;
 use App\Models\QuestionOption;
 use App\Models\Quiz;
-use App\Models\QuizAttempt;
 use App\Models\QuizAnswer;
+use App\Models\QuizAttempt;
+use App\Models\School;
 use App\Models\Subject;
 use App\Models\Topic;
 use App\Models\User;
@@ -27,28 +31,28 @@ class DomainModelTest extends TestCase
     {
         $user = User::factory()->create(['role' => UserRole::LEARNER]);
         $subject = Subject::factory()->create(['name' => 'Math', 'slug' => 'math']);
-        
+
         $topic = Topic::factory()->create([
             'subject_id' => $subject->id,
             'name' => 'Algebra',
-            'slug' => 'algebra'
+            'slug' => 'algebra',
         ]);
 
         $question = Question::factory()->create([
             'topic_id' => $topic->id,
-            'question_text' => 'What is 1+1?'
+            'question_text' => 'What is 1+1?',
         ]);
 
         $option1 = QuestionOption::factory()->create([
             'question_id' => $question->id,
             'option_text' => '2',
-            'is_correct' => true
+            'is_correct' => true,
         ]);
 
         $option2 = QuestionOption::factory()->create([
             'question_id' => $question->id,
             'option_text' => '3',
-            'is_correct' => false
+            'is_correct' => false,
         ]);
 
         $quiz = Quiz::factory()->create(['title' => 'Algebra Quiz']);
@@ -82,7 +86,7 @@ class DomainModelTest extends TestCase
             'subject_id' => $subject->id,
             'level' => 'ss1',
             'version' => '1.0.0',
-            'status' => 'published'
+            'status' => 'published',
         ]);
 
         // Asserts
@@ -119,7 +123,7 @@ class DomainModelTest extends TestCase
     {
         $user = User::factory()->create();
         $quiz = Quiz::factory()->create();
-        
+
         $attempt = QuizAttempt::create([
             'user_id' => $user->id,
             'quiz_id' => $quiz->id,
@@ -143,11 +147,11 @@ class DomainModelTest extends TestCase
         $option = QuestionOption::factory()->create([
             'question_id' => $question->id,
             'option_text' => 'Correct Option',
-            'is_correct' => true
+            'is_correct' => true,
         ]);
 
         $request = Request::create('/', 'GET');
-        
+
         // Load relationship
         $question->setRelation('options', collect([$option]));
 
@@ -156,7 +160,7 @@ class DomainModelTest extends TestCase
 
         // Assert is_correct is not leaked
         $this->assertArrayNotHasKey('is_correct', $serializedOption);
-        
+
         // Assert question explanation is not leaked (for student consumption)
         $this->assertArrayNotHasKey('explanation', $serializedQuestion);
     }
@@ -230,7 +234,7 @@ class DomainModelTest extends TestCase
 
         // Test complete API endpoint
         $completeResponse = $this->postJson('/api/v1/flashcards/complete', [
-            'ratings' => ['easy', 'good', 'again', 'easy']
+            'ratings' => ['easy', 'good', 'again', 'easy'],
         ]);
         $completeResponse->assertStatus(200);
         $completeResponse->assertJsonStructure([
@@ -238,7 +242,7 @@ class DomainModelTest extends TestCase
             'xp_earned',
             'new_level',
             'new_tier',
-            'new_achievements'
+            'new_achievements',
         ]);
         // Calculate: easy (2) + good (1) + again (0) + easy (2) = 5 XP. Deck complete bonus = 5 XP. Total = 10 XP.
         $completeResponse->assertJsonFragment(['xp_earned' => 10]);
@@ -264,7 +268,7 @@ class DomainModelTest extends TestCase
         $this->getJson('/api/v1/teacher/stats')->assertStatus(200)
             ->assertJsonStructure([
                 'stats' => ['totalStudents', 'classAverageMastery', 'activeStudents'],
-                'recentActivities'
+                'recentActivities',
             ]);
 
         // 4. Admin/School Admin gets redirected from /teacher/dashboard and /dashboard to /admin/dashboard
@@ -275,25 +279,25 @@ class DomainModelTest extends TestCase
 
     public function test_learner_class_progression_window_follows_program_track(): void
     {
-        $school = \App\Models\School::create([
+        $school = School::create([
             'name' => 'Test School',
             'slug' => 'test-school',
             'is_active' => true,
         ]);
 
-        $scienceProg = \App\Models\Program::create(['name' => 'Science', 'slug' => 'science', 'code' => 'SCI']);
-        $businessProg = \App\Models\Program::create(['name' => 'Business', 'slug' => 'business', 'code' => 'BUS']);
+        $scienceProg = Program::create(['name' => 'Science', 'slug' => 'science', 'code' => 'SCI']);
+        $businessProg = Program::create(['name' => 'Business', 'slug' => 'business', 'code' => 'BUS']);
 
-        $ss1Sci = \App\Models\ClassModel::create(['school_id' => $school->id, 'program_id' => $scienceProg->id, 'name' => 'SS1 Science', 'slug' => 'ss1-sci', 'grade_level' => 'SS1', 'is_active' => true]);
-        $ss1Bus = \App\Models\ClassModel::create(['school_id' => $school->id, 'program_id' => $businessProg->id, 'name' => 'SS1 Business', 'slug' => 'ss1-bus', 'grade_level' => 'SS1', 'is_active' => true]);
-        $ss2Sci = \App\Models\ClassModel::create(['school_id' => $school->id, 'program_id' => $scienceProg->id, 'name' => 'SS2 Science', 'slug' => 'ss2-sci', 'grade_level' => 'SS2', 'is_active' => true]);
-        $ss2Bus = \App\Models\ClassModel::create(['school_id' => $school->id, 'program_id' => $businessProg->id, 'name' => 'SS2 Business', 'slug' => 'ss2-bus', 'grade_level' => 'SS2', 'is_active' => true]);
-        $ss3Sci = \App\Models\ClassModel::create(['school_id' => $school->id, 'program_id' => $scienceProg->id, 'name' => 'SS3 Science', 'slug' => 'ss3-sci', 'grade_level' => 'SS3', 'is_active' => true]);
-        $ss3Bus = \App\Models\ClassModel::create(['school_id' => $school->id, 'program_id' => $businessProg->id, 'name' => 'SS3 Business', 'slug' => 'ss3-bus', 'grade_level' => 'SS3', 'is_active' => true]);
+        $ss1Sci = ClassModel::create(['school_id' => $school->id, 'program_id' => $scienceProg->id, 'name' => 'SS1 Science', 'slug' => 'ss1-sci', 'grade_level' => 'SS1', 'is_active' => true]);
+        $ss1Bus = ClassModel::create(['school_id' => $school->id, 'program_id' => $businessProg->id, 'name' => 'SS1 Business', 'slug' => 'ss1-bus', 'grade_level' => 'SS1', 'is_active' => true]);
+        $ss2Sci = ClassModel::create(['school_id' => $school->id, 'program_id' => $scienceProg->id, 'name' => 'SS2 Science', 'slug' => 'ss2-sci', 'grade_level' => 'SS2', 'is_active' => true]);
+        $ss2Bus = ClassModel::create(['school_id' => $school->id, 'program_id' => $businessProg->id, 'name' => 'SS2 Business', 'slug' => 'ss2-bus', 'grade_level' => 'SS2', 'is_active' => true]);
+        $ss3Sci = ClassModel::create(['school_id' => $school->id, 'program_id' => $scienceProg->id, 'name' => 'SS3 Science', 'slug' => 'ss3-sci', 'grade_level' => 'SS3', 'is_active' => true]);
+        $ss3Bus = ClassModel::create(['school_id' => $school->id, 'program_id' => $businessProg->id, 'name' => 'SS3 Business', 'slug' => 'ss3-bus', 'grade_level' => 'SS3', 'is_active' => true]);
 
         // Science Learner
         $sciLearner = User::factory()->create(['role' => UserRole::LEARNER]);
-        \App\Models\ClassMembership::create(['class_id' => $ss1Sci->id, 'user_id' => $sciLearner->id, 'role' => 'learner', 'is_active' => true]);
+        ClassMembership::create(['class_id' => $ss1Sci->id, 'user_id' => $sciLearner->id, 'role' => 'learner', 'is_active' => true]);
 
         $this->actingAs($sciLearner);
         $resSci = $this->getJson('/api/v1/classes');
@@ -303,7 +307,7 @@ class DomainModelTest extends TestCase
 
         // Business Learner
         $busLearner = User::factory()->create(['role' => UserRole::LEARNER]);
-        \App\Models\ClassMembership::create(['class_id' => $ss1Bus->id, 'user_id' => $busLearner->id, 'role' => 'learner', 'is_active' => true]);
+        ClassMembership::create(['class_id' => $ss1Bus->id, 'user_id' => $busLearner->id, 'role' => 'learner', 'is_active' => true]);
 
         $this->actingAs($busLearner);
         $resBus = $this->getJson('/api/v1/classes');
@@ -314,10 +318,9 @@ class DomainModelTest extends TestCase
 
     public function test_ai_chat_supports_both_school_admin_copilot_and_learner_study_companion(): void
     {
-        $school = \App\Models\School::create([
+        $school = School::create([
             'name' => 'Apex High School',
             'slug' => 'apex-high-school',
-            'category' => 'secondary',
             'is_active' => true,
         ]);
 

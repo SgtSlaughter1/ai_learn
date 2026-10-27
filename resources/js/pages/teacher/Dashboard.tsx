@@ -1556,7 +1556,7 @@ export default function Dashboard({ school, classes = [], selectedClass = null }
                                 required
                                 value={learnerForm.password}
                                 onChange={(e) => setLearnerForm({ ...learnerForm, password: e.target.value })}
-                                placeholder="Minimum 6 characters"
+                                placeholder="Minimum 8 characters"
                                 className="w-full px-3.5 py-2.5 bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-[var(--color-text)] text-sm focus:outline-none focus:border-[var(--color-primary)] placeholder-[var(--color-muted)]"
                             />
                         </div>

@@ -11,7 +11,8 @@ return new class extends Migration
         Schema::create('class_memberships', function (Blueprint $table) {
             $table->id();
             $table->foreignId('class_id')->constrained('classes')->cascadeOnDelete();
-            $table->uuid('user_id')->constrained('users')->cascadeOnDelete();
+            // foreignUuid, so the foreign key is really created (uuid()->constrained() silently is not).
+            $table->foreignUuid('user_id')->constrained('users')->cascadeOnDelete();
             $table->enum('role', ['teacher', 'learner'])->default('learner');
             $table->boolean('is_active')->default(true);
             $table->timestamps();

@@ -12,6 +12,7 @@ use App\Models\Topic;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class QuizScoringIntegrityTest extends TestCase
@@ -19,6 +20,7 @@ class QuizScoringIntegrityTest extends TestCase
     use RefreshDatabase;
 
     protected User $learner;
+
     protected Topic $topic;
 
     protected function setUp(): void
@@ -43,7 +45,7 @@ class QuizScoringIntegrityTest extends TestCase
         return [$quiz, $correct];
     }
 
-    private function sync(Quiz $quiz, array $answers): \Illuminate\Testing\TestResponse
+    private function sync(Quiz $quiz, array $answers): TestResponse
     {
         $id = (string) Str::uuid();
 

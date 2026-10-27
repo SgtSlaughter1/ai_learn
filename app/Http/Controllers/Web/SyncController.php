@@ -16,11 +16,12 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Routing\Pipeline;
-use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class SyncController extends Controller
 {
+    public function __construct(private GamificationService $gamification) {}
+
     /**
      * Lightweight check the sync engine calls before draining its queue: says which user
      * owns the session (null when signed out) so the device never uploads another user's
@@ -32,47 +33,18 @@ class SyncController extends Controller
     }
 
     /**
-     * Sync offline learner progress records back to the server.
-     * Called by SyncService.ts when the user comes back online.
+     * Retired as a write: topic progress is added on the server when each graded attempt syncs
+     * (LearnerProgress::recordResults), so the device's totals are only a display cache. Writing
+     * them double-counted honest devices and let a crafted request set any mastery. Kept so older
+     * app versions stop retrying; returns the server's figures for that topic.
      */
     public function syncProgress(SyncProgressRequest $request): JsonResponse
     {
-        $validated = $request->validated();
-        $user = auth()->user();
+        $progress = LearnerProgress::where('user_id', auth()->id())
+            ->where('topic_id', $request->validated('topic_id'))
+            ->first(['topic_id', 'questions_attempted', 'questions_correct', 'mastery_score', 'ability_score']);
 
-        DB::transaction(function () use ($validated, $user) {
-            // createOrFirst relies on the unique (user_id, topic_id) index, so two concurrent
-            // syncs for the same topic cannot both insert.
-            $progress = LearnerProgress::createOrFirst(
-                ['user_id' => $user->id, 'topic_id' => $validated['topic_id']],
-                [
-                    'questions_attempted' => $validated['questions_attempted'],
-                    'questions_correct' => $validated['questions_correct'],
-                    'mastery_score' => $validated['mastery_score'],
-                    'ability_score' => $validated['ability_score'] ?? 1000,
-                    'last_attempted_at' => now(),
-                ]
-            );
-
-            if ($progress->wasRecentlyCreated) {
-                return;
-            }
-
-            $progress = LearnerProgress::whereKey($progress->id)->lockForUpdate()->first();
-
-            // Only update if offline data shows more attempts (prevents rolling back progress)
-            if ($validated['questions_attempted'] > $progress->questions_attempted) {
-                $progress->update([
-                    'questions_attempted' => $validated['questions_attempted'],
-                    'questions_correct' => $validated['questions_correct'],
-                    'mastery_score' => max($progress->mastery_score, $validated['mastery_score']),
-                    'ability_score' => $validated['ability_score'] ?? $progress->ability_score,
-                    'last_attempted_at' => now(),
-                ]);
-            }
-        });
-
-        return response()->json(['success' => true]);
+        return response()->json(['success' => true, 'progress' => $progress]);
     }
 
     /**
@@ -83,7 +55,7 @@ class SyncController extends Controller
      */
     public function syncGamification(SyncGamificationRequest $request): JsonResponse
     {
-        $profile = app(GamificationService::class)->getProfile(auth()->user());
+        $profile = $this->gamification->getProfile(auth()->user());
 
         return response()->json([
             'success' => true,

@@ -1,0 +1,76 @@
+name: ✅ Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  php:
+    name: PHP tests (SQLite and MySQL) and code style
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      # Production runs MySQL: row locks, collation and foreign keys behave differently on SQLite.
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: offline_ai_learning_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, pdo_sqlite, dom, filter, gd, json, zip, curl
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare the app
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Code style (Pint)
+        run: ./vendor/bin/pint --test
+
+      # The test DB host and credentials for phpunit.mysql.xml come from these variables.
+      - name: Tests on SQLite
+        run: php artisan test
+
+      - name: Tests on MySQL
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: php artisan test --configuration=phpunit.mysql.xml
+
+  frontend:
+    name: Frontend type check and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx vitest run

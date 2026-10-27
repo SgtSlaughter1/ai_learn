@@ -14,6 +14,7 @@ class TopicFactory extends Factory
     public function definition(): array
     {
         $name = $this->faker->unique()->sentence(3);
+
         return [
             'subject_id' => Subject::factory(),
             'name' => $name,

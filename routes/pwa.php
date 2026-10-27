@@ -21,10 +21,11 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/build/sw.js', function () {
     $path = public_path('build/sw.js');
-    if (!file_exists($path)) {
+    if (! file_exists($path)) {
         return response('/* sw.js not found */', 404)
             ->header('Content-Type', 'application/javascript');
     }
+
     return response(file_get_contents($path), 200)
         ->header('Content-Type', 'application/javascript')
         ->header('Service-Worker-Allowed', '/')
@@ -35,10 +36,11 @@ Route::get('/build/sw.js', function () {
 Route::get('/sw.js', function () {
     // Alias — points to the same built file
     $path = public_path('build/sw.js');
-    if (!file_exists($path)) {
+    if (! file_exists($path)) {
         return response('/* sw.js not found */', 404)
             ->header('Content-Type', 'application/javascript');
     }
+
     return response(file_get_contents($path), 200)
         ->header('Content-Type', 'application/javascript')
         ->header('Service-Worker-Allowed', '/')
@@ -50,10 +52,11 @@ Route::get('/sw.js', function () {
 
 Route::get('/build/workbox-{hash}.js', function (string $hash) {
     $path = public_path("build/workbox-{$hash}.js");
-    if (!file_exists($path)) {
+    if (! file_exists($path)) {
         return response("/* workbox-{$hash}.js not found */", 404)
             ->header('Content-Type', 'application/javascript');
     }
+
     return response(file_get_contents($path), 200)
         ->header('Content-Type', 'application/javascript')
         ->header('Cache-Control', 'public, max-age=31536000, immutable');
@@ -61,13 +64,14 @@ Route::get('/build/workbox-{hash}.js', function (string $hash) {
 
 Route::get('/workbox-{hash}.js', function (string $hash) {
     $path = public_path("build/workbox-{$hash}.js");
-    if (!file_exists($path)) {
+    if (! file_exists($path)) {
         $path = public_path("workbox-{$hash}.js");
     }
-    if (!file_exists($path)) {
+    if (! file_exists($path)) {
         return response("/* workbox-{$hash}.js not found */", 404)
             ->header('Content-Type', 'application/javascript');
     }
+
     return response(file_get_contents($path), 200)
         ->header('Content-Type', 'application/javascript')
         ->header('Cache-Control', 'public, max-age=31536000, immutable');
@@ -78,12 +82,14 @@ Route::get('/workbox-{hash}.js', function (string $hash) {
 Route::get('/build/registerSW.js', function () {
     $path = public_path('build/registerSW.js');
     $body = file_exists($path) ? file_get_contents($path) : '/* SW registered manually in app.blade.php */';
+
     return response($body, 200)->header('Content-Type', 'application/javascript');
 });
 
 Route::get('/registerSW.js', function () {
     $path = public_path('build/registerSW.js');
     $body = file_exists($path) ? file_get_contents($path) : '/* SW registered manually in app.blade.php */';
+
     return response($body, 200)->header('Content-Type', 'application/javascript');
 });
 
@@ -96,13 +102,13 @@ $serveManifest = function () {
         base_path('public/build/manifest.webmanifest'),
         base_path('public/manifest.webmanifest'),
         base_path('manifest.webmanifest'),
-        ($_SERVER['DOCUMENT_ROOT'] ?? '') . '/public/build/manifest.webmanifest',
-        ($_SERVER['DOCUMENT_ROOT'] ?? '') . '/build/manifest.webmanifest',
-        ($_SERVER['DOCUMENT_ROOT'] ?? '') . '/manifest.webmanifest',
+        ($_SERVER['DOCUMENT_ROOT'] ?? '').'/public/build/manifest.webmanifest',
+        ($_SERVER['DOCUMENT_ROOT'] ?? '').'/build/manifest.webmanifest',
+        ($_SERVER['DOCUMENT_ROOT'] ?? '').'/manifest.webmanifest',
     ];
 
     foreach ($candidates as $candidate) {
-        if (!empty($candidate) && file_exists($candidate)) {
+        if (! empty($candidate) && file_exists($candidate)) {
             return response(file_get_contents($candidate), 200)
                 ->header('Content-Type', 'application/manifest+json')
                 ->header('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -147,9 +153,10 @@ Route::get('/manifest.json', $serveManifest);
 
 Route::get('/offline.html', function () {
     $path = public_path('offline.html');
-    if (!file_exists($path)) {
+    if (! file_exists($path)) {
         return response('<h1>You are offline</h1>', 200)->header('Content-Type', 'text/html');
     }
+
     return response(file_get_contents($path), 200)
         ->header('Content-Type', 'text/html; charset=UTF-8')
         ->header('Cache-Control', 'no-cache, no-store, must-revalidate');

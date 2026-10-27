@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('subjects', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('school_id')->nullable()->constrained('schools')->nullOnDelete();
+            $table->foreignId('school_id')->nullable()->constrained('schools')->restrictOnDelete(); // null means "shared with every school", so never null it on delete
             $table->foreignId('class_id')->nullable()->constrained('classes')->nullOnDelete();
             $table->string('name');
             $table->string('slug', 150)->unique();

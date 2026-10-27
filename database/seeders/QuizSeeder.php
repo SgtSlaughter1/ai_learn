@@ -94,7 +94,7 @@ class QuizSeeder extends Seeder
 
         foreach ($subjectSlugs as $slug => $meta) {
             $subject = Subject::where('slug', $slug)->first();
-            if (!$subject) {
+            if (! $subject) {
                 continue;
             }
 
@@ -126,6 +126,6 @@ class QuizSeeder extends Seeder
             );
         }
 
-        $this->command?->info("Successfully seeded dedicated 15-question topic quizzes and comprehensive subject assessments.");
+        $this->command?->info('Successfully seeded dedicated 15-question topic quizzes and comprehensive subject assessments.');
     }
 }

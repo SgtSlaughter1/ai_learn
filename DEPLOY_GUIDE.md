@@ -21,7 +21,7 @@ This guide walks you through the steps to successfully deploy this Laravel + Rea
 - [ ] Database credentials for a production database user.
 - [ ] Mail settings (`MAIL_*`) so password resets work.
 - [ ] AI: `AI_PROVIDER=groq` and `GROQ_API_KEY` (fastest; models default to `openai/gpt-oss-120b`, then `openai/gpt-oss-20b`, each with its own free-tier limits). Keep `GEMINI_API_KEY` set too: Gemini answers automatically when Groq fails or hits its rate limit, and the built-in offline answers cover the rest. Check that the host can reach `api.groq.com`.
-- [ ] `MAINTENANCE_TOKEN` left **empty** if you can run Artisan over SSH. Only on hosts without SSH: set it to `openssl rand -hex 32`, use it, then empty it again.
+- [ ] `MAINTENANCE_TOKEN` left **empty** if you can run Artisan over SSH. Only on hosts without SSH: set it to `openssl rand -hex 32`, use it, then empty it again. To use a maintenance URL (e.g. `/run-seed`), open it in the browser: it shows a confirmation page where you paste the token and press **Run**. The token is never put in the URL, and opening a link alone runs nothing. Over the command line: `curl -X POST -H "X-Maintenance-Token: <token>" https://<your-domain>/run-seed`. Each action is limited to 10 tries a minute per IP and logged.
 - [ ] `ALLOW_DESTRUCTIVE_MAINTENANCE`: `true` only while you are still testing and want `/run-migrate-fresh-seed` (drops **every** table, then migrates and seeds the test accounts). Set it back to `false` once real schools have data on the site.
 
 ### Database
@@ -44,7 +44,7 @@ This guide walks you through the steps to successfully deploy this Laravel + Rea
 - [ ] InfinityFree cannot run a worker or cron: there keep `QUEUE_CONNECTION=sync` (works, slower) and expect limited concurrency. Use a VPS for real school traffic (see section 7).
 
 ### Smoke test after deploying
-- [ ] `/run-migrations`, `/run-migrate-fresh-seed`, `/run-seed`, `/clear-cache` return **404** without the token, and `/run-migrate-fresh-seed` returns **403** in production unless `ALLOW_DESTRUCTIVE_MAINTENANCE=true`.
+- [ ] `/run-migrations`, `/run-migrate-fresh-seed`, `/run-seed`, `/clear-cache` return **404** while `MAINTENANCE_TOKEN` is empty, and their Run button returns **404** with a wrong token. `/run-migrate-fresh-seed` returns **403** in production unless `ALLOW_DESTRUCTIVE_MAINTENANCE=true`.
 - [ ] Sign in as each role (learner, teacher, school admin, platform admin) and open their dashboard.
 - [ ] The header shows **Offline Ready**; on a phone over HTTPS, switch to airplane mode, reload, take a quiz, reconnect, and confirm the score and XP appear.
 - [ ] On the server, delete any old `htdocs/public/robots.txt`, `sitemap.xml`, `llms.txt` and `llms-full.txt` (uploads never delete files; `.htaccess` routes these URLs to Laravel anyway).

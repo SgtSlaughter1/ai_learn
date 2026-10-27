@@ -24,7 +24,6 @@ export interface CategoryItem {
 export interface SchoolItem {
     id: number;
     name: string;
-    category?: 'primary' | 'junior' | 'senior' | 'combined' | string;
     category_ids?: number[];
     category_names?: string[];
     category_type_label?: string;

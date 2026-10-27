@@ -9,4 +9,3 @@ enum UserRole: string
     case TEACHER = 'teacher';
     case LEARNER = 'learner';
 }
-

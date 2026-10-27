@@ -3,29 +3,33 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\UserRole;
+use App\Notifications\ResetPasswordNotification;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Notifications\Notifiable;
-
-use App\Enums\UserRole;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     // SoftDeletes = archiving: archived users keep their quiz history but cannot sign in.
-    use HasFactory, Notifiable, HasUuids, SoftDeletes;
+    use HasFactory, HasUuids, Notifiable, SoftDeletes;
 
-    protected $guarded = [];
+    /**
+     * Only what account forms set. is_active, archived_email and email_verified_at change through
+     * forceFill in the code that owns them, so request data can never switch them.
+     */
+    protected $fillable = ['name', 'email', 'password', 'role'];
 
     /**
      * Get the attributes that should be cast.
@@ -45,12 +49,11 @@ class User extends Authenticatable
     /**
      * Send the password reset notification.
      *
-     * @param string $token
-     * @return void
+     * @param  string  $token
      */
     public function sendPasswordResetNotification($token): void
     {
-        $this->notify(new \App\Notifications\ResetPasswordNotification($token));
+        $this->notify(new ResetPasswordNotification($token));
     }
 
     // --- School Relationships ---
@@ -145,6 +148,7 @@ class User extends Authenticatable
     // ── School scope: the one rule every policy and query scope uses ──
 
     private bool $managedSchoolResolved = false;
+
     private ?int $managedSchoolIdCache = null;
 
     /**
@@ -154,7 +158,7 @@ class User extends Authenticatable
      */
     public function managedSchoolId(): ?int
     {
-        if (!$this->managedSchoolResolved) {
+        if (! $this->managedSchoolResolved) {
             $id = match (true) {
                 $this->isSchoolAdmin() => $this->administeredSchool()->value('id'),
                 $this->isTeacher() => $this->teacherProfile()->value('school_id'),
@@ -165,6 +169,7 @@ class User extends Authenticatable
             $this->managedSchoolIdCache = $id !== null ? (int) $id : null;
             $this->managedSchoolResolved = true;
         }
+
         return $this->managedSchoolIdCache;
     }
 
@@ -178,6 +183,7 @@ class User extends Authenticatable
         if ($this->isPlatformAdmin()) {
             return true;
         }
+
         return $schoolId !== null && $this->managedSchoolId() !== null && (int) $schoolId === $this->managedSchoolId();
     }
 
@@ -188,7 +194,7 @@ class User extends Authenticatable
     public function taughtClassIds(): array
     {
         if ($this->taughtClassIdsCache === null) {
-            $this->taughtClassIdsCache = !$this->isTeacher() ? [] : ClassMembership::where('user_id', $this->id)
+            $this->taughtClassIdsCache = ! $this->isTeacher() ? [] : ClassMembership::where('user_id', $this->id)
                 ->where('role', 'teacher')
                 ->where('is_active', true)
                 ->whereHas('schoolClass', fn ($q) => $q->where('is_active', true))
@@ -196,6 +202,7 @@ class User extends Authenticatable
                 ->map(fn ($id) => (int) $id)
                 ->all();
         }
+
         return $this->taughtClassIdsCache;
     }
 
@@ -229,7 +236,9 @@ class User extends Authenticatable
         if ($this->isPlatformAdmin()) {
             return $requested !== null && $requested !== '' ? (int) $requested : null;
         }
-        return $this->managedSchoolId();
+
+        // Null means "global" (shared with every school), which only platform admins may create.
+        return $this->managedSchoolId() ?? abort(403, 'Your account is not linked to a school.');
     }
 
     /** Accounts the actor may see in admin lists: all for platform admins, else their school's. */
@@ -243,13 +252,24 @@ class User extends Authenticatable
      * default context for school-level screens; everyone else gets their own school or
      * null (never someone else's school).
      */
+    /** Looked up once per request, like managedSchoolId(): scoping calls this several times. */
+    private bool $primarySchoolResolved = false;
+
+    private ?School $primarySchoolCache = null;
+
     public function primarySchool(): ?School
     {
-        if ($this->isPlatformAdmin()) {
-            return School::first();
+        if (! $this->primarySchoolResolved) {
+            if ($this->isPlatformAdmin()) {
+                $this->primarySchoolCache = School::first();
+            } else {
+                $schoolId = $this->managedSchoolId();
+                $this->primarySchoolCache = $schoolId ? School::find($schoolId) : null;
+            }
+            $this->primarySchoolResolved = true;
         }
-        $schoolId = $this->managedSchoolId();
-        return $schoolId ? School::find($schoolId) : null;
+
+        return $this->primarySchoolCache;
     }
 
     /**
@@ -261,6 +281,7 @@ class User extends Authenticatable
         if ($this->isPlatformAdmin()) {
             return true;
         }
+
         return $this->managedSchoolId() !== null;
     }
 
@@ -278,7 +299,7 @@ class User extends Authenticatable
     public function classProgressionWindow(int $aheadCount = 2): array
     {
         $currentClass = $this->primaryClass();
-        if (!$currentClass) {
+        if (! $currentClass) {
             return [];
         }
 
@@ -329,6 +350,7 @@ class User extends Authenticatable
     }
 
     protected ?array $memoizedAllowedGradeLevels = null;
+
     protected ?array $memoizedGradeOptions = null;
 
     /**
@@ -342,11 +364,11 @@ class User extends Authenticatable
         }
 
         if ($this->isPlatformAdmin()) {
-            return $this->memoizedAllowedGradeLevels = School::allowedGradeLevelsForCategory(null);
+            return $this->memoizedAllowedGradeLevels = School::allowedGradeLevelsForCategoryIds(null);
         }
 
         $school = $this->primarySchool();
-        $schoolAllowed = $school ? $school->allowedGradeLevels() : School::allowedGradeLevelsForCategory(null);
+        $schoolAllowed = $school ? $school->allowedGradeLevels() : School::allowedGradeLevelsForCategoryIds(null);
 
         if ($this->isTeacher()) {
             if ($this->relationLoaded('classes')) {
@@ -383,6 +405,7 @@ class User extends Authenticatable
         if ($this->isLearner()) {
             $class = $this->primaryClass();
             $grade = $class?->grade_level ? strtoupper(str_replace(' ', '', (string) $class->grade_level)) : null;
+
             return $this->memoizedAllowedGradeLevels = ($grade ? [$grade] : []);
         }
 
@@ -406,10 +429,11 @@ class User extends Authenticatable
      */
     public function supportsGradeLevel(?string $gradeLevel): bool
     {
-        if (!$gradeLevel) {
+        if (! $gradeLevel) {
             return false;
         }
         $normalized = strtoupper(str_replace(' ', '', $gradeLevel));
+
         return in_array($normalized, $this->allowedGradeLevels(), true);
     }
 
@@ -442,7 +466,7 @@ class User extends Authenticatable
     {
         $this->forceFill([
             'archived_email' => $this->email,
-            'email' => 'archived+' . $this->id . '@archived.invalid',
+            'email' => 'archived+'.$this->id.'@archived.invalid',
             'remember_token' => null,
         ])->save();
         $this->delete();
@@ -463,6 +487,9 @@ class User extends Authenticatable
         }
 
         $schoolId = $this->isPlatformAdmin() ? null : $this->managedSchoolId();
+        if ($schoolId === null && $this->isSchoolAdmin()) {
+            return 'Your account is not linked to a school yet. Please contact the platform administrator.';
+        }
         if ($schoolId !== null && School::whereKey($schoolId)->where('is_active', false)->exists()) {
             return 'Your school\'s account has been deactivated. Please contact your school administrator.';
         }

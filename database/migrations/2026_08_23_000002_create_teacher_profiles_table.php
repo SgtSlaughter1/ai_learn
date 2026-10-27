@@ -10,7 +10,8 @@ return new class extends Migration
     {
         Schema::create('teacher_profiles', function (Blueprint $table) {
             $table->id();
-            $table->uuid('user_id')->constrained('users')->cascadeOnDelete();
+            // One profile per teacher (User::teacherProfile is hasOne). foreignUuid, so the key is really created.
+            $table->foreignUuid('user_id')->unique()->constrained('users')->cascadeOnDelete();
             $table->foreignId('school_id')->constrained('schools')->cascadeOnDelete();
             $table->string('employee_id')->nullable();
             $table->string('department')->nullable();
@@ -18,7 +19,6 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
-            $table->unique(['user_id', 'school_id']);
             $table->index('school_id');
         });
     }
