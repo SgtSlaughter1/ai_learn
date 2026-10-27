@@ -7,7 +7,10 @@ use App\Models\ClassMembership;
 use App\Models\ClassModel;
 use App\Models\Feedback;
 use App\Models\LearnerProfile;
+use App\Models\Question;
 use App\Models\School;
+use App\Models\Subject;
+use App\Models\Topic;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -206,5 +209,27 @@ class AdminSchoolScopeTest extends TestCase
 
         // A school saved without categories counts as senior secondary.
         $this->postJson('/api/v1/admin/schools', ['name' => 'Plain School'])->assertJsonPath('school.category_ids', [3]);
+    }
+
+    public function test_school_admins_see_shared_questions_as_read_only(): void
+    {
+        // Shared subjects (no school) are the platform's: the list must not offer Edit or Delete on
+        // them, or the save fails later with "This action is unauthorized".
+        $sharedTopic = Topic::factory()->create(['subject_id' => Subject::factory()->create(['school_id' => null, 'class_id' => null])->id, 'level' => 'SS1']);
+        $ownTopic = Topic::factory()->create(['subject_id' => Subject::factory()->create(['school_id' => $this->ownClass->school_id, 'class_id' => $this->ownClass->id])->id, 'level' => 'SS1']);
+        $shared = Question::factory()->create(['topic_id' => $sharedTopic->id, 'school_id' => null, 'status' => 'active']);
+        $own = Question::factory()->create(['topic_id' => $ownTopic->id, 'school_id' => $this->ownClass->school_id, 'status' => 'active']);
+
+        $questions = collect($this->actingAs($this->schoolAdmin)->getJson('/api/v1/admin/questions')->assertOk()->json('questions'))->keyBy('id');
+
+        $this->assertSame(['update' => false, 'delete' => false], $questions[$shared->id]['can']);
+        $this->assertSame(['update' => true, 'delete' => true], $questions[$own->id]['can']);
+        $this->patchJson("/api/v1/admin/questions/{$shared->id}", [
+            'topic_id' => $sharedTopic->id,
+            'question_text' => 'Changed',
+            'type' => 'multiple_choice',
+            'difficulty' => 'medium',
+            'options' => [['option_text' => 'A', 'is_correct' => true], ['option_text' => 'B', 'is_correct' => false]],
+        ])->assertForbidden();
     }
 }

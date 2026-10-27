@@ -5,6 +5,7 @@ import { executeAdminAction, setAccountActive } from '@/services/AdminOfflineSer
 import { InactiveBadge } from '@/components/common/InactiveBadge';
 import Pagination from '@/components/common/Pagination';
 import { SkeletonTable } from '@/components/common/Skeleton';
+import { useDismiss } from '@/hooks/useDismiss';
 
 interface SchoolAdminsTabProps {
     admins: SchoolAdminItem[];
@@ -179,6 +180,8 @@ export default function SchoolAdminsTab({
 
     const assignedCount = admins.filter(a => !!a.administered_school || !!a.school_id).length;
     const unassignedCount = admins.length - assignedCount;
+
+    const { backdrop, panel } = useDismiss(isCreateModalOpen, () => { setIsCreateModalOpen(false); resetForm(); });
 
     return (
         <div className="space-y-6">
@@ -474,8 +477,8 @@ export default function SchoolAdminsTab({
 
             {/* Create / Edit School Admin Modal */}
             {isCreateModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
-                    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-scale-up">
+                <div {...backdrop} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+                    <div {...panel} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-scale-up">
                         <div className="px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-background)]">
                             <h3 className="font-bold text-lg text-[var(--color-text)] flex items-center gap-2">
                                 <svg className="w-5 h-5 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">

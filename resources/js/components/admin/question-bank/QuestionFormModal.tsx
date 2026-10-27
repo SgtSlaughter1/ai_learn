@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { confirmAction } from '@/components/common/ConfirmModal';
 import { RichText } from '@/components/common/RichText';
 import 'katex/dist/katex.min.css';
 import type { ClassItem, QuestionContextItem, QuestionItem, SubjectItem, TopicItem } from '@/types/admin';
 import { formatClassOptionLabel, ALL_GRADE_GROUPS, getGradeLevelsForSchool, getGradeLevelsForTeacher } from '@/utils/format';
 import QuestionImageUploader from './QuestionImageUploader';
-import MathToolbar from './MathToolbar';
 import PassageSection from './PassageSection';
-import SubjectTools, { formulaSuggestion } from './SubjectTools';
+import SubjectTools, { formulaSuggestion, usesMathsPanel } from './SubjectTools';
 import { PassageView } from '@/components/quiz/PassageView';
-import { Eye, EyeOff, Plus, Trash2, Image as ImageIcon, Check, Sigma } from 'lucide-react';
+import { Eye, EyeOff, Plus, Trash2, Image as ImageIcon, Check } from 'lucide-react';
 
 export interface QuestionFormData {
     topic_id: string;
@@ -48,6 +48,8 @@ interface QuestionFormModalProps {
     school?: { category?: string | null; category_ids?: number[] | null; allowed_grade_levels?: string[] | null } | null;
     allowedGradeLevels?: string[];
     isTeacher?: boolean;
+    /** Platform admins only: may add questions to shared subjects. */
+    canEditShared?: boolean;
     showToast?: (text: string, type?: 'success' | 'error') => void;
 }
 
@@ -66,6 +68,7 @@ export default function QuestionFormModal({
     school,
     allowedGradeLevels,
     isTeacher,
+    canEditShared = false,
     showToast,
 }: QuestionFormModalProps) {
     const [selectedGradeLevel, setSelectedGradeLevel] = useState<string>('');
@@ -75,12 +78,68 @@ export default function QuestionFormModal({
     const [showLivePreview, setShowLivePreview] = useState(true);
     const [showImageUploader, setShowImageUploader] = useState<boolean>(Boolean(form.image_url));
     const [mobileTab, setMobileTab] = useState<'curriculum' | 'editor' | 'preview'>(() => (editingQuestion ? 'editor' : 'curriculum'));
-    const [showMathMobile, setShowMathMobile] = useState<boolean>(false);
     const [allowMultipleCorrect, setAllowMultipleCorrect] = useState<boolean>(() => {
         return form.options.filter((o) => o.is_correct).length > 1;
     });
 
     const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+    const topicSelectRef = useRef<HTMLSelectElement | null>(null);
+    // Once a topic is chosen the placement rarely changes, so it shows as one summary line
+    // until the teacher asks to change it. (The topic can arrive just after opening, when the
+    // bank's filter fills it in, so this is "expanded on request", not "collapsed on open".)
+    const [curriculumOpen, setCurriculumOpen] = useState(false);
+    // What the teacher had typed when the modal opened (or after the last Save & Next), to tell
+    // whether closing would throw work away. A passage carried over to the next question is
+    // already saved, so it doesn't count.
+    const contentKey = (f: typeof form) =>
+        JSON.stringify([
+            f.question_text.trim(),
+            (f.explanation ?? '').trim(),
+            f.image_url ?? '',
+            f.options.map((o) => [o.option_text.trim(), o.is_correct]),
+            f.context && !f.context_locked ? [f.context.body ?? '', f.context.image_url ?? ''] : null,
+        ]);
+    const savedSnapshotRef = useRef('');
+    const confirmingCloseRef = useRef(false);
+    // Typed something, and it differs from what was there: a blank form (fresh, or just reset by
+    // Save & Next) never asks.
+    const hasText = Boolean(
+        form.question_text.trim() || (form.explanation ?? '').trim() || form.image_url
+        || form.options.some((o) => o.option_text.trim())
+        || (form.context && !form.context_locked && (form.context.body?.trim() || form.context.image_url))
+    );
+    const hasUnsavedWork = hasText && contentKey(form) !== savedSnapshotRef.current;
+
+    const requestClose = async () => {
+        if (confirmingCloseRef.current) return;
+        if (hasUnsavedWork) {
+            confirmingCloseRef.current = true;
+            const discard = await confirmAction({
+                title: 'Discard this question?',
+                message: "What you've typed hasn't been saved and will be lost.",
+                confirmLabel: 'Discard',
+                cancelLabel: 'Keep editing',
+                tone: 'danger',
+            });
+            confirmingCloseRef.current = false;
+            if (!discard) return;
+        }
+        onClose();
+    };
+    const requestCloseRef = useRef(requestClose);
+    requestCloseRef.current = requestClose;
+
+    // Closing or reloading the browser tab warns too.
+    useEffect(() => {
+        if (!isOpen || !hasUnsavedWork) return;
+        const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+        window.addEventListener('beforeunload', warn);
+        return () => window.removeEventListener('beforeunload', warn);
+    }, [isOpen, hasUnsavedWork]);
+    // The field that stopped the last save, shown under that field. The browser's own
+    // "Please fill out this field" bubble is off (noValidate): it can't reach fields on a
+    // hidden mobile step, so Save used to fail there with no message.
+    const [invalid, setInvalid] = useState<{ field: 'topic' | 'prompt' | 'passage' | number; message: string } | null>(null);
     const explanationTextareaRef = useRef<HTMLTextAreaElement | null>(null);
     const optionInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -117,7 +176,10 @@ export default function QuestionFormModal({
         prevIsOpenRef.current = true;
 
         if (justOpened) {
-            setMobileTab(editingQuestion ? 'editor' : 'curriculum');
+            // Placement already known (editing, or carried over from the last question): start writing.
+            setMobileTab(editingQuestion || form.topic_id ? 'editor' : 'curriculum');
+            setCurriculumOpen(false);
+            savedSnapshotRef.current = contentKey(form);
 
             if (form.image_url) {
                 setShowImageUploader(true);
@@ -178,8 +240,17 @@ export default function QuestionFormModal({
         (c) => !selectedGradeLevel || c.grade_level === selectedGradeLevel
     );
 
+    // Shared subjects (no school) belong to the platform: only a platform admin may add to them,
+    // so nobody else is offered one and then refused on save.
+    const canAuthorIn = (subjectId: number | string | null | undefined) => {
+        if (canEditShared) return true;
+        const subject = subjects.find((s) => String(s.id) === String(subjectId));
+        return subject ? subject.school_id != null : false;
+    };
+
     // Filtered subjects based on selected class and/or grade
     const availableSubjects = subjects.filter((s) => {
+        if (!canAuthorIn(s.id)) return false;
         if (selectedClassId) {
             return !s.class_id || String(s.class_id) === String(selectedClassId);
         }
@@ -192,6 +263,9 @@ export default function QuestionFormModal({
 
     // Filtered topics based on selected subject, class, and grade
     const availableTopics = allTopics.filter((t) => {
+        // The question being edited keeps showing its own topic.
+        if (editingQuestion && String(t.id) === String(form.topic_id)) return true;
+        if (!canAuthorIn(t.subject_id)) return false;
         if (selectedSubjectId && String(t.subject_id) !== String(selectedSubjectId)) {
             return false;
         }
@@ -297,27 +371,24 @@ export default function QuestionFormModal({
         }
     };
 
-    // Keyboard shortcut handler for power educators: Cmd/Ctrl+Enter to save, Cmd/Ctrl+Shift+Enter to Save & Add Next
+    // Keyboard shortcuts: Cmd/Ctrl+Enter saves, Cmd/Ctrl+Shift+Enter saves and adds the next one,
+    // Esc closes. Both saves go through handleFormSubmit, so a shortcut can't skip the checks.
+    const submitRef = useRef<(e: React.FormEvent, next?: boolean) => void>(() => {});
     useEffect(() => {
         if (!isOpen) return;
 
         const handleKeyDown = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                 e.preventDefault();
-                if (e.shiftKey && onSaveAndAddNext && !editingQuestion) {
-                    onSaveAndAddNext(e as any);
-                } else {
-                    const formElement = promptTextareaRef.current?.closest('form');
-                    if (formElement) {
-                        formElement.requestSubmit();
-                    }
-                }
+                submitRef.current(e as unknown as React.FormEvent, e.shiftKey && Boolean(onSaveAndAddNext) && !editingQuestion);
+            } else if (e.key === 'Escape') {
+                requestCloseRef.current();
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, onSaveAndAddNext, editingQuestion]);
+    }, [isOpen, onSaveAndAddNext, editingQuestion, onClose]);
 
     // Math Insertion Logic: Inserts snippet at current cursor or appends to active target field
     const handleInsertMath = (snippet: string) => {
@@ -418,30 +489,37 @@ export default function QuestionFormModal({
         return form.question_text;
     };
 
+    useEffect(() => setInvalid(null), [form]);
+
     const handleFormSubmit = (e: React.FormEvent, isSaveAndNext: boolean = false) => {
         if (e && typeof e.preventDefault === 'function') {
             e.preventDefault();
         }
+        // Show the step that holds the field, then focus it once it is visible.
+        const block = (field: 'topic' | 'prompt' | 'passage' | number, message: string, target?: HTMLElement | null) => {
+            setInvalid({ field, message });
+            setMobileTab(field === 'topic' ? 'curriculum' : 'editor');
+            requestAnimationFrame(() => {
+                target?.focus();
+                target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            });
+        };
         if (!form.topic_id) {
-            setMobileTab('curriculum');
-            if (showToast) {
-                showToast('Please select a curriculum topic for this question', 'error');
-            }
-            return;
+            setCurriculumOpen(true);
+            return block('topic', 'Choose a topic for this question.', topicSelectRef.current);
         }
         if (!form.question_text.trim()) {
-            setMobileTab('editor');
-            if (showToast) {
-                showToast('Please enter the question prompt', 'error');
-            }
-            promptTextareaRef.current?.focus();
-            return;
+            return block('prompt', 'Write the question.', promptTextareaRef.current);
         }
         if (form.context && !form.context.body?.trim() && !form.context.image_url) {
-            setMobileTab('editor');
-            showToast?.('Add the passage text or a picture, or untick "This question is about a passage".', 'error');
-            return;
+            return block('passage', 'Add the passage text or a picture, or untick "This question is about a passage".');
         }
+        const emptyOption = form.options.findIndex((o) => !o.option_text.trim());
+        if (emptyOption !== -1) {
+            const letter = String.fromCharCode(65 + emptyOption);
+            return block(emptyOption, `Option ${letter} is empty. Fill it in or remove it.`, optionInputRefs.current[emptyOption]);
+        }
+        setInvalid(null);
         if (isSaveAndNext && onSaveAndAddNext) {
             onSaveAndAddNext(e);
         } else {
@@ -449,20 +527,26 @@ export default function QuestionFormModal({
         }
     };
 
+    submitRef.current = handleFormSubmit;
+
     if (!isOpen) return null;
 
+    const fieldError = (field: 'topic' | 'prompt' | 'passage' | number) =>
+        invalid?.field === field ? (
+            <p id="question-error" role="alert" className="mt-1 text-xs font-semibold text-[var(--color-error)]">
+                {invalid.message}
+            </p>
+        ) : null;
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 md:p-6 bg-black/60 backdrop-blur-md animate-fade-in">
-            <div className="bg-[var(--color-surface)] border-0 sm:border border-[var(--color-border)] rounded-none sm:rounded-2xl md:rounded-3xl p-3 sm:p-6 max-w-5xl xl:max-w-6xl w-full shadow-2xl space-y-3 sm:space-y-4 h-full sm:h-auto max-h-screen sm:max-h-[94vh] flex flex-col">
+        <div onMouseDown={(e) => { if (e.target === e.currentTarget) requestClose(); }} className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 md:p-6 bg-black/60 backdrop-blur-md animate-fade-in">
+            <div role="dialog" aria-modal="true" aria-labelledby="question-modal-title" className="bg-[var(--color-surface)] border-0 sm:border border-[var(--color-border)] rounded-none sm:rounded-2xl md:rounded-3xl p-3 sm:p-6 max-w-5xl xl:max-w-6xl w-full shadow-2xl space-y-3 sm:space-y-4 h-full sm:h-auto max-h-screen sm:max-h-[94vh] flex flex-col">
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-2.5 sm:pb-3 shrink-0">
                     <div>
-                        <h3 className="text-base sm:text-xl font-bold text-[var(--color-text)] tracking-tight">
+                        <h3 id="question-modal-title" className="text-base sm:text-xl font-bold text-[var(--color-text)] tracking-tight">
                             {editingQuestion ? 'Edit Question' : 'Add New Question'}
                         </h3>
-                        <p className="text-[11px] sm:text-xs text-[var(--color-muted)] mt-0.5">
-                            Author questions, select correct answers, and preview in real time.
-                        </p>
                     </div>
                     <div className="flex items-center gap-1.5 sm:gap-2">
                         <button
@@ -488,7 +572,7 @@ export default function QuestionFormModal({
 
                         <button
                             type="button"
-                            onClick={onClose}
+                            onClick={requestClose}
                             className="p-1.5 rounded-xl text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors cursor-pointer"
                             aria-label="Close modal"
                         >
@@ -510,11 +594,11 @@ export default function QuestionFormModal({
                                 : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
                         }`}
                     >
-                        <span>🎯 1. Curriculum</span>
+                        <span>1. Curriculum</span>
                         {form.topic_id ? (
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                         ) : (
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" aria-label="Topic not chosen" />
                         )}
                     </button>
                     <button
@@ -526,7 +610,7 @@ export default function QuestionFormModal({
                                 : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
                         }`}
                     >
-                        <span>✍️ 2. Question</span>
+                        <span>2. Question</span>
                     </button>
                     <button
                         type="button"
@@ -543,7 +627,7 @@ export default function QuestionFormModal({
                 </div>
 
                 {/* Form Body: 2-Column Split Studio on Desktop */}
-                <form onSubmit={(e) => handleFormSubmit(e)} className="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
+                <form noValidate onSubmit={(e) => handleFormSubmit(e)} className="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
                         
                         {/* ======================================================================= */}
@@ -551,7 +635,37 @@ export default function QuestionFormModal({
                         {/* ======================================================================= */}
                         <div className="lg:col-span-5 space-y-3.5 lg:sticky lg:top-0">
                             
-                            {/* Curriculum Placement Card */}
+                            {/* Curriculum: one summary line once a topic is chosen, the full form otherwise */}
+                            {form.topic_id && !curriculumOpen ? (
+                                <div className={`flex-wrap items-center gap-3 px-3.5 py-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-background)] ${mobileTab === 'curriculum' ? 'flex' : 'hidden lg:flex'}`}>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-bold text-[var(--color-text)] truncate">
+                                            {[selectedGradeLevel || form.grade_level, subjectName, allTopics.find((t) => String(t.id) === String(form.topic_id))?.name]
+                                                .filter(Boolean)
+                                                .join(' · ')}
+                                        </p>
+                                        <p className="text-xs text-[var(--color-muted)] mt-0.5">
+                                            {form.marks ?? 1} {(form.marks ?? 1) === 1 ? 'mark' : 'marks'} · {form.difficulty.charAt(0).toUpperCase() + form.difficulty.slice(1)}
+                                            {form.status !== 'active' && ' · Inactive'}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCurriculumOpen(true)}
+                                        aria-expanded={false}
+                                        className="min-h-11 sm:min-h-8 px-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-xs font-bold text-[var(--color-text)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-primary)] cursor-pointer shrink-0"
+                                    >
+                                        Change
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setMobileTab('editor')}
+                                        className="lg:hidden w-full min-h-11 rounded-xl bg-[var(--color-primary)] text-white text-sm font-bold cursor-pointer"
+                                    >
+                                        Next: write the question
+                                    </button>
+                                </div>
+                            ) : (
                             <div className={`p-3.5 sm:p-4 rounded-2xl bg-[var(--color-background)] border border-[var(--color-border)] space-y-3 shadow-2xs ${mobileTab === 'curriculum' ? 'block' : 'hidden lg:block'}`}>
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -565,9 +679,13 @@ export default function QuestionFormModal({
                                         )}
                                     </div>
                                     {form.topic_id && (
-                                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                                            ✓ Ready
-                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCurriculumOpen(false)}
+                                            className="min-h-11 sm:min-h-8 px-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-xs font-bold text-[var(--color-text)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-primary)] cursor-pointer"
+                                        >
+                                            Done
+                                        </button>
                                     )}
                                 </div>
 
@@ -625,9 +743,12 @@ export default function QuestionFormModal({
                                     </div>
 
                                     <div className="col-span-1 sm:col-span-1">
-                                        <label className="block font-bold text-[var(--color-text)] mb-1 text-[11px]">4. Topic *</label>
+                                        <label htmlFor="question-topic" className="block font-bold text-[var(--color-text)] mb-1 text-[11px]">4. Topic *</label>
                                         <select
-                                            required
+                                            id="question-topic"
+                                            ref={topicSelectRef}
+                                            aria-invalid={invalid?.field === 'topic'}
+                                            aria-describedby={invalid?.field === 'topic' ? 'question-error' : undefined}
                                             value={form.topic_id}
                                             onChange={(e) => {
                                                 const topId = e.target.value;
@@ -642,7 +763,9 @@ export default function QuestionFormModal({
                                                 }
                                             }}
                                             className={`w-full h-9 sm:h-8.5 px-3 pr-8 bg-[var(--color-surface)] border rounded-xl font-semibold outline-none text-sm sm:text-xs cursor-pointer ${
-                                                form.topic_id
+                                                invalid?.field === 'topic'
+                                                    ? 'border-[var(--color-error)] text-[var(--color-muted)]'
+                                                    : form.topic_id
                                                     ? 'border-emerald-500/60 text-[var(--color-text)]'
                                                     : 'border-[var(--color-border)] text-[var(--color-muted)] focus:border-[var(--color-primary)]'
                                             }`}
@@ -654,11 +777,12 @@ export default function QuestionFormModal({
                                                 </option>
                                             ))}
                                         </select>
+                                        {fieldError('topic')}
                                     </div>
 
-                                    <div className="col-span-1 sm:col-span-2 grid grid-cols-3 gap-2 pt-2 border-t border-[var(--color-border)]/60">
+                                    <div className="col-span-1 sm:col-span-2 grid grid-cols-[4.5rem_1fr_1fr] gap-2 pt-2 border-t border-[var(--color-border)]/60">
                                         <div>
-                                            <label className="block font-bold text-[var(--color-text)] mb-1 text-[11px]">Marks / Pts</label>
+                                            <label className="block font-bold text-[var(--color-text)] mb-1 text-[11px]">Marks</label>
                                             <input
                                                 type="number"
                                                 min={1}
@@ -709,6 +833,7 @@ export default function QuestionFormModal({
                                     </button>
                                 </div>
                             </div>
+                            )}
 
                             {/* Live Student Exam Simulation Preview */}
                             {showLivePreview && (
@@ -826,44 +951,18 @@ export default function QuestionFormModal({
                         {/* ======================================================================= */}
                         <div className={`space-y-3.5 lg:col-span-7 ${mobileTab === 'editor' ? 'block' : 'hidden lg:block'}`}>
                             
-                            {/* Math Studio Palette (Collapsible on mobile, sticky on desktop) */}
-                            <div className="lg:sticky lg:top-0 z-20 bg-[var(--color-surface)]/95 backdrop-blur-md pt-1 pb-2 border-b border-[var(--color-border)] -mx-1 px-1 space-y-1.5 shadow-2xs">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-[11px] font-bold text-[var(--color-muted)] flex items-center gap-1.5">
-                                        <span>Target field:</span>
-                                        <span className="px-2 py-0.5 rounded-full font-extrabold bg-[var(--color-primary-10)] text-[var(--color-primary)] border border-[var(--color-primary)]/20">
-                                            {activeFocus === 'prompt'
-                                                ? 'Question Prompt'
-                                                : typeof activeFocus === 'number'
-                                                ? `Option ${String.fromCharCode(65 + activeFocus)}`
-                                                : 'Explanation'}
-                                        </span>
-                                    </span>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[10px] text-[var(--color-muted)] hidden sm:inline">
-                                            Click formula to insert at cursor
-                                        </span>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowMathMobile(!showMathMobile)}
-                                            className="sm:hidden px-2 py-0.5 rounded-lg text-[10px] font-bold text-[var(--color-primary)] bg-[var(--color-primary-10)] border border-[var(--color-primary)]/30 flex items-center gap-1 cursor-pointer"
-                                        >
-                                            <Sigma className="w-3 h-3" />
-                                            <span>{showMathMobile ? 'Hide Math' : 'Math Formulas'}</span>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className={showMathMobile ? 'block' : 'hidden sm:block'}>
-                                    <MathToolbar
-                                        onInsert={handleInsertMath}
-                                        onFormatCurrentText={handleFormatActiveText}
-                                        currentText={getActiveText()}
-                                    />
-                                </div>
-                            </div>
-
-                            <SubjectTools subjectName={subjectName} onInsert={handleInsertMath} onWrap={handleWrapSelection} />
+                            <SubjectTools
+                                subjectName={subjectName}
+                                targetLabel={activeFocus === 'prompt'
+                                    ? 'the question'
+                                    : typeof activeFocus === 'number'
+                                    ? `option ${String.fromCharCode(65 + activeFocus)}`
+                                    : 'the explanation'}
+                                currentText={getActiveText()}
+                                onInsert={handleInsertMath}
+                                onWrap={handleWrapSelection}
+                                onFormatCurrentText={handleFormatActiveText}
+                            />
 
                             <PassageSection
                                 value={form.context ?? null}
@@ -874,27 +973,32 @@ export default function QuestionFormModal({
                                 questionNumber={form.context_question_number}
                                 showToast={showToast}
                             />
+                            {fieldError('passage')}
 
                             {/* Question Prompt Field */}
                             <div className="space-y-1">
                                 <div className="flex items-center justify-between">
-                                    <label className="font-bold text-[var(--color-text)] text-xs">Question Prompt *</label>
-                                    <span className="text-[10px] text-[var(--color-muted)]">Supports LaTeX ($x^2$) and Markdown</span>
+                                    <label htmlFor="question-prompt" className="font-bold text-[var(--color-text)] text-xs">Question Prompt *</label>
                                 </div>
                                 <textarea
+                                    id="question-prompt"
                                     ref={promptTextareaRef}
-                                    required
+                                    aria-invalid={invalid?.field === 'prompt'}
+                                    aria-describedby={invalid?.field === 'prompt' ? 'question-error' : undefined}
                                     rows={3}
                                     value={form.question_text}
                                     onFocus={() => setActiveFocus('prompt')}
                                     onChange={(e) => setForm({ ...form, question_text: e.target.value })}
                                     className={`w-full px-3.5 py-2.5 bg-[var(--color-background)] border rounded-2xl text-[var(--color-text)] outline-none resize-none font-mono text-[15px] sm:text-xs transition-colors leading-relaxed ${
-                                        activeFocus === 'prompt'
+                                        invalid?.field === 'prompt'
+                                            ? 'border-[var(--color-error)] ring-2 ring-[var(--color-error)]/20'
+                                            : activeFocus === 'prompt'
                                             ? 'border-[var(--color-primary)] ring-2 ring-[var(--color-primary)]/20 shadow-xs'
                                             : 'border-[var(--color-border)]'
                                     }`}
-                                    placeholder="Enter the question prompt here (e.g., Solve for x in $2x^2 + 5x - 3 = 0$)..."
+                                    placeholder={usesMathsPanel(subjectName) ? 'e.g. Solve for x: 2x² + 5x − 3 = 0' : 'e.g. Choose the word nearest in meaning to the underlined word.'}
                                 />
+                                {fieldError('prompt')}
                                 {suggestion && (
                                     <div className="flex flex-wrap items-center gap-2 p-2 rounded-xl bg-[var(--color-primary-5)] border border-[var(--color-primary)]/20 text-[11px]">
                                         <span className="flex-1 min-w-[180px] text-[var(--color-text)]">
@@ -1034,7 +1138,9 @@ export default function QuestionFormModal({
                                                             optionInputRefs.current[idx] = el;
                                                         }}
                                                         type="text"
-                                                        required
+                                                        aria-label={`Option ${String.fromCharCode(65 + idx)}`}
+                                                        aria-invalid={invalid?.field === idx}
+                                                        aria-describedby={invalid?.field === idx ? 'question-error' : undefined}
                                                         value={opt.option_text}
                                                         onFocus={() => setActiveFocus(idx)}
                                                         onChange={(e) => {
@@ -1069,7 +1175,7 @@ export default function QuestionFormModal({
                                                     <div className="flex items-center gap-1.5 truncate pr-1">
                                                         {opt.is_correct ? (
                                                             <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
                                                                 Correct answer
                                                             </span>
                                                         ) : (
@@ -1095,13 +1201,14 @@ export default function QuestionFormModal({
                                         );
                                     })}
                                 </div>
+                                {typeof invalid?.field === 'number' && fieldError(invalid.field)}
                             </div>
 
                             {/* Explanation / Solution Notes */}
                             <div className="space-y-1">
                                 <div className="flex items-center justify-between">
                                     <label className="font-bold text-[var(--color-text)] text-xs">
-                                        Explanation / Solution Working (Optional)
+                                        Explanation (optional)
                                     </label>
                                     <span className="text-[10px] text-[var(--color-muted)]">Shown after quiz completion</span>
                                 </div>
@@ -1116,7 +1223,7 @@ export default function QuestionFormModal({
                                             ? 'border-[var(--color-primary)] ring-2 ring-[var(--color-primary)]/20 shadow-xs'
                                             : 'border-[var(--color-border)]'
                                     }`}
-                                    placeholder="Step-by-step reasoning or mathematical working..."
+                                    placeholder={usesMathsPanel(subjectName) ? 'The working, step by step.' : 'Why the right answer is right.'}
                                 />
                             </div>
 
@@ -1169,7 +1276,7 @@ export default function QuestionFormModal({
                         <div className="grid grid-cols-2 sm:flex sm:items-center justify-end gap-2 sm:gap-2.5 w-full sm:w-auto">
                             <button
                                 type="button"
-                                onClick={onClose}
+                                onClick={requestClose}
                                 disabled={isSubmitting}
                                 className="w-full sm:w-auto justify-center px-4 py-2.5 sm:py-2 text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] bg-[var(--color-surface)] sm:bg-transparent border sm:border-0 border-[var(--color-border)] rounded-xl disabled:opacity-50 cursor-pointer transition-colors"
                             >
@@ -1179,7 +1286,7 @@ export default function QuestionFormModal({
                                 <button
                                     type="button"
                                     onClick={(e) => handleFormSubmit(e, true)}
-                                    disabled={isSubmitting || !form.question_text.trim()}
+                                    disabled={isSubmitting}
                                     className="w-full sm:w-auto justify-center px-3.5 sm:px-4 py-2.5 sm:py-2 bg-[var(--color-surface-hover)] hover:bg-[var(--color-surface)] text-[var(--color-primary)] border border-[var(--color-primary)]/30 hover:border-[var(--color-primary)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5"
                                     title={form.context ? 'Save this question and write the next one about the same passage' : 'Save this question and immediately start drafting the next one with curriculum preserved'}
                                 >
@@ -1189,7 +1296,7 @@ export default function QuestionFormModal({
                             )}
                             <button
                                 type="submit"
-                                disabled={isSubmitting || !form.question_text.trim()}
+                                disabled={isSubmitting}
                                 className={`${!editingQuestion && onSaveAndAddNext ? 'col-span-2 sm:col-auto' : ''} w-full sm:w-auto justify-center px-5 py-2.5 sm:py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2`}
                             >
                                 {isSubmitting ? (

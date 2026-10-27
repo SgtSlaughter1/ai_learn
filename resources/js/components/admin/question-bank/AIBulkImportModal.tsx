@@ -3,6 +3,7 @@ import type { ClassItem, SubjectItem, TopicItem } from '@/types/admin';
 import type { ExtractedQuestion } from '@/utils/questionParser';
 import { formatClassOptionLabel, ALL_GRADE_GROUPS, getGradeLevelsForSchool, getGradeLevelsForTeacher } from '@/utils/format';
 import ExtractedQuestionCard from './ExtractedQuestionCard';
+import { useDismiss } from '@/hooks/useDismiss';
 
 interface AIBulkImportModalProps {
     isOpen: boolean;
@@ -85,6 +86,8 @@ export default function AIBulkImportModal({
         }
         return ALL_GRADE_GROUPS;
     }, [allowedGradeLevels, isTeacher, classes, school]);
+
+    const { backdrop, panel } = useDismiss(isOpen, onClose);
 
     if (!isOpen) return null;
 
@@ -219,8 +222,8 @@ D) 8`);
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md animate-fade-in">
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-scale-up">
+        <div {...backdrop} className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+            <div {...panel} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-scale-up">
                 {/* Header */}
                 <div className="p-4 sm:p-6 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-surface)] gap-3">
                     <div className="flex items-center gap-3 min-w-0">

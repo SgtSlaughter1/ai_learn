@@ -1,4 +1,6 @@
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
+import PageHeader from '@/components/layout/PageHeader';
+import { Globe } from 'lucide-react';
 import { Head, Link } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import { db } from '@/db/database';
@@ -98,19 +100,7 @@ export default function Index() {
 
     return (
         <AuthenticatedLayout
-            header={
-                <div className="space-y-1">
-                    <div className="flex items-center gap-2.5">
-                        <h1 className="text-3xl font-extrabold text-[var(--color-text)] tracking-tight">General Knowledge</h1>
-                        <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-[var(--color-accent-10)] text-[var(--color-accent)] border border-[var(--color-accent-20)]">
-                            Open Library
-                        </span>
-                    </div>
-                    <p className="text-[var(--color-muted)] text-sm max-w-3xl leading-relaxed">
-                        Explore open study materials and extra practice questions across all subjects. Please note: <strong>Questions in General Knowledge are for self-study and broad revision, and are not based on your school's class tests or assignments.</strong>
-                    </p>
-                </div>
-            }
+            header={<PageHeader icon={Globe} title="General Knowledge" subtitle="Open study materials and extra practice across all subjects." />}
         >
             <Head>
                 <title>General Knowledge & Open Curriculum Library | AceDrill</title>
@@ -120,6 +110,10 @@ export default function Index() {
             </Head>
 
             <div className="space-y-6">
+                <p className="text-sm text-[var(--color-muted)] max-w-3xl leading-relaxed">
+                    These questions are for self-study and broad revision. They are not based on your school's class tests or assignments.
+                </p>
+
                 {/* Search Bar */}
                 <div className="max-w-md">
                     <div className="relative">

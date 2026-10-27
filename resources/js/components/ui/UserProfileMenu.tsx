@@ -4,6 +4,7 @@ import { LogOut, ChevronDown, Sun, Moon, Shield, Sparkles, Loader2, RefreshCw, U
 import { useTheme } from '@/hooks/useTheme';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { signOutSafely } from '@/services/SignOut';
+import { confirmAction } from '@/components/common/ConfirmModal';
 
 interface User {
     id: number;
@@ -60,6 +61,13 @@ export default function UserProfileMenu({ user }: UserProfileMenuProps) {
 
     const handleSignOut = async () => {
         setIsOpen(false);
+        const confirmed = await confirmAction({
+            title: 'Sign out?',
+            message: "You'll need your email and password to sign in again, and this account's saved lessons are removed from this device.",
+            confirmLabel: 'Sign out',
+            cancelLabel: 'Stay signed in',
+        });
+        if (!confirmed) return;
         setIsSigningOut(true);
         try {
             await signOutSafely({ onSyncing: setIsSyncingBeforeLogout });

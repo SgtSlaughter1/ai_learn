@@ -5,6 +5,7 @@ import { executeAdminAction, setAccountActive } from '@/services/AdminOfflineSer
 import { InactiveBadge } from '@/components/common/InactiveBadge';
 import Pagination from '@/components/common/Pagination';
 import { Skeleton } from '@/components/common/Skeleton';
+import { useDismiss } from '@/hooks/useDismiss';
 
 interface TeachersTabProps {
     teachers: TeacherItem[];
@@ -243,6 +244,8 @@ export default function TeachersTab({
     });
 
     const paginatedTeachers = filteredTeachers.slice((page - 1) * 50, page * 50);
+
+    const { backdrop, panel } = useDismiss(isCreateModalOpen, () => setIsCreateModalOpen(false));
 
     return (
         <div className="space-y-6">
@@ -577,8 +580,8 @@ export default function TeachersTab({
 
             {/* Create / Edit Teacher Modal */}
             {isCreateModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
-                    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-scale-up">
+                <div {...backdrop} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+                    <div {...panel} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-scale-up">
                         <div className="flex items-center justify-between p-5 border-b border-[var(--color-border)]">
                             <h3 className="text-base font-bold text-[var(--color-text)] flex items-center gap-2">
                                 <span className="p-1.5 rounded-lg bg-[var(--color-primary-10)] text-[var(--color-primary)]">

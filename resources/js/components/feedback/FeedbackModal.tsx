@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { submitFeedback } from '@/services/FeedbackOutbox';
+import { useDismiss } from '@/hooks/useDismiss';
 
 interface FeedbackModalProps {
     isOpen: boolean;
@@ -20,6 +21,8 @@ export default function FeedbackModal({
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const { backdrop, panel } = useDismiss(isOpen, onClose);
 
     if (!isOpen) return null;
 
@@ -63,8 +66,8 @@ export default function FeedbackModal({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs">
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl max-w-lg w-full p-5 sm:p-7 shadow-2xl relative max-h-[92vh] overflow-y-auto">
+        <div {...backdrop} className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs">
+            <div {...panel} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl max-w-lg w-full p-5 sm:p-7 shadow-2xl relative max-h-[92vh] overflow-y-auto">
                 <button
                     type="button"
                     onClick={handleClose}

@@ -1,7 +1,8 @@
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
+import PageHeader from '@/components/layout/PageHeader';
 import { Head, Link } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
-import { WifiOff, RefreshCw } from 'lucide-react';
+import { Layers, WifiOff, RefreshCw } from 'lucide-react';
 import { getFreshFlashcards } from '@/services/OfflineService';
 import type { CachedFlashcard } from '@/db/database';
 import { FlashcardCard } from '@/components/flashcards/FlashcardCard';
@@ -10,6 +11,7 @@ import { FlashcardSessionComplete } from '@/components/flashcards/FlashcardSessi
 import { FlashcardProgressBar } from '@/components/flashcards/FlashcardProgressBar';
 import { getSyncUser } from '@/services/SyncQueue';
 import { sendOrQueue } from '@/services/SyncService';
+import { earnRecess } from '@/services/Recess';
 
 export default function Index() {
     const [loading, setLoading] = useState<boolean>(true);
@@ -71,6 +73,8 @@ export default function Index() {
         const localXp = finalRatings.reduce((sum, r) => sum + (r === 'easy' ? 2 : r === 'good' ? 1 : 0), 0)
             + (finalRatings.length > 0 ? 5 : 0);
 
+        if (finalRatings.length > 0) earnRecess('flashcards');
+
         try {
             // Signed-out visitors have nothing to save.
             if (!getSyncUser()) {
@@ -123,34 +127,7 @@ export default function Index() {
 
     return (
         <AuthenticatedLayout
-            header={
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div>
-                        <h1 className="text-3xl font-extrabold text-[var(--color-text)] tracking-tight">
-                            Active Recall
-                        </h1>
-                        <p className="text-[var(--color-muted)] mt-1">
-                            Review weak topics with flashcards and spaced repetition.
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        {isOffline && (
-                            <span className="px-3 py-1.5 rounded-xl bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20 text-[var(--color-accent)] text-xs font-bold flex items-center gap-1.5">
-                                <WifiOff className="w-3.5 h-3.5" />
-                                Offline
-                            </span>
-                        )}
-                        <button
-                            type="button"
-                            onClick={fetchDeck}
-                            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-[var(--color-text)] hover:text-white bg-[var(--color-surface)] hover:bg-[var(--color-primary)] border border-[var(--color-border)] hover:border-[var(--color-primary)] rounded-xl transition-all focus:outline-none min-h-[48px] cursor-pointer shadow-2xs"
-                        >
-                            <RefreshCw className="w-4 h-4" />
-                            Refresh Deck
-                        </button>
-                    </div>
-                </div>
-            }
+            header={<PageHeader icon={Layers} title="Active Recall" subtitle="Review weak topics with flashcards and spaced repetition." />}
         >
             <Head>
                 <title>Active Recall Flashcards & Spaced Repetition | AceDrill</title>
@@ -158,6 +135,22 @@ export default function Index() {
             </Head>
 
             <div className="max-w-2xl mx-auto py-4 space-y-8">
+                <div className="flex items-center justify-end gap-3">
+                    {isOffline && (
+                        <span className="px-3 py-1.5 rounded-xl bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20 text-[var(--color-accent)] text-xs font-bold flex items-center gap-1.5">
+                            <WifiOff className="w-3.5 h-3.5" />
+                            Offline
+                        </span>
+                    )}
+                    <button
+                        type="button"
+                        onClick={fetchDeck}
+                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-[var(--color-text)] hover:text-white bg-[var(--color-surface)] hover:bg-[var(--color-primary)] border border-[var(--color-border)] hover:border-[var(--color-primary)] rounded-xl transition-all focus:outline-none min-h-[48px] cursor-pointer shadow-2xs"
+                    >
+                        <RefreshCw className="w-4 h-4" />
+                        Refresh Deck
+                    </button>
+                </div>
                 {loading ? (
                     <div className="space-y-6 animate-pulse">
                         <div className="flex justify-between items-center text-sm font-semibold text-[var(--color-muted)]">

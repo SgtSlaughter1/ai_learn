@@ -13,6 +13,7 @@ import { sendOrQueue, syncAll } from '../../services/SyncService';
 import { formatMathText, extractLiteratureContext } from '../../utils/mathFormatter';
 import { reviewAnswer } from '../../services/AnswerKey';
 import { AiExplanationDrawer } from '../quiz/AiExplanationDrawer';
+import { earnRecess } from '../../services/Recess';
 import {
     Sparkles,
     CheckCircle2,
@@ -26,6 +27,7 @@ import {
     Lightbulb,
     Clock,
 } from 'lucide-react';
+import { useDismiss } from '@/hooks/useDismiss';
 
 interface Props {
     items: RevisionQueueItem[];
@@ -151,6 +153,7 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
         void flushReview();
         onClose();
     };
+    const { backdrop, panel } = useDismiss(true, handleClose);
 
     const handleExplainMistake = async () => {
         if (!currentItem) return;
@@ -226,6 +229,8 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
             streak_maintained: true,
         };
 
+        if (totalItems > 0) earnRecess('revision');
+
         try {
             const result = getSyncUser()
                 ? await sendOrQueue<{ success: boolean; data: RevisionSessionCompleteResult }>({
@@ -255,8 +260,8 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
     const earnedBonusXp = completionResult?.bonus_xp !== undefined ? completionResult.bonus_xp : correctCount;
 
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-3 md:p-6 overflow-y-auto animate-fade-in">
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+        <div {...backdrop} className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-3 md:p-6 overflow-y-auto animate-fade-in">
+            <div {...panel} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
                 {/* Modal Top Header */}
                 <div className="p-3.5 sm:p-5 border-b border-[var(--color-border)] bg-[var(--color-surface-hover)] flex items-start sm:items-center justify-between gap-2.5">
                     <div className="flex items-center gap-2.5 min-w-0">

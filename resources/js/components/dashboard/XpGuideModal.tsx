@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom';
 import { CheckCircle2, FileText, Sparkles, BookOpen, Flame, Trophy, X, HelpCircle } from 'lucide-react';
+import { useDismiss } from '@/hooks/useDismiss';
 
 interface XpGuideModalProps {
     isOpen: boolean;
@@ -16,11 +17,13 @@ const XP_RULES = [
 ];
 
 export function XpGuideModal({ isOpen, onToggle }: XpGuideModalProps) {
+    const { backdrop, panel } = useDismiss(isOpen, onToggle);
+
     if (!isOpen) return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[var(--color-overlay)] backdrop-blur-sm animate-fade-in">
-            <div
+        <div {...backdrop} className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[var(--color-overlay)] backdrop-blur-sm animate-fade-in">
+            <div {...panel}
                 className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl text-[var(--color-text)] flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >

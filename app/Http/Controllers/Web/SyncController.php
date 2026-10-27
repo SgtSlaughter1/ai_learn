@@ -78,11 +78,13 @@ class SyncController extends Controller
         '#^/api/v1/progress/sync$#',
         '#^/api/v1/revision/(submit|complete-session)$#',
         '#^/api/v1/flashcards/complete$#',
+        '#^/api/v1/recess/wins$#',
         '#^/api/v1/past-questions/simulation/submit$#',
         '#^/api/v1/admin/(learners|teachers|classes|subjects|topics|questions|schools|school-admins)(/[A-Za-z0-9-]+)?$#',
         '#^/api/v1/admin/questions/bulk$#',
         '#^/api/v1/admin/question-contexts/\d+(/order)?$#',
         '#^/api/v1/admin/(users|schools)/[A-Za-z0-9_-]+/status$#',
+        '#^/api/v1/admin/schools/\d+/recess$#',
         '#^/api/v1/admin/classes/\d+/(enroll|learners/[A-Za-z0-9-]+)$#',
         '#^/api/v1/teacher/(learners|interventions/assign|classes/\d+/enroll)$#',
     ];

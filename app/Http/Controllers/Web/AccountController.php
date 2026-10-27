@@ -24,13 +24,99 @@ class AccountController extends Controller
     {
         $user = $request->user();
         $schoolId = $user->isPlatformAdmin() ? null : $user->managedSchoolId();
+        $school = $schoolId ? School::find($schoolId) : null;
 
         return Inertia::render('Profile', [
             'profile' => [
-                'school_name' => $schoolId ? School::whereKey($schoolId)->value('name') : null,
+                'school_name' => $school?->name,
                 'member_since' => $user->created_at?->toDateString(),
+                'school' => $school ? [
+                    'name' => $school->name,
+                    'levels' => $school->category_type_label,
+                    'address' => collect([$school->address, $school->city, $school->state])->filter()->unique()->implode(', ') ?: null,
+                    'phone' => $school->phone,
+                    'email' => $school->email,
+                ] : null,
+                'learner' => $user->isLearner() ? [
+                    'student_id' => $user->learnerProfile?->student_id,
+                    'grade_level' => $user->learnerProfile?->grade_level,
+                ] : null,
+                'teacher' => $user->isTeacher() ? [
+                    'employee_id' => $user->teacherProfile?->employee_id,
+                    'department' => $user->teacherProfile?->department,
+                ] : null,
+                'classes' => match (true) {
+                    $user->isLearner(), $user->isTeacher() => $this->classesOf($user),
+                    $user->isSchoolAdmin() && $school !== null => $this->schoolClasses($school),
+                    default => [],
+                },
+                'school_counts' => $school ? [
+                    'teachers' => $school->teachers()->count(),
+                    'learners' => $school->learners()->count(),
+                    'classes' => $school->classes()->where('is_active', true)->count(),
+                ] : null,
+                'schools' => $user->isPlatformAdmin() ? $this->allSchools() : [],
             ],
         ]);
+    }
+
+    /** Every active class in a school admin's school, with teachers and learner numbers. */
+    private function schoolClasses(School $school): array
+    {
+        return $school->classes()
+            ->where('is_active', true)
+            ->with('teacherUsers:users.id,users.name')
+            ->withCount('learnerUsers')
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($class) => [
+                'id' => $class->id,
+                'name' => $class->name,
+                'grade_level' => $class->grade_level,
+                'arm' => $class->school_class_arm,
+                'teachers' => $class->teacherUsers->pluck('name')->values()->all(),
+                'learners' => $class->learner_users_count,
+            ])
+            ->all();
+    }
+
+    /** Every school on the platform, for a platform admin's profile. */
+    private function allSchools(): array
+    {
+        return School::with('admin:id,name')
+            ->withCount(['learners', 'teachers', 'classes'])
+            ->orderBy('name')
+            ->get()
+            ->map(fn (School $school) => [
+                'id' => $school->id,
+                'name' => $school->name,
+                'levels' => $school->category_type_label,
+                'city' => $school->city ?: $school->state,
+                'admin' => $school->admin?->name,
+                'is_active' => $school->is_active,
+                'learners' => $school->learners_count,
+                'teachers' => $school->teachers_count,
+                'classes' => $school->classes_count,
+            ])
+            ->all();
+    }
+
+    /** The classes a learner sits in or a teacher teaches, each with its teachers' names. */
+    private function classesOf(User $user): array
+    {
+        return $user->classes()
+            ->where('classes.is_active', true)
+            ->with('teacherUsers:users.id,users.name')
+            ->orderBy('classes.name')
+            ->get()
+            ->map(fn ($class) => [
+                'id' => $class->id,
+                'name' => $class->name,
+                'grade_level' => $class->grade_level,
+                'arm' => $class->school_class_arm,
+                'teachers' => $class->teacherUsers->pluck('name')->values()->all(),
+            ])
+            ->all();
     }
 
     public function deactivate(Request $request): JsonResponse

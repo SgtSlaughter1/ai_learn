@@ -1,4 +1,6 @@
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
+import PageHeader from '@/components/layout/PageHeader';
+import { ClipboardList } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { PastQuestionsHub } from '@/components/past-questions/PastQuestionsHub';
@@ -23,7 +25,7 @@ export default function PastQuestionsIndex() {
     // Logged in user: render with full sidebar navigation
     if (auth?.user) {
         return (
-            <AuthenticatedLayout>
+            <AuthenticatedLayout header={<PageHeader icon={ClipboardList} title="Past Questions" subtitle="JAMB, WAEC, NECO and Post-UTME papers with CBT practice." />}>
                 <Head title="Past Questions & CBT Exam Simulation Hub" />
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                     <PastQuestionsHub />

@@ -17,6 +17,7 @@ export interface AuthUser {
     email: string;
     role: string;
     has_school_access?: boolean;
+    recess_enabled?: boolean;
 }
 
 type Props = Record<string, unknown>;
@@ -64,6 +65,7 @@ const OFFLINE_ROUTES: OfflineRoute[] = [
     { pattern: /^\/quizzes\/attempts\/([^/]+)$/, component: 'quizzes/Result', auth: true, params: (m) => ({ attemptId: m[1] }) },
     { pattern: /^\/quizzes\/(\d+)$/, component: 'quizzes/Show', auth: true, params: (m) => ({ quizId: Number(m[1]) }) },
     { pattern: /^\/flashcards$/, component: 'Flashcards/Index', auth: true },
+    { pattern: /^\/recess$/, component: 'Recess/Index', auth: true },
     { pattern: /^\/profile$/, component: 'Profile', auth: true, defaults: { profile: { school_name: null, member_since: null } } },
 ];
 
@@ -76,7 +78,7 @@ export function homePathsForRole(role: string | undefined): string[] {
         case 'teacher':
             return ['/teacher/dashboard', '/profile'];
         default:
-            return ['/dashboard', '/subjects', '/general-knowledge', '/flashcards', '/past-questions', '/profile'];
+            return ['/dashboard', '/subjects', '/general-knowledge', '/flashcards', '/recess', '/past-questions', '/profile'];
     }
 }
 

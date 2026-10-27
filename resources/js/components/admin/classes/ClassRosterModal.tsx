@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { ClassItem, ClassLearner } from '@/types/admin';
 import Pagination from '@/components/common/Pagination';
+import { useDismiss } from '@/hooks/useDismiss';
 
 interface ClassRosterModalProps {
     isOpen: boolean;
@@ -29,6 +30,7 @@ export default function ClassRosterModal({
     onCreateLearner,
     onRemoveLearner,
 }: ClassRosterModalProps) {
+    const { backdrop, panel } = useDismiss(true, onClose);
     const [actionTab, setActionTab] = useState<'enroll' | 'create'>('enroll');
     const [rosterPage, setRosterPage] = useState(1);
     const [newLearner, setNewLearner] = useState({
@@ -55,8 +57,8 @@ export default function ClassRosterModal({
     const paginatedLearners = classLearners.slice((rosterPage - 1) * 50, rosterPage * 50);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md animate-fade-in">
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 max-w-3xl w-full shadow-2xl space-y-4 sm:space-y-6 max-h-[92vh] flex flex-col">
+        <div {...backdrop} className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+            <div {...panel} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 max-w-3xl w-full shadow-2xl space-y-4 sm:space-y-6 max-h-[92vh] flex flex-col">
                 <div className="flex items-start sm:items-center justify-between border-b border-[var(--color-border)] pb-4 gap-3">
                     <div className="min-w-0">
                         <h3 className="text-base sm:text-lg font-bold text-[var(--color-text)] truncate">

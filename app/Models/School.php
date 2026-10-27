@@ -16,6 +16,7 @@ class School extends Model
         return [
             'is_active' => 'boolean',
             'category_ids' => 'array',
+            'recess_enabled' => 'boolean',
         ];
     }
 

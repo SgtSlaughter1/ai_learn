@@ -14,6 +14,7 @@ import { AdaptiveFeedbackModal } from '@/components/quiz/AdaptiveFeedbackModal';
 import { PassagePanel } from '@/components/quiz/PassagePanel';
 import type { QuizContext } from '@/components/quiz/PassageView';
 import { passageRuns, pickAttemptQuestions } from '@/services/AttemptQuestions';
+import { earnRecess } from '@/services/Recess';
 
 interface Quiz {
     id: number;
@@ -241,6 +242,7 @@ export default function Show({ quizId }: Props) {
                 })),
                 synced: false,
             });
+            earnRecess('quiz');
 
             // Saved locally first; the sync engine uploads it now if online, or later.
             // The attempt id is generated here, so a retry can never create a second copy.
@@ -314,6 +316,7 @@ export default function Show({ quizId }: Props) {
             setAdaptiveState(data);
 
             if (data.is_completed) {
+                earnRecess('quiz');
                 router.get(`/quizzes/attempts/${data.attempt_id}`);
                 return;
             }

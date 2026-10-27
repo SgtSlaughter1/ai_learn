@@ -5,6 +5,7 @@ import { usePage } from '@inertiajs/react';
 import { ExamSimulationResult } from '../../types/past-questions';
 import { formatMathText, extractLiteratureContext } from '../../utils/mathFormatter';
 import { BookOpen, CheckCircle2 } from 'lucide-react';
+import { useDismiss } from '@/hooks/useDismiss';
 
 interface Props {
     result: ExamSimulationResult;
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) => {
+    const { backdrop, panel } = useDismiss(true, onClose);
     const [activeTab, setActiveTab] = useState<'summary' | 'topics' | 'review'>('summary');
     const [expandedQuestion, setExpandedQuestion] = useState<number | null>(null);
 
@@ -32,8 +34,8 @@ export const ExamResultModal: React.FC<Props> = ({ result, onClose, onRetake }) 
     const isExcellence = score >= 75;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)] backdrop-blur-md p-3 md:p-6 overflow-y-auto animate-fade-in">
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+        <div {...backdrop} className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)] backdrop-blur-md p-3 md:p-6 overflow-y-auto animate-fade-in">
+            <div {...panel} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
                 {/* Header */}
                 <div className="p-4 sm:p-6 border-b border-[var(--color-border)] bg-[var(--color-surface-hover)] flex items-center justify-between gap-3">
                     <div>

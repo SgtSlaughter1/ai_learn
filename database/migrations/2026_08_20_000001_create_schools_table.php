@@ -23,6 +23,8 @@ return new class extends Migration
                 $table->id();
                 $table->string('name');
                 $table->json('category_ids')->nullable();
+                // Learners' in-app Recess (short earned game breaks); the school can switch it off.
+                $table->boolean('recess_enabled')->default(true);
                 $table->string('slug', 150)->unique();
                 $table->string('address')->nullable();
                 $table->string('city')->nullable();

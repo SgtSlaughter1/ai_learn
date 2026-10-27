@@ -6,6 +6,7 @@ import { InactiveBadge } from '@/components/common/InactiveBadge';
 import { getGradeLevelsForSchool, formatClassOptionLabel } from '@/utils/format';
 import Pagination from '@/components/common/Pagination';
 import { Skeleton } from '@/components/common/Skeleton';
+import { useDismiss } from '@/hooks/useDismiss';
 
 interface Props {
     learners: Learner[];
@@ -182,6 +183,8 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
         if (learnerForm.grade_level && c.grade_level && c.grade_level !== learnerForm.grade_level) return false;
         return true;
     });
+
+    const { backdrop, panel } = useDismiss(isLearnerModalOpen, () => setIsLearnerModalOpen(false));
 
     return (
         <div className="space-y-6">
@@ -525,8 +528,8 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
 
             {/* Modal: Learner Create / Edit */}
             {isLearnerModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
-                    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-6">
+                <div {...backdrop} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+                    <div {...panel} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-6">
                         <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-4">
                             <h3 className="text-lg font-bold text-[var(--color-text)]">
                                 {editingLearner ? 'Edit Learner Profile' : 'Enroll New Learner'}

@@ -31,4 +31,10 @@ class SchoolPolicy
     {
         return $user->isPlatformAdmin();
     }
+
+    /** Learner-facing settings such as Recess: the platform, or that school's own admin. */
+    public function manageLearnerSettings(User $user, School $school): bool
+    {
+        return $user->isPlatformAdmin() || ($user->isSchoolAdmin() && $user->managedSchoolId() === $school->id);
+    }
 }

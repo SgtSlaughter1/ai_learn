@@ -276,6 +276,12 @@ class User extends Authenticatable
      * Whether this user is attached to a school (profile, roster or administered school).
      * Independent (self-signup) learners have none and are scoped to general-knowledge content.
      */
+    /** Recess is on unless the learner's school switched it off (learners with no school get it). */
+    public function recessEnabled(): bool
+    {
+        return $this->primarySchool()?->recess_enabled !== false;
+    }
+
     public function hasSchoolAccess(): bool
     {
         if ($this->isPlatformAdmin()) {

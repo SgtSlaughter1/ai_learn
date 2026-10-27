@@ -1,4 +1,6 @@
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
+import PageHeader from '@/components/layout/PageHeader';
+import { BookOpen } from 'lucide-react';
 import { Head } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import { db } from '@/db/database';
@@ -154,23 +156,14 @@ export default function Show({ slug }: Props) {
     return (
         <AuthenticatedLayout
             header={
-                <div className="space-y-3">
-                    {loading ? (
-                        <div className="space-y-2.5">
-                            <Skeleton variant="text" className="h-8 w-1/3" />
-                            <Skeleton variant="text" className="h-4 w-2/3" />
-                        </div>
-                    ) : (
-                        <>
-                            <h1 className="text-3xl font-extrabold text-[var(--color-text)] tracking-tight">
-                                {subject?.name}
-                            </h1>
-                            <p className="text-[var(--color-muted)] max-w-3xl leading-relaxed">
-                                {subject?.description}
-                            </p>
-                        </>
-                    )}
-                </div>
+                loading ? (
+                    <div className="space-y-2">
+                        <Skeleton variant="text" className="h-7 w-48" />
+                        <Skeleton variant="text" className="h-4 w-72" />
+                    </div>
+                ) : (
+                    <PageHeader icon={BookOpen} title={subject?.name ?? 'Subject'} subtitle={subject?.description} />
+                )
             }
         >
             <Head title={loading ? 'Loading Subject...' : `${subject?.name || 'Subject'} Syllabus & Topics | AceDrill`} />

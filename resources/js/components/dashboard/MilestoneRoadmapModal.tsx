@@ -9,6 +9,7 @@ import {
     Check,
 } from 'lucide-react';
 import { GamificationData } from './LevelProgressBar';
+import { useDismiss } from '@/hooks/useDismiss';
 
 interface Props {
     isOpen: boolean;
@@ -28,6 +29,8 @@ export const MilestoneRoadmapModal: React.FC<Props> = ({
     onClose,
     gamification,
 }) => {
+    const { backdrop, panel } = useDismiss(isOpen, onClose);
+
     if (!isOpen) return null;
 
     const streak = gamification?.current_streak ?? 0;
@@ -39,8 +42,8 @@ export const MilestoneRoadmapModal: React.FC<Props> = ({
     const currentDayIndex = (new Date().getDay() + 6) % 7; // Monday = 0
 
     return createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[var(--color-overlay)] backdrop-blur-sm animate-fade-in">
-            <div
+        <div {...backdrop} className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[var(--color-overlay)] backdrop-blur-sm animate-fade-in">
+            <div {...panel}
                 className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl text-[var(--color-text)] flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >

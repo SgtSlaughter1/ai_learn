@@ -17,6 +17,7 @@ use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\FlashcardController;
 use App\Http\Controllers\Web\GamificationController;
 use App\Http\Controllers\Web\QuizWebController;
+use App\Http\Controllers\Web\RecessController;
 use App\Http\Controllers\Web\SubjectWebController;
 use App\Http\Controllers\Web\SyncController;
 use App\Http\Controllers\Web\TeacherDashboardController;
@@ -87,6 +88,7 @@ Route::middleware('auth')->group(function () {
 
     // Active Recall Flashcards
     Route::get('/flashcards', [FlashcardController::class, 'showFlashcardsPage']);
+    Route::get('/recess', [RecessController::class, 'show']);
     Route::get('/profile', [AccountController::class, 'show']);
 
     // Separate JSON Data Routes
@@ -125,6 +127,9 @@ Route::middleware('auth')->group(function () {
         // Flashcards Deck API
         Route::get('/flashcards/deck', [FlashcardController::class, 'getFlashcardDeck']);
         Route::post('/flashcards/complete', [FlashcardController::class, 'completeFlashcardReview']);
+
+        // Recess: earned game breaks; a win can add a little capped XP
+        Route::post('/recess/wins', [RecessController::class, 'recordWin']);
 
         // Gamification & XP System
         Route::get('/gamification/profile', [GamificationController::class, 'profile']);
@@ -181,6 +186,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/admin/stats', [Admin\DashboardController::class, 'stats']);
             Route::get('/admin/categories', [Admin\LookupController::class, 'categories']);
             Route::get('/admin/schools', [Admin\SchoolController::class, 'index']);
+            Route::patch('/admin/schools/{id}/recess', [Admin\SchoolController::class, 'updateRecess']);
 
             Route::get('/admin/teachers', [Admin\TeacherController::class, 'index']);
             Route::post('/admin/teachers', [Admin\TeacherController::class, 'store']);

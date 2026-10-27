@@ -9,6 +9,34 @@ import { OfflineReadinessBadge } from '@/components/dashboard/OfflineReadinessBa
 import { SyncStatus } from '@/components/sync/SyncStatus';
 import { SessionExpiredBanner } from '@/components/sync/SessionExpiredBanner';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { currentSection, openSection, sectionHref } from '@/services/DashboardSection';
+import {
+    BarChart3, BookOpen, Building2, CircleHelp, GraduationCap, LayoutGrid, ShieldCheck, Trophy, Users, UsersRound, Zap,
+    type LucideIcon,
+} from 'lucide-react';
+
+type Section = { key: string; label: string; icon: LucideIcon };
+
+const ADMIN_SECTIONS: (Section & { platformOnly?: boolean })[] = [
+    { key: 'overview', label: 'Overview', icon: LayoutGrid },
+    { key: 'schools', label: 'Schools', icon: Building2, platformOnly: true },
+    { key: 'school_admins', label: 'School Admins', icon: ShieldCheck, platformOnly: true },
+    { key: 'teachers', label: 'Teachers', icon: Users },
+    { key: 'classes', label: 'Classes', icon: UsersRound },
+    { key: 'learners', label: 'Learners', icon: GraduationCap },
+    { key: 'subjects', label: 'Subjects', icon: BookOpen },
+    { key: 'questions', label: 'Question Bank', icon: CircleHelp },
+];
+
+const TEACHER_SECTIONS: Section[] = [
+    { key: 'overview', label: 'Overview', icon: BarChart3 },
+    { key: 'struggling', label: 'Targeted Practice', icon: Zap },
+    { key: 'learners', label: 'Class Roster', icon: Users },
+    { key: 'top', label: 'Top Performers', icon: Trophy },
+    { key: 'questions', label: 'Question Bank', icon: CircleHelp },
+];
+
+const ADMIN_DASHBOARDS = ['/admin/dashboard', '/super-admin/dashboard', '/school-admin/dashboard'];
 
 interface User {
     id: number;
@@ -16,6 +44,7 @@ interface User {
     email: string;
     role: string;
     has_school_access?: boolean;
+    recess_enabled?: boolean;
 }
 
 interface PageProps {
@@ -91,6 +120,17 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
     const isAdmin = isSuperAdmin || isSchoolAdmin;
     const hasSchool = auth?.user?.has_school_access !== false;
 
+    // Admins and teachers move between their dashboard's sections from the sidebar.
+    const currentPath = currentPathWithQuery.split('?')[0];
+    const staffBase = isTeacher ? '/teacher/dashboard' : ADMIN_DASHBOARDS.includes(currentPath) ? currentPath : '/admin/dashboard';
+    const staffSections: Section[] | null = isTeacher
+        ? TEACHER_SECTIONS
+        : isAdmin
+        ? ADMIN_SECTIONS.filter((section) => !section.platformOnly || isSuperAdmin)
+        : null;
+    const onStaffDashboard = currentPath === staffBase;
+    const activeSection = currentSection(currentPathWithQuery.split('?')[1] ?? '');
+
     return (
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex flex-col relative">
             {/* Mobile Clean Top Header Bar */}
@@ -119,38 +159,31 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
 
                     {/* Navigation Items */}
                     <nav className="mt-4 space-y-1">
-                        {isSuperAdmin ? (
-                            <Link
-                                href="/admin/dashboard"
-                                className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/admin/dashboard') || activeRouteClass('/super-admin/dashboard')}`}
-                            >
-                                <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
-                                </svg>
-                                Super Admin Portal
-                            </Link>
-                        ) : isAdmin ? (
-                            <Link
-                                href="/admin/dashboard"
-                                className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/admin/dashboard') || activeRouteClass('/school-admin/dashboard')}`}
-                            >
-                                <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
-                                </svg>
-                                School Admin Portal
-                            </Link>
-                        ) : isTeacher ? (
-                            <Link
-                                href="/teacher/dashboard"
-                                className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/teacher/dashboard') || activeRouteClass('/dashboard')}`}
-                            >
-                                <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0v6" />
-                                </svg>
-                                Teacher Dashboard
-                            </Link>
+                        {staffSections ? (
+                            <>
+                                <p className="px-6 pb-2 text-[11px] font-bold uppercase tracking-wider text-white/45">
+                                    {isSuperAdmin ? 'Platform' : isAdmin ? 'School admin' : 'Teaching'}
+                                </p>
+                                {staffSections.map(({ key, label, icon: Icon }) => {
+                                    const active = onStaffDashboard && activeSection === key;
+                                    return (
+                                        <Link
+                                            key={key}
+                                            href={sectionHref(staffBase, key)}
+                                            onClick={(e) => openSection(e, staffBase, key)}
+                                            aria-current={active ? 'page' : undefined}
+                                            className={`flex items-center px-6 py-3 text-sm transition-all border-l-4 ${
+                                                active
+                                                    ? 'bg-white/10 text-white border-[var(--color-accent)] font-semibold'
+                                                    : 'text-white/70 hover:bg-white/10 hover:text-white border-transparent'
+                                            }`}
+                                        >
+                                            <Icon className="w-5 h-5 mr-3" aria-hidden />
+                                            {label}
+                                        </Link>
+                                    );
+                                })}
+                            </>
                         ) : (
                             <>
                                 <Link
@@ -207,6 +240,18 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                                     </svg>
                                     Active Recall
                                 </Link>
+
+                                {auth?.user?.recess_enabled !== false && (
+                                    <Link
+                                        href="/recess"
+                                        className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/recess')}`}
+                                    >
+                                        <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h1a4 4 0 010 8h-1M3 8h14v9a4 4 0 01-4 4H7a4 4 0 01-4-4V8zm3-6v2m4-2v2m4-2v2" />
+                                        </svg>
+                                        Recess
+                                    </Link>
+                                )}
                             </>
                         )}
                     </nav>
@@ -231,7 +276,13 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                         )}
                     </div>
                     <div className="flex items-center gap-3 shrink-0 ml-4">
-                        <SyncStatus fallback={<OfflineReadinessBadge isOnline={isOnline} />} />
+                        {/* The full status pill only where it leaves the page title room. */}
+                        <div className="hidden xl:block">
+                            <SyncStatus fallback={<OfflineReadinessBadge isOnline={isOnline} />} />
+                        </div>
+                        <div className="xl:hidden">
+                            <SyncStatus compact fallback={<OfflineReadinessBadge isOnline={isOnline} compact />} />
+                        </div>
                         <UserProfileMenu user={auth?.user} />
                     </div>
                 </header>
@@ -239,6 +290,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                 {/* Main Content Body */}
                 <main className="flex-1 px-3.5 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 max-w-7xl w-full mx-auto pb-28 md:pb-16">
                     <SessionExpiredBanner />
+                    {header && <div className="md:hidden mb-4">{header}</div>}
                     {children}
                 </main>
             </div>

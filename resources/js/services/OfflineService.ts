@@ -258,10 +258,17 @@ if (typeof window !== 'undefined') {
 
 // ── Flashcards ──
 
+/**
+ * Store today's deck in place of the last one. Adding to it let old decks pile up on the
+ * device (19 cards from two days), and the server rejects a session of more than one
+ * deck, so the learner's whole session and its XP were lost.
+ */
 export async function cacheFlashcards(flashcards: CachedFlashcard[]): Promise<void> {
-    await db.flashcards.bulkPut(
-        flashcards.map(f => ({ ...f, cached_at: new Date().toISOString() }))
-    );
+    const cachedAt = new Date().toISOString();
+    await db.transaction('rw', db.flashcards, async () => {
+        await db.flashcards.clear();
+        await db.flashcards.bulkPut(flashcards.map((f) => ({ ...f, cached_at: cachedAt })));
+    });
 }
 
 export async function getCachedFlashcards(): Promise<CachedFlashcard[]> {

@@ -1,4 +1,5 @@
 import type { SubjectItem, TopicItem } from '@/types/admin';
+import { useDismiss } from '@/hooks/useDismiss';
 
 interface TopicManagerModalProps {
     subject: SubjectItem | null;
@@ -19,11 +20,12 @@ export default function TopicManagerModal({
     onEditTopic,
     onDeleteTopic,
 }: TopicManagerModalProps) {
+    const { backdrop, panel } = useDismiss(true, onClose);
     if (!subject) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 max-w-2xl w-full shadow-2xl space-y-5 sm:space-y-6 max-h-[92vh] flex flex-col">
+        <div {...backdrop} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+            <div {...panel} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 max-w-2xl w-full shadow-2xl space-y-5 sm:space-y-6 max-h-[92vh] flex flex-col">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--color-border)] pb-4">
                     <div>
                         <h3 className="text-base sm:text-lg font-bold text-[var(--color-text)]">

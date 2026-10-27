@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { ClassItem, SubjectItem } from '@/types/admin';
 import { formatClassOptionLabel, ALL_GRADE_GROUPS, getGradeLevelsForSchool, getGradeLevelsForTeacher } from '@/utils/format';
+import { useDismiss } from '@/hooks/useDismiss';
 
 export interface SubjectFormData {
     name: string;
@@ -72,6 +73,8 @@ export default function SubjectFormModal({
         }
     }, [form.class_id, classes, isOpen]);
 
+    const { backdrop, panel } = useDismiss(isOpen, onClose);
+
     if (!isOpen) return null;
 
     const filteredClasses = classes.filter(
@@ -79,8 +82,8 @@ export default function SubjectFormModal({
     );
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md animate-fade-in">
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-5 sm:space-y-6 max-h-[92vh] overflow-y-auto">
+        <div {...backdrop} className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+            <div {...panel} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-5 sm:space-y-6 max-h-[92vh] overflow-y-auto">
                 <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-4">
                     <h3 className="text-base sm:text-lg font-bold text-[var(--color-text)]">
                         {editingSubject ? 'Edit Subject' : 'Add Subject'}

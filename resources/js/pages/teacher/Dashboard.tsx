@@ -1,4 +1,7 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import PageHeader from '@/components/layout/PageHeader';
+import { SECTION_CHANGE_EVENT } from '@/services/DashboardSection';
+import { CircleHelp, GraduationCap, Trophy, Users, Zap } from 'lucide-react';
 import { confirmAction } from '@/components/common/ConfirmModal';
 import { Head, router, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
@@ -175,7 +178,11 @@ export default function Dashboard({ school, classes = [], selectedClass = null }
             setActiveTab(parseTabFromUrl());
         };
         window.addEventListener('popstate', handlePopState);
-        return () => window.removeEventListener('popstate', handlePopState);
+        window.addEventListener(SECTION_CHANGE_EVENT, handlePopState);
+        return () => {
+            window.removeEventListener('popstate', handlePopState);
+            window.removeEventListener(SECTION_CHANGE_EVENT, handlePopState);
+        };
     }, []);
 
     const handleTabChange = (key: 'overview' | 'learners' | 'top' | 'struggling' | 'questions') => {
@@ -253,9 +260,12 @@ export default function Dashboard({ school, classes = [], selectedClass = null }
     }, [strugglingLearners, strugglingPage]);
 
     const [refreshing, setRefreshing] = useState(false);
+    const statsRef = useRef(stats);
+    statsRef.current = stats;
 
     const fetchStats = async (forceRefresh = false) => {
-        if (forceRefresh) {
+        // Once the page has numbers, later loads (a new class, a sync) refresh them in place.
+        if (forceRefresh || statsRef.current) {
             setRefreshing(true);
         } else {
             setLoading(true);
@@ -378,11 +388,15 @@ export default function Dashboard({ school, classes = [], selectedClass = null }
         }
     };
 
+    // Stats depend on the chosen class; subjects and questions are filtered on the page.
+    useEffect(() => {
+        fetchSubjects();
+        fetchQuestions();
+    }, []);
+
     useEffect(() => {
         setStrugglingPage(1);
         fetchStats();
-        fetchSubjects();
-        fetchQuestions();
 
         const handleDataChange = () => {
             fetchStats();
@@ -420,8 +434,12 @@ export default function Dashboard({ school, classes = [], selectedClass = null }
         return () => clearTimeout(timer);
     }, [toastMessage]);
 
+    // Change class without leaving the open section.
     const selectClass = (classId: number | null) => {
-        router.get('/teacher/dashboard', { class_id: classId }, { preserveState: true, replace: true });
+        const params: Record<string, string> = {};
+        if (classId) params.class_id = String(classId);
+        if (activeTab !== 'overview') params.tab = activeTab;
+        router.get('/teacher/dashboard', params, { preserveState: true, preserveScroll: true, replace: true, only: ['selectedClass'] });
     };
 
     const handleOpenAddLearner = () => {
@@ -588,7 +606,7 @@ export default function Dashboard({ school, classes = [], selectedClass = null }
     if (!school) {
         return (
             <AuthenticatedLayout
-                header={<h1 className="text-2xl font-bold text-[var(--color-text)]">Teacher Dashboard</h1>}
+                header={<PageHeader icon={GraduationCap} title="Teacher Dashboard" />}
             >
                 <Head title="Teacher Dashboard" />
                 <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
@@ -608,14 +626,17 @@ export default function Dashboard({ school, classes = [], selectedClass = null }
 
     const strugglingCount = stats?.struggling_learners?.length || 0;
 
+    const teacherHeader = {
+        overview: { icon: GraduationCap, title: 'Teacher Dashboard', subtitle: `${school.name}: how your classes are doing.` },
+        struggling: { icon: Zap, title: 'Targeted Practice', subtitle: 'Learners who need help, and practice to send them.' },
+        learners: { icon: Users, title: 'Class Roster', subtitle: `Learners in your classes at ${school.name}.` },
+        top: { icon: Trophy, title: 'Top Performers', subtitle: 'Learners doing best in your classes.' },
+        questions: { icon: CircleHelp, title: 'Question Bank', subtitle: 'Write, import and review practice questions.' },
+    }[activeTab];
+
     return (
         <AuthenticatedLayout
-            header={
-                <div>
-                    <h1 className="text-2xl font-bold text-[var(--color-text)]">Teacher Dashboard</h1>
-                    <p className="text-sm text-[var(--color-muted)] mt-1">{school.name}</p>
-                </div>
-            }
+            header={<PageHeader icon={teacherHeader.icon} title={teacherHeader.title} subtitle={teacherHeader.subtitle} />}
         >
             <Head>
                 <title>Teacher Dashboard | AceDrill</title>
@@ -663,9 +684,9 @@ export default function Dashboard({ school, classes = [], selectedClass = null }
             ) : stats ? (
                 <>
                     {/* Single Unified Navigation & Class Filter Bar */}
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between md:justify-end gap-4 mb-6">
                         {/* Navigation Tabs */}
-                        <div className="flex items-center gap-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-1.5 shadow-xs overflow-x-auto max-w-full no-scrollbar">
+                        <div className="md:hidden flex items-center gap-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-1.5 shadow-xs overflow-x-auto max-w-full no-scrollbar">
                             {[
                                 {
                                     key: 'overview' as const,

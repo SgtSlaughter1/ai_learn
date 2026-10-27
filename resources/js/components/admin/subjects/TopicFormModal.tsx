@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import type { TopicItem, ClassItem } from '@/types/admin';
 import { ALL_GRADE_GROUPS, getGradeLevelsForSchool, getGradeLevelsForTeacher } from '@/utils/format';
+import { useDismiss } from '@/hooks/useDismiss';
 
 export interface TopicFormData {
     name: string;
@@ -58,11 +59,13 @@ export default function TopicFormModal({
         return ALL_GRADE_GROUPS;
     }, [allowedGradeLevels, isTeacher, school, classes]);
 
+    const { backdrop, panel } = useDismiss(isOpen, onClose);
+
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md animate-fade-in">
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 max-w-md w-full shadow-2xl space-y-4 sm:space-y-5 max-h-[92vh] overflow-y-auto">
+        <div {...backdrop} className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+            <div {...panel} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 max-w-md w-full shadow-2xl space-y-4 sm:space-y-5 max-h-[92vh] overflow-y-auto">
                 <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-3">
                     <h4 className="text-base font-bold text-[var(--color-text)]">
                         {editingTopic ? 'Edit Topic' : 'Add Topic'}

@@ -12,6 +12,7 @@ use App\Support\ListSize;
 use App\Support\SearchTerm;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
 class SchoolController extends Controller
@@ -121,6 +122,21 @@ class SchoolController extends Controller
         return response()->json([
             'message' => 'School updated successfully',
             'school' => $school->fresh('admin:id,name,email')->loadCount(['classes', 'learnerProfiles as learners_count']),
+        ]);
+    }
+
+    /** Switch learners' Recess (earned game breaks) on or off for one school. */
+    public function updateRecess(Request $request, int $id): JsonResponse
+    {
+        $school = School::findOrFail($id);
+        Gate::authorize('manageLearnerSettings', $school);
+        $validated = $request->validate(['enabled' => ['required', 'boolean']]);
+
+        $school->update(['recess_enabled' => $validated['enabled']]);
+
+        return response()->json([
+            'message' => $school->recess_enabled ? 'Recess is on for your learners.' : 'Recess is off for your learners.',
+            'recess_enabled' => $school->recess_enabled,
         ]);
     }
 

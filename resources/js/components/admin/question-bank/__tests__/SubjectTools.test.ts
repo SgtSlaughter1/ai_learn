@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formulaSuggestion } from '../SubjectTools';
+import { formulaSuggestion, usesMathsPanel } from '../SubjectTools';
 
 describe('formulaSuggestion', () => {
     it('offers chemistry notation for a plainly typed equation', () => {
@@ -18,5 +18,16 @@ describe('formulaSuggestion', () => {
 
     it('offers standard form in any subject', () => {
         expect(formulaSuggestion('Light travels at 3.0 x 10^8 m/s', 'Physics')?.replacement).toBe('$3.0 \\times 10^{8}$');
+    });
+});
+
+describe('usesMathsPanel', () => {
+    it('opens the maths panel only for subjects that live on equations', () => {
+        for (const subject of ['Mathematics', 'Further Mathematics', 'Physics', 'Chemistry']) {
+            expect(usesMathsPanel(subject)).toBe(true);
+        }
+        for (const subject of ['English Language', 'Literature in English', 'Biology', 'Geography', '']) {
+            expect(usesMathsPanel(subject)).toBe(false);
+        }
     });
 });

@@ -1,4 +1,6 @@
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
+import PageHeader from '@/components/layout/PageHeader';
+import { BookOpen } from 'lucide-react';
 import { Head, Link } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import { db } from '@/db/database';
@@ -167,30 +169,21 @@ export default function Index() {
 
     return (
         <AuthenticatedLayout
-            header={
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-3xl font-extrabold text-[var(--color-text)] tracking-tight">School Curriculum</h1>
-                        <p className="text-[var(--color-muted)] mt-1">
-                            Curriculum and practice quizzes for <strong className="text-[var(--color-primary)] font-semibold">{userSchool?.name || 'Your School'}</strong>.
-                        </p>
-                    </div>
-
-                    <Link
-                        href="/general-knowledge"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-xs font-bold text-[var(--color-text)] transition-all self-start md:self-auto shadow-sm"
-                    >
-                        <svg className="w-4 h-4 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>Open General Knowledge</span>
-                    </Link>
-                </div>
-            }
+            header={<PageHeader icon={BookOpen} title="School Curriculum" subtitle={`Curriculum and practice quizzes for ${userSchool?.name || 'your school'}.`} />}
         >
             <Head title="School Curriculum & Subjects | AceDrill" />
 
             <div className="space-y-6">
+                <Link
+                    href="/general-knowledge"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] border border-[var(--color-border)] rounded-xl text-xs font-bold text-[var(--color-text)] transition-all self-start shadow-sm"
+                >
+                    <svg className="w-4 h-4 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Open General Knowledge</span>
+                </Link>
+
                 {/* Search Bar & Class Filter */}
                 <div className="flex flex-col gap-3">
                     {/* Class Filter Tabs */}

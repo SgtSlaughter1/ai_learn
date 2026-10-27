@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sigma, Sparkles, BookOpen, Check } from 'lucide-react';
+import { Sparkles, BookOpen, Check } from 'lucide-react';
 import { formatMathText } from '@/utils/mathFormatter';
 
 export interface MathSnippet {
@@ -114,20 +114,10 @@ export default function MathToolbar({
     };
 
     return (
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-background)] p-3 space-y-2.5 shadow-xs transition-colors">
+        <div className="pt-2 space-y-2">
             {/* Top Toolbar Header */}
             <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-1.5">
-                    <span className="p-1 rounded-lg bg-[var(--color-primary-10)] text-[var(--color-primary)]">
-                        <Sigma className="w-3.5 h-3.5" />
-                    </span>
-                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--color-text)]">
-                        Math Formula Studio
-                    </span>
-                    <span className="text-[10px] text-[var(--color-muted)] hidden sm:inline">
-                        (Click snippet to insert LaTeX equation)
-                    </span>
-                </div>
+                <span className="text-[11px] font-bold text-[var(--color-muted)]">Maths symbols</span>
 
                 <div className="flex items-center gap-2">
                     {onFormatCurrentText && (
@@ -135,8 +125,8 @@ export default function MathToolbar({
                             type="button"
                             onClick={handleAutoFormat}
                             disabled={!currentText.trim()}
-                            title="Auto-detect fractions, powers, and equations in text and convert them to KaTeX notation"
-                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                            title="Turn maths typed plainly (1/2, x^2, sqrt(9)) into proper symbols"
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                                 formatSuccess
                                     ? 'bg-[var(--color-success)] text-white'
                                     : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-primary)] hover:border-[var(--color-primary)]/40 hover:bg-[var(--color-primary-5)]'
@@ -150,7 +140,7 @@ export default function MathToolbar({
                             ) : (
                                 <>
                                     <Sparkles className="w-3 h-3 text-[var(--color-accent)]" />
-                                    <span>Auto-Format Math</span>
+                                    <span>Tidy typed maths</span>
                                 </>
                             )}
                         </button>
@@ -159,16 +149,16 @@ export default function MathToolbar({
                     <button
                         type="button"
                         onClick={() => setIsCheatsheetOpen(!isCheatsheetOpen)}
-                        className="px-2 py-1 rounded-lg text-[10px] font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] bg-[var(--color-surface)] border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] transition-all flex items-center gap-1 cursor-pointer"
+                        className="px-2 py-1 rounded-lg text-[11px] font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] bg-[var(--color-surface)] border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] transition-all flex items-center gap-1 cursor-pointer"
                     >
                         <BookOpen className="w-3 h-3" />
-                        <span>Cheatsheet</span>
+                        <span>Typing maths by hand</span>
                     </button>
                 </div>
             </div>
 
             {/* Category Navigation Pills */}
-            <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[11px] scrollbar-none">
+            <div className="flex flex-wrap items-center gap-1 text-[11px]">
                 {categories.map((cat) => (
                     <button
                         key={cat.id}
@@ -186,14 +176,14 @@ export default function MathToolbar({
             </div>
 
             {/* Snippets Palette */}
-            <div className="flex items-center gap-1.5 flex-wrap max-h-36 overflow-y-auto p-1 bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)]">
+            <div className="flex items-center gap-1.5 flex-wrap">
                 {snippets[activeCategory].map((s, idx) => (
                     <button
                         key={idx}
                         type="button"
                         onClick={() => onInsert(s.latex)}
-                        title={`${s.description || s.label}: Click to insert ${s.latex}`}
-                        className="px-2.5 py-1 rounded-lg bg-[var(--color-background)] hover:bg-[var(--color-primary-5)] border border-[var(--color-border)] hover:border-[var(--color-primary)]/40 text-[var(--color-text)] hover:text-[var(--color-primary)] text-xs font-mono font-bold transition-all active:scale-95 cursor-pointer shadow-2xs flex items-center gap-1"
+                        title={s.description || s.label}
+                        className="min-h-11 sm:min-h-8 px-2.5 py-1 rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-primary-5)] border border-[var(--color-border)] hover:border-[var(--color-primary)]/40 text-[var(--color-text)] hover:text-[var(--color-primary)] text-xs font-mono font-bold transition-all active:scale-95 cursor-pointer shadow-2xs flex items-center gap-1"
                     >
                         <span>{s.display}</span>
                     </button>
@@ -204,8 +194,8 @@ export default function MathToolbar({
             {isCheatsheetOpen && (
                 <div className="p-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-[11px] space-y-2 text-[var(--color-text)] animate-fade-in">
                     <div className="font-extrabold text-[var(--color-primary)] flex items-center justify-between">
-                        <span>LaTeX Mathematical Formatting Quick Guide:</span>
-                        <span className="text-[10px] text-[var(--color-muted)] font-normal">Wrap inline math in $...$</span>
+                        <span>Typing maths by hand</span>
+                        <span className="text-[10px] text-[var(--color-muted)] font-normal">Put maths between $ signs</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-[10px] font-mono">
                         <div className="p-2 rounded-lg bg-[var(--color-background)] border border-[var(--color-border)]">

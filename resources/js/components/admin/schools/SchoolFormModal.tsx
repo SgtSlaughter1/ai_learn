@@ -1,5 +1,6 @@
 import React from 'react';
 import type { SchoolItem } from '@/types/admin';
+import { useDismiss } from '@/hooks/useDismiss';
 
 export interface SchoolFormData {
     name: string;
@@ -35,6 +36,8 @@ export default function SchoolFormModal({
     submitting,
     onSubmit,
 }: SchoolFormModalProps) {
+    const { backdrop, panel } = useDismiss(isOpen, onClose);
+
     if (!isOpen) return null;
 
     const isCombined = form.category === 'combined';
@@ -77,8 +80,8 @@ export default function SchoolFormModal({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md animate-fade-in">
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-scale-up">
+        <div {...backdrop} className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+            <div {...panel} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-scale-up">
                 <div className="px-4 sm:px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-background)]">
                     <h3 className="font-bold text-base sm:text-lg text-[var(--color-text)] flex items-center gap-2">
                         <svg className="w-5 h-5 text-[var(--color-primary)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

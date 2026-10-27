@@ -22,6 +22,8 @@ interface Props {
     school?: { category?: string | null; category_ids?: number[] | null; allowed_grade_levels?: string[] | null } | null;
     allowedGradeLevels?: string[];
     isTeacher?: boolean;
+    /** Platform admins may add to shared subjects (the national banks); everyone else only to their school's. */
+    canEditSharedContent?: boolean;
 }
 
 export default function QuestionBankTab({
@@ -35,7 +37,14 @@ export default function QuestionBankTab({
     school,
     allowedGradeLevels,
     isTeacher,
+    canEditSharedContent = false,
 }: Props) {
+    // Topics a new question may go in: the server refuses shared subjects for anyone but a platform admin.
+    const authorableTopics = allTopics.filter((t) => {
+        if (canEditSharedContent) return true;
+        const subject = subjects.find((s) => String(s.id) === String(t.subject_id));
+        return subject ? subject.school_id != null : false;
+    });
     // ── Filter & Pagination State ──
     const [page, setPage] = useState(1);
     const [questionGradeFilter, setQuestionGradeFilter] = useState('');
@@ -116,7 +125,7 @@ export default function QuestionBankTab({
 
     const resetQuestionForm = () => {
         setQuestionForm({
-            topic_id: allTopics[0]?.id ? String(allTopics[0].id) : '',
+            topic_id: authorableTopics[0]?.id ? String(authorableTopics[0].id) : '',
             grade_level: '',
             marks: 1,
             question_text: '',
@@ -393,10 +402,8 @@ export default function QuestionBankTab({
         if (e && typeof e.preventDefault === 'function') {
             e.preventDefault();
         }
+        // Saving is the expected outcome of this form and loses nothing, so it doesn't ask first.
         if (isSavingQuestion) return;
-        if (!(await confirmAction(editingQuestion
-            ? { title: 'Save changes?', message: 'Save the changes to this question?', confirmLabel: 'Save changes' }
-            : { title: 'Add question?', message: 'Add this question to the question bank?', confirmLabel: 'Add question' }))) return;
         setIsSavingQuestion(true);
 
         try {
@@ -707,6 +714,7 @@ export default function QuestionBankTab({
                 school={school}
                 allowedGradeLevels={allowedGradeLevels}
                 isTeacher={isTeacher}
+                canEditShared={canEditSharedContent}
                 onSubmit={(e) => handleSaveQuestion(e, false)}
                 onSaveAndAddNext={(e) => handleSaveQuestion(e, true)}
                 isSubmitting={isSavingQuestion}

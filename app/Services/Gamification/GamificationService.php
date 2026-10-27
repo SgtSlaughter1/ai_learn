@@ -26,6 +26,12 @@ class GamificationService
 
     public const XP_STREAK_DAILY_BONUS = 5;
 
+    /** A won Recess game. Small on purpose: learning, not games, should move the level. */
+    public const XP_RECESS_WIN = 10;
+
+    /** XP sources that count as learning, the activities that earn a Recess break. */
+    private const LEARNING_SOURCES = ['quiz_complete', 'flashcard_review', 'daily_revision_bonus'];
+
     /**
      * Most XP a learner can earn per server day from sources the device reports (the server can't
      * re-check the ratings or counts). About three full decks or revision sessions; without a cap a
@@ -42,6 +48,8 @@ class GamificationService
     private const DAILY_XP_CAPS = [
         'flashcard_review' => 75,
         'daily_revision_bonus' => 30,
+        // Two wins a day; more games never out-earn a single quiz.
+        'recess_win' => 20,
     ];
 
     /**
@@ -403,6 +411,41 @@ class GamificationService
     /**
      * Award XP to a user and record the transaction log.
      */
+    /**
+     * XP for a won Recess game. Paid only when the learner did some learning that day (the
+     * break was earned), within the daily cap, and without touching the streak: playing is
+     * not a day of study.
+     *
+     * @return array{xp_earned: int, total_xp: int, new_achievements: array}
+     */
+    public function processRecessWin(User $user, string $game, ?Carbon $playedAt = null): array
+    {
+        return DB::transaction(function () use ($user, $game, $playedAt) {
+            $profile = $this->lockProfile($user);
+            $dayStart = ($playedAt ?? now())->copy()->startOfDay();
+
+            $earned = XpTransaction::where('user_id', $user->id)
+                ->whereIn('source', self::LEARNING_SOURCES)
+                ->where('created_at', '>=', $dayStart)
+                ->exists()
+                || QuizAttempt::where('user_id', $user->id)
+                    ->where('status', 'completed')
+                    ->where('completed_at', '>=', $dayStart)
+                    ->exists();
+
+            $xp = $earned ? $this->withinDailyCap($user, 'recess_win', self::XP_RECESS_WIN) : 0;
+            if ($xp > 0) {
+                $this->creditXp($profile, $xp, 'recess_win', 'Recess win: '.str_replace('_', ' ', $game));
+            }
+
+            return [
+                'xp_earned' => $xp,
+                'total_xp' => (int) $profile->total_xp,
+                'new_achievements' => $xp > 0 ? $this->achievements->check($user, $this->getProfile($user)) : [],
+            ];
+        });
+    }
+
     public function awardXp(User $user, int $amount, string $source, ?string $description = null, ?Carbon $activityAt = null): array
     {
         return DB::transaction(fn () => $this->awardXpLocked($user, $amount, $source, $description, $activityAt));

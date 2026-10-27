@@ -24,6 +24,7 @@ import {
 } from '@/services/AdminOfflineService';
 import { syncAll } from '@/services/SyncService';
 import OverviewTab from '@/components/admin/OverviewTab';
+import RecessSettingCard from '@/components/admin/RecessSettingCard';
 import SchoolsTab from '@/components/admin/SchoolsTab';
 import SchoolAdminsTab from '@/components/admin/SchoolAdminsTab';
 import TeachersTab from '@/components/admin/TeachersTab';
@@ -32,6 +33,9 @@ import LearnersTab from '@/components/admin/LearnersTab';
 import SubjectsTab from '@/components/admin/SubjectsTab';
 import QuestionBankTab from '@/components/admin/QuestionBankTab';
 import type { Abilities } from '@/types';
+import PageHeader from '@/components/layout/PageHeader';
+import { SECTION_CHANGE_EVENT } from '@/services/DashboardSection';
+import { BookOpen, Building2, CircleHelp, GraduationCap, ShieldCheck, Users, UsersRound, type LucideIcon } from 'lucide-react';
 
 export default function Dashboard() {
     const { auth } = usePage<{ auth: { user: { id: number; name: string; email: string; role: string }; can?: Abilities | null } }>().props;
@@ -58,7 +62,11 @@ export default function Dashboard() {
             setActiveTab(parseTabFromUrl());
         };
         window.addEventListener('popstate', handlePopState);
-        return () => window.removeEventListener('popstate', handlePopState);
+        window.addEventListener(SECTION_CHANGE_EVENT, handlePopState);
+        return () => {
+            window.removeEventListener('popstate', handlePopState);
+            window.removeEventListener(SECTION_CHANGE_EVENT, handlePopState);
+        };
     }, []);
 
     const handleTabChange = (key: 'overview' | 'schools' | 'school_admins' | 'teachers' | 'classes' | 'learners' | 'subjects' | 'questions') => {
@@ -501,8 +509,25 @@ export default function Dashboard() {
 
     const visibleTabs = allTabs.filter(tab => !tab.superAdminOnly || isSuperAdmin);
 
+    const schoolName = stats?.school?.name || schools[0]?.name || 'School';
+    const SECTION_HEADERS: Record<typeof activeTab, { icon: LucideIcon; title: string; subtitle: string }> = {
+        overview: isSuperAdmin
+            ? { icon: Building2, title: 'Super Admin Command Center', subtitle: 'Platform oversight, school provisioning, admin assignment and shared curriculum.' }
+            : { icon: Building2, title: `${schoolName} Admin Portal`, subtitle: `School administration for ${schoolName}: manage classes, learners, and learning performance.` },
+        schools: { icon: Building2, title: 'Schools', subtitle: 'Create schools, set their levels and assign admins.' },
+        school_admins: { icon: ShieldCheck, title: 'School Admins', subtitle: 'The people who run each school on AceDrill.' },
+        teachers: { icon: Users, title: 'Teachers', subtitle: isSuperAdmin ? 'Teachers across every school.' : `Teachers at ${schoolName} and the classes they take.` },
+        classes: { icon: UsersRound, title: 'Classes', subtitle: isSuperAdmin ? 'Classes across every school.' : `Classes at ${schoolName}, their teachers and learners.` },
+        learners: { icon: GraduationCap, title: 'Learners', subtitle: isSuperAdmin ? 'Learners across every school.' : `Learners at ${schoolName}: enrol, move and manage accounts.` },
+        subjects: { icon: BookOpen, title: 'Subjects', subtitle: 'Subjects and topics in the curriculum.' },
+        questions: { icon: CircleHelp, title: 'Question Bank', subtitle: 'Write, import and review practice questions.' },
+    };
+    const activeSection = SECTION_HEADERS[activeTab];
+    const headerTitle = activeSection.title;
+    const headerSubtitle = activeSection.subtitle;
+
     return (
-        <AuthenticatedLayout>
+        <AuthenticatedLayout header={<PageHeader icon={activeSection.icon} title={headerTitle} subtitle={headerSubtitle} />}>
             <Head>
                 <title>{isSuperAdmin ? "Super Admin Command Center | AceDrill" : `${stats?.school?.name || 'School'} Admin Portal | AceDrill`}</title>
                 <meta name="robots" content="noindex, nofollow" />
@@ -527,28 +552,8 @@ export default function Dashboard() {
                     </div>
                 )}
 
-                {/* Header Title */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--color-text)] flex items-center gap-3">
-                            <span className="p-2 bg-[var(--color-primary-5)] text-[var(--color-primary)] border border-[var(--color-border)] rounded-xl">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                </svg>
-                            </span>
-                            {isSuperAdmin ? 'Super Admin Command Center' : `${stats?.school?.name || 'School'} Admin Portal`}
-                        </h1>
-                        <p className="text-[var(--color-muted)] text-sm mt-1">
-                            {isSuperAdmin 
-                                ? 'Super admin platform oversight, school provisioning, admin assignment, and global curriculum management.'
-                                : `School administration for ${stats?.school?.name || 'your institution'}: manage classes, learners, and learning performance.`
-                            }
-                        </p>
-                    </div>
-                </div>
-
-                {/* Navigation Tabs */}
-                <div className="flex items-center gap-2 border-b border-[var(--color-border)] pb-2 overflow-x-auto">
+                {/* Sections (the sidebar does this on larger screens) */}
+                <div className="md:hidden flex items-center gap-2 border-b border-[var(--color-border)] pb-2 overflow-x-auto">
                     {visibleTabs.map((tab) => (
                         <button
                             key={tab.id}
@@ -574,7 +579,12 @@ export default function Dashboard() {
 
                 {/* Sub-Component Tabs */}
                 {activeTab === 'overview' && (
-                    <OverviewTab stats={stats} loading={loadingStats} />
+                    <div className="space-y-6">
+                        {!isSuperAdmin && schools[0] && (
+                            <RecessSettingCard school={schools[0]} showToast={showToast} onChanged={fetchSchools} />
+                        )}
+                        <OverviewTab stats={stats} loading={loadingStats} />
+                    </div>
                 )}
 
                 {activeTab === 'schools' && isSuperAdmin && (
@@ -645,6 +655,7 @@ export default function Dashboard() {
                         classes={classes}
                         allTopics={allTopics}
                         school={schools[0] || (stats?.school as any) || null}
+                        canEditSharedContent={isSuperAdmin}
                         loading={loadingQuestions}
                         onRefresh={() => { fetchQuestions(); fetchStats(); }}
                         showToast={showToast}
