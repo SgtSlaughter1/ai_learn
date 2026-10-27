@@ -26,8 +26,8 @@ class GamificationService
 
     public const XP_STREAK_DAILY_BONUS = 5;
 
-    /** A won Recess game. Small on purpose: learning, not games, should move the level. */
-    public const XP_RECESS_WIN = 10;
+    /** Recess XP, paid for the first win of the day only. Small on purpose: learning, not games, should move the level. */
+    public const XP_RECESS_WIN = 5;
 
     /** XP sources that count as learning, the activities that earn a Recess break. */
     private const LEARNING_SOURCES = ['quiz_complete', 'flashcard_review', 'daily_revision_bonus'];
@@ -48,8 +48,8 @@ class GamificationService
     private const DAILY_XP_CAPS = [
         'flashcard_review' => 75,
         'daily_revision_bonus' => 30,
-        // Two wins a day; more games never out-earn a single quiz.
-        'recess_win' => 20,
+        // One win a day, whichever game and however many are played.
+        'recess_win' => self::XP_RECESS_WIN,
     ];
 
     /**
@@ -413,7 +413,7 @@ class GamificationService
      */
     /**
      * XP for a won Recess game. Paid only when the learner did some learning that day (the
-     * break was earned), within the daily cap, and without touching the streak: playing is
+     * break was earned), once a day whatever the game, and without touching the streak: playing is
      * not a day of study.
      *
      * @return array{xp_earned: int, total_xp: int, new_achievements: array}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import PageHeader from '@/components/layout/PageHeader';
 import { LayoutDashboard } from 'lucide-react';
-import { Head, usePage } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { db } from '@/db/database';
@@ -12,7 +12,6 @@ import { StatsOverview } from '@/components/dashboard/StatsOverview';
 import { LevelProgressBar, GamificationData } from '@/components/dashboard/LevelProgressBar';
 import { OverallMasteryCard, RecentQuizActivityCard, DashboardAttempt, mergeRecentAttempts } from '@/components/dashboard/RecentAttemptsList';
 import { DashboardRevisionCard } from '@/components/dashboard/DashboardRevisionCard';
-import { DashboardRecessCard } from '@/components/dashboard/DashboardRecessCard';
 import { MilestoneRoadmapModal } from '@/components/dashboard/MilestoneRoadmapModal';
 import 'katex/dist/katex.min.css';
 
@@ -27,7 +26,6 @@ interface DashboardStats {
 }
 
 export default function LearnerDashboard() {
-    const recessEnabled = usePage<{ auth?: { user?: { recess_enabled?: boolean } | null } }>().props.auth?.user?.recess_enabled !== false;
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [recentAttempts, setRecentAttempts] = useState<DashboardAttempt[]>([]);
     const [gamification, setGamification] = useState<GamificationData | null>(null);
@@ -305,8 +303,6 @@ export default function LearnerDashboard() {
                         />
                     </div>
                 </div>
-
-                {recessEnabled && <DashboardRecessCard />}
 
                 {/* 2. Core Stats KPI Row (Desktop: 4 columns in 1 row; Mobile: compact 2x2 cluster) */}
                 <StatsOverview

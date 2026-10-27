@@ -46,18 +46,19 @@ class RecessTest extends TestCase
         $this->win()->assertOk()->assertJsonPath('xp_earned', 0);
 
         $this->learnSomethingToday();
-        $this->win()->assertOk()->assertJsonPath('xp_earned', 10);
+        $this->win()->assertOk()->assertJsonPath('xp_earned', 5);
     }
 
-    public function test_recess_xp_is_capped_at_twenty_a_day(): void
+    public function test_recess_pays_once_a_day_across_all_games(): void
     {
         $this->learnSomethingToday();
 
-        $this->win('word_search')->assertJsonPath('xp_earned', 10);
-        $this->win('connect_four')->assertJsonPath('xp_earned', 10);
+        $this->win('word_search')->assertJsonPath('xp_earned', 5);
+        $this->win('word_search')->assertJsonPath('xp_earned', 0);
+        $this->win('connect_four')->assertJsonPath('xp_earned', 0);
         $this->win('make_24')->assertJsonPath('xp_earned', 0);
 
-        $this->assertSame(20, (int) XpTransaction::where('user_id', $this->learner->id)->where('source', 'recess_win')->sum('amount'));
+        $this->assertSame(5, (int) XpTransaction::where('user_id', $this->learner->id)->where('source', 'recess_win')->sum('amount'));
     }
 
     public function test_a_win_never_counts_as_a_day_of_study_for_the_streak(): void

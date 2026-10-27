@@ -17,6 +17,7 @@
 * **Built on the school's own curriculum**: questions come from the learner's class, programme (Science, Business, Arts) and subjects.
 * **AI tutor**: explains why an answer is right or wrong, step by step, with a built-in offline tutor when there's no internet.
 * **Offline-first**: content, quizzes and the review queue live on the device; work syncs when the connection returns.
+* **Recess**: finishing a quiz, flashcard deck or daily review earns a 10-minute game break (Word Search, Make 24, Connect 4, Word of the Day). The games run on the device, so they work offline too.
 
 ---
 
@@ -314,6 +315,8 @@ The device keeps a copy of what the learner needs and a queue of what they did; 
 
 **What lives on the device** (`resources/js/db/database.ts`): subjects, topics, quizzes, flashcards, quiz attempts, topic progress, XP profile, the user's profile, page snapshots for offline viewing, admin lists for staff, and the sync queue. The service worker caches the app itself so it opens with no network.
 
+**Recess games are fully offline.** Word Search, Make 24, Connect 4 and Word of the Day run in the browser with no server call; Word Search and Word of the Day draw their words from the subjects already saved on the device. Earned breaks and the running countdown are kept in the browser per user, and `/recess` opens offline like the other learner pages. A win made offline joins the sync queue; the server pays 5 XP for the first win of the day only (whichever game, however many are played), and only if the learner also studied that day; and a school that has switched Recess off gets nothing.
+
 **What happens to something done offline**
 
 1. The action is applied on the device at once and added to the sync queue (`resources/js/services/SyncQueue.ts`) with the time it happened.
@@ -323,7 +326,7 @@ The device keeps a copy of what the learner needs and a queue of what they did; 
     - success → removed from the queue; a temporary id is swapped for the server's id;
     - sign-in expired, rate limited, server error or "already in progress" → the batch stops there and retries later with exponential backoff, keeping order;
     - rejected (a permission or validation error) → set aside for the user to fix or discard, so it never blocks the rest.
-5. Each batch is kept short and only allows a fixed list of paths (quiz attempts, progress, reviews, flashcards, past-question simulations and admin edits).
+5. Each batch is kept short and only allows a fixed list of paths (quiz attempts, progress, reviews, flashcards, past-question simulations, Recess wins and admin edits).
 
 **Why offline results stay honest**
 

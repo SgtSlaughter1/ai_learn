@@ -3,6 +3,7 @@ import { TodayRevisionData, RevisionSessionCompleteResult, RevisionQueueItem } f
 import { DailyRevisionModal } from '../revision/DailyRevisionModal';
 import { GamificationData } from './LevelProgressBar';
 import { db } from '@/db/database';
+import { RecessPill } from './RecessPill';
 import {
     Zap,
     CheckCircle2,
@@ -162,7 +163,7 @@ export const DashboardRevisionCard: React.FC<Props> = ({
                         {/* Streak Pill */}
                         <div
                             onClick={onOpenMilestones}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold transition-all cursor-pointer select-none hover:scale-102 ${
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold whitespace-nowrap shrink-0 transition-all cursor-pointer select-none hover:scale-102 ${
                                 isProtected
                                     ? 'bg-[var(--color-success-10)] border-[var(--color-success)] text-[var(--color-success)]'
                                     : streak > 0
@@ -183,8 +184,9 @@ export const DashboardRevisionCard: React.FC<Props> = ({
                             <span>{streak > 0 ? `${streak}d Streak` : '0d Streak'}</span>
                         </div>
 
-                        {/* Top-Right: Shield & Roadmap */}
+                        {/* Top-Right: Recess, Shield & Roadmap */}
                         <div className="flex items-center gap-1.5 shrink-0">
+                            <RecessPill />
                             <div
                                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-[var(--color-background)] border border-[var(--color-border)] text-[var(--color-text)]"
                                 title={`${shields} streak freeze shield available`}
@@ -197,10 +199,11 @@ export const DashboardRevisionCard: React.FC<Props> = ({
                                 <button
                                     type="button"
                                     onClick={onOpenMilestones}
+                                    aria-label="Roadmap"
                                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-[var(--color-background)] border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors cursor-pointer"
                                 >
                                     <Trophy className="w-3.5 h-3.5 text-[var(--color-accent)]" />
-                                    <span>Roadmap</span>
+                                    <span className="hidden sm:inline">Roadmap</span>
                                 </button>
                             )}
                         </div>

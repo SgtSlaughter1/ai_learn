@@ -78,9 +78,9 @@ export default function RecessIndex() {
                 payload: { game: which, won_at: new Date().toISOString() },
             });
             if (result.status === 'sent') {
-                setWinNote(result.data.xp_earned > 0 ? `+${result.data.xp_earned} XP for the win!` : "Nice win! Today's Recess XP is already used up.");
+                setWinNote(result.data.xp_earned > 0 ? `+${result.data.xp_earned} XP for the win!` : "Nice win! You've already had today's Recess XP.");
             } else if (result.status === 'queued') {
-                setWinNote('Nice win! Your XP is added when you are back online.');
+                setWinNote('Nice win! If it is your first today, your XP is added when you are back online.');
             }
         } catch {
             // The win still counts on screen; XP is a bonus.

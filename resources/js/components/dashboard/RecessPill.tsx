@@ -1,35 +1,42 @@
 import { useEffect, useState } from 'react';
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { Coffee } from 'lucide-react';
 import { BREAK_MINUTES, isOnBreak, onRecessChange, readRecess } from '@/services/Recess';
 
-/** The way into Recess on the dashboard (phones have no room for it in the bottom bar). */
-export function DashboardRecessCard() {
+/**
+ * The way into Recess on the dashboard, in the mission card's top row: a break is the reward
+ * for finishing the mission, so it sits beside the streak and shields it is earned with.
+ * Phones have no room for Recess in the bottom bar, so this is their way in too.
+ */
+export function RecessPill() {
+    const enabled = usePage<{ auth?: { user?: { recess_enabled?: boolean } | null } }>().props.auth?.user?.recess_enabled !== false;
     const [state, setState] = useState(readRecess);
     useEffect(() => onRecessChange(() => setState(readRecess())), []);
 
+    if (!enabled) return null;
+
     const onBreak = isOnBreak(state);
     const ready = state.breaks > 0;
+    const label = onBreak ? 'On break' : ready ? `${state.breaks} ${state.breaks === 1 ? 'break' : 'breaks'} ready` : 'Recess';
+    const hint = onBreak
+        ? 'Your break is running. Open Recess'
+        : ready
+            ? `Recess: ${label}. Play a game`
+            : `Recess: finish a quiz, flashcard deck or daily review to earn ${BREAK_MINUTES} minutes. Word of the Day is free.`;
 
     return (
         <Link
             href="/recess"
-            className="flex items-center gap-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3.5 hover:border-[var(--color-primary)]/50 transition-colors"
+            title={hint}
+            aria-label={hint}
+            className={`inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                ready || onBreak
+                    ? 'bg-[var(--color-primary)] border-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)]'
+                    : 'bg-[var(--color-background)] border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
+            }`}
         >
-            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${ready || onBreak ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-primary-10)] text-[var(--color-primary)]'}`}>
-                <Coffee className="w-5 h-5" aria-hidden />
-            </span>
-            <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold text-[var(--color-text)]">
-                    {onBreak ? 'Your break is running' : ready ? `Recess: ${state.breaks} ${state.breaks === 1 ? 'break' : 'breaks'} ready` : 'Recess'}
-                </span>
-                <span className="block text-xs text-[var(--color-muted)]">
-                    {onBreak || ready
-                        ? 'Word Search, Make 24, Connect 4 and more'
-                        : `Finish a quiz, flashcard deck or daily review to earn ${BREAK_MINUTES} minutes. Word of the Day is free.`}
-                </span>
-            </span>
-            <span className="text-sm font-bold text-[var(--color-primary)] shrink-0">{onBreak ? 'Back to it' : ready ? 'Play' : 'Open'}</span>
+            <Coffee className={`w-3.5 h-3.5 ${ready || onBreak ? '' : 'text-[var(--color-primary)]'}`} aria-hidden />
+            <span className={ready || onBreak ? '' : 'hidden sm:inline'}>{label}</span>
         </Link>
     );
 }
