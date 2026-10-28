@@ -17,6 +17,7 @@ class School extends Model
             'is_active' => 'boolean',
             'category_ids' => 'array',
             'recess_enabled' => 'boolean',
+            'cbt_enabled' => 'boolean',
         ];
     }
 

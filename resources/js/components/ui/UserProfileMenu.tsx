@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from '@inertiajs/react';
-import { LogOut, ChevronDown, Sun, Moon, Shield, Sparkles, Loader2, RefreshCw, UserCircle } from 'lucide-react';
+import { LogOut, ChevronDown, Sun, Moon, Shield, Sparkles, Loader2, RefreshCw, UserCircle, ClipboardCheck } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { signOutSafely } from '@/services/SignOut';
@@ -11,6 +11,7 @@ interface User {
     name: string;
     email: string;
     role: string;
+    cbt_enabled?: boolean;
 }
 
 interface UserProfileMenuProps {
@@ -213,6 +214,18 @@ export default function UserProfileMenu({ user }: UserProfileMenuProps) {
                             <UserCircle className="w-4 h-4 text-[var(--color-primary-light)]" />
                             <span>My Profile</span>
                         </Link>
+
+                        {/* On phones the bottom bar is full, so School Exams lives here too. */}
+                        {user?.cbt_enabled !== false && user?.role !== 'platform_admin' && (
+                            <Link
+                                href={user?.role === 'learner' ? '/exams' : '/school-exams'}
+                                onClick={() => setIsOpen(false)}
+                                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
+                            >
+                                <ClipboardCheck className="w-4 h-4 text-[var(--color-primary-light)]" />
+                                <span>School Exams</span>
+                            </Link>
+                        )}
                     </div>
 
                     {/* Logout Footer with Pre-Logout Guard */}

@@ -140,6 +140,20 @@ class SchoolController extends Controller
         ]);
     }
 
+    public function updateCbt(Request $request, int $id): JsonResponse
+    {
+        $school = School::findOrFail($id);
+        Gate::authorize('manageLearnerSettings', $school);
+        $validated = $request->validate(['enabled' => ['required', 'boolean']]);
+
+        $school->update(['cbt_enabled' => $validated['enabled']]);
+
+        return response()->json([
+            'message' => $school->cbt_enabled ? 'School CBT is on.' : 'School CBT is off.',
+            'cbt_enabled' => $school->cbt_enabled,
+        ]);
+    }
+
     /** Sorted, unique category IDs; a school with none is treated as senior secondary. */
     private static function normalizeCategoryIds(?array $ids): array
     {

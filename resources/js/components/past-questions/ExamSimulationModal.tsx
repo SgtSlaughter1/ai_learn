@@ -7,6 +7,7 @@ import { BookOpen, Monitor, Keyboard } from 'lucide-react';
 import { enqueue, getSyncUser } from '@/services/SyncQueue';
 import { reviewAnswer } from '@/services/AnswerKey';
 import { confirmAction } from '@/components/common/ConfirmModal';
+import { CbtCalculator } from '@/components/common/CbtCalculator';
 
 interface Props {
     questions: PastQuestionItem[];
@@ -39,7 +40,6 @@ export const ExamSimulationModal: React.FC<Props> = ({
     const [secondsRemaining, setSecondsRemaining] = useState<number>(durationMinutes * 60);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     const [showCalculator, setShowCalculator] = useState<boolean>(false);
-    const [calcDisplay, setCalcDisplay] = useState<string>('0');
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     // Official JAMB Center View Toggle (High-contrast authentic test center layout)
@@ -291,23 +291,6 @@ export const ExamSimulationModal: React.FC<Props> = ({
             console.error('Offline grade error:', localErr);
             setErrorMessage('Failed to grade exam attempt locally.');
             setIsSubmitting(false);
-        }
-    };
-
-    const handleCalcInput = (char: string) => {
-        if (char === 'C') {
-            setCalcDisplay('0');
-        } else if (char === '=') {
-            try {
-                const sanitized = calcDisplay.replace(/[^0-9+\-*/.]/g, '');
-                // eslint-disable-next-line no-eval
-                const result = Function(`'use strict'; return (${sanitized})`)();
-                setCalcDisplay(String(result));
-            } catch {
-                setCalcDisplay('Error');
-            }
-        } else {
-            setCalcDisplay(prev => (prev === '0' || prev === 'Error' ? char : prev + char));
         }
     };
 
@@ -631,39 +614,7 @@ export const ExamSimulationModal: React.FC<Props> = ({
                 </aside>
 
                 {/* Calculator Popup */}
-                {showCalculator && (
-                    <div className="absolute top-4 right-4 md:right-84 z-40 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-4 shadow-2xl w-64 animate-scale-in">
-                        <div className="flex items-center justify-between pb-2 mb-2 border-b border-[var(--color-border)]">
-                            <span className="text-[10px] font-extrabold text-[var(--color-muted)] uppercase tracking-wider">CBT Calculator</span>
-                            <button
-                                onClick={() => setShowCalculator(false)}
-                                className="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] cursor-pointer"
-                            >
-                                ✕
-                            </button>
-                        </div>
-                        <div className="bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl p-2.5 text-right font-mono text-xl font-bold truncate mb-3 text-[var(--color-text)]">
-                            {calcDisplay}
-                        </div>
-                        <div className="grid grid-cols-4 gap-1.5">
-                            {['7','8','9','/','4','5','6','*','1','2','3','-','0','.','=','+','C'].map((btn) => (
-                                <button
-                                    key={btn}
-                                    onClick={() => handleCalcInput(btn)}
-                                    className={`h-9 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                        btn === 'C'
-                                            ? 'col-span-4 bg-[var(--color-error)] text-white mt-1 hover:opacity-90'
-                                            : btn === '='
-                                            ? 'bg-[var(--color-success)] text-white hover:opacity-90'
-                                            : 'bg-[var(--color-surface-hover)] border border-[var(--color-border)] hover:bg-[var(--color-border)]/60 text-[var(--color-text)]'
-                                    }`}
-                                >
-                                    {btn}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                )}
+                {showCalculator && <CbtCalculator onClose={() => setShowCalculator(false)} />}
             </div>
 
         </div>

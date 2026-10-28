@@ -25,6 +25,8 @@ return new class extends Migration
                 $table->json('category_ids')->nullable();
                 // Learners' in-app Recess (short earned game breaks); the school can switch it off.
                 $table->boolean('recess_enabled')->default(true);
+                // School CBT (teacher-set exams sat in the school); the school can switch it off.
+                $table->boolean('cbt_enabled')->default(true);
                 $table->string('slug', 150)->unique();
                 $table->string('address')->nullable();
                 $table->string('city')->nullable();

@@ -17,6 +17,7 @@
 * **Built on the school's own curriculum**: questions come from the learner's class, programme (Science, Business, Arts) and subjects.
 * **AI tutor**: explains why an answer is right or wrong, step by step, with a built-in offline tutor when there's no internet.
 * **Offline-first**: content, quizzes and the review queue live on the device; work syncs when the connection returns.
+* **School CBT exams**: teachers set timed computer-based tests (CA tests, mid-terms, mock exams) from the school's own question bank, run the room live, and release results. The server marks every paper.
 * **Recess**: finishing a quiz, flashcard deck or daily review earns a 10-minute game break (Word Search, Make 24, Connect 4, Word of the Day). The games run on the device, so they work offline too.
 
 ---
@@ -25,9 +26,9 @@
 
 | Role | What they do in the app |
 | :--- | :--- |
-| **Learner** | Takes quizzes and adaptive quizzes, does the daily review, practises WAEC/JAMB/NECO past questions, chats with the AI tutor, earns XP and badges |
-| **Teacher** | Sees their classes, finds struggling learners and weak topics, writes and imports questions, uses the AI to draft questions and lesson ideas |
-| **School admin** | Manages one school: its classes, teachers, learners, subjects and question bank |
+| **Learner** | Takes quizzes and adaptive quizzes, sits school CBT exams, does the daily review, practises WAEC/JAMB/NECO past questions, chats with the AI tutor, earns XP and badges |
+| **Teacher** | Sees their classes, finds struggling learners and weak topics, writes and imports questions, uses the AI to draft questions and lesson ideas, sets and invigilates school CBT exams |
+| **School admin** | Manages one school: its classes, teachers, learners, subjects and question bank; switches School CBT and Recess on or off |
 | **Platform admin** | Manages every school, shared content, past questions and feedback |
 
 A school is set up with the levels it teaches (primary, junior, senior or a mix). Its classes hold subjects, subjects hold topics, topics hold questions. Every answer a learner gives updates three things: their mastery of that topic, their review schedule, and their XP and streak. Teachers see the same numbers, rolled up by class.
@@ -143,7 +144,7 @@ The server grades every quiz itself; the score a device reports is never trusted
     - single answer: right if the chosen option is marked correct;
     - several correct options: right only if the learner picked exactly the correct set;
     - an option id that belongs to another question, or no longer exists, is stored as "no answer".
-3. Score = the sum of marks for right answers; total = the sum of all marks (1 per question unless the quiz sets more).
+3. Score = the sum of marks for right answers; total = the sum of all marks (1 per question unless the quiz sets more). A wrong or skipped answer scores 0; there is no negative marking and no part marks.
 4. In one database transaction: the attempt, every answer and the topic progress are saved together.
 5. XP, streak and badges are awarded once for that attempt.
 6. Every answered question gets or updates its review card.
@@ -361,6 +362,62 @@ The result breaks down accuracy per topic: **strong** at 70% or more, **moderate
 
 ---
 
+## 🏫 School CBT exams
+
+Schools set their own computer-based tests and learners sit them in school, on their own phones or the lab's computers. Code: `app/Services/SchoolExams/SchoolExamService.php`, `app/Http/Controllers/Web/SchoolExamController.php` (staff) and `app/Http/Controllers/Web/LearnerExamController.php` (learners).
+
+**Setting an exam (teacher or school admin)**
+
+- Pick the class(es), subject, duration, open and close times, pass mark, and whether learners see their score straight away.
+- Add questions from the school's bank: search and hand-pick, or **Add random** to draw a set. Each question can carry its own marks (1–20); the builder shows the running total. Up to 200 questions.
+- Publishing gives the exam a 6-character **start code** (no look-alike letters such as O/0 or I/1). Learners can't start without it, so the code is only read out in the room.
+- Once anyone has started, only the title, instructions, close time and score visibility can change. The paper itself is locked.
+
+**Who can do what**
+
+| | Can |
+|---|---|
+| School admin | Set, run and release any exam in their school |
+| Teacher | Set exams for the classes they teach; run and release exams they set or that are for their classes |
+| Learner | See and sit exams for their own class, only while the exam is open and only with the start code |
+| School switch | A school admin can turn School CBT off; the menu links and every route then close |
+
+**Sitting an exam**
+
+1. The learner opens **School Exams**, picks the open exam and types the start code.
+2. The server builds their own paper: question order and option order are shuffled per learner (questions on the same passage stay together). The paper never contains the answers.
+3. The countdown runs from the server's deadline and is kept on the device with an elapsed-time counter, so changing the phone's clock does nothing.
+4. Answers save as they go (1.5 seconds after a pick, and at least every 20 seconds). A reload or a dead battery resumes with the right time left.
+5. Leaving the exam screen is counted and shown to the teacher.
+6. Time up submits the paper. The server allows 30 seconds' grace for a slow network; after that it refuses new answers and closes the attempt itself, even if the learner never comes back.
+
+**Running the room.** The exam page shows every learner in the class: not started, writing, handed in or timed out, with how many they've answered, time left and how often they left the screen. A teacher can **add time** to one learner or **end** their attempt.
+
+**Marking.** Only the server marks, when the paper is handed in or times out.
+
+$$\text{Score} = \sum \text{marks of the questions answered correctly}$$
+
+$$\text{Percentage} = \frac{\text{score}}{\text{total marks}} \times 100 \quad\text{(kept to 2 decimal places)}$$
+
+Every number on the result is in **marks**, so the parts always add up to the whole. Example: five questions worth 5, 4, 4, 3 and 3 marks (19 in total). A learner who gets the 5, 4, 3 and 3 right scores **15 / 19 = 79%**. That is 4 of 5 questions, but the question count is only shown as a line ("You got 4 of 5 questions right"), never used for the percentage. If every question is worth 1 mark the two numbers are the same.
+
+- Wrong or skipped answers score 0; there is no negative marking.
+- **Pass or fail** compares the percentage with the exam's pass mark.
+- **Topic breakdown**: each topic's marks out of its total marks, so the topic scores add up to the exam score.
+
+**Results**
+
+- The teacher sees the class average, highest, lowest and how many passed; topics from hardest to easiest (by marks, across the class); and every learner's score. **Download CSV** gives the score sheet.
+- Results can be **released** only after the exam closes, so nobody passes answers to classmates still writing.
+- After release, learners see their corrections and topic breakdown, and every question they got wrong or skipped joins their daily review (a queued job, `RecordSchoolExamReview`).
+- Before release, a learner sees their score only if the teacher chose "show score straight away".
+
+**Kept fast for a whole school.** Indexed on school, status and open time; the exam keeps its question count and total marks so lists don't re-count them; the room view is one query; the question bank is paginated; closing overdue attempts works in batches of 100.
+
+**Coming next.** Sitting an exam with no internet: an encrypted exam pack downloaded ahead of time, unlocked by the start code, with each learner's answers handed to the invigilator's phone by QR code.
+
+---
+
 ## 🗣️ Explaining it in two minutes
 
 1. **The problem.** Students cram for tests and forget most of it within a week. Practice apps give a score but don't fix the mistake. Teachers can't personalise work for 50 children. Data is expensive.
@@ -372,6 +429,7 @@ The result breaks down accuracy per topic: **strong** at 70% or more, **moderate
 7. **It works offline.** Everything they need is on the phone. Their work syncs when they're back online, and the server checks it.
 8. **It keeps them coming back.** XP, levels, daily streaks with shields, badges and a leaderboard.
 9. **Teachers and schools see it all.** Which learners are struggling, which topics the class is weak in, and real WAEC, JAMB and NECO past questions for exam practice.
+10. **Schools run their own CBT exams.** A teacher sets a timed test from the school's question bank, reads out a start code, watches the room live, and gets a marked score sheet the moment time is up.
 
 **One-line version:** AceDrill turns a school's own curriculum into a five-minute daily drill that remembers what each child is about to forget, explains their mistakes, and works without internet.
 

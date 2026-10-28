@@ -27,7 +27,8 @@ interface ResultQuestionBreakdownProps {
     answers: ResultAnswer[];
     /** Offline view: correct answers and explanations only come with the verified result. */
     answersHidden?: boolean;
-    onAskAi: (questionId: number, questionText: string, selectedOptionId: number | null, answerObj?: ResultAnswer) => void;
+    /** Leave out to hide the AI buttons (school exams). */
+    onAskAi?: (questionId: number, questionText: string, selectedOptionId: number | null, answerObj?: ResultAnswer) => void;
 }
 
 export function ResultQuestionBreakdown({
@@ -104,7 +105,7 @@ export function ResultQuestionBreakdown({
                                 )}
                             </div>
 
-                            {!answersHidden && (<div className="shrink-0 self-start sm:self-auto">
+                            {!answersHidden && onAskAi && (<div className="shrink-0 self-start sm:self-auto">
                                 {!answer.is_correct ? (
                                     <button
                                         type="button"

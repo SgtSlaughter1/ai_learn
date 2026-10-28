@@ -27,6 +27,7 @@ export interface SchoolItem {
     category_ids?: number[];
     category_names?: string[];
     recess_enabled?: boolean;
+    cbt_enabled?: boolean;
     category_type_label?: string;
     slug?: string;
     address?: string | null;

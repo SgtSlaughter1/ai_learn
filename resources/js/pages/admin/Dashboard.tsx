@@ -24,7 +24,7 @@ import {
 } from '@/services/AdminOfflineService';
 import { syncAll } from '@/services/SyncService';
 import OverviewTab from '@/components/admin/OverviewTab';
-import RecessSettingCard from '@/components/admin/RecessSettingCard';
+import SchoolSettingSwitch from '@/components/admin/SchoolSettingSwitch';
 import SchoolsTab from '@/components/admin/SchoolsTab';
 import SchoolAdminsTab from '@/components/admin/SchoolAdminsTab';
 import TeachersTab from '@/components/admin/TeachersTab';
@@ -35,7 +35,7 @@ import QuestionBankTab from '@/components/admin/QuestionBankTab';
 import type { Abilities } from '@/types';
 import PageHeader from '@/components/layout/PageHeader';
 import { SECTION_CHANGE_EVENT } from '@/services/DashboardSection';
-import { BookOpen, Building2, CircleHelp, GraduationCap, ShieldCheck, Users, UsersRound, type LucideIcon } from 'lucide-react';
+import { BookOpen, Building2, CircleHelp, ClipboardCheck, Coffee, GraduationCap, ShieldCheck, Users, UsersRound, type LucideIcon } from 'lucide-react';
 
 export default function Dashboard() {
     const { auth } = usePage<{ auth: { user: { id: number; name: string; email: string; role: string }; can?: Abilities | null } }>().props;
@@ -581,7 +581,30 @@ export default function Dashboard() {
                 {activeTab === 'overview' && (
                     <div className="space-y-6">
                         {!isSuperAdmin && schools[0] && (
-                            <RecessSettingCard school={schools[0]} showToast={showToast} onChanged={fetchSchools} />
+                            <div className="grid gap-3 lg:grid-cols-2">
+                                <SchoolSettingSwitch
+                                    endpoint={`/api/v1/admin/schools/${schools[0].id}/recess`}
+                                    enabled={schools[0].recess_enabled !== false}
+                                    icon={Coffee}
+                                    title="Recess for learners"
+                                    description="Short game breaks learners earn by finishing a quiz, flashcard deck or daily review. 10 minutes each, small capped XP for a win."
+                                    onLabel="Recess is on."
+                                    offLabel="Recess is off."
+                                    showToast={showToast}
+                                    onChanged={fetchSchools}
+                                />
+                                <SchoolSettingSwitch
+                                    endpoint={`/api/v1/admin/schools/${schools[0].id}/cbt`}
+                                    enabled={schools[0].cbt_enabled !== false}
+                                    icon={ClipboardCheck}
+                                    title="School CBT"
+                                    description="Teachers set exams for their classes; learners sit them in the exam room with a start code."
+                                    onLabel="School CBT is on."
+                                    offLabel="School CBT is off."
+                                    showToast={showToast}
+                                    onChanged={fetchSchools}
+                                />
+                            </div>
                         )}
                         <OverviewTab stats={stats} loading={loadingStats} />
                     </div>

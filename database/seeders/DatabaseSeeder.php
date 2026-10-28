@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
             ClassSeeder::class,
             SubjectSeeder::class,
             QuizSeeder::class,
+            SchoolExamSeeder::class,
             AchievementSeeder::class,
             PastQuestionSeeder::class,
         ]);

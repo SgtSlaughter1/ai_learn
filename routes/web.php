@@ -16,8 +16,10 @@ use App\Http\Controllers\Web\AIWebController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\FlashcardController;
 use App\Http\Controllers\Web\GamificationController;
+use App\Http\Controllers\Web\LearnerExamController;
 use App\Http\Controllers\Web\QuizWebController;
 use App\Http\Controllers\Web\RecessController;
+use App\Http\Controllers\Web\SchoolExamController;
 use App\Http\Controllers\Web\SubjectWebController;
 use App\Http\Controllers\Web\SyncController;
 use App\Http\Controllers\Web\TeacherDashboardController;
@@ -89,6 +91,16 @@ Route::middleware('auth')->group(function () {
     // Active Recall Flashcards
     Route::get('/flashcards', [FlashcardController::class, 'showFlashcardsPage']);
     Route::get('/recess', [RecessController::class, 'show']);
+
+    // School CBT: learners sit the exams their school sets; staff set and run them.
+    Route::get('/exams', [LearnerExamController::class, 'index']);
+    Route::get('/exams/{exam}/take', [LearnerExamController::class, 'take']);
+    Route::get('/exams/{exam}/result', [LearnerExamController::class, 'result']);
+    Route::middleware('can:access-teaching')->group(function () {
+        Route::get('/school-exams', [SchoolExamController::class, 'index']);
+        Route::get('/school-exams/{exam}', [SchoolExamController::class, 'show']);
+        Route::get('/school-exams/{exam}/results.csv', [SchoolExamController::class, 'exportResults']);
+    });
     Route::get('/profile', [AccountController::class, 'show']);
 
     // Separate JSON Data Routes
@@ -130,6 +142,12 @@ Route::middleware('auth')->group(function () {
 
         // Recess: earned game breaks; a win can add a little capped XP
         Route::post('/recess/wins', [RecessController::class, 'recordWin']);
+
+        // School CBT, learner side. Starting checks the start code, so it is rate limited.
+        Route::post('/exams/{exam}/start', [LearnerExamController::class, 'start'])->middleware('throttle:10,1');
+        Route::get('/exams/{exam}/attempt', [LearnerExamController::class, 'attempt']);
+        Route::put('/exams/{exam}/answers', [LearnerExamController::class, 'saveAnswers']);
+        Route::post('/exams/{exam}/submit', [LearnerExamController::class, 'submit']);
 
         // Gamification & XP System
         Route::get('/gamification/profile', [GamificationController::class, 'profile']);
@@ -179,6 +197,20 @@ Route::middleware('auth')->group(function () {
             Route::delete('/admin/question-contexts/{id}', [Admin\QuestionContextController::class, 'destroy']);
             Route::post('/admin/questions/ai-extract', [Admin\QuestionToolsController::class, 'extract'])->middleware('throttle:ai');
             Route::post('/admin/questions/ai-generate', [Admin\QuestionToolsController::class, 'generate'])->middleware('throttle:ai');
+
+            // School CBT, staff side: set exams, run the room, release results.
+            Route::get('/school-exams/question-bank', [SchoolExamController::class, 'questionBank']);
+            Route::post('/school-exams', [SchoolExamController::class, 'store']);
+            Route::get('/school-exams/{exam}', [SchoolExamController::class, 'edit']);
+            Route::patch('/school-exams/{exam}', [SchoolExamController::class, 'update']);
+            Route::delete('/school-exams/{exam}', [SchoolExamController::class, 'destroy']);
+            Route::post('/school-exams/{exam}/publish', [SchoolExamController::class, 'publish']);
+            Route::post('/school-exams/{exam}/close', [SchoolExamController::class, 'close']);
+            Route::post('/school-exams/{exam}/release', [SchoolExamController::class, 'release']);
+            Route::get('/school-exams/{exam}/monitor', [SchoolExamController::class, 'monitor']);
+            Route::get('/school-exams/{exam}/results', [SchoolExamController::class, 'results']);
+            Route::post('/school-exam-attempts/{attempt}/extend', [SchoolExamController::class, 'extend']);
+            Route::post('/school-exam-attempts/{attempt}/end', [SchoolExamController::class, 'end']);
         });
 
         // ── Administration (school admins: their own school; platform admins: everything) ──
@@ -187,6 +219,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/admin/categories', [Admin\LookupController::class, 'categories']);
             Route::get('/admin/schools', [Admin\SchoolController::class, 'index']);
             Route::patch('/admin/schools/{id}/recess', [Admin\SchoolController::class, 'updateRecess']);
+            Route::patch('/admin/schools/{id}/cbt', [Admin\SchoolController::class, 'updateCbt']);
 
             Route::get('/admin/teachers', [Admin\TeacherController::class, 'index']);
             Route::post('/admin/teachers', [Admin\TeacherController::class, 'store']);

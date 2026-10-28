@@ -45,6 +45,7 @@ class HandleInertiaRequests extends Middleware
                     'role' => $request->user()->role instanceof \BackedEnum ? $request->user()->role->value : ($request->user()->role ?? 'learner'),
                     'has_school_access' => $request->user()->hasSchoolAccess(),
                     'recess_enabled' => $request->user()->recessEnabled(),
+                    'cbt_enabled' => $request->user()->cbtEnabled(),
                 ] : null,
                 // What the UI may offer, from the same gates that guard the routes.
                 'can' => $request->user() ? [

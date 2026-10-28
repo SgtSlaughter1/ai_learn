@@ -11,7 +11,7 @@ import { SessionExpiredBanner } from '@/components/sync/SessionExpiredBanner';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { currentSection, openSection, sectionHref } from '@/services/DashboardSection';
 import {
-    BarChart3, BookOpen, Building2, CircleHelp, GraduationCap, LayoutGrid, ShieldCheck, Trophy, Users, UsersRound, Zap,
+    BarChart3, BookOpen, Building2, CircleHelp, ClipboardCheck, GraduationCap, LayoutGrid, ShieldCheck, Trophy, Users, UsersRound, Zap,
     type LucideIcon,
 } from 'lucide-react';
 
@@ -45,6 +45,7 @@ interface User {
     role: string;
     has_school_access?: boolean;
     recess_enabled?: boolean;
+    cbt_enabled?: boolean;
 }
 
 interface PageProps {
@@ -183,6 +184,14 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                                         </Link>
                                     );
                                 })}
+                                <Link
+                                    href="/school-exams"
+                                    aria-current={currentPath.startsWith('/school-exams') ? 'page' : undefined}
+                                    className={`flex items-center px-6 py-3 text-sm transition-all ${activeRouteClass('/school-exams')}`}
+                                >
+                                    <ClipboardCheck className="w-5 h-5 mr-3" aria-hidden />
+                                    School Exams
+                                </Link>
                             </>
                         ) : (
                             <>
@@ -240,6 +249,16 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                                     </svg>
                                     Active Recall
                                 </Link>
+
+                                {hasSchool && auth?.user?.cbt_enabled !== false && (
+                                    <Link
+                                        href="/exams"
+                                        className={`flex items-center px-6 py-3.5 text-sm transition-all ${activeRouteClass('/exams')}`}
+                                    >
+                                        <ClipboardCheck className="w-5 h-5 mr-3" aria-hidden />
+                                        School Exams
+                                    </Link>
+                                )}
 
                                 {auth?.user?.recess_enabled !== false && (
                                     <Link

@@ -6,12 +6,14 @@ use App\Models\ClassModel;
 use App\Models\Question;
 use App\Models\Quiz;
 use App\Models\School;
+use App\Models\SchoolExam;
 use App\Models\Subject;
 use App\Models\Topic;
 use App\Models\User;
 use App\Policies\ClassModelPolicy;
 use App\Policies\QuestionPolicy;
 use App\Policies\QuizPolicy;
+use App\Policies\SchoolExamPolicy;
 use App\Policies\SchoolPolicy;
 use App\Policies\SubjectPolicy;
 use App\Policies\TopicPolicy;
@@ -83,6 +85,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Question::class, QuestionPolicy::class);
         Gate::policy(Quiz::class, QuizPolicy::class);
         Gate::policy(School::class, SchoolPolicy::class);
+        Gate::policy(SchoolExam::class, SchoolExamPolicy::class);
         Gate::policy(User::class, UserPolicy::class);
     }
 }

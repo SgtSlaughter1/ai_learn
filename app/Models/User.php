@@ -282,6 +282,12 @@ class User extends Authenticatable
         return $this->primarySchool()?->recess_enabled !== false;
     }
 
+    /** School CBT: on unless the school has switched it off; platform admins have no school to switch. */
+    public function cbtEnabled(): bool
+    {
+        return $this->isPlatformAdmin() || ($this->hasSchoolAccess() && $this->primarySchool()?->cbt_enabled !== false);
+    }
+
     public function hasSchoolAccess(): bool
     {
         if ($this->isPlatformAdmin()) {
