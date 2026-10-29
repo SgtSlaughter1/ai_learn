@@ -61,8 +61,8 @@ flowchart LR
 
 | Layer | Technology |
 | :--- | :--- |
-| **Server** | PHP 8.3, Laravel 13, MySQL in production (SQLite for fast tests) |
-| **Web front end** | React 18, TypeScript, Inertia.js, Tailwind CSS 4, KaTeX for maths |
+| **Server** | PHP and Laravel, MySQL in production (SQLite for fast tests) |
+| **Web front end** | React, TypeScript, Inertia.js, Tailwind CSS, KaTeX for maths |
 | **Offline** | Dexie (IndexedDB) for data, Workbox service worker (vite-plugin-pwa) for the app shell |
 | **AI** | Groq and Google Gemini, with rule-based offline fallbacks |
 | **Time** | All days and streaks use Lagos time (`APP_TIMEZONE=Africa/Lagos`) |
@@ -103,7 +103,7 @@ Learners and teachers join classes through memberships; a learner's class and pr
 
 Every page and every JSON endpoint lives in `routes/web.php` and uses the browser's signed-in session; `routes/api.php` is empty on purpose. A request passes the same checks in the same order whether it comes from a click or from the offline sync queue.
 
-**The path of one request** (for example `POST /api/v1/quizzes/{quiz}/submit`):
+**The path of one request** (for example, a learner submitting a quiz):
 
 1. **Route** matches the URL to a controller method (`QuizWebController@submitQuizAttempt`).
 2. **Middleware**, in order:
@@ -112,7 +112,7 @@ Every page and every JSON endpoint lives in `routes/web.php` and uses the browse
     - **Shared page data** (`HandleInertiaRequests`): the signed-in user, their school and allowed grades for React pages.
     - **Idempotency** (`EnsureIdempotentRequest`): a write with an `Idempotency-Key` header runs once; a retry with the same key gets the stored response, so a lost reply never creates duplicates.
     - **Sign-in and role gates**: `auth`, then `can:access-teaching`, `can:access-admin` or `can:manage-platform` on the groups that need them.
-    - **Rate limits**: 600 requests a minute per user for the API, 20 for AI, 10 sign-in attempts per email and IP.
+    - **Rate limits**: per user for the API and the AI, and per email and IP for sign-in.
 3. **Form request** validates the input (`app/Http/Requests/`) and returns 422 with field errors if it's wrong.
 4. **Controller** checks the policy for this record, then hands the work to an action or service.
 5. **Actions and services** do the real work: `GradeQuizAttempt`, `GamificationService`, `SpacedRepetitionService`, `AdaptiveService`, `AIService`. Writes that belong together run in one database transaction.
@@ -129,7 +129,7 @@ Every page and every JSON endpoint lives in `routes/web.php` and uses the browse
 | `app/Models` | Database tables and their relationships |
 | `app/Support` | Small shared helpers (search terms, page sizes, maths text) |
 
-Maintenance tasks (clear cache, run migrations, reseed) have their own URLs: opening one shows a confirmation page, and the action runs only on a POST carrying a secret token of 32+ characters, limited to 10 tries a minute. See [DEPLOY_GUIDE.md](DEPLOY_GUIDE.md).
+Maintenance tasks for hosts without SSH are protected and switched off by default. See [DEPLOY_GUIDE.md](DEPLOY_GUIDE.md).
 
 ---
 
@@ -345,7 +345,7 @@ The device keeps a copy of what the learner needs and a queue of what they did; 
 **What happens to something done offline**
 
 1. The action is applied on the device at once and added to the sync queue (`resources/js/services/SyncQueue.ts`) with the time it happened.
-2. Back online, the queue sends its items in batches to `POST /api/v1/sync/batch`, oldest first.
+2. Back online, the queue sends its items in batches to the server's sync endpoint, oldest first.
 3. The server runs each item through the same endpoint and rules as an online request: same permissions, same grader, same XP rules.
 4. Results come back per item:
     - success → removed from the queue; a temporary id is swapped for the server's id;

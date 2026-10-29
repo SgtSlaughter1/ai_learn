@@ -21,20 +21,20 @@ This guide walks you through the steps to successfully deploy this Laravel + Rea
 - [ ] Database credentials for a production database user.
 - [ ] Mail settings (`MAIL_*`) so password resets work.
 - [ ] AI: `AI_PROVIDER=groq` and `GROQ_API_KEY` (fastest; models default to `openai/gpt-oss-120b`, then `openai/gpt-oss-20b`, each with its own free-tier limits). Keep `GEMINI_API_KEY` set too: Gemini answers automatically when Groq fails or hits its rate limit, and the built-in offline answers cover the rest. Check that the host can reach `api.groq.com`.
-- [ ] `MAINTENANCE_TOKEN` left **empty** if you can run Artisan over SSH. Only on hosts without SSH: set it to `openssl rand -hex 32`, use it, then empty it again. To use a maintenance URL (e.g. `/run-seed`), open it in the browser: it shows a confirmation page where you paste the token and press **Run**. The token is never put in the URL, and opening a link alone runs nothing. Over the command line: `curl -X POST -H "X-Maintenance-Token: <token>" https://<your-domain>/run-seed`. Each action is limited to 10 tries a minute per IP and logged.
-- [ ] `ALLOW_DESTRUCTIVE_MAINTENANCE`: `true` only while you are still testing and want `/run-migrate-fresh-seed` (drops **every** table, then migrates and seeds the test accounts). Set it back to `false` once real schools have data on the site.
+- [ ] `MAINTENANCE_TOKEN` left **empty** if you can run Artisan over SSH. Only on hosts without SSH: set it to `openssl rand -hex 32`, use it, then empty it again. To use a maintenance page (their paths are in `routes/web.php`), open it in the browser: it shows a confirmation page where you paste the token and press **Run**. The token is never put in the URL, and opening a link alone runs nothing. Each action is rate limited and logged.
+- [ ] `ALLOW_DESTRUCTIVE_MAINTENANCE`: `true` only while you are still testing and want the migrate-fresh-and-seed maintenance page (drops **every** table, then migrates and seeds the test accounts). Set it back to `false` once real schools have data on the site.
 
 ### Database
-- [ ] Migrations applied (`php artisan migrate --force`, or `/run-migrations` with the token on hosts without SSH).
+- [ ] Migrations applied (`php artisan migrate --force`, or the run-migrations maintenance page with the token on hosts without SSH).
 - [ ] **Do not import your local database** (a local export carries your own test records). Seed instead.
-- [ ] Test accounts: `php artisan db:seed --force` (or `/run-seed` with the token) creates one account per role for checking the live site, all with the password `password`: `platformadmin@example.com`, `schooladmin@example.com`, `teacher@example.com`, `learner@example.com` (plus a few more teachers and learners). Re-running it is safe; it also resets these accounts' passwords to `password`.
-- [ ] Before real schools use the site: create your own platform admin, then deactivate or delete the `@example.com` accounts (Admin → Users), since anyone who knows the demo password can sign in with them.
+- [ ] Test accounts: `php artisan db:seed --force` (or the seed maintenance page with the token) creates one test account per role for checking the live site (see `database/seeders/DatabaseSeeder.php`). Re-running it is safe; it also resets those accounts' passwords.
+- [ ] Before real schools use the site: create your own platform admin, then deactivate or delete every seeded test account (Admin → Users), since their passwords are not secret.
 - [ ] Automatic daily database backups are enabled.
 
 ### PHP security (critical, October 2026)
 - [ ] PHP is **8.3.36 or later** (or 8.2.35, 8.4.27, 8.5.12 on those lines). Earlier releases have CVE-2026-109618 and CVE-2026-109619: unauthenticated remote code execution on every PHP that serves web requests (PHP-FPM, Apache `mod_php`, CGI, LiteSpeed). Upgrading is the only complete fix.
-- [ ] Check it: `php artisan php:security-check` over SSH, or open `/php-check` with the maintenance token on hosts without SSH. Both say `patched` and the version needed.
-- [ ] **InfinityFree / shared hosting:** the host controls PHP, so only the host can patch it. Check `/php-check`; if it is not patched, ask the host when it will be (on InfinityFree: their forum and status page) and consider taking the site offline until it is, as the UK NCSC advises. A VPS lets you patch the same day.
+- [ ] Check it: `php artisan php:security-check` over SSH, or open the PHP check maintenance page with the token on hosts without SSH. Both say `patched` and the version needed.
+- [ ] **InfinityFree / shared hosting:** the host controls PHP, so only the host can patch it. Run the PHP check; if it is not patched, ask the host when it will be (on InfinityFree: their forum and status page) and consider taking the site offline until it is, as the UK NCSC advises. A VPS lets you patch the same day.
 - [ ] **VPS:** update the PHP packages from your distribution (for example `sudo apt update && sudo apt install --only-upgrade 'php8.3*'`), restart PHP-FPM and the web server, then run the check. Until then, in the FPM pool or `php.ini` (not `.user.ini`, which applies too late): `session.upload_progress.enabled = 0` (the app does not use it) and `post_max_size = 32M` with `upload_max_filesize` below it (question pictures are at most 5 MB). These reduce exposure; they do not fix it.
 
 ### Server processes
@@ -44,7 +44,7 @@ This guide walks you through the steps to successfully deploy this Laravel + Rea
 - [ ] InfinityFree cannot run a worker or cron: there keep `QUEUE_CONNECTION=sync` (works, slower) and expect limited concurrency. Use a VPS for real school traffic (see section 7).
 
 ### Smoke test after deploying
-- [ ] `/run-migrations`, `/run-migrate-fresh-seed`, `/run-seed`, `/clear-cache` return **404** while `MAINTENANCE_TOKEN` is empty, and their Run button returns **404** with a wrong token. `/run-migrate-fresh-seed` returns **403** in production unless `ALLOW_DESTRUCTIVE_MAINTENANCE=true`.
+- [ ] Every maintenance page returns **404** while `MAINTENANCE_TOKEN` is empty, and its Run button returns **404** with a wrong token. The migrate-fresh-and-seed page returns **403** in production unless `ALLOW_DESTRUCTIVE_MAINTENANCE=true`.
 - [ ] Sign in as each role (learner, teacher, school admin, platform admin) and open their dashboard.
 - [ ] The header shows **Offline Ready**; on a phone over HTTPS, switch to airplane mode, reload, take a quiz, reconnect, and confirm the score and XP appear.
 - [ ] On the server, delete any old `htdocs/public/robots.txt`, `sitemap.xml`, `llms.txt` and `llms-full.txt` (uploads never delete files; `.htaccess` routes these URLs to Laravel anyway).
@@ -98,7 +98,7 @@ composer install --no-dev --optimize-autoloader
 You cannot run `php artisan migrate` on InfinityFree because SSH access is not available.
 
 1. **Export Local Database Structure Only:**
-   Export your local database **structure only (no data)** (e.g., in phpMyAdmin choose *Export → Custom → Structure*) into a `.sql` file. Exporting data would copy local test records and demo accounts (password `password`) into production. Alternatively use `/run-migrations` with a `MAINTENANCE_TOKEN` (see section 0).
+   Export your local database **structure only (no data)** (e.g., in phpMyAdmin choose *Export → Custom → Structure*) into a `.sql` file. Exporting data would copy local test records and test accounts into production. Alternatively use the run-migrations maintenance page with a `MAINTENANCE_TOKEN` (see section 0).
 2. **Create Database on InfinityFree:**
    Go to the InfinityFree Control Panel, click **MySQL Databases**, and create a new database.
 3. **Import SQL File:**
@@ -172,9 +172,8 @@ this never creates duplicates or loses data (idempotency keys, row locks, unique
 and so it stays fast:
 
 * Devices spread their first sync over ~20 seconds after reconnecting.
-* Each device sends its backlog in batches of up to 25 changes (`POST /api/v1/sync/batch`).
-* Per-user rate limits protect the server (`api` 600/min, `sync-batch` 60/min, `ai` 20/min,
-  `login` 10/min); the app waits and retries automatically when limited.
+* Each device sends its backlog in small batches.
+* Per-user rate limits protect the server; the app waits and retries automatically when limited.
 * Quiz XP, streaks and achievements run as a queued job, exactly once per attempt.
 
 ### `.env` settings
