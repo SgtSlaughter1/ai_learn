@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import LegalText from '@/components/legal/LegalText';
+import ReviewNotice from '@/components/legal/ReviewNotice';
 import { signOutSafely } from '@/services/SignOut';
 
 interface Props {
@@ -11,13 +12,14 @@ interface Props {
     summary: string | null;
     /** They agreed to an earlier version: say what changed rather than greeting them as new. */
     returning: boolean;
+    inReview: boolean;
 }
 
 /**
  * Shown before using the app until the current Terms and Privacy Policy are agreed to. Adults tick
  * and agree; learners (whose parents consent through the school) read the short summary and continue.
  */
-export default function Consent({ version, isLearner, summary, returning }: Props) {
+export default function Consent({ version, isLearner, summary, returning, inReview }: Props) {
     const [agreed, setAgreed] = useState(isLearner);
     const [busy, setBusy] = useState(false);
 
@@ -42,9 +44,13 @@ export default function Consent({ version, isLearner, summary, returning }: Prop
                     </h1>
                 </div>
 
+                {inReview && <ReviewNotice className="mt-4" />}
+
                 {isLearner ? (
                     <>
-                        <p className="mt-4 text-sm text-[var(--color-muted)]">Your school and your parent or guardian have agreed to you using AceDrill. Here is what that means for you.</p>
+                        <p className="mt-4 text-sm text-[var(--color-muted)]">
+                            Your school and your parent or guardian have agreed to you using AceDrill. Here is what that means for you.
+                        </p>
                         <div className="mt-2 text-sm">{summary && <LegalText markdown={summary} />}</div>
                     </>
                 ) : (
@@ -82,7 +88,11 @@ export default function Consent({ version, isLearner, summary, returning }: Prop
                     {busy ? 'Saving…' : isLearner ? 'Continue' : 'Agree and continue'}
                 </button>
 
-                <button type="button" onClick={() => void signOutSafely({})} className="mt-3 w-full text-center text-sm font-semibold text-[var(--color-muted)] hover:text-[var(--color-text)] cursor-pointer">
+                <button
+                    type="button"
+                    onClick={() => void signOutSafely({})}
+                    className="mt-3 w-full text-center text-sm font-semibold text-[var(--color-muted)] hover:text-[var(--color-text)] cursor-pointer"
+                >
                     Sign out
                 </button>
             </main>

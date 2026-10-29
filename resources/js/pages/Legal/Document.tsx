@@ -2,15 +2,17 @@ import { Head, Link } from '@inertiajs/react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import LegalText from '@/components/legal/LegalText';
+import ReviewNotice from '@/components/legal/ReviewNotice';
 
 interface Props {
     title: string;
     version: string;
     markdown: string;
+    inReview: boolean;
 }
 
 /** The Terms of Use or Privacy Policy, readable by anyone, signed in or not. */
-export default function Document({ title, version, markdown }: Props) {
+export default function Document({ title, version, markdown, inReview }: Props) {
     return (
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)]">
             <Head title={`${title} | AceDrill`} />
@@ -34,6 +36,7 @@ export default function Document({ title, version, markdown }: Props) {
             <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
                 <h1 className="text-3xl font-extrabold tracking-tight text-[var(--color-text)]">{title}</h1>
                 <p className="mt-2 text-sm text-[var(--color-muted)]">Effective {version}</p>
+                {inReview && <ReviewNotice className="mt-5 max-w-[70ch]" />}
                 <div className="mt-6 max-w-[70ch]">
                     <LegalText markdown={markdown} />
                 </div>

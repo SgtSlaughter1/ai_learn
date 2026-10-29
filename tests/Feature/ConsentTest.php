@@ -38,6 +38,10 @@ class ConsentTest extends TestCase
         $this->get('/privacy')->assertOk()->assertInertia(fn ($page) => $page->component('Legal/Document')
             ->where('markdown', fn ($md) => str_contains($md, 'Nigeria Data Protection Act 2023')));
 
+        $this->get('/privacy')->assertInertia(fn ($page) => $page->where('inReview', true));
+        config(['legal.in_review' => false]);
+        $this->get('/privacy')->assertInertia(fn ($page) => $page->where('inReview', false));
+
         // Company and contact come from config, so no blank to fill is ever shown.
         config(['legal.company' => 'AceDrill Ltd', 'legal.contact_email' => 'privacy@acedrill.test']);
         $this->get('/terms')->assertInertia(fn ($page) => $page->where('markdown', fn ($md) => str_contains($md, 'between you and AceDrill Ltd')

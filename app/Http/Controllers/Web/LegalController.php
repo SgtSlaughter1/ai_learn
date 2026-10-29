@@ -42,6 +42,7 @@ class LegalController extends Controller
             'isLearner' => $schoolLearner,
             'summary' => $schoolLearner ? $this->markdown('learner-summary') : null,
             'returning' => Consent::latestFor($user, Consent::TERMS) !== null,
+            'inReview' => (bool) config('legal.in_review'),
         ]);
     }
 
@@ -76,6 +77,7 @@ class LegalController extends Controller
             'title' => $title,
             'version' => Consent::currentVersion(Consent::TERMS),
             'markdown' => $this->markdown($name),
+            'inReview' => (bool) config('legal.in_review'),
         ]);
     }
 
