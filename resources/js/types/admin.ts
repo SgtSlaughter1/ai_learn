@@ -195,6 +195,9 @@ export interface Learner {
         tier?: string;
     };
     classes?: { id: number; name: string }[];
+    /** The parental consent form as the school recorded it: null when not recorded yet. */
+    parental_consent?: boolean | number | null;
+    ai_training_consent?: boolean | number | null;
     _pendingSync?: boolean;
     _offlineDeleted?: boolean;
 }

@@ -12,11 +12,13 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\MaintenanceController;
 use App\Http\Controllers\Web\AccountController;
 use App\Http\Controllers\Web\AdaptiveQuizController;
+use App\Http\Controllers\Web\AiConversationController;
 use App\Http\Controllers\Web\AIWebController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\FlashcardController;
 use App\Http\Controllers\Web\GamificationController;
 use App\Http\Controllers\Web\LearnerExamController;
+use App\Http\Controllers\Web\LegalController;
 use App\Http\Controllers\Web\QuizWebController;
 use App\Http\Controllers\Web\RecessController;
 use App\Http\Controllers\Web\SchoolExamController;
@@ -30,6 +32,10 @@ use Inertia\Inertia;
 
 Route::get('/', [HomeController::class, 'show']);
 Route::get('/api/stats', [HomeController::class, 'stats']);
+
+// Terms of Use and Privacy Policy, readable by anyone.
+Route::get('/terms', [LegalController::class, 'terms']);
+Route::get('/privacy', [LegalController::class, 'privacy']);
 
 // National Past Questions & Timed CBT Simulation Hub (Open to guests & learners)
 Route::get('/past-questions', fn () => Inertia::render('ExamPrep/PastQuestionsIndex'));
@@ -102,6 +108,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/school-exams/{exam}/results.csv', [SchoolExamController::class, 'exportResults']);
     });
     Route::get('/profile', [AccountController::class, 'show']);
+    // The agree screen (see EnsureTermsAccepted).
+    Route::get('/consent', [LegalController::class, 'consent']);
+    Route::post('/consent', [LegalController::class, 'accept']);
 
     // Separate JSON Data Routes
     Route::prefix('api/v1')->middleware('throttle:api')->group(function () {
@@ -129,6 +138,11 @@ Route::middleware('auth')->group(function () {
             Route::get('/questions/similar', [AIWebController::class, 'similarQuestion']);
             Route::post('/questions/explain', [AIWebController::class, 'explain']);
         });
+
+        // The user's own saved AI chats: reading them costs no AI tokens, so no AI rate limit.
+        Route::get('/ai/conversations', [AiConversationController::class, 'index']);
+        Route::get('/ai/conversations/{conversation}', [AiConversationController::class, 'show'])->whereNumber('conversation');
+        Route::delete('/ai/conversations/{conversation}', [AiConversationController::class, 'destroy'])->whereNumber('conversation');
 
         // Spaced Repetition (Daily 5-Min Smart Revision)
         Route::get('/revision/today', [SpacedRepetitionController::class, 'getTodayQueue']);
@@ -163,6 +177,7 @@ Route::middleware('auth')->group(function () {
             Route::post('/account/deactivate', [AccountController::class, 'deactivate']);
             Route::delete('/account', [AccountController::class, 'destroy']);
         });
+        Route::put('/account/ai-training', [LegalController::class, 'updateAiTraining']);
         Route::post('/gamification/sync', [SyncController::class, 'syncGamification']);
 
         // ── Teaching tools (teachers and admins) ──
@@ -232,6 +247,8 @@ Route::middleware('auth')->group(function () {
             Route::post('/admin/learners', [Admin\LearnerController::class, 'store']);
             Route::match(['patch', 'put'], '/admin/learners/{id}', [Admin\LearnerController::class, 'update']);
             Route::delete('/admin/learners/{id}', [Admin\LearnerController::class, 'destroy']);
+            Route::put('/admin/learners/{id}/consent', [Admin\LearnerController::class, 'consent']);
+            Route::post('/admin/learners/consent-forms', [Admin\LearnerController::class, 'bulkConsent']);
 
             Route::post('/admin/classes', [Admin\ClassController::class, 'store']);
             Route::match(['patch', 'put'], '/admin/classes/{id}', [Admin\ClassController::class, 'update']);

@@ -98,6 +98,39 @@ class User extends Authenticatable
         return $this->hasMany(LearnerProgress::class);
     }
 
+    public function aiConversations(): HasMany
+    {
+        return $this->hasMany(AiConversation::class);
+    }
+
+    public function consents(): HasMany
+    {
+        return $this->hasMany(Consent::class);
+    }
+
+    /** Agreed to (or, for a learner, acknowledged) the current Terms and Privacy Policy. */
+    public function hasAcceptedCurrentTerms(): bool
+    {
+        $latest = Consent::latestFor($this, Consent::TERMS);
+
+        return $latest !== null && $latest->granted && $latest->version === Consent::currentVersion(Consent::TERMS);
+    }
+
+    /**
+     * Whether this person gives their own consent. A school learner's comes from their parent's
+     * form, recorded by the school; staff and independent learners (no school) answer for themselves.
+     */
+    public function givesOwnConsent(): bool
+    {
+        return ! $this->isLearner() || $this->learnerProfile?->school_id === null;
+    }
+
+    /** Whether this person's de-identified data may be used to improve AceDrill's AI. No answer is no. */
+    public function allowsAiTraining(): bool
+    {
+        return (bool) Consent::latestFor($this, Consent::AI_TRAINING)?->granted;
+    }
+
     public function administeredSchool(): HasOne
     {
         return $this->hasOne(School::class, 'admin_user_id');

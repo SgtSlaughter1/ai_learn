@@ -3,6 +3,7 @@
 use App\Http\Controllers\MaintenanceController;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\EnsureIdempotentRequest;
+use App\Http\Middleware\EnsureTermsAccepted;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -33,6 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             EnsureAccountIsActive::class,
             HandleInertiaRequests::class,
+            EnsureTermsAccepted::class,
             EnsureIdempotentRequest::class,
         ]);
     })

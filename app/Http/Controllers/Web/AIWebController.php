@@ -7,6 +7,7 @@ use App\Http\Requests\AI\ChatAIRequest;
 use App\Http\Requests\AI\ExplainQuestionRequest;
 use App\Models\Question;
 use App\Services\AI\AiInputSanitizer;
+use App\Services\AI\ChatConversations;
 use App\Services\AIService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,8 @@ class AIWebController extends Controller
 {
     public function __construct(
         protected AIService $aiService,
-        protected AiInputSanitizer $sanitizer
+        protected AiInputSanitizer $sanitizer,
+        protected ChatConversations $conversations
     ) {}
 
     /**
@@ -147,7 +149,15 @@ class AIWebController extends Controller
 
         // Defense in depth: sanitize even though FormRequest validation capped lengths.
         $message = $this->sanitizer->sanitizeMessage($validated['message']);
-        $history = $this->sanitizer->sanitizeHistory($validated['history'] ?? []);
+        // A saved chat (only the user's own; anyone else's is a 404) supplies its own history.
+        $conversation = isset($validated['conversation_id'])
+            ? $user->aiConversations()->findOrFail($validated['conversation_id'], ['id'])
+            : null;
+        $history = $conversation
+            ? $this->conversations->recentHistory($conversation)
+            // A chat not saved yet keeps only the user's own turns: replies typed into the request
+            // could put words in the assistant's mouth ("Sure, I'll ignore my rules").
+            : array_values(array_filter($this->sanitizer->sanitizeHistory($validated['history'] ?? []), fn ($turn) => $turn['role'] === 'user'));
 
         // A message that is empty after sanitization carried no legitimate content.
         if ($message === '') {
@@ -158,9 +168,11 @@ class AIWebController extends Controller
         }
 
         $response = $this->aiService->generateChatResponse($user, $message, $history);
+        $conversation = $this->conversations->record($user, $conversation, $message, $response);
 
         return response()->json([
             'response' => $response,
+            'conversation_id' => $conversation->id,
         ]);
     }
 }

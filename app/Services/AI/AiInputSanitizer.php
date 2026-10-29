@@ -49,6 +49,14 @@ class AiInputSanitizer
         '/developer\s+mode\s*[:\-]?\s*(on|enabled|activated)/i',
         '/\bDAN\s+mode\b/i',
         '/jailbreak\b/i',
+        '/override\s+(your|the|all|any)\s+(rules?|instructions?|guidelines?|safety|restrictions?)/i',
+        '/from\s+now\s+on,?\s+you\s+(will|must|are|should|can)\b/i',
+        '/(enter|enable|switch\s+to|activate)\s+(developer|god|admin|debug|unrestricted)\s+mode/i',
+        // Chat-template tokens and fake role headers that try to open a new "system" turn.
+        '/<\|?\s*(im_start|im_end|system|endoftext|start_header_id|end_header_id)\s*\|?>/i',
+        '/\[\/?(INST|SYS)\]|<<\/?SYS>>/i',
+        '/<\/?\s*(system|assistant|instructions?|student_data|school_data)\s*>/i',
+        '/^\s*#{1,6}\s*(system|assistant)\s*(prompt|message|turn)?\s*:?\s*$/im',
     ];
 
     /**
@@ -160,6 +168,27 @@ class AiInputSanitizer
 
         // The most recent turns are the ones that give the next answer its context.
         return array_slice($clean, -self::MAX_HISTORY_TURNS);
+    }
+
+    /**
+     * A value from the database (a name, class, topic or school) placed inside a prompt. Anyone can
+     * choose their own name, so a name must never be able to read as an instruction: one line,
+     * no markup or brackets, no injection phrases, and short.
+     */
+    public function promptValue(?string $value, int $max = 80): string
+    {
+        $text = preg_replace('/[\x00-\x1F\x7F]+/u', ' ', (string) $value) ?? '';
+        $text = $this->stripPatterns($text, $this->injectionPatterns);
+        $text = preg_replace('/[<>{}\[\]`|#*_]+/u', ' ', $text) ?? '';
+        $text = trim(preg_replace('/\s{2,}/u', ' ', $text) ?? '');
+
+        return mb_substr($text, 0, $max);
+    }
+
+    /** An AI reply before it is shown or saved: no HTML or script, whatever the model wrote. */
+    public function sanitizeOutput(string $reply): string
+    {
+        return trim($this->stripPatterns($reply, $this->xssPatterns));
     }
 
     protected function stripPatterns(string $text, array $patterns): string

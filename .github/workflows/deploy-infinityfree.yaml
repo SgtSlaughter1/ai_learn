@@ -73,6 +73,7 @@ jobs:
           cp -r public /tmp/deploy_app/
           mkdir -p /tmp/deploy_app/resources
           cp -r resources/views /tmp/deploy_app/resources/
+          cp -r resources/legal /tmp/deploy_app/resources/
           cp -r routes /tmp/deploy_app/
 
           # NOTE: .env is intentionally excluded so your live server .env is NEVER touched or overwritten

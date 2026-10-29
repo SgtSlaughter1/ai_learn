@@ -2,6 +2,7 @@
 
 namespace App\Services\AI;
 
+use App\Models\AiUsageDaily;
 use App\Support\MathText;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -27,6 +28,12 @@ class AiClient
     /** End of the current generate() call's time budget (microtime). */
     private float $deadline = INF;
 
+    /** What the current generate() call is for, so its tokens are counted against that feature. */
+    private string $feature = 'other';
+
+    /** @var array{provider: string, model: string, prompt_tokens: int, completion_tokens: int}|null The answer generate() last returned */
+    private ?array $lastCall = null;
+
     public function __construct(?string $provider = null, ?string $apiKey = null, ?string $modelName = null)
     {
         // config() only (it already falls back across the env names); env() is null once config is cached.
@@ -47,12 +54,16 @@ class AiClient
      *
      * @param  array  $contents  Gemini-style turns: [['role' => 'user'|'model', 'parts' => [['text' => ...]]]]
      * @param  bool  $json  Ask for a JSON reply (question import and generation).
+     * @param  string  $feature  Which feature is asking (explain_question, learner_chat, ...), for usage counts.
+     * @param  int|null  $maxTokens  Cap on the reply, thinking included; null for the default (1,500, or 6,000 for JSON).
      */
-    public function generate(array $contents, ?string $systemInstruction = null, bool $json = false): ?string
+    public function generate(array $contents, ?string $systemInstruction = null, bool $json = false, string $feature = 'other', ?int $maxTokens = null): ?string
     {
+        $this->lastCall = null;
         if ($this->provider === 'local') {
             return null;
         }
+        $this->feature = $feature;
         // The whole chain shares one time budget, well inside PHP's execution limit on shared
         // hosting, so a slow provider still leaves time to fall back to the offline answer.
         $this->deadline = microtime(true) + (float) config('services.ai.time_budget', 20);
@@ -60,8 +71,11 @@ class AiClient
         $order = $this->provider === 'gemini' ? ['gemini', 'groq'] : ['groq', 'gemini'];
         foreach ($order as $provider) {
             $text = $provider === 'groq'
-                ? $this->callGroq($contents, $systemInstruction, $json)
-                : $this->callGemini($contents, $systemInstruction, $json ? ['response_mime_type' => 'application/json'] : []);
+                ? $this->callGroq($contents, $systemInstruction, $json, $maxTokens)
+                : $this->callGemini($contents, $systemInstruction, array_filter([
+                    'response_mime_type' => $json ? 'application/json' : null,
+                    'maxOutputTokens' => $maxTokens,
+                ]));
             if ($text !== null && $text !== '') {
                 // Maths clean-up is for prose only: in JSON it would rewrite string contents.
                 return $json ? $text : MathText::removeDuplicates(MathText::normalizeDelimiters($text));
@@ -69,6 +83,44 @@ class AiClient
         }
 
         return null;
+    }
+
+    /** Who answered the last generate() call and what it cost; null when no provider answered. */
+    public function lastCall(): ?array
+    {
+        return $this->lastCall;
+    }
+
+    /**
+     * Count the tokens a reply was billed for, answered or not (a reply cut off at the token
+     * limit is still paid for). Groq reports OpenAI-style usage; Gemini reports usageMetadata,
+     * where thinking tokens are billed as output.
+     *
+     * @return array{prompt_tokens: int, completion_tokens: int}|null
+     */
+    private function meter(string $provider, string $model, Response $response): ?array
+    {
+        $usage = $provider === 'groq'
+            ? ['prompt_tokens' => $response->json('usage.prompt_tokens'), 'completion_tokens' => $response->json('usage.completion_tokens')]
+            : [
+                'prompt_tokens' => $response->json('usageMetadata.promptTokenCount'),
+                'completion_tokens' => $response->json('usageMetadata.candidatesTokenCount') === null && $response->json('usageMetadata.thoughtsTokenCount') === null
+                    ? null
+                    : (int) $response->json('usageMetadata.candidatesTokenCount') + (int) $response->json('usageMetadata.thoughtsTokenCount'),
+            ];
+        if ($usage['prompt_tokens'] === null && $usage['completion_tokens'] === null) {
+            return null;
+        }
+        $usage = array_map('intval', $usage);
+        AiUsageDaily::record($this->feature, $provider, $model, $usage['prompt_tokens'], $usage['completion_tokens']);
+
+        return $usage;
+    }
+
+    /** Remember who answered, for callers that store the answer (see AIService explanations). */
+    private function answered(string $provider, string $model, ?array $usage): void
+    {
+        $this->lastCall = ['provider' => $provider, 'model' => $model, 'prompt_tokens' => $usage['prompt_tokens'] ?? 0, 'completion_tokens' => $usage['completion_tokens'] ?? 0];
     }
 
     /**
@@ -112,7 +164,7 @@ class AiClient
      * Groq's OpenAI-compatible chat API: the main model, then the fallback model (each has
      * its own rate limits). A rate-limited or failing model moves on to the next at once.
      */
-    protected function callGroq(array $contents, ?string $systemInstruction = null, bool $json = false): ?string
+    protected function callGroq(array $contents, ?string $systemInstruction = null, bool $json = false, ?int $maxTokens = null): ?string
     {
         if (empty($this->groqKey)) {
             return null;
@@ -153,7 +205,7 @@ class AiClient
                 'model' => $model,
                 'messages' => $messages,
                 'temperature' => $json ? 0.2 : 0.4,
-                'max_completion_tokens' => $json ? 6000 : 1500,
+                'max_completion_tokens' => $maxTokens ?? ($json ? 6000 : 1500),
             ];
             if (str_starts_with($model, 'openai/gpt-oss')) {
                 // Reasoning models: think briefly, return only the answer.
@@ -166,8 +218,11 @@ class AiClient
 
             try {
                 $response = Http::withToken($this->groqKey)->connectTimeout(5)->timeout($timeout)->post($url, $body);
+                $usage = $this->meter('groq', $model, $response);
                 $text = $response->successful() ? trim((string) $response->json('choices.0.message.content')) : '';
                 if ($text !== '') {
+                    $this->answered('groq', $model, $usage);
+
                     return $text;
                 }
                 $this->recordFailure('groq', $model, $response);
@@ -219,8 +274,11 @@ class AiClient
                     ->withHeaders(['x-goog-api-key' => $this->apiKey])
                     ->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent", $payload);
 
+                $usage = $this->meter('gemini', $model, $response);
                 $text = $response->successful() ? trim((string) $response->json('candidates.0.content.parts.0.text')) : '';
                 if ($text !== '') {
+                    $this->answered('gemini', $model, $usage);
+
                     return $text;
                 }
                 $this->recordFailure('gemini', $model, $response);

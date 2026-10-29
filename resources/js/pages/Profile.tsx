@@ -39,10 +39,64 @@ interface Props {
         classes?: ProfileClass[];
         school_counts?: { teachers: number; learners: number; classes: number } | null;
         schools?: ProfileSchool[];
+        ai_training?: { allowed: boolean; can_change: boolean };
     };
 }
 
 type Detail = { icon: LucideIcon; label: string; value?: string | null };
+
+/**
+ * Whether this person's de-identified data may help improve AceDrill's AI. Adults switch it here;
+ * a learner's answer comes from their parent's consent form, so they only see it.
+ */
+function AiTrainingChoice({ initial, canChange }: { initial: boolean; canChange: boolean }) {
+    const [allowed, setAllowed] = useState(initial);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const change = async (next: boolean) => {
+        setSaving(true);
+        setError(null);
+        try {
+            const token = decodeURIComponent(document.cookie.split('; ').find((r) => r.startsWith('XSRF-TOKEN='))?.split('=')[1] ?? '');
+            const res = await fetch('/api/v1/account/ai-training', {
+                method: 'PUT',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-XSRF-TOKEN': token },
+                body: JSON.stringify({ allowed: next }),
+            });
+            if (!res.ok) throw new Error(String(res.status));
+            setAllowed(next);
+        } catch {
+            setError("Your choice couldn't be saved. Check your connection and try again.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="space-y-3">
+            <p className="text-sm text-[var(--color-text)] leading-relaxed">
+                AceDrill may use questions, answers and chats, with names and anything that identifies you removed, to improve its AI. Saying no changes nothing else in the app.
+            </p>
+            {canChange ? (
+                <label className="flex items-center gap-3 text-sm font-semibold text-[var(--color-text)] cursor-pointer">
+                    <input type="checkbox" checked={allowed} disabled={saving} onChange={(e) => change(e.target.checked)} className="w-4 h-4 accent-[var(--color-primary)]" />
+                    Use my de-identified data to improve AceDrill's AI
+                </label>
+            ) : (
+                <p className="text-sm font-semibold text-[var(--color-text)]">
+                    {allowed ? 'Yes, your parent or guardian agreed.' : 'No, your data is not used for this.'}{' '}
+                    <span className="font-normal text-[var(--color-muted)]">Your school records this from your parent or guardian's consent form.</span>
+                </p>
+            )}
+            {error && <p role="alert" className="text-sm font-semibold text-[var(--color-error)]">{error}</p>}
+            <p className="text-xs text-[var(--color-muted)]">
+                Read the <a href="/privacy" className="underline underline-offset-2">Privacy Policy</a> and <a href="/terms" className="underline underline-offset-2">Terms of Use</a>.
+            </p>
+        </div>
+    );
+}
 
 /** Label-over-value rows, separated by hairlines; no box of its own (the card is the box). */
 function DetailList({ items }: { items: Detail[] }) {
@@ -262,6 +316,16 @@ export default function Profile({ profile }: Props) {
                                 ))}
                             </ul>
                         )}
+                    </section>
+                )}
+
+                {profile?.ai_training && (
+                    <section className={`${card} mt-6`} aria-labelledby="privacy-heading">
+                        <div className="flex items-center gap-2 pb-3">
+                            <ShieldCheck className="w-4 h-4 text-[var(--color-primary)]" aria-hidden />
+                            <h2 id="privacy-heading" className="text-base font-bold text-[var(--color-text)]">Your data and AI</h2>
+                        </div>
+                        <AiTrainingChoice initial={profile.ai_training.allowed} canChange={profile.ai_training.can_change} />
                     </section>
                 )}
 

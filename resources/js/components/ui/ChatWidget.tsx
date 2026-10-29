@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { usePage } from '@inertiajs/react';
+import { ArrowLeft, History, SquarePen, Trash2 } from 'lucide-react';
+import { confirmAction } from '@/components/common/ConfirmModal';
 import Markdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -9,6 +11,21 @@ import 'katex/dist/katex.min.css';
 interface Message {
     role: 'user' | 'model';
     content: string;
+}
+
+interface SavedChat {
+    id: number;
+    title: string;
+    last_message_at: string;
+}
+
+/** "Today", "Yesterday", or a short date, for the saved chats list. */
+function chatDay(iso: string): string {
+    const d = new Date(iso);
+    const days = Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 86_400_000);
+    if (days <= 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
 }
 
 function detectSubjectFromQuery(query: string): string {
@@ -563,13 +580,80 @@ export default function ChatWidget() {
     ]);
     const [chatInput, setChatInput] = useState<string>('');
     const [chatLoading, setChatLoading] = useState<boolean>(false);
+    // The saved chat being continued (null: a new one, saved when the first reply comes back).
+    const [conversationId, setConversationId] = useState<number | null>(null);
+    const [view, setView] = useState<'chat' | 'history'>('chat');
+    const [savedChats, setSavedChats] = useState<SavedChat[] | null>(null);
+    const [savedError, setSavedError] = useState<string | null>(null);
+    const restoredRef = useRef(false);
 
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     // Update greeting if auth changes
     useEffect(() => {
         setMessages([{ role: 'model', content: defaultGreeting }]);
+        setConversationId(null);
+        restoredRef.current = false;
     }, [isStaffOrEducator, isTeacher, user?.name]);
+
+    const loadSavedChats = async (): Promise<SavedChat[]> => {
+        setSavedError(null);
+        try {
+            const res = await fetch('/api/v1/ai/conversations', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+            if (!res.ok) throw new Error(String(res.status));
+            const list: SavedChat[] = (await res.json()).data ?? [];
+            setSavedChats(list);
+            return list;
+        } catch {
+            setSavedError(navigator.onLine ? "Your saved chats couldn't be loaded. Try again in a moment." : 'Your saved chats need an internet connection.');
+            return [];
+        }
+    };
+
+    const openSavedChat = async (id: number) => {
+        try {
+            const res = await fetch(`/api/v1/ai/conversations/${id}`, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+            if (!res.ok) throw new Error(String(res.status));
+            const chat = await res.json();
+            setMessages(chat.messages.map((m: Message) => ({ role: m.role, content: m.content })));
+            setConversationId(chat.id);
+            setView('chat');
+        } catch {
+            setSavedError("That chat couldn't be opened. Try again in a moment.");
+        }
+    };
+
+    const startNewChat = () => {
+        setMessages([{ role: 'model', content: defaultGreeting }]);
+        setConversationId(null);
+        setView('chat');
+    };
+
+    const deleteSavedChat = async (chat: SavedChat) => {
+        if (!(await confirmAction({ title: 'Delete this chat?', message: `"${chat.title}" will be deleted for good.`, confirmLabel: 'Delete', tone: 'danger' }))) return;
+        try {
+            const res = await fetch(`/api/v1/ai/conversations/${chat.id}`, {
+                method: 'DELETE',
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'X-XSRF-TOKEN': decodeURIComponent(getCsrfToken()) },
+            });
+            if (!res.ok) throw new Error(String(res.status));
+            setSavedChats((list) => (list ?? []).filter((c) => c.id !== chat.id));
+            if (conversationId === chat.id) startNewChat();
+        } catch {
+            setSavedError("That chat couldn't be deleted. Try again in a moment.");
+        }
+    };
+
+    // The first time the panel opens, pick up the most recent chat where the user left it.
+    useEffect(() => {
+        if (!chatOpen || restoredRef.current || !navigator.onLine) return;
+        restoredRef.current = true;
+        loadSavedChats().then((list) => {
+            if (list[0] && conversationId === null && messages.length <= 1) openSavedChat(list[0].id);
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [chatOpen]);
 
     // Scroll chat to bottom on new message
     useEffect(() => {
@@ -612,8 +696,9 @@ export default function ChatWidget() {
                 },
                 body: JSON.stringify({
                     message: textToSend,
-                    // Recent turns only, each trimmed: the server keeps at most 20 of 2,000 characters.
-                    history: messages.slice(-12).map((m) => ({ role: m.role, content: String(m.content ?? '').slice(0, 2000) }))
+                    // A saved chat's history is read on the server; the local turns cover a chat not saved yet.
+                    conversation_id: conversationId,
+                    history: conversationId ? [] : messages.slice(-12).map((m) => ({ role: m.role, content: String(m.content ?? '').slice(0, 2000) }))
                 })
             });
 
@@ -621,6 +706,7 @@ export default function ChatWidget() {
             const data = await res.json();
 
             setMessages((prev) => [...prev, { role: 'model', content: data.response }]);
+            if (data.conversation_id) setConversationId(data.conversation_id);
         } catch (error) {
             console.error('AI chat online request failed, falling back to local heuristic:', error);
             // Fallback to local response generator if network fails
@@ -702,6 +788,30 @@ export default function ChatWidget() {
                                 </span>
                             </div>
                         </div>
+                        <div className="flex items-center gap-0.5">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (view === 'history') {
+                                    setView('chat');
+                                } else {
+                                    setView('history');
+                                    loadSavedChats();
+                                }
+                            }}
+                            className="inline-flex items-center gap-1 px-2 text-[11px] font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-primary-5)] rounded-lg transition-colors cursor-pointer min-h-[32px]"
+                            aria-pressed={view === 'history'}
+                        >
+                            {view === 'history' ? <ArrowLeft className="w-4 h-4" aria-hidden /> : <History className="w-4 h-4" aria-hidden />}
+                            {view === 'history' ? 'Back' : 'History'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={startNewChat}
+                            className="inline-flex items-center gap-1 px-2 text-[11px] font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-primary-5)] rounded-lg transition-colors cursor-pointer min-h-[32px]"
+                        >
+                            <SquarePen className="w-4 h-4" aria-hidden /> New
+                        </button>
                         <button
                             onClick={() => setChatOpen(false)}
                             className="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-primary-5)] rounded-lg transition-colors cursor-pointer min-h-[32px] min-w-[32px] flex items-center justify-center"
@@ -711,10 +821,36 @@ export default function ChatWidget() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </button>
+                        </div>
                     </div>
 
+                    {view === 'history' && (
+                        <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+                            <p className="px-1 pb-1 text-[11px] text-[var(--color-muted)]">Your past chats, saved so you can read an answer again. Only you can see them.</p>
+                            {savedError && <p role="alert" className="px-1 text-xs font-semibold text-[var(--color-error)]">{savedError}</p>}
+                            {savedChats === null && !savedError && <p className="px-1 text-xs text-[var(--color-muted)]">Loading…</p>}
+                            {savedChats?.length === 0 && <p className="px-1 text-xs text-[var(--color-muted)]">No saved chats yet. Ask a question and it will appear here.</p>}
+                            {savedChats?.map((chat) => (
+                                <div key={chat.id} className={`flex items-center gap-1 rounded-xl border ${chat.id === conversationId ? 'border-[var(--color-primary)]/50 bg-[var(--color-primary-5)]' : 'border-[var(--color-border)]'}`}>
+                                    <button type="button" onClick={() => openSavedChat(chat.id)} className="flex-1 min-w-0 text-left px-3 py-2.5 cursor-pointer">
+                                        <span className="block truncate text-xs font-bold text-[var(--color-text)]">{chat.title}</span>
+                                        <span className="block text-[11px] text-[var(--color-muted)]">{chatDay(chat.last_message_at)}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => deleteSavedChat(chat)}
+                                        aria-label={`Delete chat: ${chat.title}`}
+                                        className="shrink-0 mr-1 w-8 h-8 inline-flex items-center justify-center rounded-lg text-[var(--color-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-surface-hover)] cursor-pointer"
+                                    >
+                                        <Trash2 className="w-4 h-4" aria-hidden />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
                     {/* Quick Suggestion Chips (shown when few messages) */}
-                    {messages.length <= 2 && (
+                    {view === 'chat' && conversationId === null && messages.length <= 2 && (
                         <div className="px-3.5 py-2.5 bg-[var(--color-background)]/50 border-b border-[var(--color-border)] flex flex-wrap gap-1.5">
                             {quickPrompts.map((prompt, idx) => (
                                 <button
@@ -730,7 +866,7 @@ export default function ChatWidget() {
                     )}
 
                     {/* Message log */}
-                    <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                    <div className={`flex-1 p-4 overflow-y-auto space-y-4 ${view === 'chat' ? '' : 'hidden'}`}>
                         {messages.map((msg, idx) => (
                             <div
                                 key={idx}
@@ -768,7 +904,7 @@ export default function ChatWidget() {
                     </div>
 
                     {/* Input Area */}
-                    <form onSubmit={handleFormSubmit} className="p-3 bg-[var(--color-surface-hover)] border-t border-[var(--color-border)] flex gap-2">
+                    <form onSubmit={handleFormSubmit} className={`p-3 bg-[var(--color-surface-hover)] border-t border-[var(--color-border)] flex gap-2 ${view === 'chat' ? '' : 'hidden'}`}>
                         <input
                             type="text"
                             value={chatInput}

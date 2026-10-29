@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Models\Consent;
 use App\Models\LearnerProfile;
 use App\Models\User;
 use App\Models\UserGamification;
@@ -70,6 +71,9 @@ class RegisterController extends Controller
                     'last_active_date' => now()->toDateString(),
                 ]
             );
+
+            // The sign-up form says creating an account means agreeing to the Terms and Privacy Policy.
+            Consent::record($user, Consent::TERMS, true, Consent::SOURCE_SELF);
 
             return $user;
         });

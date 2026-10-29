@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\SaveLearnerRequest;
 use App\Http\Requests\Admin\UpdateLearnerRequest;
 use App\Models\ClassMembership;
 use App\Models\ClassModel;
+use App\Models\Consent;
 use App\Models\LearnerProfile;
 use App\Models\School;
 use App\Models\User;
@@ -27,6 +28,12 @@ class LearnerController extends Controller
     {
         $query = User::where('role', 'learner')
             ->managedBy($request->user())
+            // Each learner's current consent-form answers (null: not recorded yet), without loading their rows.
+            ->select('users.*')
+            ->addSelect([
+                'parental_consent' => Consent::currentAnswerSubquery(Consent::PARENTAL),
+                'ai_training_consent' => Consent::currentAnswerSubquery(Consent::AI_TRAINING),
+            ])
             ->with([
                 'learnerProfile.school:id,name',
                 'gamification:id,user_id,total_xp,level,tier',
@@ -145,6 +152,87 @@ class LearnerController extends Controller
             'message' => 'Learner added successfully',
             'learner' => $user,
         ], 201);
+    }
+
+    /** The most learners one bulk consent save can cover (a large school records class by class). */
+    private const CONSENT_BATCH_MAX = 500;
+
+    /**
+     * Record a learner's consent form as the school received it: Part A (using AceDrill) and
+     * Part B (AI improvement). Only a changed answer adds a row, so the history stays meaningful.
+     */
+    public function consent(Request $request, string $id): JsonResponse
+    {
+        $learner = User::where('id', $id)->where('role', 'learner')->firstOrFail();
+        Gate::authorize('update', $learner);
+        $validated = $request->validate([
+            'parental' => ['required', 'boolean'],
+            'ai_training' => ['required', 'boolean'],
+        ]);
+
+        $this->recordConsentForms($request->user(), [$learner->id], $validated['parental'], $validated['ai_training']);
+
+        return response()->json(['parental_consent' => $validated['parental'], 'ai_training_consent' => $validated['ai_training']]);
+    }
+
+    /** The same consent form answers for many learners at once, e.g. a whole class whose forms came back. */
+    public function bulkConsent(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'learner_ids' => ['required', 'array', 'min:1', 'max:'.self::CONSENT_BATCH_MAX],
+            'learner_ids.*' => ['required', 'string', 'distinct'],
+            'parental' => ['required', 'boolean'],
+            'ai_training' => ['required', 'boolean'],
+        ]);
+
+        // Every learner must be one this person manages; one outside their school refuses the whole save.
+        $ids = User::where('role', 'learner')->managedBy($request->user())->whereIn('id', $validated['learner_ids'])->pluck('id');
+        abort_if($ids->count() !== count($validated['learner_ids']), 403, 'Some of these learners are not in your school.');
+
+        $added = $this->recordConsentForms($request->user(), $ids->all(), $validated['parental'], $validated['ai_training']);
+
+        return response()->json(['learners' => $ids->count(), 'changed' => $added]);
+    }
+
+    /**
+     * Add a consent row wherever a learner's current answer differs, reading every current answer
+     * in one query and writing every change in one insert. Returns how many rows were added.
+     *
+     * @param  array<int, string>  $learnerIds  already checked as manageable by $actor
+     */
+    private function recordConsentForms(User $actor, array $learnerIds, bool $parental, bool $aiTraining): int
+    {
+        $current = User::whereIn('id', $learnerIds)
+            ->select('id')
+            ->addSelect([
+                Consent::PARENTAL => Consent::currentAnswerSubquery(Consent::PARENTAL),
+                Consent::AI_TRAINING => Consent::currentAnswerSubquery(Consent::AI_TRAINING),
+            ])
+            ->toBase()
+            ->get();
+
+        $now = now();
+        $rows = [];
+        foreach ($current as $learner) {
+            foreach ([Consent::PARENTAL => $parental, Consent::AI_TRAINING => $aiTraining] as $document => $granted) {
+                if ($learner->{$document} === null || (bool) $learner->{$document} !== $granted) {
+                    $rows[] = [
+                        'user_id' => $learner->id,
+                        'document' => $document,
+                        'version' => Consent::currentVersion($document),
+                        'granted' => $granted,
+                        'source' => Consent::SOURCE_SCHOOL,
+                        'recorded_by' => $actor->id,
+                        'created_at' => $now,
+                    ];
+                }
+            }
+        }
+        foreach (array_chunk($rows, 500) as $chunk) {
+            Consent::insert($chunk);
+        }
+
+        return count($rows);
     }
 
     public function update(UpdateLearnerRequest $request, string $id): JsonResponse

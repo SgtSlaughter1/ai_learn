@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AiConversation;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -13,3 +14,6 @@ Artisan::command('inspire', function () {
 Schedule::call(function () {
     DB::table('idempotency_keys')->where('created_at', '<', now()->subDays(14))->delete();
 })->daily()->name('prune-idempotency-keys');
+
+// AI chats unused for a year (AiConversation::KEEP_DAYS) are deleted, as the privacy policy says.
+Schedule::command('model:prune', ['--model' => [AiConversation::class]])->daily();

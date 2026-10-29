@@ -298,13 +298,37 @@ The AI never blocks the app: every AI feature has an offline answer that is used
 - A model that returns 429 (rate limited) is set aside for its Retry-After time (60 s if not given, 5–600 s), so the next requests skip straight to the next model.
 - Failures are logged as `ai.provider_failed` with provider, model and status, never the key.
 
-**Explanations are cached** per question, version and chosen option: an AI answer for 30 days, an offline answer for 10 minutes (so the AI gets another try soon). A lock makes 30 learners asking at once produce one AI call. Editing the question changes its version, so the cache can't serve an outdated explanation. A question with no correct option marked returns "Answer key missing" instead of a made-up explanation.
+**Explanations are written once and reused.** An explanation depends only on the question, its version and the option chosen, not on the learner, so the AI writes each one once:
+
+1. The cache is checked first (30 days).
+2. If it isn't there, the saved explanation in `ai_explanations` is used and put back in the cache.
+3. Only when neither has it does the AI answer. The answer is saved to the table and the cache.
+
+So clearing the cache, or a deploy, never means paying for the same explanation again. Only real AI answers are saved; an offline answer is cached for 10 minutes so the AI gets another try soon. A lock makes 30 learners asking at once produce one AI call. Editing the question changes its version, so a fresh explanation is written. A question with no correct option marked returns "Answer key missing" instead of a made-up explanation. The saved explanations can later be checked by teachers, shipped in the offline download, or used to fine-tune a model.
+
+**Usage is metered.** Every reply a provider bills for, including one cut off at the token limit, adds its input and output tokens to `ai_usage_daily`: one row per day, feature and model. The features are `explain_question`, `explain_past_question`, `learner_chat`, `staff_chat`, `question_import` and `question_generation`. Recording never blocks an answer; a failure is only logged.
+
+```bash
+php artisan ai:usage --days=30
+```
+
+shows requests and tokens per feature and model, and how many explanations are saved.
+
+**Chat is kept lean**, because it is the one AI cost that grows with every learner:
+
+- **The fixed part of the prompt comes first** (persona, rules, guidelines), identical on every message, so providers can reuse their cached copy. The learner's own details come last.
+- **Only what the tutor needs:** the learner's 5 weakest topics, not every topic. The teacher copilot gets the school's numbers, but no longer 5 random sample questions on every message.
+- **The last 6 turns of history** are sent, not all 20.
+- **Learner replies are capped at 700 tokens** (thinking included); the prompt asks for under 150 words anyway. The teacher copilot keeps 1,500 for lesson plans and question drafts.
+- **A daily cap per user:** 40 AI chat messages for learners (`AI_DAILY_CHAT_LIMIT`) and 150 for staff (`AI_DAILY_STAFF_CHAT_LIMIT`), reset at midnight; 0 turns it off. Past the cap, learners get the built-in offline tutor with a note saying why, never an error.
+
+**Chats are saved for their owner.** Each chat is kept in `ai_conversations` and `ai_messages`, so a learner can open **History** in the chat panel and reread yesterday's answer instead of asking (and paying) again. The last chat reopens when the panel opens. Only the owner can list, open or delete their chats; anyone else gets a 404. When a saved chat continues, the AI gets its recent turns from the server's copy, so a client can't slip invented earlier replies into the prompt. Chats unused for a year are deleted by the daily `model:prune` schedule, and all of a user's chats go when their account is deleted.
 
 **Safety and privacy**
 
 - Each user can make 20 AI requests a minute.
 - Learner input is screened for prompt-injection patterns before it reaches the model.
-- Chat history is trimmed to the last 20 messages of up to 2,000 characters each.
+- Chat history is limited to 20 messages of up to 2,000 characters each, and only the last 6 are sent to the AI.
 - The learner tutor knows the learner by first name only.
 - The teacher copilot only sees learners in the teacher's own classes, and only gets the roster when the question is about students.
 
@@ -415,6 +439,25 @@ Every number on the result is in **marks**, so the parts always add up to the wh
 **Kept fast for a whole school.** Indexed on school, status and open time; the exam keeps its question count and total marks so lists don't re-count them; the room view is one query; the question bank is paginated; closing overdue attempts works in batches of 100.
 
 **Coming next.** Sitting an exam with no internet: an encrypted exam pack downloaded ahead of time, unlocked by the start code, with each learner's answers handed to the invigilator's phone by QR code.
+
+---
+
+## 🔏 Terms, privacy and consent
+
+Most learners are children, so AceDrill follows the Nigeria Data Protection Act 2023 model where **the school is the data controller** and collects consent from each learner's parent or guardian. The text of the Terms of Use, Privacy Policy and learner summary lives in `resources/legal/*.md`, so it can change without code changes; `/terms` and `/privacy` show it to anyone.
+
+**Every consent is a row in `consents`, never edited:** who, which document, which version, yes or no, whether they gave it themselves or the school recorded it (and which staff member), and when. The newest row per person and document is the current answer; the rest is the proof.
+
+| Document | Who answers | Where |
+| --- | --- | --- |
+| `terms`: Terms of Use and Privacy Policy | Staff and independent learners agree; school learners acknowledge a short summary | The agree screen at `/consent`, or the sign-up form |
+| `parental`: Part A of the parental consent form | The school, from the signed form | Admin › Learners: one learner's **Consent form**, or tick several (or Select all) and **Record consent forms** |
+| `ai_training`: using de-identified data to improve AceDrill's AI | School learners: the school, from Part B of the form. Everyone else: themselves | Admin › Learners, or the Profile page |
+
+- **No answer means no** for AI improvement (`User::allowsAiTraining()`). Any training must use only people whose current answer is yes, with identifying details removed.
+- **The agree screen is off until the documents are final** (`LEGAL_REQUIRE_ACCEPTANCE=false`). Once on, page visits by anyone who hasn't agreed to the current `LEGAL_VERSION` go to `/consent`; background calls such as offline sync are never stopped. Changing `LEGAL_VERSION` asks everyone again.
+- Only a changed answer adds a row, so saving the same choice twice leaves no noise.
+- A bulk save reads every learner's current answers in one query and writes every change in one insert (up to 500 learners). One learner from another school refuses the whole save. Part B starts unticked for a group, because it is each family's own choice.
 
 ---
 

@@ -62,6 +62,10 @@ return [
         // Seconds one AI request may spend across every provider and model before the offline
         // answer is used. Keep it well under PHP's max_execution_time (often 30 s on shared hosts).
         'time_budget' => (int) env('AI_TIME_BUDGET', 20),
+        // Chat messages per user per day that go to the AI (0: no limit). Past it, learners get
+        // the built-in offline tutor until midnight, so one heavy user can't run up the bill.
+        'daily_chat_limit' => (int) env('AI_DAILY_CHAT_LIMIT', 40),
+        'daily_staff_chat_limit' => (int) env('AI_DAILY_STAFF_CHAT_LIMIT', 150),
     ],
 
 ];

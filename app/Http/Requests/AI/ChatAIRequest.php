@@ -50,6 +50,8 @@ class ChatAIRequest extends FormRequest
                 'min:1',
                 'max:'.AiInputSanitizer::MAX_MESSAGE_LENGTH,
             ],
+            // A saved chat to continue; its history then comes from the server, not the client.
+            'conversation_id' => ['nullable', 'integer'],
             'history' => ['nullable', 'array', 'max:'.AiInputSanitizer::MAX_HISTORY_TURNS],
             'history.*.role' => ['required_with:history', 'string', 'in:user,model,assistant'],
             'history.*.content' => ['required_with:history', 'string', 'max:'.AiInputSanitizer::MAX_HISTORY_MESSAGE_LENGTH],

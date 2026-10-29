@@ -56,6 +56,8 @@ class AccountController extends Controller
                     'classes' => $school->classes()->where('is_active', true)->count(),
                 ] : null,
                 'schools' => $user->isPlatformAdmin() ? $this->allSchools() : [],
+                // Learners' answer comes from their parent's form via the school; adults choose here.
+                'ai_training' => ['allowed' => $user->allowsAiTraining(), 'can_change' => $user->givesOwnConsent()],
             ],
         ]);
     }

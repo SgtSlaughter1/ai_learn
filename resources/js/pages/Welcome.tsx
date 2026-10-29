@@ -784,8 +784,8 @@ export default function Welcome({ subjects = [], stats, faqs }: WelcomeProps) {
                                 >
                                     Feedback
                                 </button>
-                                <Link href="/login" className="hover:text-white transition-colors">Privacy Policy</Link>
-                                <Link href="/login" className="hover:text-white transition-colors">Terms of Service</Link>
+                                <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
+                                <Link href="/terms" className="hover:text-white transition-colors">Terms of Use</Link>
                             </div>
 
                             {/* Right: Copyright & Status */}

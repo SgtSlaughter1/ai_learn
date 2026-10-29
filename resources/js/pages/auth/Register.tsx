@@ -263,6 +263,11 @@ export default function Register() {
                                     <span>Create Free Account</span>
                                 )}
                             </button>
+                            <p className="text-center text-[11px] leading-relaxed text-[var(--color-muted)]">
+                                By creating an account you agree to our{' '}
+                                <Link href="/terms" className="font-semibold text-[var(--color-primary)] hover:underline">Terms of Use</Link> and{' '}
+                                <Link href="/privacy" className="font-semibold text-[var(--color-primary)] hover:underline">Privacy Policy</Link>.
+                            </p>
                         </form>
 
                         {/* Sign In Link */}

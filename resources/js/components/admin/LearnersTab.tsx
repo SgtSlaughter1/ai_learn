@@ -186,6 +186,59 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
 
     const { backdrop, panel } = useDismiss(isLearnerModalOpen, () => setIsLearnerModalOpen(false));
 
+    // The parental consent form, as the school received it: Part A (using AceDrill), Part B (AI improvement).
+    // Recorded for one learner, or for every selected learner at once (a class whose forms came back).
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [consentTarget, setConsentTarget] = useState<{ ids: string[]; label: string } | null>(null);
+    const [consentForm, setConsentForm] = useState({ parental: false, ai_training: false });
+    const [savingConsent, setSavingConsent] = useState(false);
+    const consentDismiss = useDismiss(consentTarget !== null, () => setConsentTarget(null));
+    const bulk = (consentTarget?.ids.length ?? 0) > 1;
+
+    const allShownSelected = filteredLearners.length > 0 && filteredLearners.every((l) => selectedIds.has(String(l.id)));
+    const toggleSelected = (id: string) =>
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    const toggleAllShown = () => setSelectedIds(allShownSelected ? new Set() : new Set(filteredLearners.map((l) => String(l.id))));
+
+    const openConsent = (learner: Learner) => {
+        setConsentForm({ parental: Boolean(learner.parental_consent), ai_training: Boolean(learner.ai_training_consent) });
+        setConsentTarget({ ids: [String(learner.id)], label: learner.name });
+    };
+
+    const openBulkConsent = () => {
+        // Part B starts unticked: it is each family's own choice, never assumed for a group.
+        setConsentForm({ parental: true, ai_training: false });
+        setConsentTarget({ ids: [...selectedIds], label: `${selectedIds.size} learners` });
+    };
+
+    const saveConsent = async () => {
+        if (!consentTarget || savingConsent) return;
+        setSavingConsent(true);
+        try {
+            const token = decodeURIComponent(document.cookie.split('; ').find((r) => r.startsWith('XSRF-TOKEN='))?.split('=')[1] ?? '');
+            const res = await fetch('/api/v1/admin/learners/consent-forms', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-XSRF-TOKEN': token },
+                body: JSON.stringify({ learner_ids: consentTarget.ids, ...consentForm }),
+            });
+            if (!res.ok) throw new Error(String(res.status));
+            showToast(bulk ? `Consent forms saved for ${consentTarget.label}.` : `Consent form saved for ${consentTarget.label}.`);
+            setConsentTarget(null);
+            if (bulk) setSelectedIds(new Set());
+            onRefresh();
+        } catch {
+            showToast(navigator.onLine ? "The consent form couldn't be saved. Try again." : 'Saving a consent form needs an internet connection.', 'error');
+        } finally {
+            setSavingConsent(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -274,12 +327,37 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
                 </button>
             </div>
 
+            {selectedIds.size > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--color-primary)]/30 bg-[var(--color-primary-5)] px-4 py-3" role="region" aria-label="Selected learners">
+                    <p className="text-sm font-bold text-[var(--color-text)]">
+                        {selectedIds.size} {selectedIds.size === 1 ? 'learner' : 'learners'} selected
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => setSelectedIds(new Set())} className="min-h-9 px-3 rounded-lg text-xs font-bold text-[var(--color-muted)] hover:text-[var(--color-text)] cursor-pointer">
+                            Clear selection
+                        </button>
+                        <button type="button" onClick={openBulkConsent} className="min-h-9 px-4 rounded-lg bg-[var(--color-primary)] text-white text-xs font-bold cursor-pointer hover:opacity-90">
+                            Record consent forms
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Learners Table */}
             <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs min-w-[640px]">
                         <thead>
                             <tr className="border-b border-[var(--color-border)] bg-[var(--color-primary-5)]/20 text-[var(--color-muted)] uppercase tracking-wider font-bold">
+                                <th className="py-3.5 pl-4 pr-0 w-8">
+                                    <input
+                                        type="checkbox"
+                                        checked={allShownSelected}
+                                        onChange={toggleAllShown}
+                                        aria-label={allShownSelected ? 'Clear selection' : `Select all ${filteredLearners.length} learners`}
+                                        className="w-4 h-4 accent-[var(--color-primary)] cursor-pointer align-middle"
+                                    />
+                                </th>
                                 <th className="py-3.5 px-4">Learner</th>
                                 <th className="py-3.5 px-4">Grade & Class</th>
                                 <th className="py-3.5 px-4">School</th>
@@ -291,6 +369,7 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
                             {loading ? (
                                 [1, 2, 3, 4, 5].map((n) => (
                                     <tr key={n} className="hover:bg-[var(--color-primary-5)]/10">
+                                        <td className="py-3.5 pl-4 pr-0" />
                                         <td className="py-3.5 px-4">
                                             <div className="flex items-center gap-2.5">
                                                 <Skeleton variant="circular" className="w-8 h-8 shrink-0" />
@@ -324,7 +403,7 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
                                 ))
                             ) : paginatedLearners.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="py-12 text-center text-[var(--color-muted)] text-sm">
+                                    <td colSpan={6} className="py-12 text-center text-[var(--color-muted)] text-sm">
                                         No learners found. Click "Add New Learner" to provision students.
                                     </td>
                                 </tr>
@@ -332,6 +411,15 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
                                 paginatedLearners.map((learner) => {
                                     return (
                                     <tr key={learner.id} className={`hover:bg-[var(--color-primary-5)]/20 transition-colors ${openActionDropdownId === learner.id ? 'relative z-30' : ''}`}>
+                                        <td className="py-3.5 pl-4 pr-0">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedIds.has(String(learner.id))}
+                                                onChange={() => toggleSelected(String(learner.id))}
+                                                aria-label={`Select ${learner.name}`}
+                                                className="w-4 h-4 accent-[var(--color-primary)] cursor-pointer align-middle"
+                                            />
+                                        </td>
                                         <td className="py-3.5 px-4">
                                             <div className="flex items-center gap-2">
                                                 <p className="font-bold text-[var(--color-text)]">{learner.name}<InactiveBadge show={learner.is_active === false} /></p>
@@ -343,6 +431,15 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
                                                 )}
                                             </div>
                                             <p className="text-[11px] text-[var(--color-muted)]">{learner.email}</p>
+                                            {!learner.parental_consent ? (
+                                                <span className="mt-1 inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-400">
+                                                    Consent form not recorded
+                                                </span>
+                                            ) : (
+                                                <span className="mt-1 inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[var(--color-primary-5)] text-[var(--color-primary)]">
+                                                    Consent form in{learner.ai_training_consent ? ' · AI: yes' : ' · AI: no'}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="py-3.5 px-4">
                                             <div className="flex flex-wrap items-center gap-1.5">
@@ -473,6 +570,21 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
                                                                 onClick={() => {
                                                                     setOpenActionDropdownId(null);
                                                                     setDropdownCoords(null);
+                                                                    openConsent(learner);
+                                                                }}
+                                                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-primary-10)] transition-colors cursor-pointer text-left"
+                                                            >
+                                                                <svg className="w-3.5 h-3.5 text-[var(--color-primary-light)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                                                </svg>
+                                                                <span>Consent form</span>
+                                                            </button>
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setOpenActionDropdownId(null);
+                                                                    setDropdownCoords(null);
                                                                     void handleToggleActive(learner);
                                                                 }}
                                                                 className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-primary-10)] transition-colors cursor-pointer text-left"
@@ -525,6 +637,47 @@ export default function LearnersTab({ learners, schools, classes = [], loading, 
                     itemLabel="learners"
                 />
             </div>
+
+            {/* Modal: the parental consent form, for one learner or every selected learner */}
+            {consentTarget && (
+                <div {...consentDismiss.backdrop} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+                    <div {...consentDismiss.panel} role="dialog" aria-modal="true" aria-labelledby="consent-title" className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5">
+                        <div>
+                            <h3 id="consent-title" className="text-lg font-bold text-[var(--color-text)]">{bulk ? `Consent forms: ${consentTarget.label}` : `Consent form: ${consentTarget.label}`}</h3>
+                            <p className="mt-1 text-xs text-[var(--color-muted)]">
+                                {bulk
+                                    ? 'The same answers are saved for every selected learner. Only do this when you hold a signed form for each of them, and keep the forms on file.'
+                                    : 'Record the answers from the form the parent or guardian signed. Keep the signed form on file.'}
+                            </p>
+                        </div>
+                        <label className="flex items-start gap-3 text-sm text-[var(--color-text)] cursor-pointer">
+                            <input type="checkbox" checked={consentForm.parental} onChange={(e) => setConsentForm((f) => ({ ...f, parental: e.target.checked }))} className="mt-0.5 w-4 h-4 accent-[var(--color-primary)]" />
+                            <span>
+                                <b>Part A:</b> the parent or guardian agreed to their child using AceDrill.
+                            </span>
+                        </label>
+                        <label className="flex items-start gap-3 text-sm text-[var(--color-text)] cursor-pointer">
+                            <input type="checkbox" checked={consentForm.ai_training} onChange={(e) => setConsentForm((f) => ({ ...f, ai_training: e.target.checked }))} className="mt-0.5 w-4 h-4 accent-[var(--color-primary)]" />
+                            <span>
+                                <b>Part B:</b> they said yes to using the child's de-identified data to improve AceDrill's AI. Leave unticked if they said no or left it blank.
+                            </span>
+                        </label>
+                        {bulk && consentForm.ai_training && (
+                            <p role="alert" className="rounded-xl bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                                Part B is each family's own choice. Tick it here only if every selected family said yes; record anyone who said no on their own.
+                            </p>
+                        )}
+                        <div className="flex justify-end gap-2 pt-2">
+                            <button type="button" onClick={() => setConsentTarget(null)} className="min-h-10 px-4 rounded-xl border border-[var(--color-border)] text-sm font-bold text-[var(--color-text)] cursor-pointer">
+                                Cancel
+                            </button>
+                            <button type="button" onClick={saveConsent} disabled={savingConsent} className="min-h-10 px-4 rounded-xl bg-[var(--color-primary)] text-white text-sm font-bold cursor-pointer disabled:opacity-50">
+                                {savingConsent ? 'Saving…' : 'Save'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modal: Learner Create / Edit */}
             {isLearnerModalOpen && (

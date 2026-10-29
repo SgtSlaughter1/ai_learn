@@ -1,0 +1,8 @@
+- **What we keep:** your name, your class, your answers and scores, and your chats with the AI tutor. We need these to pick your daily questions and show your progress.
+- **Who can see it:** you, your teachers and your school. Other learners can't see your scores or chats.
+- **Your password** is locked in a way nobody can read, not even us. Never share it.
+- **The AI tutor** gets your question, your first name and the topics you find hard. Nothing else about you. Don't type your phone number, address or other private things into the chat.
+- **The AI can make mistakes.** If an answer looks wrong, ask your teacher.
+- **Your chats are saved** so you can read them again. You can delete any chat. Chats you don't use for a year are deleted.
+- **Helping us improve the AI** only happens if your parent or guardian said yes. Even then, we remove your name and anything that shows who you are first.
+- **Want to see, fix or delete your data?** Ask your teacher or school, or write to {email}.
