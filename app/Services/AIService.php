@@ -12,6 +12,7 @@ use App\Models\Topic;
 use App\Models\User;
 use App\Services\AI\AiClient;
 use App\Services\AI\AiInputSanitizer;
+use App\Services\AI\LearnerLabels;
 use App\Services\AI\OfflineExplainer;
 use App\Services\AI\OfflineTutor;
 use App\Services\AI\QuestionTextParser;
@@ -445,9 +446,12 @@ Rules:
             ->with(['learnerProfile', 'classes:id,name,grade_level', 'learnerProgress.topic.subject'])
             ->get();
 
-        // Build detailed learner profiles list for AI context
+        // The real names stay here for the offline answer; the AI gets "Learner 1", "Learner 2"….
         $learnersSummaryList = [];
         $strugglingLearnersList = [];
+        $promptRoster = [];
+        $promptStruggling = [];
+        $labels = new LearnerLabels;
 
         foreach ($allLearners as $learner) {
             $className = $clean($learner->classes->first()?->name
@@ -464,11 +468,11 @@ Rules:
                 ->values()
                 ->toArray();
 
-            $learnerInfoStr = "  - Student Name: {$learnerName} | Class: {$className} | Overall Mastery: {$avgScore}%";
-            if (! empty($lowTopics)) {
-                $learnerInfoStr .= ' | Priority Focus Topics: '.implode(', ', $lowTopics);
-            }
+            $details = " | Class: {$className} | Overall Mastery: {$avgScore}%".(! empty($lowTopics) ? ' | Priority Focus Topics: '.implode(', ', $lowTopics) : '');
+            $learnerInfoStr = "  - Student Name: {$learnerName}{$details}";
+            $promptInfo = '  - Student: '.$labels->add($learnerName).$details;
             $learnersSummaryList[] = $learnerInfoStr;
+            $promptRoster[] = $promptInfo;
 
             if ($avgScore < 50 || ! empty($lowTopics)) {
                 $strugglingLearnersList[] = [
@@ -478,20 +482,21 @@ Rules:
                     'low_topics' => $lowTopics,
                     'info' => $learnerInfoStr,
                 ];
+                $promptStruggling[] = $promptInfo;
             }
         }
 
         // Students' names and scores go to the AI provider only when the conversation is about
         // students; questions about lesson plans or the curriculum get counts and averages.
         $namesShared = $this->conversationIsAboutStudents($message, $history);
-        $namesWithheld = '  - (Names are shared only when you ask about specific students or classes.)';
+        $namesWithheld = '  - (Student details are shared only when you ask about specific students or classes.)';
 
-        $learnersRosterStr = ! $namesShared ? $namesWithheld : (! empty($learnersSummaryList)
-            ? implode("\n", $learnersSummaryList)
+        $learnersRosterStr = ! $namesShared ? $namesWithheld : (! empty($promptRoster)
+            ? implode("\n", $promptRoster)
             : '  - No individual student profiles recorded yet.');
 
-        $strugglingRosterStr = ! $namesShared ? $namesWithheld : (! empty($strugglingLearnersList)
-            ? implode("\n", array_column($strugglingLearnersList, 'info'))
+        $strugglingRosterStr = ! $namesShared ? $namesWithheld : (! empty($promptStruggling)
+            ? implode("\n", $promptStruggling)
             : '  - All enrolled students are currently performing at or above standard mastery.');
 
         // 2. Active Classes
@@ -570,8 +575,8 @@ Guidelines:
 3. Keep responses structured, concise, and actionable using clear markdown headings and bullet points. Keep answers under 250 words unless generating full questions/lesson plans.
 4. When drafting exam questions, provide the question, options A-D, clearly indicate the correct option, and include a full step-by-step solution explained simply.
 5. CRITICAL: When writing math, use ONLY LaTeX with dollar signs ($...$ for inline, $$...$$ for display). NEVER write the same expression in both LaTeX AND plain text. Use ONLY the LaTeX version, not both.
-6. MANDATORY FOR STUDENT REFERENCES: When referencing individual learners, diagnosing learning gaps, or recommending intervention plans, ALWAYS explicitly mention the student by their full name and their class/grade (e.g. \"John Doe (JSS 2A)\" or \"Amina Yusuf (SS 1 Science)\"). Never refer to them as generic unnamed learners (do not just say \"1 learner\"). Always provide the learner's name and class so the educator knows exactly who needs support.
-7. Talk about students professionally and kindly: describe what they need, never label or judge them. Naming the learners in the data below, with their class, scores and weak topics, is exactly your job for this staff member; the safety rules do not stop it. Share only the learners in that data; never guess about anyone else.".self::CHAT_GUARDRAILS."
+6. MANDATORY FOR STUDENT REFERENCES: Students appear in the data below as labels such as \"Learner 3\"; the app shows the staff member their real names. When referencing individual learners, diagnosing learning gaps, or recommending intervention plans, ALWAYS refer to each student by their exact label and class (e.g. \"Learner 3 (JSS 2A)\"). Never say \"1 learner\" or invent a name, and never ask for real names.
+7. Talk about students professionally and kindly: describe what they need, never label or judge them. Discussing the learners in the data below, with their class, scores and weak topics, is exactly your job for this staff member; the safety rules do not stop it. Share only the learners in that data; never guess about anyone else.".self::CHAT_GUARDRAILS."
 
 <school_data>
 Account role (from the system, not the chat): {$userRoleDesc}
@@ -602,17 +607,17 @@ Active Curriculum Subjects:
             $role = ($msg['role'] === 'user') ? 'user' : 'model';
             $contents[] = [
                 'role' => $role,
-                'parts' => [['text' => $msg['content']]],
+                'parts' => [['text' => $labels->hide($msg['content'])]],
             ];
         }
         $contents[] = [
             'role' => 'user',
-            'parts' => [['text' => $message]],
+            'parts' => [['text' => $labels->hide($message)]],
         ];
 
         $aiResult = $this->guardReply($this->generate($contents, $systemInstruction, feature: 'staff_chat'));
         if ($aiResult) {
-            return $aiResult;
+            return $labels->reveal($aiResult);
         }
 
         return $this->tutor->generateHeuristicAdminChatResponse(

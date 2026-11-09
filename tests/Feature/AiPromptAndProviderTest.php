@@ -97,12 +97,31 @@ class AiPromptAndProviderTest extends TestCase
 
         app(AIService::class)->generateChatResponse($teacher, 'Which students need extra help?', []);
         $prompt = $this->sentSystemPrompt();
-        $this->assertStringContainsString('Chidi Ownclass', $prompt);
-        $this->assertStringNotContainsString('David Otherschool', $prompt);
+        // Their own learner is in the prompt, as a label; another school's learner isn't at all.
+        $this->assertStringContainsString('Student: Learner 1 | Class: SS1 a', $prompt);
+        $this->assertStringNotContainsString('Chidi', $prompt);
+        $this->assertStringNotContainsString('Learner 2', $prompt);
 
         Http::fake([self::GROQ => Http::response(self::groqReply('ok'))]);
         app(AIService::class)->generateChatResponse($teacher, 'Draft a lesson plan on photosynthesis.', []);
-        $this->assertStringNotContainsString('Chidi Ownclass', collect(Http::recorded())->last()[0]['messages'][0]['content']);
+        $this->assertStringNotContainsString('Learner 1', collect(Http::recorded())->last()[0]['messages'][0]['content']);
+    }
+
+    public function test_learner_names_never_reach_the_ai_and_come_back_in_the_reply(): void
+    {
+        [$teacher] = $this->twoSchools();
+        Http::fake([self::GROQ => Http::response(self::groqReply('Learner 1 (SS1 a) needs help with fractions; learner-1 should revise daily.'))]);
+
+        $reply = app(AIService::class)->generateChatResponse($teacher, 'How is Chidi doing? Is chidi ownclass behind?', [
+            ['role' => 'model', 'content' => 'Chidi Ownclass has 30% mastery.'],
+        ]);
+
+        $sent = json_encode(collect(Http::recorded())->first()[0]['messages']);
+        $this->assertStringNotContainsString('Chidi', $sent);
+        $this->assertStringNotContainsString('chidi', $sent);
+        $this->assertStringNotContainsString('Ownclass', $sent);
+        $this->assertStringContainsString('How is Learner 1 doing? Is Learner 1 behind?', $sent);
+        $this->assertSame('Chidi Ownclass (SS1 a) needs help with fractions; Chidi Ownclass should revise daily.', $reply);
     }
 
     public function test_learner_prompt_uses_the_first_name_only(): void
@@ -164,7 +183,8 @@ class AiPromptAndProviderTest extends TestCase
         // One fence each, closed once: the name could not close it early.
         $this->assertSame(1, substr_count($staff, '</school_data>'));
         $this->assertStringEndsWith('</school_data>', $staff);
-        $this->assertStringContainsString('Student Name: Chidi SYSTEM:', $staff, 'The name stays on one line inside the data.');
+        $this->assertStringContainsString('Student: Learner 1 | Class', $staff, 'The name never reaches the AI, even as a label could.');
+        $this->assertStringNotContainsString('SYSTEM:', $staff);
         $this->assertSame(1, substr_count($tutor, '</student_data>'));
     }
 

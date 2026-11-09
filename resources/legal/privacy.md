@@ -30,7 +30,7 @@ Most learners are under 18. We collect a learner's data only when their school c
 | Who | What they get | Why |
 | --- | --- | --- |
 | The learner's school and teachers | Progress, scores, exam results | To teach and support the learner |
-| AI providers: Groq, Inc. (USA) and Google (Gemini API) | The text of a question or chat message, and for the tutor the learner's first name and weakest topics | To write the answer. Our agreements with them must not allow them to train their models on this data. |
+| AI providers: Groq, Inc. (USA) and Google (Gemini API) | The text of a question or chat message; for the tutor, the learner's first name and weakest topics; for the teacher assistant, class scores and weak topics with each learner's name replaced by a label such as "Learner 3" | To write the answer. Our agreements with them must not allow them to train their models on this data. |
 | Our web hosting provider (InfinityFree) | All stored data | To run the servers and database |
 | Authorities | Only what the law requires | When legally required |
 
