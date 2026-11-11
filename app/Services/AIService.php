@@ -86,6 +86,9 @@ Guidelines:
 
     protected AiInputSanitizer $sanitizer;
 
+    /** @var array{id: int, checked: bool}|null */
+    private ?array $lastExplanation = null;
+
     public function __construct(?string $provider = null, ?string $apiKey = null, ?string $modelName = null)
     {
         $this->client = new AiClient($provider, $apiKey, $modelName);
@@ -106,62 +109,89 @@ Guidelines:
      * every learner: the cache first, then the saved explanation, and the AI only when neither has it.
      * Only real AI answers are saved; the offline fallback is cached briefly so the AI is tried again
      * soon. A lock stops several learners opening the same question at once from each paying for a call.
+     * A hidden explanation (reported, or hidden by a reviewer) gives the offline one instead.
+     * In draft mode the AI writes a fresh one for a reviewer and nothing is saved or read.
      *
      * @param  string  $source  AiExplanation::SOURCE_QUESTION or SOURCE_PAST_QUESTION
      * @param  callable(): ?string  $ask  the AI call (null when every provider failed)
      * @param  callable(): string  $fallback  the offline explanation
      */
-    private function cachedExplanation(string $source, int $questionId, int $version, int $optionId, callable $ask, callable $fallback): string
+    private function cachedExplanation(string $source, int $questionId, int $version, int $optionId, callable $ask, callable $fallback, bool $draft = false): string
     {
-        $key = 'ai_explain_'.($source === AiExplanation::SOURCE_PAST_QUESTION ? 'pq' : 'q')."_{$questionId}_{$version}_{$optionId}";
-        $lookup = ['source' => $source, 'source_id' => $questionId, 'version' => $version, 'option_id' => $optionId];
-        $saved = function () use ($key, $lookup): ?string {
-            $body = AiExplanation::where($lookup)->value('body');
-            if ($body !== null) {
-                Cache::put($key, $body, now()->addDays(30));
-            }
+        $this->lastExplanation = null;
+        if ($draft) {
+            return (string) $ask();
+        }
 
-            return $body;
+        $key = AiExplanation::cacheKey($source, $questionId, $version, $optionId);
+        $lookup = ['source' => $source, 'source_id' => $questionId, 'version' => $version, 'option_id' => $optionId];
+        $entry = fn (AiExplanation $row): array => [
+            'id' => $row->id,
+            'checked' => $row->isChecked(),
+            'body' => $row->isHidden() ? $fallback() : $row->body,
+            'hidden' => $row->isHidden(),
+        ];
+        $saved = function () use ($key, $lookup, $entry): ?array {
+            $row = AiExplanation::where($lookup)->first();
+            if ($row === null) {
+                return null;
+            }
+            Cache::put($key, $value = $entry($row), now()->addDays(30));
+
+            return $value;
         };
 
-        $produce = function () use ($key, $lookup, $ask, $fallback, $saved): string {
+        $produce = function () use ($key, $lookup, $ask, $fallback, $saved, $entry): array {
             if (($cached = Cache::get($key) ?? $saved()) !== null) {
                 return $cached;
             }
             if ($ai = $ask()) {
                 $call = $this->client->lastCall();
                 // createOrFirst rides the unique index, so a race can't save two copies.
-                AiExplanation::createOrFirst($lookup, [
+                $row = AiExplanation::createOrFirst($lookup, [
                     'body' => $ai,
                     'provider' => $call['provider'] ?? 'unknown',
                     'model' => $call['model'] ?? 'unknown',
                     'prompt_tokens' => $call['prompt_tokens'] ?? null,
                     'completion_tokens' => $call['completion_tokens'] ?? null,
                 ]);
-                Cache::put($key, $ai, now()->addDays(30));
+                Cache::put($key, $value = $entry($row), now()->addDays(30));
 
-                return $ai;
+                return $value;
             }
-            $offline = $fallback();
-            Cache::put($key, $offline, now()->addMinutes(10));
+            Cache::put($key, $value = ['id' => null, 'checked' => false, 'body' => $fallback(), 'hidden' => false], now()->addMinutes(10));
 
-            return $offline;
+            return $value;
         };
 
-        if (($cached = Cache::get($key) ?? $saved()) !== null) {
-            return $cached;
+        $value = Cache::get($key) ?? $saved();
+        if ($value === null) {
+            try {
+                $value = Cache::lock("lock:{$key}", 60)->block(25, $produce);
+            } catch (LockTimeoutException) {
+                $value = $produce();
+            }
         }
-        try {
-            return Cache::lock("lock:{$key}", 60)->block(25, $produce);
-        } catch (LockTimeoutException) {
-            return $produce();
-        }
+        $this->lastExplanation = $value['id'] !== null && ! $value['hidden'] ? ['id' => $value['id'], 'checked' => $value['checked']] : null;
+
+        return $value['body'];
+    }
+
+    /**
+     * The saved explanation behind the last explainAnswer/explainPastQuestion call, so a learner
+     * can see whether a person has checked it and report it; null for an offline or hidden one.
+     *
+     * @return array{id: int, checked: bool}|null
+     */
+    public function lastExplanation(): ?array
+    {
+        return $this->lastExplanation;
     }
 
     /**
      * Generate an explanation for why an answer is correct or incorrect.
      */
-    public function explainAnswer(Question $question, ?int $selectedOptionId): string
+    public function explainAnswer(Question $question, ?int $selectedOptionId, bool $draft = false): string
     {
         $question->loadMissing(['options', 'topic.subject']);
         $correctOptions = $question->options->where('is_correct', true);
@@ -242,13 +272,13 @@ Rules:
         }, fn () => $this->explainer->generateHeuristicExplanation(
             $question, $selectedOption, $correctOption,
             $question->topic->subject->name ?? 'Unknown Subject', $question->topic->name ?? 'Unknown Topic'
-        ));
+        ), $draft);
     }
 
     /**
      * Explain a past examination question using Live AI Tutor or local step-by-step working.
      */
-    public function explainPastQuestion(PastQuestion $question, ?int $selectedOptionId = null): string
+    public function explainPastQuestion(PastQuestion $question, ?int $selectedOptionId = null, bool $draft = false): string
     {
         $question->loadMissing(['options', 'subject', 'topic']);
         $correctOptions = $question->options->where('is_correct', true);
@@ -361,7 +391,7 @@ Rules:
             }
 
             return $out;
-        });
+        }, $draft);
     }
 
     /**

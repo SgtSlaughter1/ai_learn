@@ -42,6 +42,20 @@ return new class extends Migration
             $table->longText('payload');
             $table->integer('last_activity')->index();
         });
+
+        // In-app notifications (Laravel's database channel), listed under the bell.
+        Schema::create('notifications', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('type');
+            $table->string('notifiable_type', 191);
+            $table->uuid('notifiable_id');
+            $table->text('data');
+            $table->timestamp('read_at')->nullable();
+            $table->timestamps();
+
+            // The bell counts and lists a person's unread ones.
+            $table->index(['notifiable_type', 'notifiable_id', 'read_at']);
+        });
     }
 
     /**
@@ -49,6 +63,7 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::dropIfExists('notifications');
         Schema::dropIfExists('users');
         Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');

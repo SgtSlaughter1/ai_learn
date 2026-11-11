@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Http\Controllers\Web\NotificationController;
 use App\Models\Subject;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -55,6 +56,8 @@ class HandleInertiaRequests extends Middleware
                     'manageCurriculum' => $request->user()->can('create', Subject::class),
                 ] : null,
             ],
+            // Every page brings the bell's count, so most people never need to poll for it.
+            'notifications' => fn () => $request->user() ? NotificationController::summary($request->user()) : null,
         ]);
     }
 }

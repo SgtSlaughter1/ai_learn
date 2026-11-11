@@ -514,7 +514,7 @@ Ans: B`}
                                 <div className="text-[11px] text-[var(--color-muted)] leading-relaxed">
                                     <strong className="text-[var(--color-text)]">Smart Solver:</strong> If your text includes an answer key (e.g.{' '}
                                     <code className="text-[var(--color-primary)] font-bold bg-[var(--color-surface)] px-1.5 py-0.5 rounded border border-[var(--color-border)]">Answer: C</code> or marked with an asterisk{' '}
-                                    <code className="text-[var(--color-primary)] font-bold bg-[var(--color-surface)] px-1.5 py-0.5 rounded border border-[var(--color-border)]">*</code>), the AI will retain it. If no answer is provided, the AI will accurately calculate and solve the question with an explanation!
+                                    <code className="text-[var(--color-primary)] font-bold bg-[var(--color-surface)] px-1.5 py-0.5 rounded border border-[var(--color-border)]">*</code>), the AI will keep it. If no answer is given, the AI works one out and writes an explanation. It can get answers wrong, so check every one before you save.
                                 </div>
                             </div>
                         </div>
@@ -534,6 +534,9 @@ Ans: B`}
                                         </h4>
                                         <p className="text-[11px] text-[var(--color-muted)]">
                                             Review questions below. Edit prompts, toggle correct answers, adjust difficulty, or add options.
+                                        </p>
+                                        <p className="mt-1 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                                            Written by AI, which can make mistakes. Check each question, its correct answer and its explanation before saving: learners will see them as you save them.
                                         </p>
                                     </div>
                                 </div>

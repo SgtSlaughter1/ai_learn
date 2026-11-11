@@ -13,12 +13,14 @@ use App\Http\Controllers\MaintenanceController;
 use App\Http\Controllers\Web\AccountController;
 use App\Http\Controllers\Web\AdaptiveQuizController;
 use App\Http\Controllers\Web\AiConversationController;
+use App\Http\Controllers\Web\AiExplanationReviewController;
 use App\Http\Controllers\Web\AIWebController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\FlashcardController;
 use App\Http\Controllers\Web\GamificationController;
 use App\Http\Controllers\Web\LearnerExamController;
 use App\Http\Controllers\Web\LegalController;
+use App\Http\Controllers\Web\NotificationController;
 use App\Http\Controllers\Web\QuizWebController;
 use App\Http\Controllers\Web\RecessController;
 use App\Http\Controllers\Web\SchoolExamController;
@@ -139,6 +141,14 @@ Route::middleware('auth')->group(function () {
             Route::post('/questions/explain', [AIWebController::class, 'explain']);
         });
 
+        // Anyone signed in can report an AI explanation that looks wrong.
+        Route::post('/ai/explanations/{explanation}/report', [AiExplanationReviewController::class, 'report']);
+
+        // The bell: a person's own notifications.
+        Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::get('/notifications/summary', [NotificationController::class, 'summaryJson']);
+        Route::post('/notifications/read', [NotificationController::class, 'read']);
+
         // The user's own saved AI chats: reading them costs no AI tokens, so no AI rate limit.
         Route::get('/ai/conversations', [AiConversationController::class, 'index']);
         Route::get('/ai/conversations/{conversation}', [AiConversationController::class, 'show'])->whereNumber('conversation');
@@ -212,6 +222,10 @@ Route::middleware('auth')->group(function () {
             Route::delete('/admin/question-contexts/{id}', [Admin\QuestionContextController::class, 'destroy']);
             Route::post('/admin/questions/ai-extract', [Admin\QuestionToolsController::class, 'extract'])->middleware('throttle:ai');
             Route::post('/admin/questions/ai-generate', [Admin\QuestionToolsController::class, 'generate'])->middleware('throttle:ai');
+            // Reported AI explanations: approve, correct or hide (the controller checks each question).
+            Route::get('/admin/ai-explanations', [AiExplanationReviewController::class, 'index']);
+            Route::patch('/admin/ai-explanations/{explanation}', [AiExplanationReviewController::class, 'review']);
+            Route::post('/admin/ai-explanations/{explanation}/draft', [AiExplanationReviewController::class, 'draft'])->middleware('throttle:ai');
 
             // School CBT, staff side: set exams, run the room, release results.
             Route::get('/school-exams/question-bank', [SchoolExamController::class, 'questionBank']);

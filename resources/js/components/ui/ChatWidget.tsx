@@ -921,6 +921,11 @@ export default function ChatWidget() {
                             Send
                         </button>
                     </form>
+                    <p className={`px-3 pb-2.5 pt-1 bg-[var(--color-surface-hover)] text-[10px] leading-snug text-[var(--color-muted)] text-center ${view === 'chat' ? '' : 'hidden'}`}>
+                        {isStaffOrEducator
+                            ? 'AI can make mistakes. Check figures, answers and lesson content before you use them.'
+                            : 'AI can make mistakes. Check important answers with your teacher or textbook.'}
+                    </p>
                 </div>
             )}
 

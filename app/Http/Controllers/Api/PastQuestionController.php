@@ -593,9 +593,13 @@ class PastQuestionController extends Controller
 
         $explanation = $this->aiService->explainPastQuestion($pastQuestion, $selectedOptionId);
 
+        $saved = $this->aiService->lastExplanation();
+
         return response()->json([
             'success' => true,
             'explanation' => $explanation,
+            // Whether a person has checked it; guests can read it but only signed-in users report.
+            'review' => $saved ? $saved + ['can_report' => $request->user() !== null] : null,
         ]);
     }
 

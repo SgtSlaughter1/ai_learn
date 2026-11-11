@@ -8,6 +8,7 @@ import QuestionListItem from './question-bank/QuestionListItem';
 import PassageSectionCard from './question-bank/PassageSectionCard';
 import QuestionFormModal, { type QuestionFormData } from './question-bank/QuestionFormModal';
 import AIBulkImportModal from './question-bank/AIBulkImportModal';
+import AiExplanationReviews from './question-bank/AiExplanationReviews';
 import { Skeleton, SkeletonText } from '@/components/common/Skeleton';
 import Pagination from '@/components/common/Pagination';
 
@@ -606,6 +607,8 @@ export default function QuestionBankTab({
 
     return (
         <div className="space-y-6">
+            <AiExplanationReviews showToast={showToast} />
+
             <QuestionFilterBar
                 questionSearch={questionSearch}
                 setQuestionSearch={setQuestionSearch}

@@ -3,6 +3,7 @@ import { RichText } from '@/components/common/RichText';
 import 'katex/dist/katex.min.css';
 import { PastQuestionItem } from '../../types/past-questions';
 import { AiExplanationDrawer } from '../quiz/AiExplanationDrawer';
+import type { ExplanationReview } from '../quiz/ExplanationReviewBar';
 import { Sparkles, Lightbulb, BookOpen } from 'lucide-react';
 import { formatMathText, extractLiteratureContext } from '../../utils/mathFormatter';
 import { reviewAnswer } from '@/services/AnswerKey';
@@ -38,6 +39,9 @@ export const ExamPracticeModal: React.FC<Props> = ({
     const [aiTutorContent, setAiTutorContent] = useState<string>('');
     const [aiTutorLoading, setAiTutorLoading] = useState<boolean>(false);
     const explanationCacheRef = useRef<Record<string, string>>({});
+    // Whether a teacher checked each AI explanation, and its id for reporting; none for offline ones.
+    const [aiTutorReview, setAiTutorReview] = useState<ExplanationReview | null>(null);
+    const reviewCacheRef = useRef<Record<string, ExplanationReview | null>>({});
 
     // Safe bounds enforcement
     const safeIndex = Math.min(Math.max(0, currentIndex), Math.max(0, questions.length - 1));
@@ -251,6 +255,7 @@ export const ExamPracticeModal: React.FC<Props> = ({
 
     const handleAskAiTutor = async () => {
         const cacheKey = `${currentQ.id}_${selectedOptId ?? 'none'}`;
+        setAiTutorReview(reviewCacheRef.current[cacheKey] ?? null);
         if (explanationCacheRef.current[cacheKey]) {
             setAiTutorContent(explanationCacheRef.current[cacheKey]);
             setAiTutorLoading(false);
@@ -284,8 +289,11 @@ export const ExamPracticeModal: React.FC<Props> = ({
             });
             const data = await res.json();
             const explanation = (data.success && data.explanation) ? data.explanation : generateOfflineExplanation();
+            const review: ExplanationReview | null = data.success && data.explanation ? (data.review ?? null) : null;
             explanationCacheRef.current[cacheKey] = explanation;
+            reviewCacheRef.current[cacheKey] = review;
             setAiTutorContent(explanation);
+            setAiTutorReview(review);
         } catch {
             const fallbackExp = generateOfflineExplanation();
             explanationCacheRef.current[cacheKey] = fallbackExp;
@@ -594,6 +602,7 @@ export const ExamPracticeModal: React.FC<Props> = ({
             onClose={() => setAiTutorOpen(false)}
             questionText={currentQ.question_text}
             content={aiTutorContent}
+            review={aiTutorReview}
             loading={aiTutorLoading}
             selectedOptionText={selectedOpt ? (selectedOpt.label ? `${selectedOpt.label}. ${selectedOpt.option_text}` : selectedOpt.option_text) : null}
             correctOptionText={correctOpt ? (correctOpt.label ? `${correctOpt.label}. ${correctOpt.option_text}` : correctOpt.option_text) : null}

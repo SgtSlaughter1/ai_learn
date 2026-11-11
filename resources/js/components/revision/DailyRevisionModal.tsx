@@ -13,6 +13,7 @@ import { sendOrQueue, syncAll } from '../../services/SyncService';
 import { formatMathText, extractLiteratureContext } from '../../utils/mathFormatter';
 import { reviewAnswer } from '../../services/AnswerKey';
 import { AiExplanationDrawer } from '../quiz/AiExplanationDrawer';
+import type { ExplanationReview } from '@/components/quiz/ExplanationReviewBar';
 import { earnRecess } from '../../services/Recess';
 import {
     Sparkles,
@@ -53,6 +54,9 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
     const [aiTutorContent, setAiTutorContent] = useState<string | null>(null);
     const [aiTutorLoading, setAiTutorLoading] = useState<boolean>(false);
     const explanationCacheRef = useRef<Record<string, string>>({});
+    // Whether a teacher checked each AI explanation, and its id for reporting; none for offline ones.
+    const [aiTutorReview, setAiTutorReview] = useState<ExplanationReview | null>(null);
+    const reviewCacheRef = useRef<Record<string, ExplanationReview | null>>({});
 
     const currentItem = items[currentIndex];
     const totalItems = items.length;
@@ -160,6 +164,7 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
         setAiTutorOpen(true);
 
         const cacheKey = `${currentItem.item_type}_${currentItem.id}_${selectedOptionId}`;
+        setAiTutorReview(reviewCacheRef.current[cacheKey] ?? null);
         if (explanationCacheRef.current[cacheKey]) {
             setAiTutorContent(explanationCacheRef.current[cacheKey]);
             setAiTutorLoading(false);
@@ -194,9 +199,12 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
             });
 
             const data = await res.json();
-            if (data.success && data.explanation) {
+            // Both explain endpoints answer { explanation, review }; only the past-question one adds success.
+            if (res.ok && data.explanation) {
                 explanationCacheRef.current[cacheKey] = data.explanation;
+                reviewCacheRef.current[cacheKey] = data.review ?? null;
                 setAiTutorContent(data.explanation);
+                setAiTutorReview(data.review ?? null);
             } else {
                 setAiTutorContent(submitResult?.explanation || 'Review the core concept to resolve this misconception.');
             }
@@ -631,6 +639,7 @@ export const DailyRevisionModal: React.FC<Props> = ({ items, onClose, onSessionC
                 onClose={() => setAiTutorOpen(false)}
                 questionText={currentItem?.question_text}
                 content={aiTutorContent}
+                review={aiTutorReview}
                 loading={aiTutorLoading}
                 selectedOptionText={selectedOpt ? (selectedOpt.label ? `${selectedOpt.label}. ${selectedOpt.option_text}` : selectedOpt.option_text) : null}
                 correctOptionText={correctOpt ? (correctOpt.label ? `${correctOpt.label}. ${correctOpt.option_text}` : correctOpt.option_text) : null}

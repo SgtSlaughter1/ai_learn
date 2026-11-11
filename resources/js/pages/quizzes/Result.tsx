@@ -6,6 +6,7 @@ import { reviewAnswer } from '@/services/AnswerKey';
 import { ResultSummaryCard } from '@/components/quiz/ResultSummaryCard';
 import { ResultQuestionBreakdown, ResultAnswer } from '@/components/quiz/ResultQuestionBreakdown';
 import { AiExplanationDrawer } from '@/components/quiz/AiExplanationDrawer';
+import type { ExplanationReview } from '@/components/quiz/ExplanationReviewBar';
 
 interface Attempt {
     id: string;
@@ -44,6 +45,9 @@ export default function Result({ attemptId }: Props) {
     const [explainQuestionId, setExplainQuestionId] = useState<number | null>(null);
     const [explainTopicId, setExplainTopicId] = useState<number | null>(null);
     const explanationCacheRef = useRef<Record<string, string>>({});
+    // Whether a teacher checked each AI explanation, and its id for reporting; none for offline ones.
+    const [explainReview, setExplainReview] = useState<ExplanationReview | null>(null);
+    const reviewCacheRef = useRef<Record<string, ExplanationReview | null>>({});
 
     useEffect(() => {
         let isMounted = true;
@@ -251,6 +255,7 @@ export default function Result({ attemptId }: Props) {
         setExplainCorrectText(correctOpt?.option_text || null);
 
         const cacheKey = `${questionId}_${selectedOptionId ?? 'none'}`;
+        setExplainReview(reviewCacheRef.current[cacheKey] ?? null);
         if (explanationCacheRef.current[cacheKey]) {
             setExplainContent(explanationCacheRef.current[cacheKey]);
             setExplainLoading(false);
@@ -291,8 +296,11 @@ export default function Result({ attemptId }: Props) {
             if (!res.ok) throw new Error('Failed to fetch AI explanation');
             const data = await res.json();
             const explanation = data.explanation || (await generateOfflineExplanation(questionId, questionText, selectedOptionId, answerObj));
+            const review: ExplanationReview | null = data.explanation ? (data.review ?? null) : null;
             explanationCacheRef.current[cacheKey] = explanation;
+            reviewCacheRef.current[cacheKey] = review;
             setExplainContent(explanation);
+            setExplainReview(review);
         } catch {
             try {
                 const fallbackExp = await generateOfflineExplanation(questionId, questionText, selectedOptionId, answerObj);
@@ -410,6 +418,7 @@ export default function Result({ attemptId }: Props) {
                 onClose={() => setSidebarOpen(false)}
                 questionText={explainQuestionText}
                 content={explainContent}
+                review={explainReview}
                 loading={explainLoading}
                 selectedOptionText={explainSelectedText}
                 correctOptionText={explainCorrectText}

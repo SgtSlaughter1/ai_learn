@@ -32,8 +32,18 @@ class AIWebController extends Controller
         $explanation = $this->aiService->explainAnswer($question, $selectedOptionId);
 
         return response()->json([
+            'success' => true,
             'explanation' => $explanation,
+            'review' => $this->reviewDetails($request),
         ]);
+    }
+
+    /** Whether a person has checked the explanation just served, and whether this user can report it. */
+    private function reviewDetails(Request $request): ?array
+    {
+        $saved = $this->aiService->lastExplanation();
+
+        return $saved ? $saved + ['can_report' => $request->user() !== null] : null;
     }
 
     /**

@@ -8,6 +8,8 @@ import { prepareOfflineData } from '@/services/OfflinePrewarm';
 import { OfflineReadinessBadge } from '@/components/dashboard/OfflineReadinessBadge';
 import { SyncStatus } from '@/components/sync/SyncStatus';
 import { SessionExpiredBanner } from '@/components/sync/SessionExpiredBanner';
+import NotificationBell from '@/components/ui/NotificationBell';
+import { useNotifications } from '@/services/Notifications';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { currentSection, openSection, sectionHref } from '@/services/DashboardSection';
 import {
@@ -132,6 +134,30 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
     const onStaffDashboard = currentPath === staffBase;
     const activeSection = currentSection(currentPathWithQuery.split('?')[1] ?? '');
 
+    // The bell, browser pop-ups, and a badge on the Question Bank for reported AI explanations.
+    const notifications = useNotifications(auth?.user?.id);
+    const reviewCount = staffSections ? notifications.summary?.reviews ?? 0 : 0;
+    const bell = auth?.user && (
+        <NotificationBell
+            summary={notifications.summary}
+            onSummary={notifications.setSummary}
+            permission={notifications.permission}
+            onEnablePopUps={notifications.enablePopUps}
+            isLearner={!staffSections}
+        />
+    );
+    const reviewBadge = reviewCount > 0 && (
+        <span
+            className="ml-auto min-w-5 h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-amber-500 text-[10px] font-extrabold text-white"
+            aria-label={`${reviewCount} reported AI explanation${reviewCount === 1 ? '' : 's'} to check`}
+        >
+            {reviewCount > 9 ? '9+' : reviewCount}
+        </span>
+    );
+    const mobileReviewDot = reviewCount > 0 && (
+        <span className="absolute top-1 right-[calc(50%-18px)] w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-[var(--color-surface)]" aria-label={`${reviewCount} reported AI explanations to check`} />
+    );
+
     return (
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex flex-col relative">
             {/* Mobile Clean Top Header Bar */}
@@ -141,6 +167,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                 </Link>
                 <div className="flex items-center gap-2">
                     <SyncStatus compact fallback={<OfflineReadinessBadge isOnline={isOnline} compact />} />
+                    {bell}
                     <UserProfileMenu user={auth?.user} />
                 </div>
             </div>
@@ -181,6 +208,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                                         >
                                             <Icon className="w-5 h-5 mr-3" aria-hidden />
                                             {label}
+                                            {key === 'questions' && reviewBadge}
                                         </Link>
                                     );
                                 })}
@@ -302,6 +330,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                         <div className="xl:hidden">
                             <SyncStatus compact fallback={<OfflineReadinessBadge isOnline={isOnline} compact />} />
                         </div>
+                        {bell}
                         <UserProfileMenu user={auth?.user} />
                     </div>
                 </header>
@@ -370,7 +399,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                             href="/teacher/dashboard?tab=questions"
                             preserveState
                             preserveScroll
-                            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all min-h-[48px] ${
+                            className={`relative flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all min-h-[48px] ${
                                 currentPathWithQuery.startsWith('/teacher/dashboard') && currentPathWithQuery.includes('tab=questions')
                                     ? 'text-[var(--color-primary)] font-extrabold bg-[var(--color-primary-10)]'
                                     : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
@@ -380,6 +409,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             <span>Questions</span>
+                            {mobileReviewDot}
                         </Link>
                     </div>
                 ) : (isSuperAdmin || isAdmin) ? (
@@ -434,7 +464,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                             href={isSuperAdmin ? '/super-admin/dashboard?tab=questions' : '/admin/dashboard?tab=questions'}
                             preserveState
                             preserveScroll
-                            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all min-h-[48px] ${
+                            className={`relative flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all min-h-[48px] ${
                                 currentPathWithQuery.includes('tab=questions')
                                     ? 'text-[var(--color-primary)] font-extrabold bg-[var(--color-primary-10)]'
                                     : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
@@ -444,6 +474,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             <span>Questions</span>
+                            {mobileReviewDot}
                         </Link>
                     </div>
                 ) : (

@@ -30,7 +30,8 @@ We may suspend an account that breaks these rules. For a learner, we tell the sc
 AceDrill uses artificial intelligence (AI) to explain answers, answer questions in the tutor chat, and help teachers write questions and lesson ideas.
 
 - **AI can be wrong.** Check important answers with your teacher or textbook.
-- An explanation for a question is written by the AI once and then reused for every learner who asks about the same question and answer.
+- An explanation for a question is written by the AI once and then reused for every learner who asks about the same question and answer. Each one shows whether a teacher has checked it.
+- **Tell us when the AI gets it wrong.** Use "Report a problem" under any explanation. Your school's teachers, or our team for past questions, check reported explanations and correct or remove them.
 - To answer you, the text of your question, and for the tutor your first name and weakest topics, is sent to our AI providers (see the Privacy Policy). Don't type personal details such as phone numbers or addresses into the chat.
 - Each person has a daily limit on AI tutor messages. Past it, the built-in offline tutor answers until midnight.
 - Your chats are saved so you can read them again. You can delete any of them. Unused chats are deleted after a year.

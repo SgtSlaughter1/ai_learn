@@ -5,6 +5,7 @@ import rehypeKatex from 'rehype-katex';
 import { Lightbulb, X, Sparkles, CheckCircle2, XCircle, ArrowRight, RotateCw, Trophy, Target, Loader2, Zap, BookOpen } from 'lucide-react';
 import { formatMathText } from '@/utils/mathFormatter';
 import { db } from '@/db/database';
+import ExplanationReviewBar, { type ExplanationReview } from './ExplanationReviewBar';
 
 export interface SimilarPracticeOption {
     id: number;
@@ -37,6 +38,8 @@ export interface AiExplanationDrawerProps {
     subjectId?: number | null;
     examCode?: string | null;
     isPastQuestion?: boolean;
+    /** Whether a teacher has checked this AI explanation, and the id to report it. */
+    review?: ExplanationReview | null;
     answer?: {
         id?: string;
         question_id: number;
@@ -86,6 +89,7 @@ export function AiExplanationDrawer({
     examCode,
     isPastQuestion = false,
     answer,
+    review,
 }: AiExplanationDrawerProps) {
     // Resolve props whether passed directly or via answer object
     const questionText = directQuestionText || answer?.question_text || '';
@@ -376,6 +380,7 @@ export function AiExplanationDrawer({
                                 <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                                     {formatMathText(rawContent)}
                                 </Markdown>
+                                <ExplanationReviewBar review={review} />
                             </div>
                         ) : (
                             <div className="p-6 text-center border border-dashed border-[var(--color-border)] rounded-2xl">

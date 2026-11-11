@@ -20,6 +20,7 @@ use App\Models\Subject;
 use App\Models\Topic;
 use App\Models\User;
 use App\Models\UserGamification;
+use App\Services\Notifications\Notifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -642,6 +643,7 @@ class TeacherDashboardController extends Controller
         }
 
         $this->invalidateTeacherStatsCache($user);
+        app(Notifier::class)->practiceAssigned($learner, $topic, $questions->count() ?: $count);
 
         return response()->json([
             'success' => true,

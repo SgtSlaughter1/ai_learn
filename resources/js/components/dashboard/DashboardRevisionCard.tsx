@@ -151,7 +151,7 @@ export const DashboardRevisionCard: React.FC<Props> = ({
 
     return (
         <>
-            <div className="relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm transition-all duration-300 hover:shadow-md h-full flex flex-col justify-between">
+            <div id="daily-review" className="scroll-mt-20 relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm transition-all duration-300 hover:shadow-md h-full flex flex-col justify-between">
                 {/* Background ambient flame glow */}
                 <div
                     className="absolute -top-24 -right-24 w-72 h-72 rounded-full blur-3xl pointer-events-none opacity-20 transition-all duration-700 bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-primary)]"

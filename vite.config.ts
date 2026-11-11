@@ -19,6 +19,8 @@ export default defineConfig({
             injectRegister: null,
             scope: '/',
             workbox: {
+                // Opens the right page when a staff member clicks a review pop-up.
+                importScripts: ['/sw-notifications.js'],
                 globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf}'],
                 // Also precache the offline fallback page from public/
                 additionalManifestEntries: [
