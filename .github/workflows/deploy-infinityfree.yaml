@@ -131,21 +131,51 @@ jobs:
           fi
 
       # ── Deploy via lftp ────────────────────────────────────
-      # The runner's package mirrors sometimes can't be reached for minutes (DNS failures), so
-      # the install is retried with short timeouts instead of hanging and failing once.
+      # lftp isn't on the runner. Ubuntu's package servers are sometimes unreachable from it
+      # (DNS failures for every *.ubuntu.com host), so the package is cached between runs and,
+      # without a cache, fetched from Ubuntu, then from the kernel.org mirror, then run in Docker.
+      - name: 💾 Restore cached lftp package
+        uses: actions/cache@v4
+        with:
+          path: ~/lftp-debs
+          key: lftp-ubuntu-24.04-v1
+
       - name: 📦 Install lftp
-        timeout-minutes: 15
+        timeout-minutes: 20
         run: |
+          set -u
           if command -v lftp >/dev/null; then exit 0; fi
+          mkdir -p ~/lftp-debs
+          OPTS="-o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"
+
+          save_deb() { cp /var/cache/apt/archives/lftp_*.deb ~/lftp-debs/ 2>/dev/null || true; }
+
+          # 1. A copy from an earlier run.
+          if ls ~/lftp-debs/lftp_*.deb >/dev/null 2>&1 && sudo dpkg -i ~/lftp-debs/lftp_*.deb && command -v lftp; then
+            echo "Installed lftp from the cache"; exit 0
+          fi
+
+          # 2. Ubuntu's own servers.
           sudo rm -f /etc/apt/sources.list.d/google*.list /etc/apt/sources.list.d/chrome*.list /etc/apt/sources.list.d/microsoft*.list 2>/dev/null || true
-          APT_OPTS="-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"
-          for attempt in 1 2 3 4 5; do
-            echo "Installing lftp, attempt $attempt"
-            sudo apt-get $APT_OPTS update -qq || true
-            if sudo apt-get $APT_OPTS install -y --no-install-recommends lftp; then exit 0; fi
-            sleep $((attempt * 20))
-          done
-          echo "::error::Could not install lftp: the package mirrors were unreachable. Re-run the workflow."
+          if timeout 240 sh -c "sudo apt-get $OPTS update -qq; sudo apt-get $OPTS install -y --no-install-recommends lftp"; then
+            save_deb; echo "Installed lftp from Ubuntu"; exit 0
+          fi
+
+          # 3. The kernel.org mirror of Ubuntu, on a different domain.
+          printf 'deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://mirrors.edge.kernel.org/ubuntu noble main universe\ndeb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://mirrors.edge.kernel.org/ubuntu noble-updates main universe\n' > /tmp/kernel-org.list
+          KOPTS="$OPTS -o Dir::Etc::sourcelist=/tmp/kernel-org.list -o Dir::Etc::sourceparts=-"
+          if timeout 240 sh -c "sudo apt-get $KOPTS update -qq && sudo apt-get $KOPTS install -y --no-install-recommends lftp"; then
+            save_deb; echo "Installed lftp from the kernel.org mirror"; exit 0
+          fi
+
+          # 4. lftp inside a small Alpine container, behind a wrapper with the same command.
+          if timeout 300 sh -c 'printf "FROM alpine:3.20\nRUN apk add --no-cache lftp\n" | docker build -q -t deploy-lftp -'; then
+            printf '#!/bin/sh\nexec docker run --rm -i --network host -v /tmp:/tmp deploy-lftp lftp "$@"\n' | sudo tee /usr/local/bin/lftp >/dev/null
+            sudo chmod +x /usr/local/bin/lftp
+            echo "Using lftp in Docker"; exit 0
+          fi
+
+          echo "::error::Could not get lftp from the cache, Ubuntu, the kernel.org mirror or Docker. Re-run the workflow."
           exit 1
 
       # Clean old Vite build assets to ensure fresh hash references
@@ -187,9 +217,10 @@ jobs:
           FTP_PASS: ${{ secrets.FTP_PASSWORD }}
           FTP_HOST: ftpupload.net
         run: |
+          UPLOADED=no
           for ATTEMPT in 1 2 3 4; do
             echo "=== App Upload attempt $ATTEMPT ==="
-            lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" <<EOF && break
+            if lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" <<EOF
           set ssl:verify-certificate no
           set ftp:ssl-allow yes
           set ftp:passive-mode yes
@@ -209,9 +240,11 @@ jobs:
 
           bye
           EOF
+            then UPLOADED=yes; break; fi
             echo "Attempt $ATTEMPT had errors, waiting 20s for connection cooldown..."
             sleep 20
           done
+          [ "$UPLOADED" = yes ] || { echo "::error::The app upload failed after 4 attempts."; exit 1; }
 
       # Deploy / Sync Vendor Dependencies (Skipped when composer.lock is unchanged)
       - name: 🚀 Sync Vendor Dependencies
@@ -221,9 +254,10 @@ jobs:
           FTP_PASS: ${{ secrets.FTP_PASSWORD }}
           FTP_HOST: ftpupload.net
         run: |
+          UPLOADED=no
           for ATTEMPT in 1 2 3; do
             echo "=== Vendor Sync attempt $ATTEMPT ==="
-            lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" <<EOF && break
+            if lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" <<EOF
           set ssl:verify-certificate no
           set ftp:ssl-allow yes
           set ftp:passive-mode yes
@@ -240,9 +274,11 @@ jobs:
 
           bye
           EOF
+            then UPLOADED=yes; break; fi
             echo "Attempt $ATTEMPT had errors, waiting 20s for connection cooldown..."
             sleep 20
           done
+          [ "$UPLOADED" = yes ] || { echo "::error::The vendor upload failed after 3 attempts."; exit 1; }
 
       - name: 🎉 Deployment finished
         run: echo "Deployment to https://ailearn.gt.tc/ completed!"
