@@ -518,7 +518,7 @@ composer lint:check    # code style check (Laravel Pint); `composer lint` fixes 
 npx vitest run         # frontend tests
 ```
 
-The **Tests** GitHub workflow runs all of these on every push and pull request. Tests never call real AI providers: any HTTP request a test does not fake fails it.
+Run these locally before pushing: the pipeline only builds and deploys. Tests never call real AI providers: any HTTP request a test does not fake fails it.
 
 ---
 

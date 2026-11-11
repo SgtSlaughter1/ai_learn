@@ -1,5 +1,12 @@
-import { Head } from '@inertiajs/react';
-import { WifiOff, FileText, Sparkles, HelpCircle, Clock } from 'lucide-react';
+import { Head, router } from '@inertiajs/react';
+import { ArrowLeft, WifiOff, FileText, Sparkles, HelpCircle, Clock } from 'lucide-react';
+
+/** Back to where the learner came from in the app, or to Subjects when the quiz was opened directly. */
+function goBack() {
+    const cameFromApp = typeof document !== 'undefined' && document.referrer.startsWith(window.location.origin);
+    if (cameFromApp && window.history.length > 1) window.history.back();
+    else router.visit('/subjects');
+}
 
 interface QuizModeSelectProps {
     quizTitle: string;
@@ -25,6 +32,16 @@ export function QuizModeSelect({
     return (
         <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] p-4 md:p-8">
             <Head title={quizTitle} />
+            <div className="max-w-4xl w-full mx-auto">
+                <button
+                    type="button"
+                    onClick={goBack}
+                    className="inline-flex items-center gap-2 min-h-11 px-3 -ml-3 rounded-xl text-sm font-semibold text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] cursor-pointer"
+                >
+                    <ArrowLeft className="w-4 h-4" aria-hidden />
+                    Back
+                </button>
+            </div>
             <div className="max-w-4xl w-full mx-auto flex flex-col items-center justify-center min-h-[80vh] space-y-10">
                 {/* Offline Banner */}
                 {!isOnline && (

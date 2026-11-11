@@ -5,7 +5,7 @@ import { usePage } from '@inertiajs/react';
  * The bell's data. Every page visit brings the unread count with it (an Inertia shared prop), so
  * this only asks the server between visits: every 5 minutes while the tab is in view, every 15
  * while it is in the background, never while offline. A new notification also shows a browser
- * pop-up once the person has allowed them; the pop-up text is general (no names or scores).
+ * pop-up when the person has turned pop-ups on; the pop-up text is general (no names or scores).
  */
 
 /** Sent after something that changes the counts (a review, reading a notification). */
@@ -40,6 +40,63 @@ export function popUpPermission(): PopUpPermission {
     return typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported';
 }
 
+/**
+ * Pop-ups on this device: 'on' or 'off' (the person's choice in their profile), 'ask' (not
+ * decided yet), 'blocked' (the browser refuses them) or 'unsupported'. A browser can't take
+ * permission back from a page, so turning them off is remembered here instead.
+ */
+export type PopUpState = 'on' | 'off' | 'ask' | 'blocked' | 'unsupported';
+
+export const POPUPS_CHANGED_EVENT = 'popups-changed';
+
+const choiceKey = (userId: string | number | undefined) => `popups:${userId ?? ''}`;
+const askedKey = (userId: string | number | undefined) => `popups-asked:${userId ?? ''}`;
+
+export function popUpState(userId: string | number | undefined): PopUpState {
+    const permission = popUpPermission();
+    if (permission === 'unsupported') return 'unsupported';
+    if (permission === 'denied') return 'blocked';
+    if (stored(choiceKey(userId)) === 'off') return 'off';
+    return permission === 'granted' ? 'on' : 'ask';
+}
+
+/** Whether the first-time question about pop-ups was already answered on this device. */
+export function popUpsAsked(userId: string | number | undefined): boolean {
+    return stored(askedKey(userId)) !== null;
+}
+
+export function markPopUpsAsked(userId: string | number | undefined) {
+    stored(askedKey(userId), new Date().toISOString());
+}
+
+export async function setPopUps(userId: string | number | undefined, on: boolean): Promise<PopUpState> {
+    markPopUpsAsked(userId);
+    if (on && popUpPermission() === 'default') await Notification.requestPermission();
+    stored(choiceKey(userId), on ? 'on' : 'off');
+    const state = popUpState(userId);
+    window.dispatchEvent(new Event(POPUPS_CHANGED_EVENT));
+    return state;
+}
+
+/** The pop-up setting, kept in step across the profile, the first-time question and other tabs. */
+export function usePopUpSetting(userId: string | number | undefined) {
+    const [state, setState] = useState<PopUpState>(() => popUpState(userId));
+    useEffect(() => {
+        const sync = () => setState(popUpState(userId));
+        sync();
+        window.addEventListener(POPUPS_CHANGED_EVENT, sync);
+        window.addEventListener('storage', sync);
+        window.addEventListener('focus', sync);
+        return () => {
+            window.removeEventListener(POPUPS_CHANGED_EVENT, sync);
+            window.removeEventListener('storage', sync);
+            window.removeEventListener('focus', sync);
+        };
+    }, [userId]);
+    const change = useCallback(async (on: boolean) => setState(await setPopUps(userId, on)), [userId]);
+    return { state, turnOn: () => change(true), turnOff: () => change(false) };
+}
+
 async function popUp(latest: NonNullable<NotificationSummary['latest']>) {
     const options: NotificationOptions = {
         body: latest.body,
@@ -68,7 +125,6 @@ async function popUp(latest: NonNullable<NotificationSummary['latest']>) {
 export function useNotifications(userId: string | number | undefined) {
     const shared = (usePage().props as { notifications?: NotificationSummary | null }).notifications ?? null;
     const [summary, setSummary] = useState<NotificationSummary | null>(shared);
-    const [permission, setPermission] = useState<PopUpPermission>(popUpPermission);
     const lastReviews = useRef<number | null>(shared?.reviews ?? null);
     const seenKey = `notification-popped:${userId ?? ''}`;
     const enabled = userId !== undefined && userId !== null;
@@ -87,10 +143,10 @@ export function useNotifications(userId: string | number | undefined) {
             if (latest?.at && (!seen || latest.at > seen)) {
                 stored(seenKey, latest.at);
                 // The first check on a device only records where things stand.
-                if (seen && popUpPermission() === 'granted') void popUp(latest);
+                if (seen && popUpState(userId) === 'on') void popUp(latest);
             }
         },
-        [seenKey]
+        [seenKey, userId]
     );
 
     // A page visit brought a fresh count.
@@ -140,10 +196,5 @@ export function useNotifications(userId: string | number | undefined) {
         };
     }, [enabled, check]);
 
-    const enablePopUps = useCallback(async () => {
-        if (popUpPermission() === 'unsupported') return;
-        setPermission(await Notification.requestPermission());
-    }, []);
-
-    return { summary, setSummary: apply, permission, enablePopUps };
+    return { summary, setSummary: apply };
 }

@@ -8,6 +8,7 @@ use App\Models\Quiz;
 use App\Models\QuizAdaptiveState;
 use App\Models\QuizAnswer;
 use App\Models\QuizAttempt;
+use App\Support\OptionOrder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -84,7 +85,7 @@ class AdaptiveService
             'questions_answered' => 0,
             'total_questions' => self::MAX_QUESTIONS,
             'is_completed' => false,
-            'question' => $firstQuestion ? $this->formatQuestion($firstQuestion) : null,
+            'question' => $firstQuestion ? $this->formatQuestion($firstQuestion, $userId) : null,
         ];
     }
 
@@ -177,7 +178,7 @@ class AdaptiveService
             'answer_correct' => $isCorrect,
             'explanation' => $question->explanation,
             'correct_option_id' => $correctOption?->id,
-            'question' => $this->formatQuestion($nextQuestion),
+            'question' => $this->formatQuestion($nextQuestion, $userId),
         ];
     }
 
@@ -397,7 +398,7 @@ class AdaptiveService
     /**
      * Format a question for API response (strips correct answers).
      */
-    private function formatQuestion(Question $question): array
+    private function formatQuestion(Question $question, string $userId): array
     {
         return [
             'id' => $question->id,
@@ -407,10 +408,10 @@ class AdaptiveService
             'context' => $question->context?->toLearnerArray(),
             'type' => $question->type,
             'difficulty' => $question->difficulty,
-            'options' => $question->options->map(fn ($o) => [
+            'options' => OptionOrder::forLearner($question->options, $userId, $question->id)->map(fn ($o) => [
                 'id' => $o->id,
                 'option_text' => $o->option_text,
-            ]),
+            ])->values(),
         ];
     }
 }

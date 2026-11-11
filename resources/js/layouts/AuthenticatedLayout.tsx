@@ -9,6 +9,7 @@ import { OfflineReadinessBadge } from '@/components/dashboard/OfflineReadinessBa
 import { SyncStatus } from '@/components/sync/SyncStatus';
 import { SessionExpiredBanner } from '@/components/sync/SessionExpiredBanner';
 import NotificationBell from '@/components/ui/NotificationBell';
+import PopUpPrompt from '@/components/notifications/PopUpPrompt';
 import { useNotifications } from '@/services/Notifications';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { currentSection, openSection, sectionHref } from '@/services/DashboardSection';
@@ -141,8 +142,6 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
         <NotificationBell
             summary={notifications.summary}
             onSummary={notifications.setSummary}
-            permission={notifications.permission}
-            onEnablePopUps={notifications.enablePopUps}
             isLearner={!staffSections}
         />
     );
@@ -562,6 +561,7 @@ export default function AuthenticatedLayout({ children, header }: { children: Re
 
             {/* In-App PWA Install Banner */}
             <PWAInstallPrompt />
+            {auth?.user && <PopUpPrompt userId={auth.user.id} isLearner={!staffSections} />}
         </div>
     );
 }

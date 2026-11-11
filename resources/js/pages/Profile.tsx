@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import PageHeader from '@/components/layout/PageHeader';
 import { Head, usePage } from '@inertiajs/react';
-import { AlertTriangle, Briefcase, GraduationCap, Hash, Layers, Loader2, Mail, MapPin, Phone, School, ShieldCheck, UserCircle, Users } from 'lucide-react';
+import { AlertTriangle, Bell, Briefcase, GraduationCap, Hash, Layers, Loader2, Mail, MapPin, Phone, School, ShieldCheck, UserCircle, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import { confirmWithInput } from '@/components/common/ConfirmModal';
 import { removeOwnAccount } from '@/services/SignOut';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import PopUpSetting from '@/components/notifications/PopUpSetting';
 
 interface ProfileClass {
     id: number;
@@ -125,7 +126,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export default function Profile({ profile }: Props) {
-    const { auth } = usePage<{ auth?: { user?: { name: string; email: string; role: string } } }>().props;
+    const { auth } = usePage<{ auth?: { user?: { id: string; name: string; email: string; role: string } } }>().props;
     const user = auth?.user;
     const { isOnline } = useNetworkStatus();
     const [busy, setBusy] = useState<'deactivate' | 'delete' | null>(null);
@@ -318,6 +319,14 @@ export default function Profile({ profile }: Props) {
                         )}
                     </section>
                 )}
+
+                <section id="notifications" className={`${card} mt-6 scroll-mt-20`} aria-labelledby="notifications-heading">
+                    <div className="flex items-center gap-2 pb-3">
+                        <Bell className="w-4 h-4 text-[var(--color-primary)]" aria-hidden />
+                        <h2 id="notifications-heading" className="text-base font-bold text-[var(--color-text)]">Pop-up notifications</h2>
+                    </div>
+                    <PopUpSetting userId={user?.id} isLearner={user?.role === 'learner'} />
+                </section>
 
                 {profile?.ai_training && (
                     <section className={`${card} mt-6`} aria-labelledby="privacy-heading">

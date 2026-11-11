@@ -9,6 +9,7 @@ use App\Models\Question;
 use App\Services\AI\AiInputSanitizer;
 use App\Services\AI\ChatConversations;
 use App\Services\AIService;
+use App\Support\OptionOrder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -116,7 +117,7 @@ class AIWebController extends Controller
                     'id' => $question->topic?->subject?->id,
                     'name' => $question->topic?->subject?->name,
                 ],
-                'options' => $question->options->map(fn ($o, $idx) => [
+                'options' => OptionOrder::forLearner($question->options, $user?->id, $question->id)->values()->map(fn ($o, $idx) => [
                     'id' => $o->id,
                     'label' => chr(65 + $idx),
                     'option_text' => $o->option_text,

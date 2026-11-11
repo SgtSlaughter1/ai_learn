@@ -11,6 +11,7 @@ use App\Models\Subject;
 use App\Models\User;
 use App\Services\Gamification\GamificationService;
 use App\Support\OfflineAnswerKey;
+use App\Support\OptionOrder;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -467,7 +468,9 @@ class SpacedRepetitionService
         };
 
         // Format options
-        $options = $qObj->options->map(function ($opt, $idx) use ($isPq) {
+        // Past questions keep the paper's A-D; school questions are shuffled per learner.
+        $ordered = $isPq ? $qObj->options->values() : OptionOrder::forLearner($qObj->options, $item->user_id, $qObj->id);
+        $options = $ordered->map(function ($opt, $idx) use ($isPq) {
             $letter = $isPq
                 ? ($opt->option_key ?: chr(65 + $idx))
                 : chr(65 + $idx);

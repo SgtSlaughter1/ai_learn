@@ -11,6 +11,7 @@ use App\Models\Subject;
 use App\Models\User;
 use App\Support\LearnerProgression;
 use App\Support\OfflineAnswerKey;
+use App\Support\OptionOrder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -568,9 +569,10 @@ class SubjectWebController extends Controller
         // Shared passages, loaded once for all quizzes, sent once per quiz that uses them.
         $contextsById = collect(QuestionContext::learnerArrays($quizRows->pluck('context_id')))->keyBy('id');
 
-        $formattedQuizzes = array_values(array_map(function ($q) use ($contextsById) {
+        $formattedQuizzes = array_values(array_map(function ($q) use ($contextsById, $user) {
             $q['contexts'] = $contextsById->only(array_unique(array_filter(array_column($q['questions'], 'context_id'))))->values()->all();
-            $q['questions'] = array_values(array_map(function ($question) {
+            $q['questions'] = array_values(array_map(function ($question) use ($user) {
+                $question['options'] = OptionOrder::forLearner($question['options'], $user?->id, $question['id'])->all();
                 // Learners grade and review offline from these (see OfflineAnswerKey).
                 $question += OfflineAnswerKey::forQuestion(
                     OfflineAnswerKey::QUIZ,

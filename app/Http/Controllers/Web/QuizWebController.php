@@ -17,6 +17,7 @@ use App\Services\Gamification\GamificationService;
 use App\Services\SpacedRepetition\SpacedRepetitionService;
 use App\Support\AttemptQuestions;
 use App\Support\OfflineAnswerKey;
+use App\Support\OptionOrder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -88,7 +89,7 @@ class QuizWebController extends Controller
                 'time_limit_minutes' => $quiz->time_limit_minutes,
                 // Shared passages, once each; questions point to them with context_id.
                 'contexts' => QuestionContext::learnerArrays($questions->pluck('context_id')),
-                'questions' => $questions->map(function ($q) use ($isStaff) {
+                'questions' => $questions->map(function ($q) use ($isStaff, $user) {
                     $correctOption = $q->options->firstWhere('is_correct', true);
 
                     return [
@@ -105,7 +106,7 @@ class QuizWebController extends Controller
                         'explanation' => $isStaff ? $q->explanation : null,
                         'marks' => (int) ($q->pivot->marks ?? 1),
                         ...OfflineAnswerKey::forQuestion(OfflineAnswerKey::QUIZ, $q->id, $correctOption?->id, $q->explanation),
-                        'options' => $q->options->map(function ($o) use ($isStaff) {
+                        'options' => OptionOrder::forLearner($q->options, $user?->id, $q->id)->map(function ($o) use ($isStaff) {
                             $optionData = [
                                 'id' => $o->id,
                                 'option_text' => $o->option_text,

@@ -9,7 +9,8 @@ on:
 jobs:
   deploy:
     name: Build & Deploy to ailearn.gt.tc
-    runs-on: ubuntu-latest
+    # Pinned: the newest image (ubuntu-latest) has had unreliable package mirrors.
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
 
     steps:
@@ -130,12 +131,22 @@ jobs:
           fi
 
       # ── Deploy via lftp ────────────────────────────────────
+      # The runner's package mirrors sometimes can't be reached for minutes (DNS failures), so
+      # the install is retried with short timeouts instead of hanging and failing once.
       - name: 📦 Install lftp
+        timeout-minutes: 15
         run: |
-          sudo rm -f /etc/apt/sources.list.d/google*.list /etc/apt/sources.list.d/chrome*.list 2>/dev/null || true
-          sudo apt-get clean 2>/dev/null || true
-          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::No-Cache=true 2>/dev/null || sudo apt-get update --fix-missing || true
-          which lftp || sudo apt-get install -y --no-install-recommends lftp
+          if command -v lftp >/dev/null; then exit 0; fi
+          sudo rm -f /etc/apt/sources.list.d/google*.list /etc/apt/sources.list.d/chrome*.list /etc/apt/sources.list.d/microsoft*.list 2>/dev/null || true
+          APT_OPTS="-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20"
+          for attempt in 1 2 3 4 5; do
+            echo "Installing lftp, attempt $attempt"
+            sudo apt-get $APT_OPTS update -qq || true
+            if sudo apt-get $APT_OPTS install -y --no-install-recommends lftp; then exit 0; fi
+            sleep $((attempt * 20))
+          done
+          echo "::error::Could not install lftp: the package mirrors were unreachable. Re-run the workflow."
+          exit 1
 
       # Clean old Vite build assets to ensure fresh hash references
       - name: 🧹 Clean old build assets on server

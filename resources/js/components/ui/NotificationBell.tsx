@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { router } from '@inertiajs/react';
-import { Bell, BellRing, CheckCheck, Flag, GraduationCap, BadgeCheck, Loader2 } from 'lucide-react';
-import { NOTIFICATIONS_CHANGED_EVENT, type NotificationSummary, type PopUpPermission } from '@/services/Notifications';
+import { Bell, CheckCheck, Settings, Flag, GraduationCap, BadgeCheck, Loader2 } from 'lucide-react';
+import { NOTIFICATIONS_CHANGED_EVENT, type NotificationSummary } from '@/services/Notifications';
 import { SECTION_CHANGE_EVENT } from '@/services/DashboardSection';
 
 interface Item {
@@ -17,8 +17,6 @@ interface Item {
 interface Props {
     summary: NotificationSummary | null;
     onSummary: (summary: NotificationSummary) => void;
-    permission: PopUpPermission;
-    onEnablePopUps: () => void;
     isLearner: boolean;
 }
 
@@ -53,8 +51,8 @@ function go(url: string) {
     router.visit(target.pathname + target.search + target.hash);
 }
 
-/** The bell in the header: what's new for this person, and a switch for browser pop-ups. */
-export default function NotificationBell({ summary, onSummary, permission, onEnablePopUps, isLearner }: Props) {
+/** The bell in the header: what's new for this person, with a link to the pop-up setting. */
+export default function NotificationBell({ summary, onSummary, isLearner }: Props) {
     const [open, setOpen] = useState(false);
     const [items, setItems] = useState<Item[] | null>(null);
     const [failed, setFailed] = useState(false);
@@ -194,31 +192,19 @@ export default function NotificationBell({ summary, onSummary, permission, onEna
                         )}
                     </div>
 
-                    {permission !== 'granted' && permission !== 'unsupported' && (
-                        <div className="px-4 py-3 border-t border-[var(--color-border)] bg-[var(--color-background)]/60">
-                            {permission === 'default' ? (
-                                <>
-                                    <p className="text-[11px] text-[var(--color-muted)] leading-snug">
-                                        {isLearner
-                                            ? 'Get a pop-up when your teacher sends you practice. Pop-ups never show your name or scores.'
-                                            : 'Get a pop-up when learners report an AI explanation, even while you work in another tab.'}
-                                    </p>
-                                    <button
-                                        type="button"
-                                        onClick={onEnablePopUps}
-                                        className="mt-2 min-h-9 inline-flex items-center gap-1.5 px-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] cursor-pointer"
-                                    >
-                                        <BellRing className="w-3.5 h-3.5" aria-hidden />
-                                        Turn on pop-ups
-                                    </button>
-                                </>
-                            ) : (
-                                <p className="text-[11px] text-[var(--color-muted)] leading-snug">
-                                    Pop-ups are blocked for this site. You can allow them in your browser’s site settings.
-                                </p>
-                            )}
-                        </div>
-                    )}
+                    <div className="px-4 py-2.5 border-t border-[var(--color-border)]">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setOpen(false);
+                                go('/profile#notifications');
+                            }}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-muted)] hover:text-[var(--color-text)] cursor-pointer"
+                        >
+                            <Settings className="w-3.5 h-3.5" aria-hidden />
+                            Pop-up settings
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
