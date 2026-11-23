@@ -46,6 +46,7 @@ const OFFLINE_ROUTES: OfflineRoute[] = [
     { pattern: /^\/(register|signup)$/, component: 'auth/Register', auth: false },
     { pattern: /^\/forgot-password$/, component: 'auth/ForgotPassword', auth: false, defaults: { status: null } },
     { pattern: /^\/past-questions$/, component: 'ExamPrep/PastQuestionsIndex', auth: false },
+    { pattern: /^\/(privacy|terms)$/, component: 'Legal/Document', auth: false, snapshotOnly: true },
     { pattern: /^\/dashboard$/, component: 'Dashboard', auth: true },
     { pattern: /^\/learner\/dashboard$/, component: 'learner/Dashboard', auth: true },
     { pattern: /^\/(admin|super-admin|school-admin)\/dashboard$/, component: 'admin/Dashboard', auth: true },

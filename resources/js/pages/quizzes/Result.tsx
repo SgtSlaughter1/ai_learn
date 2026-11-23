@@ -28,6 +28,8 @@ interface Props {
 export default function Result({ attemptId }: Props) {
     const [loading, setLoading] = useState<boolean>(true);
     const [attempt, setAttempt] = useState<Attempt | null>(null);
+    // The server couldn't be reached and this attempt isn't saved on the device.
+    const [unreachable, setUnreachable] = useState(false);
 
     const effectiveAttemptId =
         attemptId ||
@@ -120,7 +122,8 @@ export default function Result({ attemptId }: Props) {
                     }
                 }
             } catch {
-                // Offline: keep showing the provisional result from this device.
+                // Offline: keep showing the provisional result from this device, if there is one.
+                if (isMounted && !localAttempt) setUnreachable(true);
             } finally {
                 if (isMounted) setLoading(false);
             }
@@ -363,17 +366,18 @@ export default function Result({ attemptId }: Props) {
     if (!attempt || !feedback) {
         return (
             <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex items-center justify-center p-4">
-                <Head title="Assessment Recorded" />
+                <Head title={unreachable ? 'Result not saved offline' : 'Result not found'} />
                 <div className="max-w-md w-full text-center bg-[var(--color-surface)] border border-[var(--color-border)] p-8 rounded-3xl space-y-5">
                     <div className="w-16 h-16 rounded-full bg-[var(--color-primary-5)] border border-[var(--color-primary)]/20 text-[var(--color-primary)] flex items-center justify-center mx-auto shadow-sm">
-                        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
-                    <h1 className="text-xl font-bold">Assessment Recorded</h1>
+                    <h1 className="text-xl font-bold">{unreachable ? 'Result not saved offline' : 'Result not found'}</h1>
                     <p className="text-sm text-[var(--color-muted)]">
-                        Your quiz attempt has been saved locally in your offline study vault and will automatically sync with
-                        the cloud next time you connect to the internet.
+                        {unreachable
+                            ? 'This quiz result isn\'t saved on this device. Reconnect to the internet to see it. Your attempt is safe on your account.'
+                            : 'We couldn\'t find this quiz result. Head back to your subjects to keep practising.'}
                     </p>
                     <a
                         href="/subjects"
