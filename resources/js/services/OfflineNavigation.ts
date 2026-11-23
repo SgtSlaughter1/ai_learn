@@ -33,6 +33,11 @@ interface OfflineRoute {
     defaults?: Props;
     /** Adjust snapshot props for this exact URL (e.g. a different ?class_id). */
     transform?: (props: Props, url: URL) => Props;
+    /**
+     * Only open offline from saved server data. For pages whose content all comes from the
+     * server: without it they would show an empty list or a missing exam as if it were true.
+     */
+    snapshotOnly?: boolean;
 }
 
 const OFFLINE_ROUTES: OfflineRoute[] = [
@@ -66,6 +71,12 @@ const OFFLINE_ROUTES: OfflineRoute[] = [
     { pattern: /^\/quizzes\/(\d+)$/, component: 'quizzes/Show', auth: true, params: (m) => ({ quizId: Number(m[1]) }) },
     { pattern: /^\/flashcards$/, component: 'Flashcards/Index', auth: true },
     { pattern: /^\/recess$/, component: 'Recess/Index', auth: true },
+    // School exams. Sitting an exam (/exams/{id}/take) stays online: it needs the start code
+    // and the server's timer.
+    { pattern: /^\/exams$/, component: 'Exams/Index', auth: true, snapshotOnly: true },
+    { pattern: /^\/exams\/(\d+)\/result$/, component: 'Exams/Result', auth: true, snapshotOnly: true },
+    { pattern: /^\/school-exams$/, component: 'SchoolExams/Index', auth: true, snapshotOnly: true },
+    { pattern: /^\/school-exams\/(\d+)$/, component: 'SchoolExams/Show', auth: true, snapshotOnly: true },
     { pattern: /^\/profile$/, component: 'Profile', auth: true, defaults: { profile: { school_name: null, member_since: null } } },
 ];
 
@@ -74,11 +85,11 @@ export function homePathsForRole(role: string | undefined): string[] {
     switch (role) {
         case 'platform_admin':
         case 'school_admin':
-            return ['/admin/dashboard', '/profile'];
+            return ['/admin/dashboard', '/profile', '/school-exams'];
         case 'teacher':
-            return ['/teacher/dashboard', '/profile'];
+            return ['/teacher/dashboard', '/profile', '/school-exams'];
         default:
-            return ['/dashboard', '/subjects', '/general-knowledge', '/flashcards', '/recess', '/past-questions', '/profile'];
+            return ['/dashboard', '/subjects', '/general-knowledge', '/flashcards', '/recess', '/past-questions', '/exams', '/profile'];
     }
 }
 
@@ -221,6 +232,7 @@ export async function buildOfflinePage(href: string): Promise<OfflinePage | null
     if (route.auth && !user) return null;
 
     const snapshot = await findSnapshot(url, user?.id ?? null);
+    if (route.snapshotOnly && !snapshot) return null;
 
     let props: Props = {
         ...(route.defaults ?? {}),
